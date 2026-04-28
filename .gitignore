@@ -28,6 +28,9 @@ env/
 # Logs / data
 *.log
 passenger_log.csv
+camera-aya/passenger/logs/
+camera-aya/driver/distraction_log.csv
+camera-aya/**/__pycache__/
 
 # OS / IDE
 .DS_Store
