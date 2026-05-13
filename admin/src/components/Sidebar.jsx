@@ -1,8 +1,8 @@
 import { useState } from "react";
 import {
-  LayoutDashboard, MapPin, Camera, Users, UserCheck,
+  LayoutDashboard, MapPin, Camera, Users, UserCheck, UserRound,
   Bus, GitBranch, CalendarDays, BarChart3,
-  Ticket, Bell, Star, LogOut, ChevronRight, Wallet,
+  Ticket, Bell, Star, LogOut, ChevronRight, Wallet, Shield, BadgeCheck, MessageSquareWarning, ScrollText, Settings,
 } from "lucide-react";
 
 const NAV = [
@@ -10,18 +10,26 @@ const NAV = [
   { id: "dashboard",     label: "Dashboard",        icon: LayoutDashboard, badge: null },
   { id: "live",          label: "Live Tracking",     icon: MapPin,          badge: 8    },
   { id: "camera",        label: "Passenger Counter", icon: Camera,          badge: null },
-  { section: "Fleet" },
-  { id: "users",         label: "Users",             icon: Users,           badge: null },
+  { section: "People" },
+  { id: "users",         label: "All Users",         icon: Users,           badge: null },
+  { id: "passengers",    label: "Passengers",        icon: UserRound,       badge: null },
   { id: "drivers",       label: "Drivers",           icon: UserCheck,       badge: null },
+  { id: "staff",         label: "Staff Accounts",    icon: BadgeCheck,      badge: null },
+  { section: "Fleet" },
   { id: "vehicles",      label: "Vehicles",          icon: Bus,             badge: null },
   { id: "routes",        label: "Routes & Stops",    icon: GitBranch,       badge: null },
   { id: "trips",         label: "Trips",             icon: CalendarDays,    badge: null },
   { section: "Reports" },
-  { id: "analytics",     label: "Analytics",         icon: BarChart3,       badge: null },
-  { id: "tickets",       label: "Tickets",           icon: Ticket,          badge: null },
-  { id: "notifications", label: "Notifications",     icon: Bell,            badge: 3    },
-  { id: "ratings",       label: "Ratings",           icon: Star,            badge: null },
-  { id: "wallet",        label: "Wallet",            icon: Wallet,          badge: null },
+  { id: "analytics",     label: "Analytics",         icon: BarChart3,              badge: null },
+  { id: "tickets",       label: "Tickets",           icon: Ticket,                 badge: null },
+  { id: "notifications", label: "Notifications",     icon: Bell,                   badge: 3    },
+  { id: "ratings",       label: "Ratings",           icon: Star,                   badge: null },
+  { id: "wallet",        label: "Wallet",            icon: Wallet,                 badge: null },
+  { id: "complaints",    label: "Complaints",        icon: MessageSquareWarning,   badge: null },
+  { section: "Admin" },
+  { id: "roles",     label: "Roles & Permissions", icon: Shield,      badge: null },
+  { id: "auditlog",  label: "Audit Log",           icon: ScrollText,  badge: null },
+  { id: "settings",  label: "System Settings",     icon: Settings,    badge: null },
 ];
 
 export default function Sidebar({ activePage, onNavigate, collapsed }) {
@@ -71,10 +79,10 @@ export default function Sidebar({ activePage, onNavigate, collapsed }) {
         {!collapsed && (
           <div style={{ overflow: "hidden", whiteSpace: "nowrap" }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: "#0F172A", letterSpacing: "-.4px" }}>
-              SmartTrack
+              Yalla Transit
             </div>
             <div style={{ fontSize: 10, color: "#2563EB", fontWeight: 600, letterSpacing: ".5px", marginTop: 1 }}>
-              FLEET MANAGEMENT
+              TRANSIT SYSTEM
             </div>
           </div>
         )}

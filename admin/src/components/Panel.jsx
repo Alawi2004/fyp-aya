@@ -1,7 +1,7 @@
 /* Panel — light premium design
    Props: title, action, onAction, children, style, icon (ReactNode), accent (color), noPad (bool) */
 
-export function Panel({ title, action, onAction, children, style, icon, accent, noPad }) {
+export function Panel({ title, action, onAction, children, style, icon, accent, noPad, extra }) {
   return (
     <div
       className="panel-card"
@@ -45,6 +45,7 @@ export function Panel({ title, action, onAction, children, style, icon, accent, 
         }}>
           {title}
         </span>
+        {extra}
         {action && (
           <span
             onClick={onAction}

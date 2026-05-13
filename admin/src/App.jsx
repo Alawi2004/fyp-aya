@@ -1,6 +1,9 @@
 import { useState } from "react";
 import Sidebar from "./components/Sidebar";
 import Topbar from "./components/Topbar";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import LoginPage from "./pages/LoginPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 
 import DashboardPage    from "./pages/DashboardPage";
 import LiveTrackingPage from "./pages/LiveTrackingPage";
@@ -15,16 +18,47 @@ import TicketsPage      from "./pages/TicketsPage";
 import NotificationsPage from "./pages/NotificationPage";
 import RatingsPage      from "./pages/RatingsPage";
 import WalletPage       from "./pages/WalletPage";
+import RolesPage        from "./pages/RolesPage";
+import StaffPage        from "./pages/StaffPage";
+import ComplaintsPage   from "./pages/ComplaintsPage";
+import PassengersPage   from "./pages/PassengersPage";
+import AuditLogPage        from "./pages/AuditLogPage";
+import SystemSettingsPage  from "./pages/SystemSettingsPage";
 
 export default function App() {
+  return (
+    <AuthProvider>
+      <AppShell />
+    </AuthProvider>
+  );
+}
+
+function AppShell() {
+  const { isAuthenticated } = useAuth();
   const [activePage,       setActivePage]       = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Handle password-reset link: ?token=... in URL
+  const urlToken = new URLSearchParams(window.location.search).get("token");
+  if (urlToken) {
+    return (
+      <ResetPasswordPage
+        token={urlToken}
+        onDone={() => window.history.replaceState({}, "", window.location.pathname)}
+      />
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage onLoginSuccess={() => setActivePage("dashboard")} />;
+  }
 
   const PAGES = {
     dashboard:     <DashboardPage onNavigate={setActivePage} />,
     live:          <LiveTrackingPage />,
     camera:        <CameraPage />,
     users:         <UsersPage />,
+    passengers:    <PassengersPage />,
     drivers:       <DriversPage />,
     vehicles:      <VehiclesPage />,
     routes:        <RoutesPage />,
@@ -34,6 +68,11 @@ export default function App() {
     notifications: <NotificationsPage />,
     ratings:       <RatingsPage />,
     wallet:        <WalletPage />,
+    roles:         <RolesPage />,
+    auditlog:      <AuditLogPage />,
+    settings:      <SystemSettingsPage />,
+    staff:         <StaffPage />,
+    complaints:    <ComplaintsPage />,
   };
 
   return (

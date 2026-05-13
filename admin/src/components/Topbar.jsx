@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Menu, Search, Bell, ChevronDown, Settings, User, LogOut, Zap } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Menu, Search, Bell, ChevronDown, Settings, User, LogOut, Zap, Smartphone, Monitor, Globe, AlertTriangle, Clock, Wrench } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 const PAGE_LABELS = {
   dashboard:     "Dashboard",
@@ -16,13 +17,145 @@ const PAGE_LABELS = {
   ratings:       "Ratings",
 };
 
+function deviceIcon(name = "") {
+  if (/iPhone|iPad|Android/.test(name)) return <Smartphone size={18} />;
+  if (/Mac/.test(name))    return <Monitor size={18} />;
+  if (/Windows/.test(name)) return <Monitor size={18} />;
+  return <Globe size={18} />;
+}
+
+function timeAgo(iso) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1)  return "Just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function SessionsModal({ onClose }) {
+  const { getSessions, revokeSession, revokeAllOtherSessions } = useAuth();
+  const [sessions, setSessions] = useState(null);
+  const [busy,     setBusy]     = useState(false);
+
+  useEffect(() => {
+    getSessions().then(setSessions).catch(() => setSessions([]));
+  }, [getSessions]);
+
+  const revoke = async (id) => {
+    setBusy(true);
+    try {
+      await revokeSession(id);
+      setSessions(s => s.filter(x => x.session_id !== id));
+    } finally { setBusy(false); }
+  };
+
+  const revokeOthers = async () => {
+    setBusy(true);
+    try {
+      await revokeAllOtherSessions();
+      setSessions(s => s.filter(x => x.is_current));
+    } finally { setBusy(false); }
+  };
+
+  const others = sessions?.filter(s => !s.is_current) ?? [];
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,.35)",
+      zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center",
+    }} onClick={onClose}>
+      <div style={{
+        background: "#fff", borderRadius: 16, width: 420, maxHeight: "80vh",
+        boxShadow: "0 24px 64px rgba(0,0,0,.18)", overflow: "hidden",
+        display: "flex", flexDirection: "column",
+      }} onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid #F1F5F9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: "#0F172A" }}>Active Sessions</div>
+            <div style={{ fontSize: 12, color: "#94A3B8", marginTop: 2 }}>Devices currently signed in</div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#94A3B8", fontSize: 20, lineHeight: 1 }}>×</button>
+        </div>
+
+        {/* Session list */}
+        <div style={{ overflowY: "auto", flex: 1, padding: "8px 0" }}>
+          {sessions === null ? (
+            <div style={{ padding: 24, textAlign: "center", color: "#94A3B8", fontSize: 13 }}>Loading…</div>
+          ) : sessions.length === 0 ? (
+            <div style={{ padding: 24, textAlign: "center", color: "#94A3B8", fontSize: 13 }}>No active sessions</div>
+          ) : sessions.map(s => (
+            <div key={s.session_id} style={{
+              display: "flex", alignItems: "center", gap: 12,
+              padding: "12px 20px",
+              borderBottom: "1px solid #F8FAFC",
+            }}>
+              <span style={{ flexShrink: 0, color: "#64748B" }}>{deviceIcon(s.device_name)}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B", display: "flex", alignItems: "center", gap: 6 }}>
+                  {s.device_name || "Unknown Device"}
+                  {s.is_current && (
+                    <span style={{ fontSize: 10, fontWeight: 700, background: "#ECFDF5", color: "#059669", border: "1px solid #A7F3D0", borderRadius: 20, padding: "1px 7px" }}>
+                      Current
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>
+                  {s.ip_address} · {timeAgo(s.last_active_at)}
+                </div>
+              </div>
+              {!s.is_current && (
+                <button
+                  onClick={() => revoke(s.session_id)}
+                  disabled={busy}
+                  style={{
+                    background: "none", border: "1px solid #FECACA", borderRadius: 6,
+                    color: "#EF4444", fontSize: 11, fontWeight: 600,
+                    padding: "4px 10px", cursor: busy ? "not-allowed" : "pointer",
+                    flexShrink: 0,
+                  }}
+                >
+                  Revoke
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        {others.length > 0 && (
+          <div style={{ padding: "12px 20px", borderTop: "1px solid #F1F5F9" }}>
+            <button
+              onClick={revokeOthers}
+              disabled={busy}
+              style={{
+                width: "100%", padding: "9px", background: "#FEF2F2",
+                border: "1px solid #FECACA", borderRadius: 8,
+                color: "#DC2626", fontSize: 13, fontWeight: 600,
+                cursor: busy ? "not-allowed" : "pointer",
+              }}
+            >
+              Sign out all other devices ({others.length})
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Topbar({ onToggleSidebar, collapsed, activePage }) {
-  const [showProfile, setShowProfile] = useState(false);
-  const [notifOpen,   setNotifOpen]   = useState(false);
+  const [showProfile,   setShowProfile]   = useState(false);
+  const [notifOpen,     setNotifOpen]     = useState(false);
+  const [showSessions,  setShowSessions]  = useState(false);
+  const { user, logout } = useAuth();
 
   const pageLabel = PAGE_LABELS[activePage] || "Dashboard";
 
   return (
+    <>
     <header style={{
       height:     64,
       background: "#FFFFFF",
@@ -79,7 +212,7 @@ export default function Topbar({ onToggleSidebar, collapsed, activePage }) {
               </svg>
             </div>
             <span style={{ fontSize: 14, fontWeight: 700, color: "#0F172A", letterSpacing: "-.3px" }}>
-              SmartTrack
+              Yalla Transit
             </span>
           </div>
         )}
@@ -87,7 +220,7 @@ export default function Topbar({ onToggleSidebar, collapsed, activePage }) {
         {/* Breadcrumb */}
         {!collapsed && (
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 11, color: "#94A3B8", fontWeight: 500 }}>SmartTrack</span>
+            <span style={{ fontSize: 11, color: "#94A3B8", fontWeight: 500 }}>Yalla Transit</span>
             <span style={{ color: "#CBD5E1", fontSize: 13 }}>/</span>
             <span style={{ fontSize: 13, fontWeight: 600, color: "#1E293B" }}>{pageLabel}</span>
           </div>
@@ -212,9 +345,9 @@ export default function Topbar({ onToggleSidebar, collapsed, activePage }) {
                 <span style={{ fontSize: 11, color: "#2563EB", cursor: "pointer", fontWeight: 500 }}>Mark all read</span>
               </div>
               {[
-                { icon: "🚨", text: "Emergency alert — Driver K. Moussa", sub: "Trip #TRP-041 · 2m ago",  dot: "#EF4444" },
-                { icon: "⏱",  text: "Trip #TRP-038 delayed 15 min",       sub: "Route 7B · 11m ago",    dot: "#F59E0B" },
-                { icon: "🔧", text: "Vehicle BUS-07 needs maintenance",    sub: "Fleet alert · 34m ago", dot: "#F59E0B" },
+                { Icon: AlertTriangle, text: "Emergency alert — Driver K. Moussa", sub: "Trip #TRP-041 · 2m ago",  dot: "#EF4444" },
+                { Icon: Clock,         text: "Trip #TRP-038 delayed 15 min",       sub: "Route 7B · 11m ago",    dot: "#F59E0B" },
+                { Icon: Wrench,        text: "Vehicle BUS-07 needs maintenance",    sub: "Fleet alert · 34m ago", dot: "#F59E0B" },
               ].map((n, i) => (
                 <div key={i} style={{
                   padding: "12px 16px",
@@ -290,24 +423,26 @@ export default function Topbar({ onToggleSidebar, collapsed, activePage }) {
               animation:   "slideInDown .15s ease",
             }}>
               <div style={{ padding: "13px 16px 10px", borderBottom: "1px solid #F1F5F9" }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>Admin User</div>
-                <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>admin@smarttrack.com</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>{user?.full_name || "Admin"}</div>
+                <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{user?.email || ""}</div>
               </div>
               {[
-                { icon: User,     label: "Profile",  danger: false },
-                { icon: Settings, label: "Settings", danger: false },
-                { icon: LogOut,   label: "Log out",  danger: true  },
-              ].map(({ icon: Icon, label, danger }) => (
-                <div key={label} style={{
-                  padding: "10px 16px",
-                  display: "flex", gap: 10,
-                  alignItems: "center",
-                  cursor: "pointer",
-                  color:  danger ? "#EF4444" : "#475569",
-                  fontSize: 13, fontWeight: 500,
-                  borderTop: label === "Log out" ? "1px solid #F1F5F9" : "none",
-                  transition: "background .1s",
-                }}
+                { icon: User,     label: "Profile",         danger: false, onClick: null },
+                { icon: Settings, label: "Active Sessions", danger: false, onClick: () => setShowSessions(true) },
+                { icon: LogOut,   label: "Log out",         danger: true,  onClick: logout },
+              ].map(({ icon: Icon, label, danger, onClick }) => (
+                <div key={label}
+                  onClick={() => { setShowProfile(false); onClick?.(); }}
+                  style={{
+                    padding: "10px 16px",
+                    display: "flex", gap: 10,
+                    alignItems: "center",
+                    cursor: "pointer",
+                    color:  danger ? "#EF4444" : "#475569",
+                    fontSize: 13, fontWeight: 500,
+                    borderTop: label === "Log out" ? "1px solid #F1F5F9" : "none",
+                    transition: "background .1s",
+                  }}
                   onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
                   onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                 >
@@ -320,5 +455,8 @@ export default function Topbar({ onToggleSidebar, collapsed, activePage }) {
         </div>
       </div>
     </header>
+
+    {showSessions && <SessionsModal onClose={() => setShowSessions(false)} />}
+  </>
   );
 }

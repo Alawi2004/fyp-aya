@@ -1,21 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
+import { CAMERA_WS_URL } from '../config/camera';
 
-const CAMERA_SERVER = 'ws://localhost:9000';
+const CAMERA_SERVER    = CAMERA_WS_URL;
+const INITIAL_DELAY_MS = 1_000;
+const MAX_DELAY_MS     = 30_000;
 
+// status values: 'connecting' | 'connected' | 'disconnected'
 export function useWebSocketCamera(busId = null, cameraType = 'passenger') {
   const [connected, setConnected] = useState(false);
+  const [status,    setStatus]    = useState('disconnected');
   const [error,     setError]     = useState(null);
   const [frameUrl,  setFrameUrl]  = useState(null);
 
   const wsRef      = useRef(null);
   const prevUrl    = useRef(null);
   const retryRef   = useRef(null);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
+  const delayRef   = useRef(INITIAL_DELAY_MS); // current backoff delay
 
   useEffect(() => {
     if (!busId) return;
@@ -32,6 +32,7 @@ export function useWebSocketCamera(busId = null, cameraType = 'passenger') {
     function connect() {
       if (destroyed) return;
       clearTimeout(retryRef.current);
+      setStatus('connecting');
 
       const ws = new WebSocket(`${CAMERA_SERVER}/ws/bus/${busId}/${cameraType}`);
       wsRef.current = ws;
@@ -39,7 +40,9 @@ export function useWebSocketCamera(busId = null, cameraType = 'passenger') {
 
       ws.onopen = () => {
         if (destroyed) { ws.close(); return; }
+        delayRef.current = INITIAL_DELAY_MS; // reset backoff on successful connect
         setConnected(true);
+        setStatus('connected');
         setError(null);
       };
 
@@ -52,19 +55,26 @@ export function useWebSocketCamera(busId = null, cameraType = 'passenger') {
       };
 
       ws.onerror = () => {
-        if (!destroyed) {
-          setConnected(false);
-          setError('Camera server offline — demo mode active');
-        }
+        if (destroyed) return;
+        setConnected(false);
+        setStatus('disconnected');
+        setError('Camera server offline — demo mode active');
       };
 
       ws.onclose = () => {
         if (destroyed) return;
         setConnected(false);
-        retryRef.current = setTimeout(connect, 4000);
+        setStatus('disconnected');
+
+        // Exponential backoff: 1 s → 2 s → 4 s → … → 30 s cap
+        const delay = delayRef.current;
+        delayRef.current = Math.min(delay * 2, MAX_DELAY_MS);
+
+        retryRef.current = setTimeout(connect, delay);
       };
     }
 
+    delayRef.current = INITIAL_DELAY_MS; // reset before first connect attempt
     connect();
 
     return () => {
@@ -73,9 +83,10 @@ export function useWebSocketCamera(busId = null, cameraType = 'passenger') {
       wsRef.current?.close();
       revokePrev();
       setConnected(false);
+      setStatus('disconnected');
       setFrameUrl(null);
     };
   }, [busId, cameraType]);
 
-  return { connected, error, frameUrl };
+  return { connected, status, error, frameUrl };
 }

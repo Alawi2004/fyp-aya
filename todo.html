@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Yalla Transit — Fix List</title>
+<style>
+  :root {
+    --critical: #dc2626; --critical-bg: #fef2f2; --critical-border: #fecaca;
+    --high:     #d97706; --high-bg:     #fffbeb; --high-border:     #fde68a;
+    --medium:   #2563eb; --medium-bg:   #eff6ff; --medium-border:   #bfdbfe;
+    --low:      #16a34a; --low-bg:      #f0fdf4; --low-border:      #bbf7d0;
+    --done-bg:  #f8fafc; --done-border: #e2e8f0; --done-text: #94a3b8;
+    --bg: #f1f5f9; --card: #fff; --text: #0f172a; --sub: #64748b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); }
+
+  header {
+    background: linear-gradient(135deg, #1e3a5f 0%, #0f4c81 100%);
+    color: #fff; padding: 36px 48px; border-bottom: 4px solid #dc2626;
+  }
+  header h1 { font-size: 24px; font-weight: 800; letter-spacing: -.5px; }
+  header p  { margin-top: 6px; color: #93c5fd; font-size: 13px; }
+
+  .progress-bar-wrap {
+    display: flex; align-items: center; gap: 14px; padding: 18px 48px;
+    background: #fff; border-bottom: 1px solid #e5e7eb; flex-wrap: wrap;
+  }
+  .pbar { flex: 1; max-width: 300px; height: 10px; background: #e5e7eb; border-radius: 5px; overflow: hidden; }
+  .pbar-fill { height: 100%; background: linear-gradient(90deg, #2563eb, #16a34a); border-radius: 5px; transition: width .4s; }
+  .pbar-label { font-size: 13px; font-weight: 700; color: #374151; white-space: nowrap; }
+
+  .legend {
+    display: flex; gap: 20px; padding: 14px 48px;
+    background: #fff; border-bottom: 1px solid #e5e7eb; flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  main { max-width: 1280px; margin: 0 auto; padding: 32px 48px 60px; display: flex; flex-direction: column; gap: 36px; }
+
+  .section { }
+  .section-header {
+    font-size: 17px; font-weight: 800; color: var(--text);
+    border-left: 4px solid #2563eb; padding-left: 14px;
+    margin-bottom: 14px; display: flex; align-items: center; gap: 10px;
+  }
+  .section-count {
+    font-size: 11px; font-weight: 700; background: #dbeafe; color: #1d4ed8;
+    padding: 2px 9px; border-radius: 12px;
+  }
+
+  .task-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .task {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 13px 16px; border-radius: 10px; border: 1px solid;
+    cursor: pointer; transition: opacity .15s, box-shadow .15s;
+    user-select: none; position: relative;
+  }
+  .task:hover { box-shadow: 0 2px 10px rgba(0,0,0,.07); }
+  .task.done { background: var(--done-bg); border-color: var(--done-border); opacity: .65; }
+
+  .copy-btn {
+    position: absolute; top: 10px; right: 10px;
+    background: transparent; border: 1px solid #cbd5e1; border-radius: 6px;
+    padding: 3px 8px; font-size: 11px; font-weight: 600; color: #64748b;
+    cursor: pointer; opacity: 0; transition: opacity .15s, background .15s, color .15s;
+    display: flex; align-items: center; gap: 4px; white-space: nowrap;
+    z-index: 2;
+  }
+  .task:hover .copy-btn { opacity: 1; }
+  .copy-btn:hover { background: #f1f5f9; color: #0f172a; border-color: #94a3b8; }
+  .copy-btn.copied { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; opacity: 1; }
+
+  .task.critical { background: var(--critical-bg); border-color: var(--critical-border); }
+  .task.high     { background: var(--high-bg);     border-color: var(--high-border);     }
+  .task.medium   { background: var(--medium-bg);   border-color: var(--medium-border);   }
+  .task.low      { background: var(--low-bg);       border-color: var(--low-border);       }
+
+  .task.done .task-title { text-decoration: line-through; color: var(--done-text); }
+  .task.done .task-detail { color: var(--done-text); }
+
+  .checkbox {
+    width: 18px; height: 18px; border-radius: 5px; border: 2px solid #cbd5e1;
+    flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center;
+    transition: background .15s, border-color .15s;
+  }
+  .task.done .checkbox { background: #16a34a; border-color: #16a34a; }
+  .checkmark { display: none; color: #fff; font-size: 11px; font-weight: 900; }
+  .task.done .checkmark { display: block; }
+
+  .task-body { flex: 1; min-width: 0; }
+  .task-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; flex-wrap: wrap; }
+  .task-title { font-size: 13.5px; font-weight: 700; color: var(--text); }
+  .badge {
+    font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 8px;
+    letter-spacing: .04em; text-transform: uppercase; white-space: nowrap;
+  }
+  .badge-critical { background: var(--critical); color: #fff; }
+  .badge-high     { background: var(--high);     color: #fff; }
+  .badge-medium   { background: var(--medium);   color: #fff; }
+  .badge-low      { background: var(--low);       color: #fff; }
+  .badge-security { background: #7c3aed; color: #fff; }
+  .badge-backend  { background: #0f766e; color: #fff; }
+  .badge-frontend { background: #c2410c; color: #fff; }
+  .badge-db       { background: #1e40af; color: #fff; }
+  .badge-deploy   { background: #374151; color: #fff; }
+
+  .task-detail { font-size: 12px; color: #64748b; line-height: 1.55; margin-top: 2px; }
+
+  .id-tag { font-size: 10px; font-weight: 700; color: #94a3b8; font-family: monospace; white-space: nowrap; }
+
+  .score-row {
+    display: flex; gap: 14px; flex-wrap: wrap; padding: 20px 48px;
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+  }
+  .score-card {
+    flex: 1; min-width: 140px; background: var(--bg); border-radius: 10px;
+    padding: 14px 18px; border: 1px solid #e5e7eb;
+  }
+  .score-card .label { font-size: 11px; color: var(--sub); font-weight: 500; margin-bottom: 6px; }
+  .score-card .value { font-size: 26px; font-weight: 800; }
+  .score-critical .value { color: var(--critical); }
+  .score-high     .value { color: var(--high);     }
+  .score-medium   .value { color: var(--medium);   }
+  .score-good     .value { color: var(--low);       }
+
+  .counter {
+    display: flex; gap: 12px; padding: 16px 48px;
+    background: #fff; border-bottom: 1px solid #e5e7eb; flex-wrap: wrap;
+  }
+  .counter-pill {
+    display: flex; align-items: center; gap: 7px; padding: 6px 14px;
+    border-radius: 20px; font-size: 12px; font-weight: 700; border: 1px solid;
+  }
+  .cp-remaining { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+  .cp-done      { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+  .cp-total     { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
+
+  footer { text-align: center; padding: 24px; font-size: 12px; color: var(--sub); border-top: 1px solid #e5e7eb; }
+
+  @media (max-width: 768px) {
+    header, .legend, .score-row, .counter, .progress-bar-wrap { padding-left: 20px; padding-right: 20px; }
+    main { padding: 24px 20px 40px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Yalla Transit — Admin Fix List</h1>
+  <p>Generated from full QA + Security Audit · 2026-05-10 · Click any item to mark as done</p>
+</header>
+
+<!-- Scores -->
+<div class="score-row">
+  <div class="score-card score-critical"><div class="label">System Quality</div><div class="value">52/100</div></div>
+  <div class="score-card score-critical"><div class="label">Production Readiness</div><div class="value">28/100</div></div>
+  <div class="score-card score-critical"><div class="label">Security Score</div><div class="value">38/100</div></div>
+  <div class="score-card score-high"><div class="label">Scalability</div><div class="value">44/100</div></div>
+  <div class="score-card score-medium"><div class="label">Architecture Quality</div><div class="value">58/100</div></div>
+</div>
+
+<!-- Live counter -->
+<div class="counter">
+  <div class="counter-pill cp-total">Total Tasks: <span id="total-count">0</span></div>
+  <div class="counter-pill cp-remaining">Remaining: <span id="remaining-count">0</span></div>
+  <div class="counter-pill cp-done">Done: <span id="done-count">0</span></div>
+</div>
+
+<!-- Progress -->
+<div class="progress-bar-wrap">
+  <span class="pbar-label">Progress</span>
+  <div class="pbar"><div class="pbar-fill" id="pbar" style="width:0%"></div></div>
+  <span class="pbar-label" id="pbar-pct">0%</span>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-item"><div class="dot" style="background:#dc2626"></div> Critical</div>
+  <div class="legend-item"><div class="dot" style="background:#d97706"></div> High</div>
+  <div class="legend-item"><div class="dot" style="background:#2563eb"></div> Medium</div>
+  <div class="legend-item"><div class="dot" style="background:#16a34a"></div> Low</div>
+  <div class="legend-item"><div class="dot" style="background:#7c3aed"></div> Security</div>
+  <div class="legend-item"><div class="dot" style="background:#0f766e"></div> Backend</div>
+  <div class="legend-item"><div class="dot" style="background:#c2410c"></div> Frontend</div>
+  <div class="legend-item"><div class="dot" style="background:#1e40af"></div> Database</div>
+</div>
+
+<main>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 1 — CRITICAL SECURITY -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">🔴 Critical Security Fixes <span class="section-count" id="s1-count"></span></div>
+  <div class="task-list" id="s1">
+
+    <div class="task critical" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">SEC-01</span>
+          <span class="badge badge-critical">Critical</span>
+          <span class="badge badge-security">Security</span>
+        </div>
+        <div class="task-title">Rotate Azure SQL password — it is committed in plaintext in backend/.env</div>
+        <div class="task-detail">Go to Azure Portal → SQL Server → Reset password. Update backend/.env with new password. Add .env to .gitignore. Consider scrubbing git history with BFG Repo Cleaner to remove old credentials permanently.</div>
+      </div>
+    </div>
+
+    <div class="task critical" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">SEC-02</span>
+          <span class="badge badge-critical">Critical</span>
+          <span class="badge badge-security">Security</span>
+        </div>
+        <div class="task-title">Revoke and regenerate Gmail SMTP app password — exposed in backend/.env</div>
+        <div class="task-detail">Go to Google Account → Security → App passwords → revoke "FYP Admin". Generate a new app password. Update SMTP_PASS in backend/.env. Never commit .env to git again.</div>
+      </div>
+    </div>
+
+    <div class="task critical" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">SEC-03</span>
+          <span class="badge badge-critical">Critical</span>
+          <span class="badge badge-security">Security</span>
+        </div>
+        <div class="task-title">Replace JWT_SECRET with a real random secret — current value is "CHANGE_ME_GENERATE_A_LONG_RANDOM_SECRET"</div>
+        <div class="task-detail">Run: openssl rand -hex 64 — paste output as JWT_SECRET in backend/.env. The current placeholder is predictable, meaning any attacker can sign their own admin-role JWT and bypass all auth. After changing, all existing tokens will be invalidated (users must re-login).</div>
+      </div>
+    </div>
+
+    <div class="task critical" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">SEC-04</span>
+          <span class="badge badge-critical">Critical</span>
+          <span class="badge badge-security">Security</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Fix register endpoint — anyone can pass "role":"admin" and become admin</div>
+        <div class="task-detail">In backend/src/controllers/auth.controller.js line 244, remove "role" from the destructured body. Hardcode role = 'passenger' on the INSERT, or at minimum whitelist only ['passenger'] as valid self-registration roles. This is a privilege escalation vulnerability.</div>
+      </div>
+    </div>
+
+    <div class="task critical" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">SEC-05</span>
+          <span class="badge badge-critical">Critical</span>
+          <span class="badge badge-security">Security</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Add authentication middleware to ALL vehicle routes — currently zero auth</div>
+        <div class="task-detail">In backend/src/routes/vehicles.routes.js — add requirePermission("vehicles","view") to GET /, requirePermission("vehicles","create") to POST /, requirePermission("vehicles","edit") to PUT /:id. Right now anyone on the internet can create or modify vehicle records with no login.</div>
+      </div>
+    </div>
+
+    <div class="task critical" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">SEC-06</span>
+          <span class="badge badge-critical">Critical</span>
+          <span class="badge badge-frontend">Frontend</span>
+        </div>
+        <div class="task-title">Set VITE_FRONTEND_ONLY=false — the entire admin dashboard shows fake data by default</div>
+        <div class="task-detail">Create admin/.env with VITE_FRONTEND_ONLY=false and VITE_API_URL=http://localhost:4000/api. The current logic (VITE_FRONTEND_ONLY !== 'false') defaults to true when the variable is missing, so every screen shows mock data. This must be fixed before any real demo or evaluation.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 2 — MISSING BACKEND ENDPOINTS -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">🟠 Missing Backend Endpoints <span class="section-count" id="s2-count"></span></div>
+  <div class="task-list" id="s2">
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BE-01</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Implement wallet freeze endpoints — GET /wallet/statuses, POST /wallet/:id/freeze, POST /wallet/:id/unfreeze, GET /wallet/freeze-log</div>
+        <div class="task-detail">The entire Wallet Freeze Management tab (WalletPage.jsx) is mock-only. Need: wallet_freeze_log table, freeze/unfreeze controller logic, and 4 new routes registered in wallet.routes.js. The frontend code is already written and calling these exact URLs.</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BE-02</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Implement staff admin management endpoints — GET /staff/accounts, PUT /staff/accounts/:id, GET /staff/wallet/all-history (admin view), GET /staff/wallet/suspicious, GET /staff/reconciliation, PUT /staff/reconciliation/:id</div>
+        <div class="task-detail">The Staff Accounts page calls 6 endpoints that don't exist. The existing staffWallet routes use requireStaffOnly, blocking admins. Need a separate admin-facing controller and routes for viewing/managing staff accounts, their transaction history, suspicious flags, and reconciliation records.</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BE-03</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Implement vehicle docs endpoints — GET /vehicles/docs, PUT /vehicles/docs/:plate</div>
+        <div class="task-detail">The VehiclesPage Expiry Alerts tab uses MOCK_VEHICLE_DOCS. Need a vehicle_docs table (or columns on vehicles) for registration_expiry, insurance_expiry, roadworthiness_expiry dates. Need controller + routes. The frontend code already calls these exact endpoints.</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BE-04</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Implement vehicle maintenance log endpoints — GET /vehicles/maintenance, POST /vehicles/maintenance, PUT /vehicles/maintenance/:id</div>
+        <div class="task-detail">The Maintenance Log tab shows 15 hardcoded mock records. Need vehicle_maintenance_records table with columns: vehicle_id, date, type, mechanic, workshop, cost, odometer, next_service_date, notes. Need controller with full CRUD and aggregation for the KPI cards (total cost, due within 30 days, etc.).</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BE-05</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Implement fuel tracking endpoints — GET /vehicles/fuel, POST /vehicles/fuel, GET /vehicles/:id/fuel</div>
+        <div class="task-detail">The Fuel Tracking tab is entirely fake. Need a vehicle_fuel_records table with: vehicle_id, date, station, cost, liters, odometer, km_per_liter (computed). Need controller + routes registered in vehicles.routes.js.</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BE-06</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Implement trip conflict detection API endpoint</div>
+        <div class="task-detail">Conflict detection currently happens client-side against mock data. Need GET /trips/conflicts or a check on POST /trips that queries: SELECT trips WHERE driver_id = X AND time overlaps, AND vehicle_id = Y AND time overlaps. Return conflict list for the Conflicts tab in TripsPage.</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BE-07</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Implement real journey playback — serve actual GPS history from gps_logs table</div>
+        <div class="task-detail">GET /gps/trip/:id already exists but journey playback generates fake interpolated GPS. The playback overlay should query real gps_logs records for a given trip and date. When no data exists, show "No GPS data for this date" instead of generating fake movement.</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BE-08</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Implement passenger activity heatmap data endpoint</div>
+        <div class="task-detail">The 7-day × 24-hour heatmap in UsersPage is generated from static mock arrays. Need GET /analytics/passenger-heatmap?from=X&to=Y that returns actual trip timestamp data aggregated by day-of-week and hour-of-day from the tickets or gps_logs table.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BE-09</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Verify and test recurring trip schedule endpoints — GET/POST/PUT/DELETE /trips/recurring</div>
+        <div class="task-detail">The endpoints are defined in endpoints.js but the controller implementation needs verification. Test the full CRUD flow: create a recurring schedule, pause it, resume it, delete it. Check that the recurrence pattern (Daily/Weekdays/Weekends/Custom) is stored and returned correctly.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BE-10</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Add DELETE endpoints for vehicles, routes, drivers — currently no delete capability</div>
+        <div class="task-detail">None of the CRUD resources have DELETE routes. Add: DELETE /vehicles/:id, DELETE /routes/:id, DELETE /drivers/:id, DELETE /stops/:id with soft-delete (set status = 'deleted') rather than hard delete to preserve audit trail. Apply appropriate RBAC permissions.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BE-11</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Enforce maintenance mode and force-2FA settings from system_settings table</div>
+        <div class="task-detail">The system_settings table stores these flags but they are never read at runtime. Add a middleware that checks the maintenance_mode flag on every request and returns 503 (except for allowed IPs). In the login flow, check force_2fa_enabled and reject logins without 2FA if set.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BE-12</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Add pagination and search/filter to all list endpoints</div>
+        <div class="task-detail">GET /users, GET /drivers, GET /vehicles, GET /trips have no pagination. At scale these will return thousands of rows. Add ?page=1&limit=20&search=X&status=Y query params. Use OFFSET/FETCH NEXT in SQL (already done for audit-logs — copy that pattern). Return { total, page, limit, data } envelope.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BE-13</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Fix driver performance — idle_hours is hardcoded 0.0, never calculated</div>
+        <div class="task-detail">In backend/src/controllers/drivers.controller.js line 76: "0.0 AS idle_hours". Implement real idle calculation: idle_hours = total scheduled hours - total active trip hours for the period. This requires joining trips with their actual durations from trip_stop_arrivals or trip status change timestamps.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BE-14</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Add real-time heatmap data endpoint using actual gps_logs density</div>
+        <div class="task-detail">The heatmap overlay uses 365 hardcoded CircleMarkers. Replace with GET /analytics/gps-heatmap that returns coordinates from gps_logs aggregated into grid cells. Count GPS pings per 0.01-degree cell, normalize density, and return [lat, lng, intensity] arrays for the frontend Leaflet heatmap.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 3 — MISSING DATABASE TABLES / COLUMNS -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">🔵 Database — Missing Tables & Columns <span class="section-count" id="s3-count"></span></div>
+  <div class="task-list" id="s3">
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">DB-01</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-db">Database</span>
+        </div>
+        <div class="task-title">Create wallet_freeze_log table for freeze management</div>
+        <div class="task-detail">CREATE TABLE wallet_freeze_log (freeze_id INT IDENTITY PK, user_id INT FK→users, action VARCHAR(10) CHECK IN ('freeze','unfreeze'), reason NVARCHAR(100), notes NVARCHAR(500), frozen_by INT FK→users, created_at DATETIME2 DEFAULT GETUTCDATE()). Also add is_frozen BIT and frozen_reason columns to the wallets table.</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">DB-02</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-db">Database</span>
+        </div>
+        <div class="task-title">Create vehicle_docs table for registration/insurance/roadworthiness expiry tracking</div>
+        <div class="task-detail">CREATE TABLE vehicle_docs (doc_id INT IDENTITY PK, plate_number VARCHAR(20) FK→vehicles, registration_expiry DATE, insurance_expiry DATE, roadworthiness_expiry DATE, updated_at DATETIME2, updated_by INT FK→users). Or add these columns directly to the vehicles table.</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">DB-03</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-db">Database</span>
+        </div>
+        <div class="task-title">Create vehicle_maintenance_records table</div>
+        <div class="task-detail">CREATE TABLE vehicle_maintenance_records (record_id INT IDENTITY PK, vehicle_id INT FK→vehicles, service_date DATE, type VARCHAR(50), mechanic VARCHAR(100), workshop VARCHAR(150), cost DECIMAL(10,2), odometer INT, next_service_date DATE, notes NVARCHAR(500), created_by INT FK→users, created_at DATETIME2 DEFAULT GETUTCDATE()).</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">DB-04</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-db">Database</span>
+        </div>
+        <div class="task-title">Create vehicle_fuel_records table</div>
+        <div class="task-detail">CREATE TABLE vehicle_fuel_records (fuel_id INT IDENTITY PK, vehicle_id INT FK→vehicles, fill_date DATE, station NVARCHAR(100), liters DECIMAL(8,2), cost_per_liter DECIMAL(6,3), total_cost DECIMAL(10,2), odometer INT, km_per_liter AS (odometer / NULLIF(liters, 0)) PERSISTED, recorded_by INT FK→users, created_at DATETIME2 DEFAULT GETUTCDATE()).</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">DB-05</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-db">Database</span>
+        </div>
+        <div class="task-title">Add license_expiry_date column to drivers table</div>
+        <div class="task-detail">ALTER TABLE drivers ADD license_expiry_date DATE NULL. Currently the License Alerts tab in DriversPage uses mock data because there is no expiry date in the DB query. Update getDrivers controller to include this column. Update the createDriver and updateDriver endpoints to accept and store it.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">DB-06</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-db">Database</span>
+        </div>
+        <div class="task-title">Add category column to users table for passenger type (Regular/Student/Senior/Staff)</div>
+        <div class="task-detail">ALTER TABLE users ADD category VARCHAR(20) DEFAULT 'regular' CHECK IN ('regular', 'student', 'senior', 'employee', 'school_child'). Update getPassengers controller to include it. This affects fare calculations and the passenger activity heatmap category filter.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">DB-07</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-db">Database</span>
+        </div>
+        <div class="task-title">Add indexes on high-traffic foreign key columns</div>
+        <div class="task-detail">Add: CREATE INDEX IX_gps_logs_trip_id ON gps_logs(trip_id); CREATE INDEX IX_wallet_transactions_user_id ON wallet_transactions(user_id); CREATE INDEX IX_tickets_user_id ON tickets(user_id); CREATE INDEX IX_notifications_user_id ON notifications(user_id); CREATE INDEX IX_login_audit_logged_at ON login_audit_logs(logged_at DESC). These will prevent table scans as data grows.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">DB-08</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-db">Database</span>
+        </div>
+        <div class="task-title">Connect roles/permissions DB tables to RBAC middleware — they are completely disconnected</div>
+        <div class="task-detail">The DB has roles, permissions, role_permissions tables (migration 004) but permissions.middleware.js uses a hardcoded JavaScript object. Either: (A) load permissions from DB on startup and cache in memory, or (B) query permissions per request. The admin role editor UI currently writes nowhere — it must persist to these DB tables.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 4 — SECURITY HARDENING -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">🔒 Security Hardening <span class="section-count" id="s4-count"></span></div>
+  <div class="task-list" id="s4">
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">SEC-07</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-security">Security</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Restrict CORS — change app.use(cors()) to whitelist specific origins</div>
+        <div class="task-detail">In backend/src/app.js line 40: replace cors() with cors({ origin: ['http://localhost:5173', 'http://localhost:5174', 'https://your-production-domain.com'], credentials: true }). Currently any website on the internet can make cross-origin requests to your API.</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">SEC-08</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-security">Security</span>
+          <span class="badge badge-frontend">Frontend</span>
+        </div>
+        <div class="task-title">Move auth token from localStorage to HttpOnly cookie to prevent XSS token theft</div>
+        <div class="task-detail">In apiClient.js, getToken() reads from localStorage — easily stolen via XSS. Change to use HttpOnly, Secure, SameSite=Strict cookies. The backend needs to set Set-Cookie on login responses. The refresh endpoint needs to accept the cookie. This is a significant refactor but critical for security.</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">SEC-09</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-security">Security</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Add rate limiting to register endpoint and all non-auth routes</div>
+        <div class="task-detail">Currently only auth login/refresh have rate limiting. Add: register (max 5/hour per IP), vehicle CRUD (max 100/min), all API routes general limiter (max 200/min). Use the existing rateLimiter.middleware.js pattern. Without this, the API is vulnerable to enumeration and resource exhaustion attacks.</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">SEC-10</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-security">Security</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Require TOTP re-confirmation to disable 2FA</div>
+        <div class="task-detail">In auth.controller.js, the disable2fa handler (line 456) only checks requireAuth — it doesn't verify the current TOTP code. An attacker who steals an access token can immediately disable 2FA. Add { totp_code } to the request body and verify with speakeasy before disabling.</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">SEC-11</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-security">Security</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Fix ADMIN_BASE_URL — currently points to local LAN IP 192.168.1.109:5173</div>
+        <div class="task-detail">In backend/.env: ADMIN_BASE_URL=http://192.168.1.109:5173. Password reset emails send links like http://192.168.1.109:5173?token=... which only work on the same local network. Change to the real public domain or https://localhost:5173 for dev. Users outside the network cannot reset their passwords.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">SEC-12</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-security">Security</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Add helmet middleware for security headers (CSP, HSTS, X-Frame-Options etc.)</div>
+        <div class="task-detail">npm install helmet — then in app.js: import helmet from 'helmet'; app.use(helmet()). This adds Content-Security-Policy, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, and HSTS headers automatically. Currently none of these are set.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">SEC-13</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-security">Security</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Add input validation to register endpoint — email format, password strength, allowed roles</div>
+        <div class="task-detail">Register endpoint has zero input validation. Add: email must match RFC email regex, password minimum 8 chars with complexity, full_name non-empty max 100 chars, phone E.164 format if provided. Use the existing validate.middleware.js pattern. Reject any role other than 'passenger' for self-registration.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">SEC-14</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-security">Security</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Restrict Swagger UI access in production — currently public with full API schema exposed</div>
+        <div class="task-detail">GET /api/docs is publicly accessible with no auth, showing every endpoint, parameter, and schema. Add requireAdminOnly middleware in front of the swagger routes, or disable entirely with a NODE_ENV=production check: if (process.env.NODE_ENV !== 'production') { app.use('/api/docs', ...) }</div>
+      </div>
+    </div>
+
+    <div class="task low" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">SEC-15</span>
+          <span class="badge badge-low">Low</span>
+          <span class="badge badge-security">Security</span>
+        </div>
+        <div class="task-title">Add .gitignore entries for all .env files and run git history audit</div>
+        <div class="task-detail">Add to .gitignore: .env, .env.local, .env.production, backend/.env, admin/.env. Run: git log --all --full-history -- "**/.env" to check git history. If .env files were ever committed, use BFG Repo Cleaner (https://rtyley.github.io/bfg-repo-cleaner/) to scrub them from all commits.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 5 — BUG FIXES -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">🐛 Bug Fixes <span class="section-count" id="s5-count"></span></div>
+  <div class="task-list" id="s5">
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BUG-01</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Add try-catch to getUserProfile, updateUserProfile, createVehicle, updateVehicleStatus — currently unhandled crashes</div>
+        <div class="task-detail">users.controller.js: getUserProfile and updateUserProfile have no try-catch. vehicles.controller.js: createVehicle and updateVehicleStatus have no try-catch. An unhandled DB error will crash the entire Express process. Wrap each in try-catch and return res.status(500).json({ error: ... }).</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BUG-02</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-frontend">Frontend</span>
+        </div>
+        <div class="task-title">Dashboard page — replace all hardcoded ALERTS, TRIPS, VEHICLES, FLEET, DRIVERS, WEEK, LOAD_HOURS constants with real API data</div>
+        <div class="task-detail">DashboardPage.jsx lines 17-79 define 7 large constant arrays with fake data that never change. The live map, active trips table, vehicle status table, driver leaderboard, and revenue/load charts all use these constants. Wire them to real API endpoints: getDashboardStats already exists — extend it or add getDashboardOverview to return all needed data.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BUG-03</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">getUserProfile returns undefined (not 404) when user not found</div>
+        <div class="task-detail">In users.controller.js, getUserProfile does: res.json(result.recordset[0]) — if no user found, this sends "undefined" as JSON (or null). Add: if (!result.recordset[0]) return res.status(404).json({ error: 'User not found' });</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BUG-04</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-frontend">Frontend</span>
+        </div>
+        <div class="task-title">Journey playback — show "No GPS data available" when real data is empty, not fake simulated movement</div>
+        <div class="task-detail">The playback overlay currently always generates a procedural GPS track regardless of whether real data exists. When the real gps_logs query returns empty, show a clear "No GPS data recorded for this vehicle on this date" message instead of showing fabricated movement that looks real.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BUG-05</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-frontend">Frontend</span>
+        </div>
+        <div class="task-title">Geofence and GPS signal-loss alerts — label them clearly as simulation/demo in the UI</div>
+        <div class="task-detail">TRP-047 is hardcoded as a geofence breach demo and TRP-038 is hardcoded as GPS signal-lost demo. Either wire these to real backend events or add a visible "DEMO" badge so evaluators understand these are simulated. Do not present fabricated alerts as real operational data.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BUG-06</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Report scheduler uses setInterval — replace with persistent job tracking</div>
+        <div class="task-detail">reportScheduler.js runs setInterval every 30 minutes. If the server restarts, all scheduled timing is lost. Add a last_sent_at timestamp to the scheduled_reports table and check on startup if any reports are overdue. This makes the scheduler restart-safe without needing Redis or a job queue.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BUG-07</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-frontend">Frontend</span>
+        </div>
+        <div class="task-title">Camera stream — add reconnection logic and don't show LIVE badge when not connected</div>
+        <div class="task-detail">useWebSocketCamera hook has no reconnect on drop. If the camera server closes the connection, the feed freezes silently with a LIVE badge still showing. Add: automatic reconnection with exponential backoff (1s, 2s, 4s, max 30s), and change the status badge to DISCONNECTED when WebSocket readyState !== OPEN.</div>
+      </div>
+    </div>
+
+    <div class="task low" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BUG-08</span>
+          <span class="badge badge-low">Low</span>
+          <span class="badge badge-frontend">Frontend</span>
+        </div>
+        <div class="task-title">Dashboard total fleet KPI is hardcoded as "13" — should come from the database</div>
+        <div class="task-detail">DashboardPage.jsx line 212: value: "13" is a hardcoded string. The dashboard stats API should return totalVehicles from a COUNT(*) on the vehicles table, and the fleet breakdown (active/maintenance/offline) should come from a GROUP BY status query, not the hardcoded FLEET constant.</div>
+      </div>
+    </div>
+
+    <div class="task low" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">BUG-09</span>
+          <span class="badge badge-low">Low</span>
+          <span class="badge badge-backend">Backend</span>
+        </div>
+        <div class="task-title">Add request logging middleware — currently no HTTP access logs</div>
+        <div class="task-detail">npm install morgan — add app.use(morgan('combined')) in app.js. Without logging, there's no way to diagnose production issues, monitor usage, or detect attacks. For production, log to a file or logging service (e.g. morgan with a write stream to logs/access.log).</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 6 — FRONTEND FIXES -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">🟤 Frontend Fixes & Improvements <span class="section-count" id="s6-count"></span></div>
+  <div class="task-list" id="s6">
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">FE-01</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-frontend">Frontend</span>
+        </div>
+        <div class="task-title">Wire Roles page CRUD to backend — currently saves nothing and changes no permissions</div>
+        <div class="task-detail">RolesPage.jsx has a fully designed role editor modal and permission matrix UI. However, creating/editing/deleting roles only updates local state. These actions must call: POST /api/roles (create), PUT /api/roles/:id (edit), DELETE /api/roles/:id (delete), and POST /api/roles/:id/permissions (update matrix). These backend endpoints need to be created first (see DB-08).</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">FE-02</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-frontend">Frontend</span>
+        </div>
+        <div class="task-title">Connect Analytics charts to real report API data — currently show hardcoded values</div>
+        <div class="task-detail">AnalyticsPage.jsx renders revenue, passenger load, top routes, and peak hours charts. The backend has GET /api/reports/revenue and /passenger-usage with real SQL. Wire the chart data to these endpoints. The Driver Performance and Vehicle Utilization report tables already call the right APIs but use mock fallback — ensure they work with FRONTEND_ONLY=false.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">FE-03</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-frontend">Frontend</span>
+        </div>
+        <div class="task-title">Add proper loading and error states to all pages — most pages show nothing or crash on API failure</div>
+        <div class="task-detail">Most pages use useEffect + setState without loading spinners or error messages. When the API is slow or fails, users see blank content. Add: loading skeleton/spinner while fetching, error banner with retry button on failure, empty state illustration when data is genuinely empty. Use a consistent pattern across all 19 pages.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">FE-04</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-frontend">Frontend</span>
+        </div>
+        <div class="task-title">Vehicle photo upload — add real backend endpoint with file storage</div>
+        <div class="task-detail">VehiclesPage Photos tab uses FileReader for client-side preview only. Photos are never sent to the server — they vanish on page refresh. Add: POST /api/vehicles/:id/photos with multer middleware, store files to disk or Azure Blob Storage, return public URLs. Add GET /api/vehicles/:id/photos to retrieve them.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">FE-05</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-frontend">Frontend</span>
+        </div>
+        <div class="task-title">Notification delivery tracking — implement real sent/delivered/read counting</div>
+        <div class="task-detail">NotificationPage shows per-notification sent/delivered/read progress bars, but these are fake percentages from mock data. Add a notifications_delivery table or status column. When a notification is created, record sent_count. When a user opens it, mark as read. Aggregate counts for the admin view.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">FE-06</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-frontend">Frontend</span>
+        </div>
+        <div class="task-title">Make camera server URL configurable via env variable — currently hardcoded localhost:9000</div>
+        <div class="task-detail">The WebSocket URL is hardcoded in useWebSocketCamera or CameraPage. Add VITE_CAMERA_WS_URL to admin/.env and reference it as import.meta.env.VITE_CAMERA_WS_URL || 'ws://localhost:9000'. This allows deployment to different environments without code changes.</div>
+      </div>
+    </div>
+
+    <div class="task low" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">FE-07</span>
+          <span class="badge badge-low">Low</span>
+          <span class="badge badge-frontend">Frontend</span>
+        </div>
+        <div class="task-title">Passenger activity heatmap — the 7×24 grid must use real data, not a generated random pattern</div>
+        <div class="task-detail">The heatmap in UsersPage generates values from a seed formula or uses MOCK data. Connect it to real ticket/trip timestamps from the backend. Group by DAY_OF_WEEK and HOUR. Show "Insufficient data" if fewer than 100 records exist instead of showing a convincing but fake activity pattern.</div>
+      </div>
+    </div>
+
+    <div class="task low" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">FE-08</span>
+          <span class="badge badge-low">Low</span>
+          <span class="badge badge-frontend">Frontend</span>
+        </div>
+        <div class="task-title">Clean up the 100+ line mockAdminResponse function — move mock data to a dev-only module</div>
+        <div class="task-detail">apiClient.js mixes production HTTP code with the 100+ line mock response router. This makes the file hard to read and maintains fake data alongside real code. Move the mock logic to a separate admin/src/api/mockClient.js file, and have apiClient.js conditionally import it: import { mockAdminResponse } from './mockClient'.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 7 — PRODUCTION DEPLOYMENT -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">🚀 Production Deployment Checklist <span class="section-count" id="s7-count"></span></div>
+  <div class="task-list" id="s7">
+
+    <div class="task critical" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">PROD-01</span>
+          <span class="badge badge-critical">Critical</span>
+          <span class="badge badge-deploy">Deploy</span>
+        </div>
+        <div class="task-title">Create admin/.env with VITE_FRONTEND_ONLY=false and VITE_API_URL pointing to backend</div>
+        <div class="task-detail">File does not exist. Create: VITE_FRONTEND_ONLY=false, VITE_API_URL=http://localhost:4000/api (dev) or https://api.yourdomain.com/api (prod). Without this, every evaluator who opens the admin dashboard sees fake data regardless of whether the backend is running.</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">PROD-02</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-deploy">Deploy</span>
+        </div>
+        <div class="task-title">Build the React frontend for production — npm run build in admin/ directory</div>
+        <div class="task-detail">Never serve the Vite dev server in production (it's slow, exposes source maps, and is insecure). Run npm run build in the admin/ directory. Serve the dist/ folder with a static file server (nginx, serve, or Express static middleware). The build output goes to admin/dist/.</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">PROD-03</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-deploy">Deploy</span>
+        </div>
+        <div class="task-title">Run npm audit and fix all critical/high vulnerabilities in both admin/ and backend/</div>
+        <div class="task-detail">Run: cd backend && npm audit --audit-level=high. Then: cd admin && npm audit --audit-level=high. Fix or npm audit fix any critical packages. Document any that cannot be fixed (e.g. breaking API changes) with a justification comment.</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">PROD-04</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-deploy">Deploy</span>
+        </div>
+        <div class="task-title">Set NODE_ENV=production in backend/.env and configure process manager (PM2)</div>
+        <div class="task-detail">Add NODE_ENV=production to backend/.env. Install PM2: npm install -g pm2. Create ecosystem.config.js with: apps: [{ name: 'yalla-transit-api', script: './src/server.js', env_production: { NODE_ENV: 'production', PORT: 4000 } }]. Start with: pm2 start ecosystem.config.js --env production. pm2 startup for auto-restart.</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">PROD-05</span>
+          <span class="badge badge-high">High</span>
+          <span class="badge badge-deploy">Deploy</span>
+        </div>
+        <div class="task-title">Enable HTTPS — obtain TLS certificate for production domain</div>
+        <div class="task-detail">HTTP is unacceptable for a transport system handling wallet transactions and personal data. Options: (A) Azure App Service with managed cert, (B) Let's Encrypt via Certbot on a VPS, (C) Cloudflare proxy with automatic TLS. Also set Secure flag on cookies once HTTPS is active.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">PROD-06</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-deploy">Deploy</span>
+        </div>
+        <div class="task-title">Add a proper health check endpoint that pings the database</div>
+        <div class="task-detail">The current GET / just returns a string. Add GET /api/health that: queries SELECT 1 from the DB, checks reportScheduler status, returns { status: 'ok', db: 'connected', uptime: process.uptime(), timestamp } or { status: 'degraded', db: 'error', error: message } with HTTP 503. Used by load balancers, monitoring, and PM2.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">PROD-07</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-deploy">Deploy</span>
+        </div>
+        <div class="task-title">Use a dedicated SMTP service instead of personal Gmail — Gmail has 500/day send limits</div>
+        <div class="task-detail">SMTP_USER=ayoushagh@gmail.com is a personal account. For production: use Mailgun (free tier: 5,000/month), SendGrid (free: 100/day), or AWS SES (very cheap). These also provide delivery analytics, bounce handling, and SPF/DKIM setup for proper email deliverability. Update SMTP settings in backend/.env.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">PROD-08</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-deploy">Deploy</span>
+        </div>
+        <div class="task-title">Run all database migration files against Azure SQL before launch</div>
+        <div class="task-detail">Verify migrations 001–004 have been executed: backend/migrations/001_add_refresh_tokens.sql, 002_staff_shift_and_complaints.sql, 003_refresh_blacklist_and_passenger_qr.sql, 004_roles_arrivals_and_audit.sql. Also run the new migrations for wallet_freeze_log, vehicle_docs, vehicle_maintenance_records, vehicle_fuel_records, and the new index statements.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">PROD-09</span>
+          <span class="badge badge-medium">Medium</span>
+          <span class="badge badge-deploy">Deploy</span>
+        </div>
+        <div class="task-title">Add error monitoring — integrate Sentry or similar to catch unhandled errors in production</div>
+        <div class="task-detail">npm install @sentry/node @sentry/browser. Initialize in app.js before routes: Sentry.init({ dsn: process.env.SENTRY_DSN }). Add Sentry.setupExpressErrorHandler(app) after routes. In the React app, wrap with Sentry.init({ dsn }). This catches and reports any unhandled crash with full stack trace.</div>
+      </div>
+    </div>
+
+    <div class="task low" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">PROD-10</span>
+          <span class="badge badge-low">Low</span>
+          <span class="badge badge-deploy">Deploy</span>
+        </div>
+        <div class="task-title">Create a README with setup instructions — backend and admin start commands, env var list, DB migration steps</div>
+        <div class="task-detail">Document: Prerequisites (Node 18+, Azure SQL access), Setup steps (clone → npm install → copy .env.example → run migrations → npm start), Environment variables (complete list with descriptions), Port assignments (4000 backend, 5173 admin, 5174 staff, 9000 camera), Troubleshooting common errors (DB connection, SMTP config).</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- SECTION 8 — FYP SUBMISSION DELIVERABLES -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header">📄 FYP Submission Deliverables <span class="section-count" id="s8-count"></span></div>
+  <div class="task-list" id="s8">
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">DOC-01</span>
+          <span class="badge badge-high">High</span>
+        </div>
+        <div class="task-title">Create Full ERD Diagram — Crow's Foot notation covering all 25+ tables with data types and FK relationships</div>
+        <div class="task-detail">Use draw.io, Lucidchart, or dbdiagram.io. Cover every table: users, drivers, vehicles, routes, stops, trips, gps_logs, tickets, wallets, wallet_transactions, wallet_recharges, wallet_adjustments, wallet_freeze_log, refresh_tokens, user_sessions, login_audit_logs, login_lockouts, user_totp, user_suspension_logs, roles, permissions, role_permissions, audit_logs, complaints, complaint_updates, notifications, notification_templates, system_settings, staff_shift_sessions, driver_schedules, trip_stop_arrivals, passenger_qr_tokens, refresh_token_blacklist, vehicle_docs, vehicle_maintenance_records, vehicle_fuel_records.</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">DOC-02</span>
+          <span class="badge badge-high">High</span>
+        </div>
+        <div class="task-title">Create System Architecture Diagram — all apps, API server, DB, camera AI, GPS stream, SMTP</div>
+        <div class="task-detail">Show: Admin Dashboard (React/Vite:5173) → Backend API (Express:4000) → Azure SQL. Passenger App (React Native/Expo) → Backend API. Driver App → Backend API. Staff Portal (React/Vite:5174) → Backend API. Camera AI (Python/FastAPI:9000) → Backend API (passenger counts) + Admin via WebSocket. Backend → SMTP (Gmail/Mailgun). Backend → OSRM (ETA routing).</div>
+      </div>
+    </div>
+
+    <div class="task high" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">DOC-03</span>
+          <span class="badge badge-high">High</span>
+        </div>
+        <div class="task-title">Create Data Flow Diagrams — at minimum: Auth/JWT flow, GPS data flow, wallet top-up flow</div>
+        <div class="task-detail">Auth flow: Login → lockout check → password verify → 2FA gate → token issue → session create → audit log. GPS flow: Driver app → POST /gps/log → DB insert → Admin live map polls → ETA calculation. Wallet top-up: Staff scans QR → POST /staff/wallet/topup → DB transaction → wallet_recharges insert → wallet_transactions insert → new balance returned.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">DOC-04</span>
+          <span class="badge badge-medium">Medium</span>
+        </div>
+        <div class="task-title">Create Test Cases Document — functional test cases for each feature with expected vs actual results</div>
+        <div class="task-detail">Cover at minimum: Login (success, wrong password, lockout, 2FA), Passenger suspend/restore, Wallet top-up and adjust, Trip create/conflict, GPS recording, QR code scan, Notification send. For each: precondition, steps, expected result, actual result, pass/fail. This is a required FYP submission document.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">DOC-05</span>
+          <span class="badge badge-medium">Medium</span>
+        </div>
+        <div class="task-title">Create Security Analysis Document — threats addressed and countermeasures implemented</div>
+        <div class="task-detail">Document: OWASP Top 10 mapping (SQL injection mitigated by parameterized queries, XSS mitigated by React, brute force mitigated by lockout, broken auth mitigated by refresh token rotation, etc.). List vulnerabilities fixed during development. Describe what remains (missing CSRF, localStorage token storage) and why it was accepted.</div>
+      </div>
+    </div>
+
+    <div class="task medium" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">DOC-06</span>
+          <span class="badge badge-medium">Medium</span>
+        </div>
+        <div class="task-title">Record Demo Video (3–5 min) — full walkthrough: login → track bus → admin reports → camera AI</div>
+        <div class="task-detail">Recommended flow: (1) Admin login with 2FA, (2) Dashboard overview, (3) Live tracking map with vehicle moving, (4) Trip scheduling and conflict detection, (5) Passenger management — suspend a user, adjust wallet, (6) Driver performance report, (7) Camera AI passenger counting, (8) Notification send, (9) Audit log showing all actions taken during demo. Use OBS Studio or Loom for recording.</div>
+      </div>
+    </div>
+
+    <div class="task low" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">DOC-07</span>
+          <span class="badge badge-low">Low</span>
+        </div>
+        <div class="task-title">Create Presentation Slide Deck — problem statement, solution, architecture, key features, challenges, results</div>
+        <div class="task-detail">Structure: (1) Problem: public transport inefficiency in Lebanon, (2) Solution: Yalla Transit ecosystem, (3) System Architecture diagram, (4) Key features demo screenshots, (5) Technical highlights (AI passenger counting, real-time GPS, RBAC, refresh token rotation), (6) Challenges overcome, (7) Evaluation results/scores, (8) Future work, (9) Q&A. ~15-20 slides.</div>
+      </div>
+    </div>
+
+    <div class="task low" onclick="toggle(this)">
+      <div class="checkbox"><span class="checkmark">✓</span></div>
+      <div class="task-body">
+        <div class="task-meta">
+          <span class="id-tag">DOC-08</span>
+          <span class="badge badge-low">Low</span>
+        </div>
+        <div class="task-title">Create A0 Poster for poster session</div>
+        <div class="task-detail">Include: System name + logo, team names + student IDs + supervisor, problem statement (2-3 sentences), architecture diagram (simplified), key features list with icons, screenshots of main screens (admin dashboard, passenger app, driver app), technology stack logos, QR code linking to demo video or GitHub. Use A0 (841×1189mm) at 150dpi minimum.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</main>
+
+<footer>
+  Yalla Transit — Admin QA Fix List · Generated 2026-05-10 · Click items to mark as complete · Progress saved in browser
+</footer>
+
+<script>
+  const STORAGE_KEY = 'yalla_transit_todo_v1';
+
+  function loadState() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; }
+  }
+
+  function saveState(state) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  function getTaskId(el) {
+    return el.querySelector('.id-tag')?.textContent?.trim() || null;
+  }
+
+  function toggle(el) {
+    el.classList.toggle('done');
+    const state = loadState();
+    const id = getTaskId(el);
+    if (id) state[id] = el.classList.contains('done');
+    saveState(state);
+    updateCounters();
+  }
+
+  function updateCounters() {
+    const all   = document.querySelectorAll('.task');
+    const done  = document.querySelectorAll('.task.done');
+    const total = all.length;
+    const doneN = done.length;
+    const remN  = total - doneN;
+    const pct   = total ? Math.round((doneN / total) * 100) : 0;
+
+    document.getElementById('total-count').textContent     = total;
+    document.getElementById('remaining-count').textContent = remN;
+    document.getElementById('done-count').textContent      = doneN;
+    document.getElementById('pbar').style.width            = pct + '%';
+    document.getElementById('pbar-pct').textContent        = pct + '%';
+
+    // Section counts
+    const sections = ['s1','s2','s3','s4','s5','s6','s7','s8'];
+    sections.forEach(sid => {
+      const sec    = document.getElementById(sid);
+      if (!sec) return;
+      const stasks = sec.querySelectorAll('.task');
+      const sdone  = sec.querySelectorAll('.task.done');
+      const el     = document.getElementById(sid + '-count');
+      if (el) el.textContent = `${sdone.length}/${stasks.length}`;
+    });
+  }
+
+  function copyTask(btn, task) {
+    const id     = task.querySelector('.id-tag')?.textContent?.trim() || '';
+    const title  = task.querySelector('.task-title')?.textContent?.trim() || '';
+    const detail = task.querySelector('.task-detail')?.textContent?.trim() || '';
+    const badges = [...task.querySelectorAll('.badge')].map(b => b.textContent.trim()).join(' · ');
+    const text   = `[${id}] ${title}\n${badges}\n\n${detail}`;
+
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = '✓ Copied';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.innerHTML = '⎘ Copy';
+        btn.classList.remove('copied');
+      }, 1800);
+    }).catch(() => {
+      // Fallback for browsers without clipboard API
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      btn.textContent = '✓ Copied';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.innerHTML = '⎘ Copy'; btn.classList.remove('copied'); }, 1800);
+    });
+  }
+
+  // Restore saved state on load
+  window.addEventListener('DOMContentLoaded', () => {
+    const state = loadState();
+    document.querySelectorAll('.task').forEach(task => {
+      const id = getTaskId(task);
+      if (id && state[id]) task.classList.add('done');
+
+      // Inject copy button into every task
+      const btn = document.createElement('button');
+      btn.className = 'copy-btn';
+      btn.innerHTML = '⎘ Copy';
+      btn.addEventListener('click', e => { e.stopPropagation(); copyTask(btn, task); });
+      task.appendChild(btn);
+    });
+    updateCounters();
+  });
+</script>
+</body>
+</html>

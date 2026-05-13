@@ -27,21 +27,48 @@ const mockPassengerData = {
   ],
 };
 
+const _now = new Date();
 const mockMultiTrip = {
   route_type: 'multi_step',
   mode: 'fastest',
   total_price: 400000,
-  total_duration_min: 52,
+  total_duration_min: 44,
+  traffic_adjusted_duration_min: 58,
+  traffic_multiplier: 1.45,
+  traffic_condition: { label: 'Heavy', color: '#F97316', severity: 'heavy' },
+  delay_description: 'moderate delays expected',
+  departure_time: _now.toISOString(),
+  best_departure_windows: [],
   total_transfers: 2,
   walking_time_min: 8,
   summary: 'ML1 -> B1 -> B2 -> Walk',
   segments: [
-    { type: 'bus', line: 'ML1', route_name: 'Chtaura -> Adliyeh Roundabout', from: 'Chtaura', to: 'Adliyeh Roundabout', from_stop_id: 11, to_stop_id: 48, stops: 13, estimated_time_min: 20, price: 150000 },
-    { type: 'bus', line: 'B1', route_name: 'Adliyeh -> Hamra', from: 'Adliyeh Roundabout', to: 'Hamra', from_stop_id: 48, to_stop_id: 71, stops: 8, estimated_time_min: 15, price: 125000, transfer_from_previous_min: 4 },
-    { type: 'bus', line: 'B2', route_name: 'Hamra -> Beirut Souks', from: 'Hamra', to: 'Beirut Souks', from_stop_id: 71, to_stop_id: 88, stops: 5, estimated_time_min: 9, price: 125000, transfer_from_previous_min: 3 },
-    { type: 'walk', from: 'Beirut Souks Stop', to: 'Final Destination', from_stop_id: 88, to_stop_id: 999, estimated_time_min: 8, distance_m: 550, directions_available: true },
+    { type: 'bus', line: 'ML1', route_name: 'Chtaura -> Adliyeh Roundabout', from: 'Chtaura', to: 'Adliyeh Roundabout', from_stop_id: 11, to_stop_id: 48, stops: 13, estimated_time_min: 18, traffic_adjusted_min: 26, osrm_distance_m: 42000, data_source: 'osrm', price: 150000 },
+    { type: 'bus', line: 'B1', route_name: 'Adliyeh -> Hamra', from: 'Adliyeh Roundabout', to: 'Hamra', from_stop_id: 48, to_stop_id: 71, stops: 8, estimated_time_min: 12, traffic_adjusted_min: 17, osrm_distance_m: 7200, data_source: 'osrm', price: 125000, transfer_from_previous_min: 4 },
+    { type: 'bus', line: 'B2', route_name: 'Hamra -> Beirut Souks', from: 'Hamra', to: 'Beirut Souks', from_stop_id: 71, to_stop_id: 88, stops: 5, estimated_time_min: 6, traffic_adjusted_min: 9, osrm_distance_m: 3100, data_source: 'osrm', price: 125000, transfer_from_previous_min: 3 },
+    { type: 'walk', from: 'Beirut Souks Stop', to: 'Final Destination', from_stop_id: 88, to_stop_id: 999, estimated_time_min: 8, traffic_adjusted_min: 8, distance_m: 550, directions_available: true },
   ],
   alternatives: [],
+};
+
+const mockEtaPredictions = {
+  trip_id: 1,
+  route_id: 1,
+  route_name: 'Express 101',
+  trip_status: 'ongoing',
+  current_position: { latitude: 33.8938, longitude: 35.5018 },
+  last_gps_update: _now.toISOString(),
+  gps_age_seconds: 4,
+  current_stop_index: 1,
+  traffic: { multiplier: 1.45, label: 'Heavy', color: '#F97316', severity: 'heavy', delay_description: 'moderate delays expected' },
+  stops: [
+    { stop_id: 2, stop_name: 'City Mall', stop_order: 2, status: 'next',     eta_min: 8.5,  eta_min_base: 5.9,  eta_time: new Date(_now.getTime() + 8.5 * 60000).toTimeString().slice(0,5),  distance_m: 2200 },
+    { stop_id: 3, stop_name: 'Airport',   stop_order: 3, status: 'upcoming', eta_min: 22.4, eta_min_base: 15.4, eta_time: new Date(_now.getTime() + 22.4 * 60000).toTimeString().slice(0,5), distance_m: 6800 },
+  ],
+  confidence: 0.92,
+  historical_samples: 0,
+  best_departure_windows: [],
+  generated_at: _now.toISOString(),
 };
 
 const mockResponse = (config) => {
@@ -54,6 +81,8 @@ const mockResponse = (config) => {
   }
   if (url.includes('/auth/me')) return { user: { _id: 'mock-user', name: 'Demo User', email: 'demo@example.com' } };
   if (url.includes('/routes/multi-trip')) return mockMultiTrip;
+  if (url.includes('/eta-predictions')) return mockEtaPredictions;
+  if (url.includes('/traffic-forecast')) return { traffic_multiplier: 1.0, condition: { label: 'Moderate', color: '#84CC16' }, day_forecast: [], best_departure_windows: [] };
   if (url.includes('/buses')) return { buses: mockPassengerData.buses };
   if (url.includes('/wallet/transactions')) return mockPassengerData.transactions;
   if (url.includes('/wallet/locations')) return mockPassengerData.locations;

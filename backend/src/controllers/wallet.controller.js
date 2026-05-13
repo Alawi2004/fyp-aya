@@ -234,6 +234,321 @@ export const getRechargeAuditLog = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// POST /api/wallet/adjust                   ← ADMIN ONLY
+// Admin credit or debit on any passenger wallet with full audit trail.
+// Body: { user_id, type: 'credit'|'debit', amount, reason, notes? }
+// ─────────────────────────────────────────────────────────────────────────────
+export const adminAdjustWallet = async (req, res) => {
+  const { user_id, type, amount, reason, notes } = req.body;
+  const adminId = req.user.user_id;
+
+  if (!user_id || !type || !amount || !reason) {
+    return res.status(400).json({ error: "user_id, type, amount, and reason are required" });
+  }
+  if (!["credit", "debit"].includes(type)) {
+    return res.status(400).json({ error: "type must be 'credit' or 'debit'" });
+  }
+  const parsedAmount = parseFloat(amount);
+  if (isNaN(parsedAmount) || parsedAmount <= 0) {
+    return res.status(400).json({ error: "amount must be a positive number" });
+  }
+
+  const pool = await poolPromise;
+  const tx   = pool.transaction();
+
+  try {
+    await tx.begin();
+
+    // Get current balance
+    const balRes = await tx.request()
+      .input("uid", sql.Int, user_id)
+      .query(`
+        IF NOT EXISTS (SELECT 1 FROM wallets WHERE user_id=@uid)
+          INSERT INTO wallets(user_id, balance) VALUES(@uid, 0);
+        SELECT balance FROM wallets WHERE user_id=@uid;
+      `);
+
+    const balanceBefore = parseFloat(balRes.recordset[0]?.balance ?? 0);
+    const delta         = type === "credit" ? parsedAmount : -parsedAmount;
+    const balanceAfter  = balanceBefore + delta;
+
+    if (type === "debit" && balanceAfter < 0) {
+      await tx.rollback();
+      return res.status(400).json({ error: `Insufficient balance. Current: ${balanceBefore.toFixed(2)}` });
+    }
+
+    // Update wallet
+    await tx.request()
+      .input("uid",    sql.Int,           user_id)
+      .input("amount", sql.Decimal(10, 2), delta)
+      .query("UPDATE wallets SET balance = balance + @amount WHERE user_id=@uid");
+
+    // Log to wallet_transactions
+    await tx.request()
+      .input("uid",    sql.Int,           user_id)
+      .input("type",   sql.VarChar(10),   type)
+      .input("amount", sql.Decimal(10, 2), parsedAmount)
+      .input("reason", sql.VarChar(200),  reason)
+      .query(`
+        INSERT INTO wallet_transactions(user_id, type, amount, description, created_at)
+        VALUES(@uid, @type, @amount, CONCAT('Admin adjustment: ', @reason), GETUTCDATE())
+      `);
+
+    // Audit trail in wallet_adjustments
+    await tx.request()
+      .input("user_id",        sql.Int,           user_id)
+      .input("admin_id",       sql.Int,           adminId)
+      .input("type",           sql.NVarChar(10),  type)
+      .input("amount",         sql.Decimal(10, 2), parsedAmount)
+      .input("reason",         sql.NVarChar(200), reason)
+      .input("notes",          sql.NVarChar(500), notes || null)
+      .input("balance_before", sql.Decimal(10, 2), balanceBefore)
+      .input("balance_after",  sql.Decimal(10, 2), balanceAfter)
+      .query(`
+        INSERT INTO wallet_adjustments
+          (user_id,admin_id,type,amount,reason,notes,balance_before,balance_after)
+        VALUES
+          (@user_id,@admin_id,@type,@amount,@reason,@notes,@balance_before,@balance_after)
+      `);
+
+    await tx.commit();
+
+    res.status(201).json({
+      message:        `Wallet ${type}ed successfully`,
+      balance_before: balanceBefore,
+      balance_after:  balanceAfter,
+      amount:         parsedAmount,
+      type,
+    });
+  } catch (err) {
+    await tx.rollback().catch(() => {});
+    console.error(err);
+    res.status(500).json({ error: "Wallet adjustment failed — transaction rolled back" });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/wallet/adjustments               ← ADMIN ONLY
+// Full admin wallet adjustment audit trail.
+// ─────────────────────────────────────────────────────────────────────────────
+export const getAdjustmentHistory = async (req, res) => {
+  try {
+    const pool  = await poolPromise;
+    const limit = Math.min(Number(req.query.limit) || 100, 500);
+
+    const result = await pool.request()
+      .input("limit", sql.Int, limit)
+      .query(`
+        SELECT TOP (@limit)
+          wa.adjustment_id, wa.type, wa.amount, wa.reason, wa.notes,
+          wa.balance_before, wa.balance_after, wa.created_at,
+          u.full_name  AS user_name,  u.email AS user_email,
+          a.full_name  AS admin_name, a.email AS admin_email
+        FROM wallet_adjustments wa
+        JOIN users u ON u.user_id = wa.user_id
+        JOIN users a ON a.user_id = wa.admin_id
+        ORDER BY wa.created_at DESC
+      `);
+
+    res.json(result.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch adjustment history" });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/wallet/statuses                  ← ADMIN ONLY
+// Returns every passenger wallet with live freeze status.
+// Requires is_frozen, freeze_reason, freeze_notes, frozen_at, frozen_by_admin_id
+// columns on the wallets table (see migration SQL below).
+// ─────────────────────────────────────────────────────────────────────────────
+export const getWalletStatuses = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT
+        w.user_id,
+        u.full_name                                          AS name,
+        u.email,
+        CAST(w.balance AS FLOAT)                             AS balance,
+        CASE WHEN w.is_frozen = 1 THEN 'Frozen' ELSE 'Active' END AS status,
+        w.freeze_reason                                      AS reason,
+        w.freeze_notes                                       AS notes,
+        w.frozen_at,
+        a.full_name                                          AS frozen_by
+      FROM wallets w
+      JOIN  users u ON u.user_id = w.user_id
+      LEFT JOIN users a ON a.user_id = w.frozen_by_admin_id
+      WHERE u.role = 'passenger'
+      ORDER BY w.is_frozen DESC, u.full_name
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch wallet statuses" });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/wallet/:id/freeze               ← ADMIN ONLY
+// Freezes a passenger wallet — blocks deductions but preserves balance.
+// Body: { reason, notes? }
+// ─────────────────────────────────────────────────────────────────────────────
+export const freezeWallet = async (req, res) => {
+  const userId  = parseInt(req.params.id, 10);
+  const adminId = req.user.user_id;
+  const { reason, notes } = req.body;
+
+  if (!reason) return res.status(400).json({ error: "reason is required" });
+
+  const pool = await poolPromise;
+  const tx   = pool.transaction();
+  try {
+    await tx.begin();
+
+    const walletRes = await tx.request()
+      .input("uid", sql.Int, userId)
+      .query("SELECT wallet_id, is_frozen FROM wallets WHERE user_id = @uid");
+
+    if (!walletRes.recordset[0]) {
+      await tx.rollback();
+      return res.status(404).json({ error: "Wallet not found" });
+    }
+    if (walletRes.recordset[0].is_frozen) {
+      await tx.rollback();
+      return res.status(409).json({ error: "Wallet is already frozen" });
+    }
+
+    await tx.request()
+      .input("uid",     sql.Int,          userId)
+      .input("reason",  sql.NVarChar(200), reason)
+      .input("notes",   sql.NVarChar(500), notes || null)
+      .input("adminId", sql.Int,          adminId)
+      .query(`
+        UPDATE wallets
+        SET is_frozen            = 1,
+            freeze_reason        = @reason,
+            freeze_notes         = @notes,
+            frozen_at            = GETUTCDATE(),
+            frozen_by_admin_id   = @adminId
+        WHERE user_id = @uid
+      `);
+
+    await tx.request()
+      .input("uid",     sql.Int,          userId)
+      .input("action",  sql.NVarChar(20),  "frozen")
+      .input("reason",  sql.NVarChar(200), reason)
+      .input("notes",   sql.NVarChar(500), notes || null)
+      .input("adminId", sql.Int,          adminId)
+      .query(`
+        INSERT INTO wallet_freeze_log (user_id, action, reason, notes, admin_id, created_at)
+        VALUES (@uid, @action, @reason, @notes, @adminId, GETUTCDATE())
+      `);
+
+    await tx.commit();
+    res.json({ message: "Wallet frozen successfully" });
+  } catch (err) {
+    await tx.rollback().catch(() => {});
+    console.error(err);
+    res.status(500).json({ error: "Failed to freeze wallet" });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/wallet/:id/unfreeze             ← ADMIN ONLY
+// Re-enables deductions on a previously frozen wallet.
+// Body: { notes? }
+// ─────────────────────────────────────────────────────────────────────────────
+export const unfreezeWallet = async (req, res) => {
+  const userId  = parseInt(req.params.id, 10);
+  const adminId = req.user.user_id;
+  const { notes } = req.body;
+
+  const pool = await poolPromise;
+  const tx   = pool.transaction();
+  try {
+    await tx.begin();
+
+    const walletRes = await tx.request()
+      .input("uid", sql.Int, userId)
+      .query("SELECT wallet_id, is_frozen FROM wallets WHERE user_id = @uid");
+
+    if (!walletRes.recordset[0]) {
+      await tx.rollback();
+      return res.status(404).json({ error: "Wallet not found" });
+    }
+    if (!walletRes.recordset[0].is_frozen) {
+      await tx.rollback();
+      return res.status(409).json({ error: "Wallet is not frozen" });
+    }
+
+    await tx.request()
+      .input("uid", sql.Int, userId)
+      .query(`
+        UPDATE wallets
+        SET is_frozen            = 0,
+            freeze_reason        = NULL,
+            freeze_notes         = NULL,
+            frozen_at            = NULL,
+            frozen_by_admin_id   = NULL
+        WHERE user_id = @uid
+      `);
+
+    await tx.request()
+      .input("uid",     sql.Int,          userId)
+      .input("action",  sql.NVarChar(20),  "unfrozen")
+      .input("reason",  sql.NVarChar(200), "Investigation completed")
+      .input("notes",   sql.NVarChar(500), notes || null)
+      .input("adminId", sql.Int,          adminId)
+      .query(`
+        INSERT INTO wallet_freeze_log (user_id, action, reason, notes, admin_id, created_at)
+        VALUES (@uid, @action, @reason, @notes, @adminId, GETUTCDATE())
+      `);
+
+    await tx.commit();
+    res.json({ message: "Wallet unfrozen successfully" });
+  } catch (err) {
+    await tx.rollback().catch(() => {});
+    console.error(err);
+    res.status(500).json({ error: "Failed to unfreeze wallet" });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/wallet/freeze-log                ← ADMIN ONLY
+// Full audit trail of freeze / unfreeze events.
+// ─────────────────────────────────────────────────────────────────────────────
+export const getFreezeLog = async (req, res) => {
+  try {
+    const pool  = await poolPromise;
+    const limit = Math.min(Number(req.query.limit) || 100, 500);
+
+    const result = await pool.request()
+      .input("limit", sql.Int, limit)
+      .query(`
+        SELECT TOP (@limit)
+          fl.log_id        AS id,
+          fl.user_id,
+          u.full_name      AS [user],
+          fl.action,
+          fl.reason,
+          fl.notes,
+          a.full_name      AS [by],
+          fl.created_at    AS at
+        FROM wallet_freeze_log fl
+        JOIN  users u ON u.user_id = fl.user_id
+        LEFT JOIN users a ON a.user_id = fl.admin_id
+        ORDER BY fl.created_at DESC
+      `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch freeze log" });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Fallback locations shown if DB table doesn't exist yet
 // ─────────────────────────────────────────────────────────────────────────────
 const FALLBACK_LOCATIONS = [

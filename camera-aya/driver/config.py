@@ -41,5 +41,27 @@ class Config:
     HAND_EAR_Y_BOT_EXTEND = 0.15
     HAND_DETECT_CONFIDENCE = 0.60
 
+    # ── PERCLOS (scientific drowsiness metric) ────────────────────────────────
+    # Rolling window length in seconds over which eye-closure proportion is
+    # computed.  Standard clinical value is 60 s; 30 s is more reactive.
+    PERCLOS_WINDOW_SECS      = 60.0
+    # Proportion of the window that must be "eyes closed" to trigger drowsiness.
+    # Dinges & Grace (1998) recommend 0.15 (15 %) for the P80 criterion.
+    PERCLOS_DROWSY_THRESHOLD = 0.15
+    # Seconds of sustained PERCLOS alert before it fires (0 = immediate,
+    # the PERCLOS window itself already smooths the signal).
+    DROWSY_ALERT_SECS        = 0.0
+
+    # ── Seatbelt detection ────────────────────────────────────────────────────
+    # Path to custom YOLOv8 seatbelt weights (relative to detectors/ dir).
+    # If the file is absent, the Hough-line heuristic is used instead.
+    SEATBELT_MODEL           = "seatbelt.pt"
+    SEATBELT_CONF_THRESHOLD  = 0.40
+    SEATBELT_OFF_ALERT_SECS  = 2.0   # warn after N seconds without a strap
+
+    # ── Phone detection logging ───────────────────────────────────────────────
+    PHONE_LOG_DETECTIONS  = True
+    PHONE_DETECTION_LOG   = "phone_detections.csv"
+
     # ── Logging ───────────────────────────────────────────────────────────────
     LOG_FILE = "distraction_log.csv"

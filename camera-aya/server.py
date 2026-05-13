@@ -137,6 +137,17 @@ class _Config:
     HAND_EAR_Y_TOP_EXTEND          = 0.2
     HAND_EAR_Y_BOT_EXTEND          = 0.15
     HAND_DETECT_CONFIDENCE         = 0.60
+    # PERCLOS
+    PERCLOS_WINDOW_SECS            = 60.0
+    PERCLOS_DROWSY_THRESHOLD       = 0.15
+    DROWSY_ALERT_SECS              = 0.0
+    # Seatbelt
+    SEATBELT_MODEL                 = "seatbelt.pt"
+    SEATBELT_CONF_THRESHOLD        = 0.40
+    SEATBELT_OFF_ALERT_SECS        = 2.0
+    # Phone logging
+    PHONE_LOG_DETECTIONS           = True
+    PHONE_DETECTION_LOG            = "logs/phone_detections.csv"
 
 
 _cfg_mod.Config = _Config
@@ -178,11 +189,12 @@ sys.path.remove(_PASSENGER_DIR)
 
 sys.path.insert(0, _DRIVER_DIR)
 
-from detectors.face_detector  import FaceDetector   # noqa: E402
-from detectors.eye_detector   import EyeDetector    # noqa: E402
-from detectors.gaze_estimator import GazeEstimator  # noqa: E402
-from detectors.phone_detector import PhoneDetector  # noqa: E402
-from alerts.alert_manager     import AlertManager   # noqa: E402
+from detectors.face_detector     import FaceDetector     # noqa: E402
+from detectors.eye_detector      import EyeDetector, PERCLOSTracker  # noqa: E402
+from detectors.gaze_estimator    import GazeEstimator    # noqa: E402
+from detectors.phone_detector    import PhoneDetector    # noqa: E402
+from detectors.seatbelt_detector import SeatbeltDetector # noqa: E402
+from alerts.alert_manager        import AlertManager     # noqa: E402
 import utils.drawing as _dd                         # noqa: E402
 
 _drv_draw_status    = _dd.draw_status_panel
@@ -436,10 +448,12 @@ class PassengerCameraSession:
 
 _ALERT_STATE_MAP = {
     "EYES_CLOSED":    "drowsy",
+    "DROWSY":         "drowsy",
     "PHONE_DETECTED": "phone_detected",
     "GAZE_LEFT":      "distracted",
     "GAZE_RIGHT":     "distracted",
     "GAZE_DOWN":      "distracted",
+    "SEATBELT_OFF":   "seatbelt_off",
     "NO_FACE":        "no_face",
 }
 
@@ -452,16 +466,21 @@ class DriverCameraSession:
         self.source  = source
         self._shared = shared_cam
 
-        self._face_det  = FaceDetector()
-        self._eye_det   = EyeDetector()
-        self._gaze_est  = GazeEstimator()
-        self._phone_det = PhoneDetector()
-        self._alert_mgr = AlertManager()
+        self._face_det     = FaceDetector()
+        self._eye_det      = EyeDetector()
+        self._perclos      = PERCLOSTracker()
+        self._gaze_est     = GazeEstimator()
+        self._phone_det    = PhoneDetector()
+        self._seatbelt_det = SeatbeltDetector()
+        self._alert_mgr    = AlertManager()
 
         self._status: dict = {
             "state": "unknown", "confidence": 0, "alert": False,
             "face_detected": False, "eyes_closed": False, "gaze": "unknown",
-            "phone_detected": False, "ear": 0.0, "fps": 0.0,
+            "phone_detected": False, "ear": 0.0,
+            "perclos": 0.0, "perclos_drowsy": False,
+            "seatbelt_on": True,
+            "fps": 0.0,
             "bus_id": bus_id, "timestamp": datetime.now().isoformat(),
         }
         self._alert_history: list        = []
@@ -546,15 +565,18 @@ class DriverCameraSession:
             face_results = self._face_det.detect(frame)
             face_found   = bool(face_results and face_results.multi_face_landmarks)
 
-            ear         = 0.30
-            eyes_closed = False
-            gaze        = "unknown"
-            face_box    = None
+            ear             = 0.30
+            eyes_closed     = False
+            gaze            = "unknown"
+            face_box        = None
+            perclos         = 0.0
+            perclos_drowsy  = False
 
             if face_found:
                 lm = face_results.multi_face_landmarks[0]
                 _, _, ear, eyes_closed = self._eye_det.compute(lm, w, h)
                 self._eye_det.draw(frame, lm, w, h, eyes_closed)
+                perclos, perclos_drowsy = self._perclos.update(now, ear)
                 gaze     = self._gaze_est.estimate(lm, w, h, frame)
                 face_box = self._face_det.get_face_box(lm, w, h)
                 _drv_draw_face_box(frame, face_box, gaze)
@@ -564,12 +586,16 @@ class DriverCameraSession:
             if phone_boxes:
                 _drv_draw_phones(frame, phone_boxes)
 
+            seatbelt_on, _sb_conf = self._seatbelt_det.detect(frame, face_box)
+
             alerts = self._alert_mgr.update(
                 face_detected=face_found,
                 eyes_closed=eyes_closed,
                 gaze=gaze,
                 phone_near=phone_near,
                 now=now,
+                perclos_drowsy=perclos_drowsy,
+                seatbelt_on=seatbelt_on,
             )
 
             # ── State + confidence ────────────────────────────────────────────
@@ -588,18 +614,21 @@ class DriverCameraSession:
 
             with self._lock:
                 self._status = {
-                    "state":          top_state,
-                    "alert_label":    top_state,
-                    "confidence":     confidence,
-                    "alert":          top_state != "focused",
-                    "face_detected":  face_found,
-                    "eyes_closed":    eyes_closed,
-                    "gaze":           gaze,
-                    "phone_detected": phone_near,
-                    "ear":            round(ear, 3),
-                    "fps":            round(fps, 1),
-                    "bus_id":         self.bus_id,
-                    "timestamp":      datetime.now().isoformat(),
+                    "state":           top_state,
+                    "alert_label":     top_state,
+                    "confidence":      confidence,
+                    "alert":           top_state != "focused",
+                    "face_detected":   face_found,
+                    "eyes_closed":     eyes_closed,
+                    "gaze":            gaze,
+                    "phone_detected":  phone_near,
+                    "ear":             round(ear, 3),
+                    "perclos":         perclos,
+                    "perclos_drowsy":  perclos_drowsy,
+                    "seatbelt_on":     seatbelt_on,
+                    "fps":             round(fps, 1),
+                    "bus_id":          self.bus_id,
+                    "timestamp":       datetime.now().isoformat(),
                 }
                 if top_state != "focused" and top_state != self._prev_alert:
                     self._alert_history.append({
@@ -667,16 +696,23 @@ class BusCameraSession:
             self.bus_id, self.passenger_source,
             shared_cam=self.shared_cam, capacity=self.capacity,
         )
-        self.driver_cam = DriverCameraSession(
-            self.bus_id, self.driver_source,
-            shared_cam=self.shared_cam,
-        )
         self.passenger_cam.start()
-        self.driver_cam.start()
+        driver_note = ""
+        try:
+            self.driver_cam = DriverCameraSession(
+                self.bus_id, self.driver_source,
+                shared_cam=self.shared_cam,
+            )
+            self.driver_cam.start()
+        except Exception as e:
+            self.driver_cam = None
+            driver_note = f" [driver disabled: {e}]"
+            print(f"[BusCameraSession] Driver pipeline unavailable for "
+                  f"bus {self.bus_id}: {e}")
         shared_note = " [shared camera]" if self.shared_cam else ""
         print(f"[BusCameraSession] Bus {self.bus_id} started "
               f"(passenger={self.passenger_source}, "
-              f"driver={self.driver_source}){shared_note}")
+              f"driver={self.driver_source}){shared_note}{driver_note}")
 
     def stop(self):
         if self.passenger_cam:

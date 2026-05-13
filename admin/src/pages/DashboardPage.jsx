@@ -9,17 +9,10 @@ import {
 import { Panel }    from "../components/Panel";
 import { StatCard } from "../components/StatCard";
 import DashboardMap from "../components/map/DashboardMap";
-import { getDashboardStats } from "../api/endpoints";
+import { getDashboardStats, getDashboardOverview } from "../api/endpoints";
 import { MOCK_DASHBOARD_STATS } from "../data/mockData";
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-const ALERTS = [
-  { type: "emergency", text: "Driver K. Moussa sent emergency alert — Trip #TRP-041", time: "2m ago"  },
-  { type: "delay",     text: "Trip #TRP-038 reporting 15 min delay — heavy traffic",   time: "11m ago" },
-  { type: "delay",     text: "Vehicle BUS-07 flagged for maintenance check",           time: "34m ago" },
-  { type: "info",      text: "New passenger registration spike — 38 today",            time: "1h ago"  },
-];
+// ─── Mock fallbacks (used until the real API responds) ────────────────────────
 
 const ALERT_CFG = {
   emergency: { dot: "#EF4444", bg: "#FEF2F2", color: "#DC2626", label: "Emergency" },
@@ -27,37 +20,44 @@ const ALERT_CFG = {
   info:      { dot: "#3B82F6", bg: "#EFF6FF", color: "#2563EB", label: "Info"      },
 };
 
-const TRIPS = [
-  { id: "TRP-041", route: "Route 12A", name: "City Center → Airport",     seats: "24/30", eta: "14:15", status: "Ongoing"   },
-  { id: "TRP-038", route: "Route 7B",  name: "University → Downtown",     seats: "18/30", eta: "14:42", status: "Delayed"   },
-  { id: "TRP-029", route: "Route 3C",  name: "North Terminal → Mall",     seats: "30/30", eta: "13:58", status: "Ongoing"   },
-  { id: "TRP-033", route: "Route 5D",  name: "Hospital → Station",        seats: "11/30", eta: "14:30", status: "Scheduled" },
-  { id: "TRP-045", route: "Route 9E",  name: "Harbor → Old City",         seats: "22/30", eta: "15:05", status: "Ongoing"   },
+const DEFAULT_ALERTS = [
+  { type: "emergency", text: "Driver K. Moussa sent emergency alert — Trip #TRP-041", time: "2m ago"  },
+  { type: "delay",     text: "Trip #TRP-038 reporting 15 min delay — heavy traffic",   time: "11m ago" },
+  { type: "delay",     text: "Vehicle BUS-07 flagged for maintenance check",           time: "34m ago" },
+  { type: "info",      text: "New passenger registration spike — 38 today",            time: "1h ago"  },
 ];
 
-const VEHICLES = [
-  { id: "BUS-01", driver: "Karim Moussa",   speed: 45, location: "Hamra, Beirut",      fuel: 78, status: "Active"  },
-  { id: "BUS-05", driver: "Lara Abi Nader", speed: 62, location: "Achrafieh, Beirut",  fuel: 52, status: "Active"  },
-  { id: "BUS-09", driver: "Joe Pharaon",    speed: 0,  location: "Dbayeh Highway",     fuel: 35, status: "Idle"    },
-  { id: "BUS-02", driver: "Maya Salameh",   speed: 38, location: "Corniche, Beirut",   fuel: 91, status: "Active"  },
-  { id: "BUS-11", driver: "Rami Khoury",    speed: 0,  location: "Depot - Mtayleb",    fuel: 12, status: "Alert"   },
-  { id: "BUS-07", driver: "Sara Khoury",    speed: 55, location: "Jounieh Highway",    fuel: 64, status: "Active"  },
+const DEFAULT_TRIPS = [
+  { id: "TRP-041", route: "Route 12A", name: "City Center → Airport",  seats: "24/30", eta: "14:15", status: "Ongoing"   },
+  { id: "TRP-038", route: "Route 7B",  name: "University → Downtown",  seats: "18/30", eta: "14:42", status: "Delayed"   },
+  { id: "TRP-029", route: "Route 3C",  name: "North Terminal → Mall",  seats: "30/30", eta: "13:58", status: "Ongoing"   },
+  { id: "TRP-033", route: "Route 5D",  name: "Hospital → Station",     seats: "11/30", eta: "14:30", status: "Scheduled" },
+  { id: "TRP-045", route: "Route 9E",  name: "Harbor → Old City",      seats: "22/30", eta: "15:05", status: "Ongoing"   },
 ];
 
-const FLEET = [
+const DEFAULT_VEHICLES = [
+  { id: "BUS-01", driver: "Karim Moussa",   speed: 45, location: "Hamra, Beirut",     fuel: 78, status: "Active" },
+  { id: "BUS-05", driver: "Lara Abi Nader", speed: 62, location: "Achrafieh, Beirut", fuel: 52, status: "Active" },
+  { id: "BUS-09", driver: "Joe Pharaon",    speed: 0,  location: "Dbayeh Highway",    fuel: 35, status: "Idle"   },
+  { id: "BUS-02", driver: "Maya Salameh",   speed: 38, location: "Corniche, Beirut",  fuel: 91, status: "Active" },
+  { id: "BUS-11", driver: "Rami Khoury",    speed: 0,  location: "Depot - Mtayleb",   fuel: 12, status: "Alert"  },
+  { id: "BUS-07", driver: "Sara Khoury",    speed: 55, location: "Jounieh Highway",   fuel: 64, status: "Active" },
+];
+
+const DEFAULT_FLEET = [
   { label: "Active",      count: 8, total: 13, color: "#10B981" },
   { label: "Maintenance", count: 2, total: 13, color: "#F59E0B" },
   { label: "Offline",     count: 3, total: 13, color: "#EF4444" },
 ];
 
-const DRIVERS = [
+const DEFAULT_DRIVERS = [
   { initials: "KM", name: "Karim Moussa",   trips: 12, rating: 4.9, change: "+0.2" },
   { initials: "LA", name: "Lara Abi Nader", trips: 9,  rating: 4.5, change: "+0.1" },
   { initials: "JP", name: "Joe Pharaon",    trips: 7,  rating: 4.3, change: "-0.1" },
   { initials: "MS", name: "Maya Salameh",   trips: 5,  rating: 4.7, change: "+0.3" },
 ];
 
-const WEEK = [
+const DEFAULT_WEEK = [
   { day: "Mon", trips: 42, rev: 72 },
   { day: "Tue", trips: 51, rev: 85 },
   { day: "Wed", trips: 38, rev: 64 },
@@ -67,7 +67,7 @@ const WEEK = [
   { day: "Sun", trips: 29, rev: 48 },
 ];
 
-const LOAD_HOURS = [
+const DEFAULT_LOAD_HOURS = [
   { label: "6am",  pct: 38 },
   { label: "8am",  pct: 70 },
   { label: "9am",  pct: 90 },
@@ -166,10 +166,10 @@ function BarChartInline({ data, valueKey, color, height = 80 }) {
   );
 }
 
-function LoadChart() {
+function LoadChart({ data }) {
   return (
     <div style={{ display: "flex", alignItems: "flex-end", gap: 5, height: 80 }}>
-      {LOAD_HOURS.map(({ label, pct, current, future }) => (
+      {data.map(({ label, pct, current, future }) => (
         <div key={label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
           <div style={{
             width:        "100%",
@@ -197,19 +197,40 @@ export default function DashboardPage({ onNavigate }) {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
-  const [stats, setStats] = useState(MOCK_DASHBOARD_STATS);
+  const [stats,     setStats]     = useState(MOCK_DASHBOARD_STATS);
+  const [alerts,    setAlerts]    = useState(DEFAULT_ALERTS);
+  const [trips,     setTrips]     = useState(DEFAULT_TRIPS);
+  const [vehicles,  setVehicles]  = useState(DEFAULT_VEHICLES);
+  const [fleet,     setFleet]     = useState(DEFAULT_FLEET);
+  const [drivers,   setDrivers]   = useState(DEFAULT_DRIVERS);
+  const [week,      setWeek]      = useState(DEFAULT_WEEK);
+  const [loadHours, setLoadHours] = useState(DEFAULT_LOAD_HOURS);
+  const [revSummary, setRevSummary] = useState({ this_week: 8420, last_week: 7390, change_pct: 14 });
 
   useEffect(() => {
     getDashboardStats()
       .then(d => setStats(d))
+      .catch(() => {});
+
+    getDashboardOverview()
+      .then(d => {
+        if (d.alerts?.length)     setAlerts(d.alerts);
+        if (d.trips?.length)      setTrips(d.trips);
+        if (d.vehicles?.length)   setVehicles(d.vehicles);
+        if (d.fleet?.length)      setFleet(d.fleet);
+        if (d.drivers?.length)    setDrivers(d.drivers);
+        if (d.week?.length)       setWeek(d.week);
+        if (d.load_hours?.length) setLoadHours(d.load_hours);
+        if (d.rev_summary)        setRevSummary(d.rev_summary);
+      })
       .catch(() => {});
   }, []);
 
   const KPI = [
     {
       label:    "Total Fleet",
-      value:    "13",
-      delta:    "2 in maintenance",
+      value:    String(stats.totalVehicles ?? fleet[0]?.total ?? "—"),
+      delta:    `${fleet.find(f => f.label === "Maintenance")?.count ?? "?"} in maintenance`,
       up:       null,
       accent:   "#2563EB",
       gradient: "linear-gradient(135deg,#DBEAFE,#EFF6FF)",
@@ -263,7 +284,7 @@ export default function DashboardPage({ onNavigate }) {
             {today}
           </div>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0F172A", margin: 0, letterSpacing: "-.5px" }}>
-            {greeting}, Admin 👋
+            {greeting}, Admin
           </h1>
           <p style={{ fontSize: 13, color: "#64748B", margin: "4px 0 0", fontWeight: 400 }}>
             Here's what's happening with your fleet today.
@@ -278,7 +299,7 @@ export default function DashboardPage({ onNavigate }) {
             background: "#FEF2F2", border: "1px solid #FECACA",
           }}>
             <AlertTriangle size={14} color="#EF4444" />
-            <span style={{ fontSize: 12, fontWeight: 600, color: "#DC2626" }}>3 Active Alerts</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#DC2626" }}>{alerts.filter(a => a.type !== "info").length} Active Alerts</span>
           </div>
 
           <button
@@ -340,7 +361,7 @@ export default function DashboardPage({ onNavigate }) {
           accent="#F59E0B"
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {ALERTS.map((a, i) => {
+            {alerts.map((a, i) => {
               const c = ALERT_CFG[a.type];
               return (
                 <div key={i} style={{
@@ -391,9 +412,9 @@ export default function DashboardPage({ onNavigate }) {
             gap:          8,
           }}>
             {[
-              { label: "Critical", count: 1, color: "#EF4444", bg: "#FEF2F2" },
-              { label: "Warnings", count: 2, color: "#F59E0B", bg: "#FFFBEB" },
-              { label: "Info",     count: 1, color: "#3B82F6", bg: "#EFF6FF" },
+              { label: "Critical", count: alerts.filter(a => a.type === "emergency").length, color: "#EF4444", bg: "#FEF2F2" },
+              { label: "Warnings", count: alerts.filter(a => a.type === "delay").length,     color: "#F59E0B", bg: "#FFFBEB" },
+              { label: "Info",     count: alerts.filter(a => a.type === "info").length,       color: "#3B82F6", bg: "#EFF6FF" },
             ].map(({ label, count, color, bg }) => (
               <div key={label} style={{
                 textAlign: "center", padding: "8px 4px",
@@ -441,9 +462,9 @@ export default function DashboardPage({ onNavigate }) {
                 </tr>
               </thead>
               <tbody>
-                {TRIPS.map((t, i) => (
+                {trips.map((t, i) => (
                   <tr key={t.id} className="table-row" style={{
-                    borderBottom: i < TRIPS.length - 1 ? "1px solid #F8FAFC" : "none",
+                    borderBottom: i < trips.length - 1 ? "1px solid #F8FAFC" : "none",
                     cursor: "pointer",
                   }}>
                     <td style={{ padding: "11px 16px" }}>
@@ -504,11 +525,15 @@ export default function DashboardPage({ onNavigate }) {
             icon={<BarChart3 size={14} color="#2563EB" />}
             accent="#2563EB"
           >
-            <LoadChart />
+            <LoadChart data={loadHours} />
             <div style={{ display: "flex", justifyContent: "space-between",
                           marginTop: 10, paddingTop: 8, borderTop: "1px solid #F1F5F9" }}>
-              <span style={{ fontSize: 10, color: "#94A3B8" }}>Peak: 9am</span>
-              <span style={{ fontSize: 10, color: "#2563EB", fontWeight: 600 }}>↑ 100% capacity now</span>
+              <span style={{ fontSize: 10, color: "#94A3B8" }}>
+                Peak: {loadHours.reduce((p, h) => h.pct > p.pct ? h : p, loadHours[0])?.label ?? "—"}
+              </span>
+              <span style={{ fontSize: 10, color: "#2563EB", fontWeight: 600 }}>
+                ↑ {loadHours.find(h => h.current)?.pct ?? 0}% capacity now
+              </span>
             </div>
           </Panel>
 
@@ -518,7 +543,7 @@ export default function DashboardPage({ onNavigate }) {
             accent="#2563EB"
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {FLEET.map(f => (
+              {fleet.map(f => (
                 <div key={f.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <div style={{
                     width: 8, height: 8, borderRadius: "50%",
@@ -557,7 +582,7 @@ export default function DashboardPage({ onNavigate }) {
               alignItems:   "center",
             }}>
               <span style={{ fontSize: 11, color: "#94A3B8" }}>Total fleet</span>
-              <span style={{ fontSize: 14, fontWeight: 800, color: "#0F172A" }}>13 vehicles</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: "#0F172A" }}>{fleet[0]?.total ?? "—"} vehicles</span>
             </div>
           </Panel>
         </div>
@@ -573,13 +598,13 @@ export default function DashboardPage({ onNavigate }) {
           icon={<Star size={14} color="#F59E0B" />}
           accent="#F59E0B"
         >
-          {DRIVERS.map((d, i) => (
+          {drivers.map((d, i) => (
             <div key={d.name} style={{
               display:      "flex",
               alignItems:   "center",
               gap:          12,
               padding:      "10px 0",
-              borderBottom: i < DRIVERS.length - 1 ? "1px solid #F8FAFC" : "none",
+              borderBottom: i < drivers.length - 1 ? "1px solid #F8FAFC" : "none",
             }}>
               {/* Rank */}
               <span style={{
@@ -631,7 +656,7 @@ export default function DashboardPage({ onNavigate }) {
           icon={<TrendingUp size={14} color="#10B981" />}
           accent="#10B981"
         >
-          <BarChartInline data={WEEK} valueKey="rev" color="#2563EB" height={90} />
+          <BarChartInline data={week} valueKey="rev" color="#2563EB" height={90} />
 
           <div style={{
             display:     "flex",
@@ -645,7 +670,7 @@ export default function DashboardPage({ onNavigate }) {
                 This week
               </div>
               <div style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", letterSpacing: "-.5px" }}>
-                $8,420
+                ${revSummary.this_week.toLocaleString(undefined, { maximumFractionDigits: 0 })}
               </div>
             </div>
             <div style={{ textAlign: "right" }}>
@@ -653,12 +678,15 @@ export default function DashboardPage({ onNavigate }) {
                 vs last week
               </div>
               <div style={{
-                fontSize: 22, fontWeight: 800, color: "#10B981",
+                fontSize: 22, fontWeight: 800,
+                color: revSummary.change_pct >= 0 ? "#10B981" : "#EF4444",
                 letterSpacing: "-.5px",
                 display: "flex", alignItems: "center", gap: 4,
               }}>
-                <ArrowUpRight size={18} color="#10B981" />
-                +14%
+                {revSummary.change_pct >= 0
+                  ? <ArrowUpRight size={18} color="#10B981" />
+                  : <ArrowDownRight size={18} color="#EF4444" />}
+                {revSummary.change_pct >= 0 ? "+" : ""}{revSummary.change_pct}%
               </div>
             </div>
           </div>
@@ -668,7 +696,7 @@ export default function DashboardPage({ onNavigate }) {
             <div style={{ fontSize: 11, fontWeight: 600, color: "#64748B", marginBottom: 8 }}>
               Daily trip volume
             </div>
-            <BarChartInline data={WEEK} valueKey="trips" color="#10B981" height={50} />
+            <BarChartInline data={week} valueKey="trips" color="#10B981" height={50} />
           </div>
         </Panel>
       </div>
@@ -704,7 +732,7 @@ export default function DashboardPage({ onNavigate }) {
             }} />
           </div>
           <span style={{ fontSize: 11, color: "#10B981", fontWeight: 700 }}>
-            6 vehicles tracked · Updated live
+            {vehicles.length} vehicles tracked · Updated live
           </span>
         </div>
 
@@ -730,9 +758,9 @@ export default function DashboardPage({ onNavigate }) {
               </tr>
             </thead>
             <tbody>
-              {VEHICLES.map((v, i) => (
+              {vehicles.map((v, i) => (
                 <tr key={v.id} className="table-row" style={{
-                  borderBottom: i < VEHICLES.length - 1 ? "1px solid #F8FAFC" : "none",
+                  borderBottom: i < vehicles.length - 1 ? "1px solid #F8FAFC" : "none",
                   cursor: "pointer",
                 }}>
                   <td style={{ padding: "12px 16px" }}>
@@ -780,7 +808,9 @@ export default function DashboardPage({ onNavigate }) {
                     </div>
                   </td>
                   <td style={{ padding: "12px 16px" }}>
-                    <FuelBar pct={v.fuel} />
+                    {v.fuel != null
+                      ? <FuelBar pct={v.fuel} />
+                      : <span style={{ fontSize: 11, color: "#CBD5E1" }}>—</span>}
                   </td>
                   <td style={{ padding: "12px 16px" }}>
                     <StatusBadge status={v.status} />

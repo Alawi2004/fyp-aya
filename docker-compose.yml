@@ -1,0 +1,35 @@
+services:
+  # ── Node.js / Express API ────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "4000:4000"
+    env_file:
+      - ./backend/.env       # set SQL_CONNECTION_STRING + JWT_SECRET here
+    networks:
+      - transport-net
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:4000/',r=>process.exit(r.statusCode===200?0:1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  # ── Python FastAPI camera server ─────────────────────────────────────────────
+  camera:
+    build:
+      context: ./camera-aya
+    ports:
+      - "9000:9000"
+    environment:
+      - NODE_BACKEND_URL=http://backend:4000
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - transport-net
+
+networks:
+  transport-net:
+    driver: bridge

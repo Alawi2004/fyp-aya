@@ -1,11 +1,13 @@
 // src/pages/CameraPage.jsx
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Check, Smartphone, Moon, Eye, AlertTriangle, User } from 'lucide-react';
 import { useWebSocketCamera } from '../hooks/useWebSocketCamera';
 import { useCounterData }     from '../hooks/useCounterData';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const CAMERA_SERVER_REST = 'http://localhost:9000';
+import { CAMERA_REST_URL } from '../config/camera';
+const CAMERA_SERVER_REST = CAMERA_REST_URL;
 
 const MOCK_BUSES = [
   { bus_id: 'BUS-01', driver: 'Karim Moussa',   route: 'Route 12A', on_bus: 24, driver_alert: 'focused',   active: true  },
@@ -18,10 +20,11 @@ const MOCK_BUSES = [
 ];
 
 const ALERT_META = {
-  focused:        { color: '#059669', bg: '#dcfce7', border: '#86efac', icon: '✓',  label: 'Focused',         severity: 0 },
-  phone_detected: { color: '#dc2626', bg: '#fee2e2', border: '#fca5a5', icon: '📱', label: 'Phone Detected!', severity: 3 },
-  drowsy:         { color: '#d97706', bg: '#fef3c7', border: '#fde68a', icon: '😴', label: 'Drowsy',          severity: 2 },
-  distracted:     { color: '#7c3aed', bg: '#ede9fe', border: '#c4b5fd', icon: '👀', label: 'Distracted!',     severity: 1 },
+  focused:        { color: '#059669', bg: '#dcfce7', border: '#86efac', Icon: Check,         label: 'Focused',         severity: 0 },
+  phone_detected: { color: '#dc2626', bg: '#fee2e2', border: '#fca5a5', Icon: Smartphone,    label: 'Phone Detected!', severity: 3 },
+  drowsy:         { color: '#d97706', bg: '#fef3c7', border: '#fde68a', Icon: Moon,          label: 'Drowsy',          severity: 2 },
+  distracted:     { color: '#7c3aed', bg: '#ede9fe', border: '#c4b5fd', Icon: Eye,           label: 'Distracted!',     severity: 1 },
+  no_face:        { color: '#6b7280', bg: '#f3f4f6', border: '#d1d5db', Icon: AlertTriangle, label: 'No Face',         severity: 1 },
 };
 const alertMeta = (a) => ALERT_META[a] || ALERT_META.focused;
 
@@ -106,6 +109,17 @@ function useSimulatedDriverStatus(busId) {
   return { status, alerts };
 }
 
+// Maps gaze string from camera-aya to yaw/pitch angles for the overlay canvas
+function gazeToAngles(gaze) {
+  switch (gaze) {
+    case 'left':  return { yaw: +40, pitch:   0 };
+    case 'right': return { yaw: -40, pitch:   0 };
+    case 'down':  return { yaw:   0, pitch: -25 };
+    case 'up':    return { yaw:   0, pitch: +20 };
+    default:      return { yaw:   0, pitch:   0 };
+  }
+}
+
 // ─── Real driver status (polling from camera server) ─────────────────────────
 
 function useServerDriverStatus(busId) {
@@ -124,14 +138,24 @@ function useServerDriverStatus(busId) {
         if (!active) return;
         if (res.ok) {
           const data = await res.json();
-          setStatus(data);
+          // camera-aya returns `state` (string) and `alert` (boolean).
+          // Normalize to what the UI expects: alert = state string, eyes_detected = !eyes_closed.
+          const angles     = gazeToAngles(data.gaze);
+          const normalized = {
+            ...data,
+            alert:         data.state || data.alert_label || (data.alert ? 'distracted' : 'focused'),
+            eyes_detected: !data.eyes_closed,
+            yaw:           angles.yaw,
+            pitch:         angles.pitch,
+          };
+          setStatus(normalized);
           setOnline(true);
-          if (data.alert !== prevAlert.current) {
-            if (data.alert !== 'focused') {
-              setAlerts(prev => [{ alert: data.alert, previous: prevAlert.current,
+          if (normalized.alert !== prevAlert.current) {
+            if (normalized.alert !== 'focused') {
+              setAlerts(prev => [{ alert: normalized.alert, previous: prevAlert.current,
                 timestamp: new Date().toISOString(), bus_id: busId }, ...prev].slice(0, 20));
             }
-            prevAlert.current = data.alert;
+            prevAlert.current = normalized.alert;
           }
         } else {
           setOnline(false);
@@ -597,10 +621,10 @@ function CriticalAlertBanner({ alert, busId, driver, onDismiss }) {
       boxShadow: `0 4px 24px ${meta.color}44`,
       animation: 'blink 1s infinite',
     }}>
-      <span style={{ fontSize: 28, flexShrink: 0 }}>{meta.icon}</span>
+      <meta.Icon size={28} color={meta.color} style={{ flexShrink: 0 }} />
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 800, fontSize: 14, color: meta.color }}>
-          ⚠ CRITICAL DRIVER ALERT — {busId}
+          CRITICAL DRIVER ALERT — {busId}
         </div>
         <div style={{ fontSize: 12, color: '#374151', fontWeight: 600, marginTop: 1 }}>
           {meta.label} · {driver}
@@ -634,7 +658,7 @@ function AlertToast({ alert, busId, driver, onDismiss }) {
         @keyframes slideIn { from { transform: translateX(110%); opacity:0 } to { transform:none; opacity:1 } }
         @keyframes blink   { 0%,100%{opacity:1} 50%{opacity:.45} }
       `}</style>
-      <span style={{ fontSize: 24, flexShrink: 0 }}>{meta.icon}</span>
+      <meta.Icon size={24} color={meta.color} style={{ flexShrink: 0 }} />
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 800, fontSize: 12, color: meta.color, marginBottom: 2 }}>Driver Alert — {busId}</div>
         <div style={{ fontSize: 12, color: '#374151', fontWeight: 600 }}>{meta.label}</div>
@@ -684,7 +708,7 @@ function BusSelectorPanel({ buses, selectedBusId, onSelect, onRefresh, loading }
             <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 8,
                             backgroundColor: meta.bg, color: meta.color, border: `1px solid ${meta.border}`,
                             animation: meta.severity >= 2 ? 'blink 1s infinite' : 'none', whiteSpace: 'nowrap' }}>
-              {meta.icon} {meta.label}
+              {meta.label}
             </span>
           ) : (
             <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 8,
@@ -737,69 +761,197 @@ function BusSelectorPanel({ buses, selectedBusId, onSelect, onRefresh, loading }
   );
 }
 
+// ─── Shared camera controls ───────────────────────────────────────────────────
+
+function CamIconBtn({ onClick, title, children }) {
+  return (
+    <button onClick={onClick} title={title} style={{
+      background: 'none', border: '1px solid #d1d5db', borderRadius: 5,
+      cursor: 'pointer', padding: '2px 7px', fontSize: 13, color: '#6b7280',
+      lineHeight: 1, display: 'flex', alignItems: 'center', transition: 'all .15s',
+    }}
+      onMouseEnter={e => { e.currentTarget.style.background = '#f3f4f6'; e.currentTarget.style.color = '#111'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'none';    e.currentTarget.style.color = '#6b7280'; }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function CamMaxOverlay({ title, onClose, onMinimize, children }) {
+  useEffect(() => {
+    const handler = e => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  const overlayBtn = (onClick, label, tip) => (
+    <button onClick={onClick} title={tip} style={{
+      background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)',
+      borderRadius: 6, color: '#e2e8f0', cursor: 'pointer',
+      fontSize: 13, padding: '5px 13px', fontWeight: 500, transition: 'background .15s',
+    }}
+      onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
+      onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+    >{label}</button>
+  );
+
+  return (
+    <div
+      onClick={e => e.target === e.currentTarget && onClose()}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 10000,
+        background: 'rgba(0,0,0,0.93)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '20px',
+      }}
+    >
+      <div style={{
+        display: 'flex', flexDirection: 'column',
+        width: '100%', maxWidth: 1400, height: '100%',
+      }}>
+        {/* Header */}
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          marginBottom: 10, flexShrink: 0,
+        }}>
+          <span style={{ color: '#e2e8f0', fontWeight: 700, fontSize: 15 }}>{title}</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {onMinimize && overlayBtn(onMinimize, '— Minimize', 'Collapse panel')}
+            {overlayBtn(onClose, '✕ Close', 'Exit fullscreen (Esc)')}
+          </div>
+        </div>
+
+        {/* Video — fills remaining height, capped by aspect ratio */}
+        <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <div style={{
+              width: '100%', aspectRatio: '16/9', maxHeight: '100%',
+              overflow: 'hidden', borderRadius: 10, position: 'relative',
+            }}>
+              {children}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ marginTop: 8, textAlign: 'center', fontSize: 11, color: '#374151', flexShrink: 0 }}>
+          Esc · click outside · or — Minimize to collapse
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Passenger camera panel ───────────────────────────────────────────────────
 
 function PassengerCameraPanel({ busId, counter }) {
-  const { frameUrl, connected } = useWebSocketCamera(busId, 'passenger');
-  const isLive = !!frameUrl;
+  const { frameUrl, connected, status } = useWebSocketCamera(busId, 'passenger');
+  const [collapsed, setCollapsed] = useState(false);
+  const [maximized, setMaximized] = useState(false);
+  const isLive = connected && !!frameUrl;
+
+  // Badge: LIVE → DISCONNECTED → CONNECTING → DEMO
+  const badge = connected && frameUrl
+    ? { text: '● LIVE',          bg: '#dcfce7', color: '#166534', border: '#86efac' }
+    : status === 'connecting'
+    ? { text: '◉ CONNECTING',    bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' }
+    : frameUrl   // frozen last frame — was live, now dropped
+    ? { text: '✕ DISCONNECTED', bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' }
+    : { text: '◎ DEMO',          bg: '#fef3c7', color: '#92400e', border: '#fde68a' };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {/* Title bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontWeight: 700, fontSize: 13, color: '#374151' }}>
-          🚌 Passenger Camera — {busId}
-        </span>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ fontSize: 9, color: '#6b7280' }}>3-ZONE DETECTION</span>
-          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
-                          backgroundColor: isLive ? '#dcfce7' : '#fef3c7',
-                          color: isLive ? '#166534' : '#92400e',
-                          border: `1px solid ${isLive ? '#86efac' : '#fde68a'}` }}>
-            {isLive ? '● LIVE' : '◎ DEMO'}
+    <>
+      {maximized && (
+        <CamMaxOverlay
+          title={`Passenger Camera — ${busId}`}
+          onClose={() => setMaximized(false)}
+          onMinimize={() => { setMaximized(false); setCollapsed(true); }}
+        >
+          {isLive ? (
+            <>
+              <img src={frameUrl} alt="passenger cam"
+                style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block',
+                         backgroundColor: '#051a0e' }} />
+              <div style={{ position: 'absolute', top: 8, left: 8,
+                            backgroundColor: 'rgba(0,0,0,.70)', padding: '3px 9px', borderRadius: 6,
+                            fontSize: 11, fontWeight: 700, color: '#e2e8f0' }}>
+                {busId} · 3-ZONE COUNTER
+              </div>
+            </>
+          ) : (
+            <div style={{ width: '100%', height: '100%', backgroundColor: '#051a0e' }}>
+              <PassengerDetectionCanvas counter={counter} />
+            </div>
+          )}
+        </CamMaxOverlay>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Title bar */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontWeight: 700, fontSize: 13, color: '#374151' }}>
+            Passenger Camera — {busId}
           </span>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span style={{ fontSize: 9, color: '#6b7280' }}>3-ZONE DETECTION</span>
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                            backgroundColor: badge.bg, color: badge.color,
+                            border: `1px solid ${badge.border}` }}>
+              {badge.text}
+            </span>
+            <CamIconBtn onClick={() => setCollapsed(c => !c)} title={collapsed ? 'Expand' : 'Collapse'}>
+              {collapsed ? '▲' : '▼'}
+            </CamIconBtn>
+            <CamIconBtn onClick={() => setMaximized(true)} title="Maximize">⛶</CamIconBtn>
+          </div>
+        </div>
+
+        {/* Video / canvas */}
+        {!collapsed && (
+          <div style={{
+            position: 'relative', aspectRatio: '16/9', borderRadius: 10, overflow: 'hidden',
+            border: `2px solid ${isLive ? '#059669' : '#1a3a2e'}`,
+            boxShadow: isLive ? '0 0 18px #05966933' : 'none',
+            backgroundColor: '#051a0e',
+          }}>
+            {isLive ? (
+              <>
+                <img src={frameUrl} alt="passenger cam"
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+                <div style={{ position: 'absolute', top: 8, left: 8,
+                              backgroundColor: 'rgba(0,0,0,.70)', padding: '3px 9px', borderRadius: 6,
+                              fontSize: 11, fontWeight: 700, color: '#e2e8f0' }}>
+                  {busId} · 3-ZONE COUNTER
+                </div>
+              </>
+            ) : (
+              <PassengerDetectionCanvas counter={counter} />
+            )}
+          </div>
+        )}
+
+        {/* Counter tiles */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+          {[
+            { label: 'On Bus',  value: counter.on_bus,  color: '#059669', bg: '#f0fdf4', border: '#86efac' },
+            { label: 'Entered', value: counter.entered, color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe' },
+            { label: 'Exited',  value: counter.exited,  color: '#ef4444', bg: '#fef2f2', border: '#fecaca' },
+          ].map(({ label, value, color, bg, border }) => (
+            <div key={label} style={{ padding: '8px 6px', borderRadius: 8, textAlign: 'center',
+                                       backgroundColor: bg, border: `1px solid ${border}` }}>
+              <div style={{ fontSize: 9, color: '#6b7280', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.4px' }}>
+                {label}
+              </div>
+              <div style={{ fontSize: 24, fontWeight: 900, color, marginTop: 2, lineHeight: 1 }}>{value}</div>
+            </div>
+          ))}
         </div>
       </div>
-
-      {/* Video / canvas */}
-      <div style={{
-        position: 'relative', aspectRatio: '16/9', borderRadius: 10, overflow: 'hidden',
-        border: `2px solid ${isLive ? '#059669' : '#1a3a2e'}`,
-        boxShadow: isLive ? '0 0 18px #05966933' : 'none',
-        backgroundColor: '#051a0e',
-      }}>
-        {isLive ? (
-          <>
-            <img src={frameUrl} alt="passenger cam"
-              style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
-            <div style={{ position: 'absolute', top: 8, left: 8,
-                          backgroundColor: 'rgba(0,0,0,.70)', padding: '3px 9px', borderRadius: 6,
-                          fontSize: 11, fontWeight: 700, color: '#e2e8f0' }}>
-              {busId} · 3-ZONE COUNTER
-            </div>
-          </>
-        ) : (
-          <PassengerDetectionCanvas counter={counter} />
-        )}
-      </div>
-
-      {/* Counter tiles */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-        {[
-          { label: 'On Bus',  value: counter.on_bus,  color: '#059669', bg: '#f0fdf4', border: '#86efac' },
-          { label: 'Entered', value: counter.entered, color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe' },
-          { label: 'Exited',  value: counter.exited,  color: '#ef4444', bg: '#fef2f2', border: '#fecaca' },
-        ].map(({ label, value, color, bg, border }) => (
-          <div key={label} style={{ padding: '8px 6px', borderRadius: 8, textAlign: 'center',
-                                     backgroundColor: bg, border: `1px solid ${border}` }}>
-            <div style={{ fontSize: 9, color: '#6b7280', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.4px' }}>
-              {label}
-            </div>
-            <div style={{ fontSize: 24, fontWeight: 900, color, marginTop: 2, lineHeight: 1 }}>{value}</div>
-          </div>
-        ))}
-      </div>
-    </div>
+    </>
   );
 }
 
@@ -807,114 +959,162 @@ function PassengerCameraPanel({ busId, counter }) {
 
 function DriverCameraPanel({ busId, bus, driverStatus, alertMeta: meta }) {
   const { frameUrl } = useWebSocketCamera(busId, 'driver');
-  const videoRef     = useRef(null);
-  const streamRef    = useRef(null);
+  const videoRef       = useRef(null);
+  const streamRef      = useRef(null);
+  const serverFrameRef = useRef(false);
   const [webcamOn,   setWebcamOn]   = useState(false);
   const [camErr,     setCamErr]     = useState(false);
+  const [collapsed,  setCollapsed]  = useState(false);
+  const [maximized,  setMaximized]  = useState(false);
+
+  if (frameUrl && !serverFrameRef.current) serverFrameRef.current = true;
 
   useEffect(() => {
+    serverFrameRef.current = false;
     if (!busId) return;
     let stopped = false;
-    navigator.mediaDevices?.getUserMedia({ video: { facingMode: 'user' }, audio: false })
-      .then((stream) => {
-        if (stopped) { stream.getTracks().forEach(t => t.stop()); return; }
-        streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
-        setWebcamOn(true);
-      })
-      .catch(() => setCamErr(true));
+    const timer = setTimeout(() => {
+      if (stopped || serverFrameRef.current) return;
+      navigator.mediaDevices?.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+        .then((stream) => {
+          if (stopped || serverFrameRef.current) { stream.getTracks().forEach(t => t.stop()); return; }
+          streamRef.current = stream;
+          if (videoRef.current) videoRef.current.srcObject = stream;
+          setWebcamOn(true);
+        })
+        .catch(() => { if (!stopped) setCamErr(true); });
+    }, 3000);
     return () => {
       stopped = true;
+      clearTimeout(timer);
       streamRef.current?.getTracks().forEach(t => t.stop());
       streamRef.current = null;
       setWebcamOn(false);
+      setCamErr(false);
     };
   }, [busId]);
+
+  const serverStreaming = !!frameUrl;
+  useEffect(() => {
+    if (serverStreaming && webcamOn) {
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+      setWebcamOn(false);
+    }
+  }, [serverStreaming]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const showServer      = !!frameUrl;
   const showWebcam      = !showServer && webcamOn;
   const showPlaceholder = !showServer && !webcamOn;
   const isLive          = showServer || showWebcam;
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {/* Title */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontWeight: 700, fontSize: 13, color: '#374151' }}>
-          👤 Driver Camera — {busId}
-        </span>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ fontSize: 9, color: '#6b7280' }}>BEHAVIOUR ANALYSIS</span>
-          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
-                          backgroundColor: showServer ? '#dcfce7' : showWebcam ? '#eff6ff' : '#f3f4f6',
-                          color: showServer ? '#166534' : showWebcam ? '#1d4ed8' : '#6b7280',
-                          border: `1px solid ${showServer ? '#86efac' : showWebcam ? '#bfdbfe' : '#d1d5db'}` }}>
-            {showServer ? '● SERVER' : showWebcam ? '● WEBCAM' : '○ OFFLINE'}
-          </span>
-        </div>
-      </div>
-
-      {/* Video container */}
-      <div style={{
-        position: 'relative', aspectRatio: '16/9', borderRadius: 10, overflow: 'hidden',
-        backgroundColor: '#0a0a0a',
-        border: `2px solid ${meta.severity > 0 ? meta.border : isLive ? '#374151' : '#1f2937'}`,
-        boxShadow: meta.severity > 0 ? `0 0 20px ${meta.color}44` : 'none',
-        transition: 'border-color .3s, box-shadow .3s',
-      }}>
-        {/* Server annotated stream */}
-        {showServer && (
-          <img src={frameUrl} alt="driver cam" style={{ width:'100%', height:'100%', objectFit:'contain' }} />
-        )}
-
-        {/* Browser webcam (mirrored — face cam) */}
-        <video ref={videoRef} autoPlay playsInline muted style={{
-          position: 'absolute', inset: 0, width: '100%', height: '100%',
-          objectFit: 'cover', transform: 'scaleX(-1)',
-          display: showWebcam ? 'block' : 'none',
-        }} />
-
-        {/* Canvas overlay on webcam — face box, eye tracking, alert border */}
-        {showWebcam && (
-          <DriverOverlayCanvas driverStatus={driverStatus} alertMeta={meta} />
-        )}
-
-        {/* Shared overlays (badge + alert label) on live feeds */}
-        {isLive && !showServer && (
-          <>
-            <div style={{ position: 'absolute', top: 8, left: 8,
-                          backgroundColor: 'rgba(0,0,0,.70)', padding: '3px 9px', borderRadius: 6,
-                          fontSize: 11, fontWeight: 700, color: '#e2e8f0' }}>
-              {busId} · {bus?.driver || 'Driver'}
-            </div>
-            <div style={{
-              position: 'absolute', top: 8, right: 8,
-              backgroundColor: meta.severity > 0 ? meta.color : 'rgba(5,150,105,.85)',
-              padding: '3px 10px', borderRadius: 6,
-              fontSize: 11, fontWeight: 700, color: '#fff',
-              animation: meta.severity >= 2 ? 'blink 1s infinite' : 'none',
-            }}>
-              {meta.icon} {meta.label.toUpperCase()}
-            </div>
-          </>
-        )}
-
-        {/* Placeholder */}
-        {showPlaceholder && (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-                        alignItems: 'center', justifyContent: 'center', gap: 10,
-                        background: 'linear-gradient(135deg,#0f172a,#1e293b)' }}>
-            <span style={{ fontSize: 40 }}>👤</span>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0' }}>{busId} — Driver Camera</div>
-              <div style={{ fontSize: 10, color: camErr ? '#f87171' : '#94a3b8', marginTop: 4 }}>
-                {camErr ? 'Camera permission denied' : 'Connecting…'}
-              </div>
+  const videoContent = (
+    <div style={{
+      position: 'relative', aspectRatio: '16/9', borderRadius: 10, overflow: 'hidden',
+      backgroundColor: '#0a0a0a',
+      border: `2px solid ${meta.severity > 0 ? meta.border : isLive ? '#374151' : '#1f2937'}`,
+      boxShadow: meta.severity > 0 ? `0 0 20px ${meta.color}44` : 'none',
+      transition: 'border-color .3s, box-shadow .3s',
+    }}>
+      {showServer && (
+        <img src={frameUrl} alt="driver cam" style={{ width:'100%', height:'100%', objectFit:'contain' }} />
+      )}
+      <video ref={videoRef} autoPlay playsInline muted style={{
+        position: 'absolute', inset: 0, width: '100%', height: '100%',
+        objectFit: 'cover', transform: 'scaleX(-1)',
+        display: showWebcam ? 'block' : 'none',
+      }} />
+      {showWebcam && (
+        <DriverOverlayCanvas driverStatus={driverStatus} alertMeta={meta} />
+      )}
+      {isLive && !showServer && (
+        <>
+          <div style={{ position: 'absolute', top: 8, left: 8,
+                        backgroundColor: 'rgba(0,0,0,.70)', padding: '3px 9px', borderRadius: 6,
+                        fontSize: 11, fontWeight: 700, color: '#e2e8f0' }}>
+            {busId} · {bus?.driver || 'Driver'}
+          </div>
+          <div style={{
+            position: 'absolute', top: 8, right: 8,
+            backgroundColor: meta.severity > 0 ? meta.color : 'rgba(5,150,105,.85)',
+            padding: '3px 10px', borderRadius: 6,
+            fontSize: 11, fontWeight: 700, color: '#fff',
+            animation: meta.severity >= 2 ? 'blink 1s infinite' : 'none',
+          }}>
+            {meta.label.toUpperCase()}
+          </div>
+        </>
+      )}
+      {showPlaceholder && (
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+                      alignItems: 'center', justifyContent: 'center', gap: 10,
+                      background: 'linear-gradient(135deg,#0f172a,#1e293b)' }}>
+          <User size={40} color="#94a3b8" />
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#e2e8f0' }}>{busId} — Driver Camera</div>
+            <div style={{ fontSize: 10, color: camErr ? '#f87171' : '#94a3b8', marginTop: 4 }}>
+              {camErr ? 'Camera permission denied' : 'Connecting…'}
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
+  );
+
+  return (
+    <>
+      {maximized && (
+        <CamMaxOverlay
+          title={`Driver Camera — ${busId}`}
+          onClose={() => setMaximized(false)}
+          onMinimize={() => { setMaximized(false); setCollapsed(true); }}
+        >
+          {showServer ? (
+            <img src={frameUrl} alt="driver cam"
+              style={{ width: '100%', height: '100%', objectFit: 'contain', backgroundColor: '#0a0a0a' }} />
+          ) : (
+            <div style={{
+              width: '100%', height: '100%',
+              background: 'linear-gradient(135deg,#0f172a,#1e293b)',
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center', gap: 12,
+            }}>
+              <span style={{ fontSize: 48 }}>👤</span>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8' }}>
+                {camErr ? 'Camera permission denied'
+                  : showWebcam ? 'Webcam active in panel — server feed not available'
+                  : 'Camera connecting…'}
+              </div>
+            </div>
+          )}
+        </CamMaxOverlay>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Title */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontWeight: 700, fontSize: 13, color: '#374151' }}>
+            👤 Driver Camera — {busId}
+          </span>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span style={{ fontSize: 9, color: '#6b7280' }}>BEHAVIOUR ANALYSIS</span>
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                            backgroundColor: showServer ? '#dcfce7' : showWebcam ? '#eff6ff' : '#f3f4f6',
+                            color: showServer ? '#166534' : showWebcam ? '#1d4ed8' : '#6b7280',
+                            border: `1px solid ${showServer ? '#86efac' : showWebcam ? '#bfdbfe' : '#d1d5db'}` }}>
+              {showServer ? '● SERVER' : showWebcam ? '● WEBCAM' : '○ OFFLINE'}
+            </span>
+            <CamIconBtn onClick={() => setCollapsed(c => !c)} title={collapsed ? 'Expand' : 'Collapse'}>
+              {collapsed ? '▲' : '▼'}
+            </CamIconBtn>
+            <CamIconBtn onClick={() => setMaximized(true)} title="Maximize">⛶</CamIconBtn>
+          </div>
+        </div>
+
+        {/* Video container */}
+        {!collapsed && videoContent}
+      </div>
+    </>
   );
 }
 
@@ -933,7 +1133,7 @@ function DriverStatusPanel({ busId, bus, driverStatus, simAlerts }) {
       <div style={{ padding: '10px 14px', borderRadius: 10, border: `2px solid ${meta.border}`,
                     backgroundColor: meta.bg, display: 'flex', alignItems: 'center', gap: 10,
                     animation: status?.alert !== 'focused' ? 'blink 1.2s infinite' : 'none' }}>
-        <span style={{ fontSize: 22 }}>{meta.icon}</span>
+        <meta.Icon size={22} color={meta.color} />
         <div>
           <div style={{ fontWeight: 800, fontSize: 14, color: meta.color }}>{meta.label}</div>
           <div style={{ fontSize: 11, color: '#6b7280', marginTop: 1 }}>
@@ -996,7 +1196,7 @@ function DriverStatusPanel({ busId, bus, driverStatus, simAlerts }) {
                 <div key={i} style={{ padding: '5px 9px', borderRadius: 6, fontSize: 11,
                                        backgroundColor: m.bg, border: `1px solid ${m.border}`,
                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: m.color, fontWeight: 700 }}>{m.icon} {m.label}</span>
+                  <span style={{ color: m.color, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}><m.Icon size={11} />{m.label}</span>
                   <span style={{ color: '#9ca3af', fontSize: 10 }}>{new Date(a.timestamp).toLocaleTimeString()}</span>
                 </div>
               );
@@ -1134,7 +1334,7 @@ export default function CameraPage() {
                           backgroundColor: driverMeta.bg, color: driverMeta.color,
                           border: `2px solid ${driverMeta.border}`,
                           animation: driverStatus?.alert !== 'focused' ? 'blink 1s infinite' : 'none' }}>
-              {driverMeta.icon} {selectedBusId}: {driverMeta.label}
+              {selectedBusId}: {driverMeta.label}
             </div>
           )}
           <div style={{ padding: '6px 11px', borderRadius: 8, fontSize: 11, fontWeight: 700,

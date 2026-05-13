@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { CAMERA_WS_URL } from '../config/camera';
 
-const WS_URL = "ws://localhost:8000/ws/video";
+const WS_URL = `${CAMERA_WS_URL}/ws/video`;
 const WS_CONNECT_TIMEOUT = 4000; // ms to wait before falling back to webcam
 
 export function useCameraStream() {

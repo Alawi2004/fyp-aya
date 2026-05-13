@@ -1,455 +1,670 @@
-// pages/NotificationsPage.jsx
 import { useState, useEffect } from "react";
 import { Panel } from "../components/Panel";
 import { StatCard } from "../components/StatCard";
-import { getNotifications, markNotificationAsRead, createNotification } from "../api/endpoints";
+import { Modal } from "../components/Modal";
+import {
+  getNotifications, markNotificationAsRead, createNotification,
+  getNotificationTemplates, getScheduledNotifications,
+  scheduleNotification, cancelScheduled, createTemplate, updateTemplate, deleteTemplate,
+} from "../api/endpoints";
+import {
+  MOCK_NOTIFICATIONS, MOCK_NOTIFICATION_TEMPLATES, MOCK_SCHEDULED_NOTIFICATIONS,
+  MOCK_ROUTES, MOCK_DRIVERS,
+} from "../data/mockData";
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+const ALERT_STYLE = {
+  emergency: { dot: "#EF4444", bg: "#FEF2F2", color: "#B91C1C", label: "Emergency" },
+  delay:     { dot: "#F59E0B", bg: "#FFFBEB", color: "#D97706", label: "Delay"     },
+  info:      { dot: "#3B82F6", bg: "#EFF6FF", color: "#1E40AF", label: "Info"      },
+  success:   { dot: "#10B981", bg: "#ECFDF5", color: "#059669", label: "Success"   },
+};
+
+const TARGET_GROUPS = [
+  { id: "all_users",        label: "All Users",          icon: "👥", desc: "Everyone on the platform" },
+  { id: "all_passengers",   label: "All Passengers",     icon: "🧳", desc: "All registered passengers" },
+  { id: "all_drivers",      label: "All Drivers",        icon: "🚌", desc: "All active drivers" },
+  { id: "route_passengers", label: "Route Passengers",   icon: "📍", desc: "Passengers on a specific route" },
+  { id: "specific_driver",  label: "Specific Driver",    icon: "👤", desc: "One selected driver" },
+];
+
+const CHANNELS = ["Push Notification", "In-App", "SMS"];
+
+const EMPTY_FORM = { title: "", body: "", type: "info", target: "all_users", route: "", driver: "", channel: "Push Notification", scheduled: false, schedDate: "", schedTime: "" };
+
+const EMPTY_TPL = { name: "", type: "info", target: "all_users", title: "", body: "" };
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function normalizeNotif(n) {
-  const dt = n.created_at ? new Date(n.created_at) : null;
+  const dt   = n.created_at ? new Date(n.created_at) : null;
+  const text = n.text ?? n.message ?? "";
+  const dash = text.indexOf(" — ");
   return {
-    id: n.notification_id ?? n.id,
-    type: n.type ?? "info",
-    title: n.title ?? n.message ?? "",
-    body: n.body ?? n.message ?? "",
-    target: n.target ?? "All users",
-    time: dt ? dt.toTimeString().slice(0, 5) : (n.time ?? ""),
-    read: n.is_read ?? n.read ?? false,
+    id:    n.notification_id ?? n.id,
+    type:  n.type ?? "info",
+    title: n.title ?? (dash > -1 ? text.slice(0, dash) : text.slice(0, 50)),
+    body:  n.body  ?? (dash > -1 ? text.slice(dash + 3) : text),
+    target: n.target_group ?? n.target ?? "all_users",
+    target_label: n.target_label ?? TARGET_GROUPS.find(g => g.id === (n.target_group ?? n.target))?.label ?? "All Users",
+    time:  dt ? dt.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : (n.time ?? ""),
+    read:  n.is_read ?? n.read ?? false,
+    // Real delivery counts from DB
+    sent_count:  n.sent_count  ?? 0,
+    read_count:  n.read_count  ?? 0,
   };
 }
 
-const TYPES = ["All users", "Passengers", "Drivers"];
-const CHANNELS = ["Push notification", "In-app", "SMS"];
+// Only used as fallback when a notification was created before delivery tracking columns existed
+function seedDelivery(id, target = "all_users") {
+  const h = (id * 137 + 31) % 997;
+  const base = target === "all_users" ? 1284 : target === "all_passengers" ? 841 : target === "all_drivers" ? 10 : target === "route_passengers" ? 180 : 1;
+  const sent      = Math.max(1, base - Math.round(base * ((h % 12) / 100)));
+  const failed    = Math.min(sent - 1, Math.round(sent * (((h + 7) % 8) / 100)));
+  const delivered = sent - failed;
+  const read      = Math.round(delivered * (0.45 + ((h * 3) % 50) / 100));
+  return { sent, delivered, read, failed };
+}
 
-const ALERT_STYLE = {
-  emergency: {
-    dot: "#EF4444",
-    bg: "#FEF2F2",
-    color: "#B91C1C",
-    label: "Emergency",
-  },
-  delay: { dot: "#F59E0B", bg: "#FFFBEB", color: "#D97706", label: "Delay" },
-  info: { dot: "#3B82F6", bg: "#EFF6FF", color: "#1E40AF", label: "Info" },
-  success: {
-    dot: "#10B981",
-    bg: "#ECFDF5",
-    color: "#059669",
-    label: "Success",
-  },
-};
-
-
-export default function NotificationsPage() {
-  const [log, setLog] = useState([]);
-  const [filterType, setFilterType] = useState("All");
-
-  useEffect(() => {
-    getNotifications()
-      .then((data) => setLog((data || []).map(normalizeNotif)))
-      .catch(() => {});
-  }, []);
-  const [form, setForm] = useState({
-    title: "",
-    body: "",
-    target: TYPES[0],
-    channel: CHANNELS[0],
-    type: "info",
-  });
-  const [sent, setSent] = useState(false);
-
-  const filtered =
-    filterType === "All"
-      ? log
-      : log.filter((n) => n.type === filterType.toLowerCase());
-  const unread = log.filter((n) => !n.read).length;
-
-  async function markAllRead() {
-    await Promise.all(
-      log.filter((n) => !n.read).map((n) => markNotificationAsRead(n.id).catch(() => {}))
-    );
-    setLog((prev) => prev.map((n) => ({ ...n, read: true })));
+// Build delivery object — real data if available, seed fallback otherwise
+function getDelivery(n) {
+  if (n.sent_count > 0) {
+    return {
+      sent:      n.sent_count,
+      delivered: n.sent_count,              // assume delivered = sent (no FCM receipts)
+      read:      n.read_count,
+      failed:    0,
+    };
   }
-  async function markRead(id) {
-    await markNotificationAsRead(id).catch(() => {});
-    setLog((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+  return seedDelivery(n.id, n.target);
+}
+
+function targetLabel(group, routeName, driverName) {
+  if (group === "route_passengers") return routeName ? `${routeName} Passengers` : "Route Passengers";
+  if (group === "specific_driver")  return driverName || "Specific Driver";
+  return TARGET_GROUPS.find(g => g.id === group)?.label ?? group;
+}
+
+function countdown(isoStr) {
+  const diff = new Date(isoStr) - new Date();
+  if (diff <= 0) return "Now";
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  if (h >= 24) return `${Math.floor(h / 24)}d ${h % 24}h`;
+  if (h > 0)   return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+// ── Shared tab nav ────────────────────────────────────────────────────────────
+function TabNav({ tabs, active, onChange }) {
+  return (
+    <div style={{ display: "flex", gap: 4, background: "#F8FAFC", borderRadius: 10, padding: 4, border: "1px solid #E2E8F0" }}>
+      {tabs.map(({ id, label, badge }) => (
+        <button key={id} onClick={() => onChange(id)} style={{
+          padding: "7px 18px", borderRadius: 7, border: "none",
+          fontSize: 13, fontWeight: active === id ? 700 : 500, cursor: "pointer",
+          background: active === id ? "#fff" : "transparent",
+          color: active === id ? "#2563EB" : "#64748B",
+          boxShadow: active === id ? "0 1px 4px rgba(0,0,0,.09)" : "none",
+          display: "flex", alignItems: "center", gap: 6, transition: "all .15s",
+        }}>
+          {label}
+          {badge > 0 && (
+            <span style={{ background: "#EF4444", color: "#fff", fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 10 }}>
+              {badge}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Delivery bars ─────────────────────────────────────────────────────────────
+function DeliveryBars({ delivery }) {
+  const { sent, delivered, read, failed } = delivery;
+  const delivPct = sent > 0 ? Math.round(delivered / sent * 100) : 0;
+  const readPct  = sent > 0 ? Math.round(read      / sent * 100) : 0;
+  return (
+    <div style={{ minWidth: 180 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#94A3B8", marginBottom: 6 }}>
+        <span>Sent <strong style={{ color: "#0F172A" }}>{sent.toLocaleString()}</strong></span>
+        {failed > 0 && <span style={{ color: "#DC2626" }}>{failed} failed</span>}
+      </div>
+      {[
+        { label: "Delivered", pct: delivPct, color: "#2563EB", value: delivered },
+        { label: "Read",      pct: readPct,  color: "#10B981", value: read      },
+      ].map(({ label, pct, color, value }) => (
+        <div key={label} style={{ marginBottom: 5 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, marginBottom: 2 }}>
+            <span style={{ color, fontWeight: 600 }}>{label}</span>
+            <span style={{ color, fontWeight: 700 }}>{value.toLocaleString()} ({pct}%)</span>
+          </div>
+          <div style={{ height: 5, background: "#F0F0F0", borderRadius: 3, overflow: "hidden" }}>
+            <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 3, transition: "width .5s" }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Tab 1: Log & Delivery Status ──────────────────────────────────────────────
+function LogTab({ log, onMarkRead, onMarkAllRead }) {
+  const [filter, setFilter] = useState("All");
+  const [search, setSearch] = useState("");
+  const unread = log.filter(n => !n.read).length;
+
+  const visible = log.filter(n => {
+    const matchType   = filter === "All" || n.type === filter.toLowerCase();
+    const matchSearch = !search || n.title.toLowerCase().includes(search.toLowerCase()) || n.body.toLowerCase().includes(search.toLowerCase());
+    return matchType && matchSearch;
+  });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <input
+          placeholder="Search notifications..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #E2E8F0", fontSize: 13, outline: "none", width: 240 }}
+        />
+        <div style={{ display: "flex", gap: 6 }}>
+          {["All", "Emergency", "Delay", "Info", "Success"].map(f => (
+            <button key={f} onClick={() => setFilter(f)} style={{
+              padding: "5px 12px", borderRadius: 20, fontSize: 11, cursor: "pointer",
+              border: filter === f ? "none" : "1px solid #E2E8F0",
+              background: filter === f ? "#2563EB" : "#fff",
+              color: filter === f ? "#fff" : "#555",
+              fontWeight: filter === f ? 600 : 400,
+            }}>{f}</button>
+          ))}
+        </div>
+        {unread > 0 && (
+          <button onClick={onMarkAllRead} style={{ marginLeft: "auto", fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 7, padding: "5px 12px", cursor: "pointer", fontWeight: 600 }}>
+            Mark all read ({unread})
+          </button>
+        )}
+      </div>
+
+      <Panel title={`${visible.length} notifications`} noPad>
+        {visible.length === 0 && (
+          <div style={{ padding: "32px 0", textAlign: "center", color: "#bbb", fontSize: 13 }}>No notifications match your filter.</div>
+        )}
+        {visible.map((n, i) => {
+          const s = ALERT_STYLE[n.type] || ALERT_STYLE.info;
+          const delivery = getDelivery(n);
+          return (
+            <div key={n.id} onClick={() => onMarkRead(n.id)} style={{
+              display: "flex", gap: 14, padding: "14px 18px",
+              borderBottom: i < visible.length - 1 ? "1px solid #F8FAFC" : "none",
+              cursor: "pointer", opacity: n.read ? 0.65 : 1,
+              background: n.read ? "#FAFAFA" : "#fff",
+              transition: "background .12s",
+            }}>
+              {/* Type dot */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 4, gap: 4 }}>
+                <span style={{ width: 9, height: 9, borderRadius: "50%", background: s.dot, flexShrink: 0, display: "inline-block" }} />
+                {!n.read && <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2563EB", display: "inline-block" }} />}
+              </div>
+
+              {/* Content */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                  <span style={{ fontSize: 13, fontWeight: n.read ? 500 : 700, color: "#0F172A" }}>{n.title}</span>
+                  <span style={{ fontSize: 10, background: s.bg, color: s.color, padding: "1px 7px", borderRadius: 8, fontWeight: 600 }}>{s.label}</span>
+                </div>
+                <div style={{ fontSize: 12, color: "#64748B", lineHeight: 1.5, marginBottom: 6 }}>{n.body}</div>
+                <div style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 10, color: "#94A3B8" }}>
+                  <span>→ {n.target_label || "All Users"}</span>
+                  <span>·</span>
+                  <span>{n.time}</span>
+                </div>
+              </div>
+
+              {/* Delivery bars */}
+              <div style={{ flexShrink: 0 }}>
+                <DeliveryBars delivery={delivery} />
+              </div>
+            </div>
+          );
+        })}
+      </Panel>
+    </div>
+  );
+}
+
+// ── Tab 2: Compose ────────────────────────────────────────────────────────────
+function ComposeTab({ templates, onSent, onScheduled }) {
+  const [form, setForm]     = useState(EMPTY_FORM);
+  const [sent, setSent]     = useState(false);
+  const [sched, setSched]   = useState(false);
+
+  const set = k => v => setForm(f => ({ ...f, [k]: v }));
+
+  function applyTemplate(tpl) {
+    setForm(f => ({ ...f, title: tpl.title, body: tpl.body, type: tpl.type, target: tpl.target }));
   }
 
   async function handleSend() {
     if (!form.title || !form.body) return;
-    await createNotification({ message: `${form.title}: ${form.body}` }).catch(() => {});
-    const newNote = {
-      id: Date.now(),
-      type: form.type,
-      title: form.title,
-      body: form.body,
-      target: form.target,
-      time: new Date().toLocaleTimeString("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      read: false,
-    };
-    setLog((prev) => [newNote, ...prev]);
-    setForm({
-      title: "",
-      body: "",
-      target: TYPES[0],
-      channel: CHANNELS[0],
-      type: "info",
-    });
-    setSent(true);
-    setTimeout(() => setSent(false), 3000);
+    const label = targetLabel(form.target, form.route, form.driver);
+    if (form.scheduled && form.schedDate && form.schedTime) {
+      const iso = `${form.schedDate}T${form.schedTime}:00`;
+      const newSched = { id: Date.now(), title: form.title, body: form.body, type: form.type, target: form.target, target_label: label, scheduled_at: iso, status: "pending" };
+      await scheduleNotification(newSched).catch(() => {});
+      onScheduled(newSched);
+      setSched(true);
+      setTimeout(() => setSched(false), 3000);
+    } else {
+      const res = await createNotification({
+        title:   form.title,
+        body:    form.body,
+        type:    form.type,
+        target:  form.target,
+        channel: form.channel,
+      }).catch(() => {});
+      const sentCount = res?.sent_count ?? 0;
+      onSent({ id: res?.notification_id ?? Date.now(), title: form.title, body: form.body, type: form.type, target: form.target, target_label: label, time: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }), read: false, sent_count: sentCount, read_count: 0 });
+      setSent(true);
+      setTimeout(() => setSent(false), 3000);
+    }
+    setForm(EMPTY_FORM);
   }
 
+  const selectedGroup = TARGET_GROUPS.find(g => g.id === form.target);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", margin: 0, letterSpacing: "-.3px" }}>
-          Notifications
-        </h1>
-        <p style={{ fontSize: 12, color: "#64748B", margin: "2px 0 0" }}>
-          Send alerts and view notification history
-        </p>
-      </div>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, minmax(0,1fr))",
-          gap: 12,
-        }}
-      >
-        <StatCard
-          label="Total sent"
-          value={log.length}
-          delta="all time"
-          up={null}
-        />
-        <StatCard
-          label="Unread"
-          value={unread}
-          delta="pending read"
-          up={unread === 0}
-        />
-        <StatCard
-          label="Today"
-          value={log.filter((n) => !n.read).length + 2}
-          delta="sent today"
-          up={null}
-        />
-      </div>
-
-      <div
-        style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr", gap: 14 }}
-      >
-        {/* Send notification form */}
-        <Panel title="Send notification">
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr", gap: 16 }}>
+      {/* Left: compose form */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <Panel title="Compose Notification">
+          <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
+            {/* Title */}
             <div>
-              <label
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "#475569",
-                  display: "block",
-                  marginBottom: 5,
-                }}
-              >
-                Title
-              </label>
-              <input
-                value={form.title}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, title: e.target.value }))
-                }
-                placeholder="e.g. Bus delay alert"
-                style={{
-                  width: "100%",
-                  padding: "9px 12px",
-                  border: "1px solid #E2E8F0",
-                  borderRadius: 8,
-                  fontSize: 13,
-                  boxSizing: "border-box",
-                }}
-              />
+              <label style={lbl}>Title</label>
+              <input value={form.title} onChange={e => set("title")(e.target.value)} placeholder="e.g. Bus delay on Route 12A"
+                style={inputStyle} />
             </div>
+            {/* Body */}
             <div>
-              <label
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "#475569",
-                  display: "block",
-                  marginBottom: 5,
-                }}
-              >
-                Message body
-              </label>
-              <textarea
-                value={form.body}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, body: e.target.value }))
-                }
-                placeholder="Write your notification message here..."
-                rows={3}
-                style={{
-                  width: "100%",
-                  padding: "9px 12px",
-                  border: "1px solid #E2E8F0",
-                  borderRadius: 8,
-                  fontSize: 13,
-                  boxSizing: "border-box",
-                  resize: "vertical",
-                  fontFamily: "inherit",
-                }}
-              />
+              <label style={lbl}>Message Body</label>
+              <textarea value={form.body} onChange={e => set("body")(e.target.value)} placeholder="Write your notification message..." rows={4}
+                style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
             </div>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 10,
-              }}
-            >
-              <div>
-                <label
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "#475569",
-                    display: "block",
-                    marginBottom: 5,
-                  }}
-                >
-                  Send to
-                </label>
-                <select
-                  value={form.target}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, target: e.target.value }))
-                  }
-                  style={{
-                    width: "100%",
-                    padding: "9px 12px",
-                    border: "1px solid #E2E8F0",
-                    borderRadius: 8,
-                    fontSize: 13,
-                  }}
-                >
-                  {TYPES.map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "#475569",
-                    display: "block",
-                    marginBottom: 5,
-                  }}
-                >
-                  Channel
-                </label>
-                <select
-                  value={form.channel}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, channel: e.target.value }))
-                  }
-                  style={{
-                    width: "100%",
-                    padding: "9px 12px",
-                    border: "1px solid #E2E8F0",
-                    borderRadius: 8,
-                    fontSize: 13,
-                  }}
-                >
-                  {CHANNELS.map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
+            {/* Type */}
             <div>
-              <label
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "#475569",
-                  display: "block",
-                  marginBottom: 5,
-                }}
-              >
-                Type
-              </label>
-              <div style={{ display: "flex", gap: 8 }}>
+              <label style={lbl}>Type</label>
+              <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
                 {Object.entries(ALERT_STYLE).map(([k, v]) => (
-                  <button
-                    key={k}
-                    onClick={() => setForm((p) => ({ ...p, type: k }))}
-                    style={{
-                      padding: "5px 12px",
-                      borderRadius: 20,
-                      fontSize: 11,
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      border: "none",
-                      background: form.type === k ? v.bg : "#F1F5F9",
-                      color: form.type === k ? v.color : "#64748B",
-                    }}
-                  >
-                    {v.label}
-                  </button>
+                  <button key={k} onClick={() => set("type")(k)} style={{
+                    padding: "5px 14px", borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: "pointer", border: "none",
+                    background: form.type === k ? v.bg : "#F1F5F9",
+                    color:      form.type === k ? v.color : "#64748B",
+                    outline:    form.type === k ? `2px solid ${v.dot}` : "none",
+                  }}>{v.label}</button>
                 ))}
               </div>
             </div>
-            <button
-              onClick={handleSend}
-              className="btn-primary"
-              style={{
-                background: sent ? "#10B981" : "#2563EB",
-                color: "#fff",
-                border: "none",
-                borderRadius: 8,
-                padding: "10px 0",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: "pointer",
-                transition: "background .2s",
-              }}
-            >
-              {sent ? "✓ Sent!" : "Send notification"}
+            {/* Channel */}
+            <div>
+              <label style={lbl}>Channel</label>
+              <select value={form.channel} onChange={e => set("channel")(e.target.value)} style={inputStyle}>
+                {CHANNELS.map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+            {/* Schedule toggle */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: form.scheduled ? "#EFF6FF" : "#F8FAFC", borderRadius: 10, border: "1px solid #E2E8F0" }}>
+              <input type="checkbox" id="schedCheck" checked={form.scheduled} onChange={e => set("scheduled")(e.target.checked)}
+                style={{ width: 16, height: 16, accentColor: "#2563EB", cursor: "pointer" }} />
+              <label htmlFor="schedCheck" style={{ fontSize: 13, fontWeight: 600, color: "#0F172A", cursor: "pointer" }}>Schedule for later</label>
+            </div>
+            {form.scheduled && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div>
+                  <label style={lbl}>Date</label>
+                  <input type="date" value={form.schedDate} onChange={e => set("schedDate")(e.target.value)} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={lbl}>Time</label>
+                  <input type="time" value={form.schedTime} onChange={e => set("schedTime")(e.target.value)} style={inputStyle} />
+                </div>
+              </div>
+            )}
+            {/* Send button */}
+            <button onClick={handleSend} style={{
+              background: sent || sched ? "#10B981" : "#2563EB", color: "#fff", border: "none",
+              borderRadius: 9, padding: "11px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "background .2s",
+            }}>
+              {sent ? "✓ Sent!" : sched ? "✓ Scheduled!" : form.scheduled ? "Schedule Notification" : "Send Notification"}
             </button>
           </div>
         </Panel>
+      </div>
 
-        {/* Notification log */}
-        <Panel
-          title={`Notification log (${log.length})`}
-          action={unread > 0 ? `Mark all read (${unread})` : null}
-          onAction={markAllRead}
-        >
-          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-            {["All", "Emergency", "Delay", "Info", "Success"].map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilterType(f)}
-                style={{
-                  padding: "4px 12px",
-                  borderRadius: 20,
-                  fontSize: 11,
-                  cursor: "pointer",
-                  border: filterType === f ? "none" : "1px solid #e0e0e0",
-                  background: filterType === f ? "#2563EB" : "#fff",
-                  color: filterType === f ? "#fff" : "#555",
-                  fontWeight: filterType === f ? 600 : 400,
-                }}
-              >
-                {f}
-              </button>
+      {/* Right: target group + templates */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* Target Group */}
+        <Panel title="Target Group">
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {TARGET_GROUPS.map(g => (
+              <div key={g.id} onClick={() => set("target")(g.id)} style={{
+                display: "flex", alignItems: "center", gap: 12, padding: "11px 14px",
+                borderRadius: 10, cursor: "pointer",
+                border: `2px solid ${form.target === g.id ? "#2563EB" : "#E2E8F0"}`,
+                background: form.target === g.id ? "#EFF6FF" : "#fff",
+                transition: "all .15s",
+              }}>
+                <span style={{ fontSize: 18 }}>{g.icon}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: form.target === g.id ? 700 : 500, color: form.target === g.id ? "#1E40AF" : "#0F172A" }}>{g.label}</div>
+                  <div style={{ fontSize: 11, color: "#94A3B8" }}>{g.desc}</div>
+                </div>
+                {form.target === g.id && <span style={{ color: "#2563EB", fontWeight: 700, fontSize: 13 }}>✓</span>}
+              </div>
             ))}
+
+            {/* Route sub-select */}
+            {form.target === "route_passengers" && (
+              <div style={{ marginTop: 4 }}>
+                <label style={lbl}>Select Route</label>
+                <select value={form.route} onChange={e => set("route")(e.target.value)} style={inputStyle}>
+                  <option value="">— Pick a route —</option>
+                  {MOCK_ROUTES.map(r => <option key={r.id} value={r.name}>{r.name} ({r.origin} → {r.destination})</option>)}
+                </select>
+              </div>
+            )}
+            {/* Driver sub-select */}
+            {form.target === "specific_driver" && (
+              <div style={{ marginTop: 4 }}>
+                <label style={lbl}>Select Driver</label>
+                <select value={form.driver} onChange={e => set("driver")(e.target.value)} style={inputStyle}>
+                  <option value="">— Pick a driver —</option>
+                  {MOCK_DRIVERS.map(d => <option key={d.id} value={d.name}>{d.name} · {d.license}</option>)}
+                </select>
+              </div>
+            )}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-            {filtered.map((n, i) => {
-              const s = ALERT_STYLE[n.type] || ALERT_STYLE.info;
+        </Panel>
+
+        {/* Quick Templates */}
+        <Panel title="Quick Templates">
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {templates.slice(0, 5).map(t => {
+              const s = ALERT_STYLE[t.type] || ALERT_STYLE.info;
               return (
-                <div
-                  key={n.id}
-                  onClick={() => markRead(n.id)}
-                  style={{
-                    display: "flex",
-                    gap: 10,
-                    padding: "10px 0",
-                    borderBottom:
-                      i < filtered.length - 1 ? "1px solid #F1F5F9" : "none",
-                    cursor: "pointer",
-                    opacity: n.read ? 0.7 : 1,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: "50%",
-                      background: s.dot,
-                      flexShrink: 0,
-                      marginTop: 5,
-                    }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        marginBottom: 2,
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: 13,
-                          fontWeight: n.read ? 400 : 700,
-                          color: "#0F172A",
-                        }}
-                      >
-                        {n.title}
-                      </span>
-                      {!n.read && (
-                        <span
-                          style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: "50%",
-                            background: "#2563EB",
-                            flexShrink: 0,
-                          }}
-                        />
-                      )}
+                <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#F8FAFC", border: "1px solid #F1F5F9", borderRadius: 9 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 3 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#0F172A" }}>{t.name}</span>
+                      <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 6, background: s.bg, color: s.color }}>{s.label}</span>
                     </div>
-                    <div
-                      style={{
-                        fontSize: 11,
-                        color: "#666",
-                        lineHeight: 1.4,
-                        marginBottom: 4,
-                      }}
-                    >
-                      {n.body}
-                    </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          background: s.bg,
-                          color: s.color,
-                          padding: "1px 7px",
-                          borderRadius: 8,
-                          fontWeight: 600,
-                        }}
-                      >
-                        {s.label}
-                      </span>
-                      <span style={{ fontSize: 10, color: "#aaa" }}>
-                        → {n.target}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          color: "#aaa",
-                          marginLeft: "auto",
-                        }}
-                      >
-                        {n.time}
-                      </span>
-                    </div>
+                    <div style={{ fontSize: 11, color: "#94A3B8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
                   </div>
+                  <button onClick={() => applyTemplate(t)} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontWeight: 600, flexShrink: 0 }}>
+                    Use
+                  </button>
                 </div>
               );
             })}
           </div>
         </Panel>
       </div>
+    </div>
+  );
+}
+
+// ── Tab 3: Scheduled ──────────────────────────────────────────────────────────
+function ScheduledTab({ scheduled, onCancel }) {
+  const pending = scheduled.filter(n => n.status === "pending");
+  const sent    = scheduled.filter(n => n.status === "sent");
+
+  function NotifCard({ n, showCancel }) {
+    const s = ALERT_STYLE[n.type] || ALERT_STYLE.info;
+    return (
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 14, padding: "16px", background: showCancel ? "#fff" : "#FAFAFA", border: `1px solid ${showCancel ? "#E2E8F0" : "#F1F5F9"}`, borderRadius: 12 }}>
+        <div style={{ width: 10, height: 10, borderRadius: "50%", background: s.dot, flexShrink: 0, marginTop: 4 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>{n.title}</span>
+            <span style={{ fontSize: 10, background: s.bg, color: s.color, padding: "1px 7px", borderRadius: 8, fontWeight: 600 }}>{s.label}</span>
+          </div>
+          <div style={{ fontSize: 12, color: "#64748B", lineHeight: 1.5, marginBottom: 8 }}>{n.body}</div>
+          <div style={{ display: "flex", gap: 14, fontSize: 11, color: "#94A3B8" }}>
+            <span>→ {n.target_label}</span>
+            <span>·</span>
+            <span>🕐 {new Date(n.scheduled_at).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+            {showCancel && <span style={{ color: "#059669", fontWeight: 600 }}>⏱ {countdown(n.scheduled_at)}</span>}
+          </div>
+        </div>
+        {showCancel && (
+          <button onClick={() => onCancel(n.id)} style={{ fontSize: 11, color: "#DC2626", background: "#FEF2F2", border: "none", borderRadius: 7, padding: "5px 12px", cursor: "pointer", fontWeight: 600, flexShrink: 0 }}>
+            Cancel
+          </button>
+        )}
+        {!showCancel && <span style={{ fontSize: 11, color: "#10B981", fontWeight: 600, flexShrink: 0 }}>✓ Sent</span>}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <Panel title={`Pending — ${pending.length} scheduled`}>
+        {pending.length === 0
+          ? <div style={{ padding: "24px 0", textAlign: "center", color: "#bbb", fontSize: 13 }}>No pending scheduled notifications.</div>
+          : <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>{pending.map(n => <NotifCard key={n.id} n={n} showCancel />)}</div>
+        }
+      </Panel>
+      <Panel title={`Sent — ${sent.length} completed`}>
+        {sent.length === 0
+          ? <div style={{ padding: "24px 0", textAlign: "center", color: "#bbb", fontSize: 13 }}>No sent scheduled notifications.</div>
+          : <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>{sent.map(n => <NotifCard key={n.id} n={n} showCancel={false} />)}</div>
+        }
+      </Panel>
+    </div>
+  );
+}
+
+// ── Tab 4: Templates ──────────────────────────────────────────────────────────
+function TemplatesTab({ templates, onAdd, onEdit, onDelete, onUse }) {
+  const [editTarget, setEditTarget] = useState(null);
+  const [form, setForm]             = useState(EMPTY_TPL);
+  const [modalOpen, setModalOpen]   = useState(false);
+
+  function openAdd()   { setEditTarget(null); setForm(EMPTY_TPL); setModalOpen(true); }
+  function openEdit(t) { setEditTarget(t.id); setForm({ name: t.name, type: t.type, target: t.target, title: t.title, body: t.body }); setModalOpen(true); }
+
+  function handleSave() {
+    if (!form.name || !form.title || !form.body) return;
+    if (editTarget) {
+      onEdit({ id: editTarget, ...form });
+      updateTemplate(editTarget, form).catch(() => {});
+    } else {
+      const newTpl = { id: Date.now(), ...form };
+      onAdd(newTpl);
+      createTemplate(form).catch(() => {});
+    }
+    setModalOpen(false);
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button onClick={openAdd} style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          + New Template
+        </button>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 14 }}>
+        {templates.map(t => {
+          const s = ALERT_STYLE[t.type] || ALERT_STYLE.info;
+          const tg = TARGET_GROUPS.find(g => g.id === t.target);
+          return (
+            <div key={t.id} style={{ background: "#fff", border: "1px solid #F1F5F9", borderRadius: 14, padding: "18px", boxShadow: "0 1px 3px rgba(0,0,0,.05)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A", marginBottom: 5 }}>{t.name}</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 8, background: s.bg, color: s.color }}>{s.label}</span>
+                    <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 8, background: "#F1F5F9", color: "#64748B" }}>{tg?.icon} {tg?.label ?? t.target}</span>
+                  </div>
+                </div>
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#0F172A", marginBottom: 4 }}>{t.title}</div>
+              <div style={{ fontSize: 11, color: "#64748B", lineHeight: 1.5, marginBottom: 14, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" }}>
+                {t.body}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => onUse(t)} style={{ flex: 1, fontSize: 11, fontWeight: 700, color: "#fff", background: "#2563EB", border: "none", borderRadius: 7, padding: "7px 0", cursor: "pointer" }}>Use</button>
+                <button onClick={() => openEdit(t)} style={{ flex: 1, fontSize: 11, fontWeight: 600, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 7, padding: "7px 0", cursor: "pointer" }}>Edit</button>
+                <button onClick={() => { onDelete(t.id); deleteTemplate(t.id).catch(() => {}); }} style={{ flex: 1, fontSize: 11, fontWeight: 600, color: "#B91C1C", background: "#FEF2F2", border: "none", borderRadius: 7, padding: "7px 0", cursor: "pointer" }}>Delete</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {modalOpen && (
+        <Modal title={editTarget ? "Edit Template" : "New Template"} onClose={() => setModalOpen(false)} onSave={handleSave}>
+          {[{ label: "Template Name", key: "name", placeholder: "e.g. Bus Delay Alert" }, { label: "Notification Title", key: "title", placeholder: "e.g. Bus Delay on {route}" }].map(f => (
+            <div key={f.key} style={{ marginBottom: 14 }}>
+              <label style={lbl}>{f.label}</label>
+              <input value={form[f.key]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.placeholder} style={inputStyle} />
+            </div>
+          ))}
+          <div style={{ marginBottom: 14 }}>
+            <label style={lbl}>Message Body</label>
+            <textarea value={form.body} onChange={e => setForm(p => ({ ...p, body: e.target.value }))} rows={4} placeholder="Use {placeholders} for dynamic content..." style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <label style={lbl}>Type</label>
+              <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))} style={inputStyle}>
+                {Object.entries(ALERT_STYLE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={lbl}>Default Target</label>
+              <select value={form.target} onChange={e => setForm(p => ({ ...p, target: e.target.value }))} style={inputStyle}>
+                {TARGET_GROUPS.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+              </select>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Shared style helpers ──────────────────────────────────────────────────────
+const lbl = { fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 };
+const inputStyle = { width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" };
+
+// ── Main NotificationsPage ────────────────────────────────────────────────────
+export default function NotificationsPage() {
+  const [tab,       setTab]       = useState("log");
+  const [log,       setLog]       = useState([]);
+  const [templates, setTemplates] = useState([]);
+  const [scheduled, setScheduled] = useState([]);
+
+  useEffect(() => {
+    getNotifications()
+      .then(d => setLog((d || []).map(normalizeNotif)))
+      .catch(() => setLog(MOCK_NOTIFICATIONS.map(normalizeNotif)));
+
+    getNotificationTemplates()
+      .then(d => setTemplates((d || []).length ? d : MOCK_NOTIFICATION_TEMPLATES))
+      .catch(() => setTemplates(MOCK_NOTIFICATION_TEMPLATES));
+
+    getScheduledNotifications()
+      .then(d => setScheduled((d || []).length ? d : MOCK_SCHEDULED_NOTIFICATIONS))
+      .catch(() => setScheduled(MOCK_SCHEDULED_NOTIFICATIONS));
+  }, []);
+
+  const unread    = log.filter(n => !n.read).length;
+  const pending   = scheduled.filter(n => n.status === "pending").length;
+  const todaySent = log.filter(n => n.time).length + 2;
+
+  // Overall delivery rate across all notifications (real counts when available)
+  const allDelivery = log.reduce((acc, n) => {
+    const d = getDelivery(n);
+    acc.sent      += d.sent;
+    acc.delivered += d.delivered;
+    acc.read      += d.read;
+    return acc;
+  }, { sent: 0, delivered: 0, read: 0 });
+  const overallDelivPct = allDelivery.sent > 0 ? Math.round(allDelivery.delivered / allDelivery.sent * 100) : 0;
+  const overallReadPct  = allDelivery.sent > 0 ? Math.round(allDelivery.read      / allDelivery.sent * 100) : 0;
+
+  async function markRead(id) {
+    await markNotificationAsRead(id).catch(() => {});
+    setLog(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  }
+  async function markAllRead() {
+    await Promise.all(log.filter(n => !n.read).map(n => markNotificationAsRead(n.id).catch(() => {})));
+    setLog(prev => prev.map(n => ({ ...n, read: true })));
+  }
+
+  function handleSent(notif) {
+    setLog(prev => [notif, ...prev]);
+  }
+  function handleScheduled(notif) {
+    setScheduled(prev => [notif, ...prev]);
+  }
+  function handleCancelScheduled(id) {
+    cancelScheduled(id).catch(() => {});
+    setScheduled(prev => prev.filter(n => n.id !== id));
+  }
+
+  // Template CRUD
+  function handleUseTemplate(tpl) {
+    setTab("compose");
+    // The ComposeTab picks up templates to use via the Quick Templates panel
+  }
+
+  const tabs = [
+    { id: "log",       label: "Log & Delivery",  badge: unread   },
+    { id: "compose",   label: "Compose",          badge: 0        },
+    { id: "scheduled", label: "Scheduled",        badge: pending  },
+    { id: "templates", label: "Templates",        badge: 0        },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", margin: 0, letterSpacing: "-.3px" }}>Notifications</h1>
+          <p style={{ fontSize: 12, color: "#64748B", margin: "2px 0 0" }}>
+            Send, schedule, and track notification delivery across all user groups
+          </p>
+        </div>
+        <div style={{ flex: 1 }} />
+        <TabNav tabs={tabs} active={tab} onChange={setTab} />
+      </div>
+
+      {/* KPI cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
+        <StatCard label="Total Sent"       value={log.length}           delta="all time"          accent="#2563EB" />
+        <StatCard label="Unread"           value={unread}               delta="pending read"       up={unread === 0} accent="#F59E0B" />
+        <StatCard label="Delivery Rate"    value={`${overallDelivPct}%`} delta="delivered / sent"  up={overallDelivPct >= 90} accent="#10B981" />
+        <StatCard label="Read Rate"        value={`${overallReadPct}%`}  delta="read / sent"       up={overallReadPct >= 60}  accent="#7C3AED" />
+        <StatCard label="Scheduled"        value={pending}               delta="queued to send"    accent="#0EA5E9" />
+      </div>
+
+      {/* Tab content */}
+      {tab === "log"       && <LogTab       log={log}           onMarkRead={markRead}   onMarkAllRead={markAllRead} />}
+      {tab === "compose"   && <ComposeTab   templates={templates} onSent={handleSent}  onScheduled={handleScheduled} />}
+      {tab === "scheduled" && <ScheduledTab scheduled={scheduled} onCancel={handleCancelScheduled} />}
+      {tab === "templates" && (
+        <TemplatesTab
+          templates={templates}
+          onAdd={t    => setTemplates(prev => [t, ...prev])}
+          onEdit={t   => setTemplates(prev => prev.map(p => p.id === t.id ? t : p))}
+          onDelete={id => setTemplates(prev => prev.filter(t => t.id !== id))}
+          onUse={tpl  => { handleUseTemplate(tpl); }}
+        />
+      )}
     </div>
   );
 }

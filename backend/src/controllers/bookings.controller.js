@@ -1,4 +1,6 @@
 import { poolPromise, sql } from "../db/db.js";
+import { ensureOperationalTables } from "../db/featureSetup.js";
+import { verifyPassengerQrToken } from "../utils/passengerQr.js";
 
 // POST /api/bookings — book a ticket
 export const createBooking = async (req, res) => {
@@ -65,11 +67,79 @@ export const cancelBooking = async (req, res) => {
 // POST /api/bookings/verify
 export const verifyTicket = async (req, res) => {
   try {
-    const { qrCode } = req.body;
+    const token = req.body.token || req.body.qrCode;
+    if (!token) {
+      return res.status(400).json({ valid: false, message: "QR token is required" });
+    }
+
     const pool = await poolPromise;
+    await ensureOperationalTables(pool);
+
+    const passengerQr = verifyPassengerQrToken(token);
+    if (passengerQr.valid) {
+      const qrRecordResult = await pool
+        .request()
+        .input("jti", sql.NVarChar(64), passengerQr.payload.jti)
+        .input("tokenHash", sql.NVarChar(64), passengerQr.tokenHash)
+        .query(`
+          SELECT TOP 1 *
+          FROM passenger_qr_tokens
+          WHERE jti = @jti
+            AND token_hash = @tokenHash
+        `);
+
+      const qrRecord = qrRecordResult.recordset[0];
+      if (!qrRecord) {
+        return res.status(404).json({ valid: false, message: "QR token not recognized" });
+      }
+      if (qrRecord.used_at) {
+        return res.status(409).json({ valid: false, message: "QR token already used" });
+      }
+      if (qrRecord.revoked_at) {
+        return res.status(409).json({ valid: false, message: "QR token has been revoked" });
+      }
+      if (new Date(qrRecord.expires_at) <= new Date()) {
+        return res.status(401).json({ valid: false, message: "QR token expired" });
+      }
+
+      await pool
+        .request()
+        .input("jti", sql.NVarChar(64), passengerQr.payload.jti)
+        .query(`
+          UPDATE passenger_qr_tokens
+          SET used_at = GETUTCDATE()
+          WHERE jti = @jti
+            AND used_at IS NULL
+        `);
+
+      const passengerResult = await pool
+        .request()
+        .input("userId", sql.Int, Number.parseInt(passengerQr.payload.sub, 10))
+        .query(`
+          SELECT TOP 1
+            u.user_id,
+            u.full_name,
+            u.email,
+            t.ticket_id,
+            t.trip_id,
+            t.seat_number,
+            t.status
+          FROM users u
+          LEFT JOIN tickets t ON t.user_id = u.user_id
+          WHERE u.user_id = @userId
+          ORDER BY t.ticket_id DESC
+        `);
+
+      return res.json({
+        valid: true,
+        mode: "rotating_passenger_qr",
+        passenger: passengerResult.recordset[0] || { user_id: Number.parseInt(passengerQr.payload.sub, 10) },
+      });
+    }
+
     const result = await pool
       .request()
-      .input("qr", sql.VarChar, qrCode)
+      .input("qr", sql.VarChar, token)
       .query("SELECT * FROM tickets WHERE qr_code=@qr");
     const ticket = result.recordset[0];
     if (!ticket) return res.status(404).json({ valid: false, message: "Ticket not found" });
