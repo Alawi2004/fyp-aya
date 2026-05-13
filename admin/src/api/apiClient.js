@@ -5,6 +5,7 @@ import {
   MOCK_COMPLAINTS,
   MOCK_DASHBOARD_STATS,
   MOCK_FREEZE_LOG,
+  MOCK_FUEL_LOG,
   MOCK_MAINTENANCE_LOG,
   MOCK_VEHICLE_DOCS,
   MOCK_WALLET_STATUS,
@@ -59,6 +60,7 @@ const mockAdminResponse = (method, endpoint, data = {}) => {
   if (endpoint.startsWith('/trips')) return endpoint.includes('/load') ? { current_passengers: 24, capacity: 40 } : MOCK_TRIPS;
   if (endpoint.startsWith('/vehicles/docs'))        return MOCK_VEHICLE_DOCS;
   if (endpoint.startsWith('/vehicles/maintenance')) return MOCK_MAINTENANCE_LOG;
+  if (endpoint.startsWith('/vehicles/fuel'))        return MOCK_FUEL_LOG;
   if (endpoint.startsWith('/vehicles')) return MOCK_VEHICLES;
   if (endpoint.startsWith('/drivers/performance')) return MOCK_PERFORMANCE;
   if (endpoint.startsWith('/drivers/schedules'))   return MOCK_SCHEDULES;

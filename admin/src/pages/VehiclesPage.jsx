@@ -1190,6 +1190,28 @@ export default function VehiclesPage() {
   const [deleteId,      setDeleteId]      = useState(null);
   const [profile,       setProfile]       = useState(null);
 
+  // Load persisted photos for all vehicles on mount
+  const loadAllPhotos = useCallback(async (vehicleList) => {
+    const results = await Promise.allSettled(
+      vehicleList.map(v => {
+        const id = v.id ?? v.vehicle_id;
+        return getVehiclePhotos(id).then(photos => ({ id, photos }));
+      })
+    );
+    const photoMap = {};
+    for (const r of results) {
+      if (r.status === "fulfilled") {
+        const { id, photos } = r.value;
+        for (const p of photos ?? []) {
+          photoMap[`${id}-${p.slot}`] = p.url;
+        }
+      }
+    }
+    if (Object.keys(photoMap).length > 0) {
+      setPhotos(prev => ({ ...prev, ...photoMap }));
+    }
+  }, []);
+
   const loadVehicles = useCallback(() => {
     setVehiclesLoading(true);
     setVehiclesError(null);
@@ -1230,27 +1252,6 @@ export default function VehiclesPage() {
 
   function openAdd()   { setEditTarget(null); setForm(EMPTY_FORM); setModalOpen(true); }
   function openEdit(v) { setEditTarget(v.id); setForm({ plate: v.plate, type: v.type ?? "Bus", model: v.model, year: v.year, capacity: v.capacity, status: v.status, driver: v.driver }); setModalOpen(true); }
-  // Load persisted photos for all vehicles on mount
-  const loadAllPhotos = useCallback(async (vehicleList) => {
-    const results = await Promise.allSettled(
-      vehicleList.map(v => {
-        const id = v.id ?? v.vehicle_id;
-        return getVehiclePhotos(id).then(photos => ({ id, photos }));
-      })
-    );
-    const photoMap = {};
-    for (const r of results) {
-      if (r.status === "fulfilled") {
-        const { id, photos } = r.value;
-        for (const p of photos ?? []) {
-          photoMap[`${id}-${p.slot}`] = p.url;
-        }
-      }
-    }
-    if (Object.keys(photoMap).length > 0) {
-      setPhotos(prev => ({ ...prev, ...photoMap }));
-    }
-  }, []);
 
   async function handlePhotoUpload(key, file) {
     // key = "{vehicleId}-{slot}"
