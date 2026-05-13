@@ -286,7 +286,9 @@ END;
 
 export const ensureOperationalTables = async (pool) => {
   if (!setupPromise) {
-    setupPromise = pool.request().batch(setupSql).catch((err) => {
+    const req = pool.request();
+    req.timeout = 60000;
+    setupPromise = req.batch(setupSql).catch((err) => {
       setupPromise = null;
       throw err;
     });
@@ -584,7 +586,9 @@ let authTablesPromise = null;
 
 export const ensureAuthTables = async (pool) => {
   if (!authTablesPromise) {
-    authTablesPromise = pool.request().batch(authTablesSql).catch((err) => {
+    const req = pool.request();
+    req.timeout = 60000;
+    authTablesPromise = req.batch(authTablesSql).catch((err) => {
       authTablesPromise = null;
       console.error("[db] ensureAuthTables failed:", err.message);
       throw err;

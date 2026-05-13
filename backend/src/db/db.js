@@ -15,7 +15,9 @@ let _pool = null;
 async function connectWithRetry(retries = 5, delayMs = 5000) {
   for (let i = 1; i <= retries; i++) {
     try {
-      const pool = await sql.connect(connectionString);
+      const pool = new sql.ConnectionPool(connectionString);
+      pool.config.requestTimeout = 30000; // 30 s (mssql default is 15 s)
+      await pool.connect();
       console.log("✅ Azure SQL Database connected successfully");
       _pool = pool;
       return pool;
