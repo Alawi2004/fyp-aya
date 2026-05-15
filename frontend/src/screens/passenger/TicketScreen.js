@@ -1,16 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Share,
+  View, Text, StyleSheet, ScrollView,
   StatusBar, TouchableOpacity, Animated,
 } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { captureRef } from 'react-native-view-shot';
-import * as Sharing from 'expo-sharing';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import QRCode from 'react-native-qrcode-svg';
 import { Ionicons } from '@expo/vector-icons';
 import Button from '../../components/common/Button';
+import ShareTicketModal from '../../components/passenger/ShareTicketModal';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS } from '../../constants/colors';
 import { formatDateTime } from '../../utils/formatters';
@@ -64,11 +63,11 @@ const TicketScreen = ({ route, navigation }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [linkedCard, setLinkedCard]     = useState(null);
 
-  const pulseAnim   = useRef(new Animated.Value(1)).current;
-  const flashAnim   = useRef(new Animated.Value(1)).current;
-  const lastWindow  = useRef(currentWindowExp());
-  const ticketRef   = useRef(null);   // view-shot target
-  const [sharing, setSharing] = useState(false);
+  const pulseAnim      = useRef(new Animated.Value(1)).current;
+  const flashAnim      = useRef(new Animated.Value(1)).current;
+  const lastWindow     = useRef(currentWindowExp());
+  const ticketRef      = useRef(null);
+  const [showShare, setShowShare] = useState(false);
 
   // Network monitoring
   useEffect(() => {
@@ -144,43 +143,7 @@ const TicketScreen = ({ route, navigation }) => {
     ? (secondsLeft <= 10 ? COLORS.danger : secondsLeft <= 20 ? COLORS.warning : COLORS.secondary)
     : COLORS.warning;
 
-  const shareTicket = async () => {
-    if (sharing) return;
-    setSharing(true);
-    try {
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare && ticketRef.current) {
-        // Capture the ticket card as a PNG image (includes QR + booking details)
-        const uri = await captureRef(ticketRef, {
-          format: 'png',
-          quality: 1.0,
-          result: 'tmpfile',
-          // Ensure animations are fully opaque at capture time
-          snapshotContentContainer: false,
-        });
-        await Sharing.shareAsync(uri, {
-          mimeType: 'image/png',
-          dialogTitle: 'Share Ticket',
-          UTI: 'public.png',
-        });
-      } else {
-        // Fallback: text share when image capture not available
-        await Share.share({
-          message:
-            `🎟 Yalla Transit Ticket\n\n` +
-            `Bus: ${booking.bus?.name}\n` +
-            `Route: ${booking.bus?.origin} → ${booking.bus?.destination}\n` +
-            `Seat: ${booking.seatId}  |  Fare: $${booking.price}\n` +
-            `Date: ${formatDateTime(booking.date)}\n` +
-            `Booking #${booking._id}`,
-        });
-      }
-    } catch {
-      // Silent fail — user may have cancelled
-    } finally {
-      setSharing(false);
-    }
-  };
+  const shareTicket = () => setShowShare(true);
 
   return (
     <View style={styles.container}>
@@ -200,12 +163,8 @@ const TicketScreen = ({ route, navigation }) => {
           <Text style={styles.headerTitle}>Your Ticket</Text>
           <Text style={styles.headerSub}>Present QR or NFC card to board</Text>
         </View>
-        <TouchableOpacity style={styles.shareBtn} onPress={shareTicket} disabled={sharing}>
-          <Ionicons
-            name={sharing ? 'hourglass-outline' : 'share-social-outline'}
-            size={20}
-            color={COLORS.white}
-          />
+        <TouchableOpacity style={styles.shareBtn} onPress={shareTicket}>
+          <Ionicons name="share-social-outline" size={20} color={COLORS.white} />
         </TouchableOpacity>
       </View>
 
@@ -447,6 +406,15 @@ const TicketScreen = ({ route, navigation }) => {
           />
         </View>
       </ScrollView>
+
+      {/* ── Share Ticket Modal ── */}
+      <ShareTicketModal
+        visible={showShare}
+        onClose={() => setShowShare(false)}
+        booking={booking}
+        passengerName={user?.name}
+        user={user}
+      />
     </View>
   );
 };

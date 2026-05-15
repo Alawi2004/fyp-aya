@@ -92,6 +92,25 @@ const mockResponse = (config) => {
   if (url.includes('/stops')) return mockPassengerData.stops;
   if (url.includes('/driver/trips')) return { trips: [] };
   if (url.includes('/driver/earnings')) return { total: 0, trips: 0, history: [] };
+  // Share ticket endpoints
+  if (url.includes('/share/ticket/token') && method === 'post') {
+    const bid  = body.bookingId ?? 'b1';
+    const seat = body.seatId ?? 'B3';
+    const exp  = Math.floor(Date.now() / 1000) + 604800;
+    const token = `bW9ja3BheWxvYWQ.${bid}${seat}${exp}`.replace(/[^a-zA-Z0-9._-]/g, 'x');
+    return {
+      token,
+      shareUrl: `https://yallatransit.app/ticket/share?t=${token}`,
+      deepLink: `yallatransit://ticket/share?t=${token}`,
+      expiresAt: new Date(exp * 1000).toISOString(),
+    };
+  }
+  if (url.includes('/share/ticket/verify') && method === 'post') {
+    return { valid: true, bookingId: 'b1', seatId: 'B3', reason: null };
+  }
+  if (url.includes('/share/ticket') && method === 'get') {
+    return { valid: true, bookingId: 'b1', seatId: 'B3', expiresAt: new Date(Date.now() + 604800000).toISOString() };
+  }
   return { ok: true };
 };
 

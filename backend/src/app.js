@@ -42,6 +42,7 @@ import auditLogRoutes          from "./routes/auditLog.routes.js";
 import settingsRoutes          from "./routes/systemSettings.routes.js";
 import rolesRoutes             from "./routes/roles.routes.js";
 import analyticsRoutes         from "./routes/analytics.routes.js";
+import shareTicketRoutes       from "./routes/shareTicket.routes.js";
 import { startReportScheduler } from "./services/reportScheduler.js";
 import { poolPromise }          from "./db/db.js";
 import { ensureAuthTables, ensureOperationalTables } from "./db/featureSetup.js";
@@ -148,6 +149,7 @@ app.use("/api/audit-logs",         auditLogRoutes);
 app.use("/api/settings",           settingsRoutes);
 app.use("/api/roles",              rolesRoutes);
 app.use("/api/analytics",          analyticsRoutes);
+app.use("/api/share",              shareTicketRoutes);
 
 // Run DB setup batches at startup so login requests don't pay the cold cost
 poolPromise.then(pool => {
