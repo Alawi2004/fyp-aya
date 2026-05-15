@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../../constants/colors';
 
 const SplashScreen = ({ navigation }) => {
@@ -12,7 +13,10 @@ const SplashScreen = ({ navigation }) => {
       Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 5 }),
       Animated.timing(opacity, { toValue: 1, duration: 600, useNativeDriver: true }),
     ]).start();
-    const timer = setTimeout(() => navigation.replace('Login'), 2200);
+    const timer = setTimeout(async () => {
+      const seen = await AsyncStorage.getItem('hasSeenOnboarding');
+      navigation.replace(seen ? 'Login' : 'Onboarding');
+    }, 2200);
     return () => clearTimeout(timer);
   }, []);
 

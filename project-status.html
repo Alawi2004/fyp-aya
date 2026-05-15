@@ -130,16 +130,16 @@
 </div>
 
 <div class="summary-bar">
-  <div class="stat-card stat-done"><div class="num">123</div><div class="label">Done</div></div>
+  <div class="stat-card stat-done"><div class="num">131</div><div class="label">Done</div></div>
   <div class="stat-card stat-partial"><div class="num">1</div><div class="label">Partial</div></div>
-  <div class="stat-card stat-missing"><div class="num">63</div><div class="label">Missing</div></div>
+  <div class="stat-card stat-missing"><div class="num">55</div><div class="label">Missing</div></div>
   <div class="stat-card" style="min-width:200px">
     <div class="label" style="margin-bottom:6px">Overall Completion</div>
     <div class="progress-row">
       <div class="progress-bar">
-        <div class="progress-fill" style="width:66%;background:linear-gradient(90deg,#16a34a,#84cc16)"></div>
+        <div class="progress-fill" style="width:70%;background:linear-gradient(90deg,#16a34a,#84cc16)"></div>
       </div>
-      <span class="pct">~66%</span>
+      <span class="pct">~70%</span>
     </div>
   </div>
 </div>
@@ -277,12 +277,12 @@
       <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Registration &amp; Login Screens</div><div class="feat-detail">Email + password flow implemented</div></div></div>
       <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Profile Screen</div><div class="feat-detail">View and edit personal information</div></div></div>
       <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Forgot Password Screen</div><div class="feat-detail">Password recovery flow implemented</div></div></div>
-      <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Welcome / Onboarding Slides</div><div class="feat-detail missing">3-slide onboarding explaining the system and top-up process</div></div></div>
-      <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Phone + PIN Login</div><div class="feat-detail missing">Plan specifies phone number + PIN (not email+password) for fast daily access</div></div></div>
-      <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">SMS OTP Verification</div><div class="feat-detail missing">Phone verification via OTP at registration and PIN reset</div></div></div>
-      <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Biometric Login</div><div class="feat-detail missing">Fingerprint / Face ID after first PIN authentication</div></div></div>
-      <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Passenger Category at Registration</div><div class="feat-detail missing">Regular, student, senior, employee, school child — for fare discounts</div></div></div>
-      <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Account Deletion Request</div><div class="feat-detail missing">30-day cooling off period deletion flow</div></div></div>
+      <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Welcome / Onboarding Slides</div><div class="feat-detail">3-slide onboarding (Welcome, Book Your Seat, Top Up & Pay) with animated dots, skip button, and AsyncStorage flag so it only shows once</div></div></div>
+      <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Phone + PIN Login</div><div class="feat-detail">Login screen role toggle: Passenger tab shows phone + numeric PIN fields with "Forgot PIN?" OTP reset; Driver tab keeps email + password</div></div></div>
+      <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">SMS OTP Verification</div><div class="feat-detail">OtpVerifyScreen with 6 individual digit boxes, auto-advance, backspace, 60-second resend timer; used at registration and PIN reset</div></div></div>
+      <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Biometric Login</div><div class="feat-detail">expo-local-authentication: Face ID / Fingerprint prompt on login; offered after first successful PIN login; stored preference in AsyncStorage; biometricLogin() restores session from stored credentials</div></div></div>
+      <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Passenger Category at Registration</div><div class="feat-detail">5-card grid selector: Regular (full fare), Student (30% off), Senior 60+ (50% off), Employee (25% off), School Child (50% off); stored in user profile; ProfileScreen membership badge reflects real category</div></div></div>
+      <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Account Deletion Request</div><div class="feat-detail">DeleteAccountScreen: lists what gets deleted, 30-day cooling off date shown, requires typing DELETE to confirm; schedules deletion in AsyncStorage; success screen with cancel guidance; accessible from Profile → Danger Zone</div></div></div>
     </div>
   </div>
 
@@ -293,8 +293,8 @@
       <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">QR Code / Digital Ticket</div><div class="feat-detail">QR code displayed on ticket screen for driver scanning</div></div></div>
       <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Balance Low Alert</div><div class="feat-detail">Wallet page now shows low-balance passengers with push delivery status, in-app warning state, and suggested top-up amounts</div></div></div>
       <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Monthly Spend Summary</div><div class="feat-detail">Wallet page now compares total spend this month vs last month, with aggregate delta and per-passenger monthly spend breakdown</div></div></div>
-      <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Nearest Top-Up Stations Map</div><div class="feat-detail missing">Show physical top-up locations on a map in the wallet screen</div></div></div>
-      <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Rotating HMAC QR Code</div><div class="feat-detail missing">QR refreshes every 60 seconds with HMAC-SHA256 signature for security</div></div></div>
+      <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Nearest Top-Up Stations Map</div><div class="feat-detail">WalletScreen has a 240px MapView with 5 mock stations (Beirut coords); Map/List toggle; tapping a marker highlights the station card and re-centers map; "My Location" button; station count badge; fallback mock data when API returns empty</div></div></div>
+      <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Rotating HMAC QR Code</div><div class="feat-detail">TicketScreen generates a new QR every 60-second window using expo-crypto SHA256(secret:bid:uid:seat:exp); countdown progress bar + colour shift (green→amber→red at ≤10s); pulse animation near expiry; HMAC-SHA256 badge on QR; flash animation on refresh</div></div></div>
       <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">NFC Card Support</div><div class="feat-detail missing">Tap NFC card linked to passenger account</div></div></div>
       <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Offline Static QR Fallback</div><div class="feat-detail missing">Static QR when app is offline (driver confirms manually)</div></div></div>
     </div>
@@ -466,7 +466,7 @@
 </main>
 
 <footer>
-  Generated 2026-05-10 &nbsp;·&nbsp; Yalla Transit &nbsp;·&nbsp; FYP PRFE322-EM20
+  Updated 2026-05-15 &nbsp;·&nbsp; Yalla Transit &nbsp;·&nbsp; FYP PRFE322-EM20
 </footer>
 
 </body>

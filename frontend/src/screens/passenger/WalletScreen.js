@@ -2,12 +2,31 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   StatusBar, Animated, ActivityIndicator, RefreshControl,
+  Platform,
 } from 'react-native';
+import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import * as Location from 'expo-location';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import { Ionicons } from '@expo/vector-icons';
 import { getWalletApi, getWalletTransactionsApi, getTopUpLocationsApi } from '../../api/walletApi';
 import { useApp } from '../../context/AppContext';
 import { COLORS } from '../../constants/colors';
+
+// Mock stations for frontend-only mode (Beirut coordinates)
+const MOCK_LOCATIONS = [
+  { location_id: 1, name: 'Hamra Main Office',   address: 'Hamra Street',      city: 'Beirut',    hours: 'Mon–Sat 8am–8pm', phone: '+961 1 740 000', latitude: 33.8938, longitude: 35.4824 },
+  { location_id: 2, name: 'Dora Station Kiosk',  address: 'Dora Highway',      city: 'Beirut',    hours: 'Daily 7am–10pm',  phone: '+961 1 260 000', latitude: 33.9117, longitude: 35.5583 },
+  { location_id: 3, name: 'Zouk Mosbeh Branch',  address: 'Zouk Main Road',    city: 'Keserwan', hours: 'Mon–Fri 9am–6pm', phone: '+961 9 215 000', latitude: 33.9736, longitude: 35.6266 },
+  { location_id: 4, name: 'Jdeideh Center',      address: 'Jdeideh Ring Road', city: 'Beirut',    hours: 'Daily 8am–9pm',   phone: '+961 1 880 000', latitude: 33.8975, longitude: 35.5608 },
+  { location_id: 5, name: 'Achrafieh Branch',    address: 'Sassine Square',    city: 'Beirut',    hours: 'Mon–Sat 9am–7pm', phone: '+961 1 200 000', latitude: 33.8837, longitude: 35.5123 },
+];
+
+const MAP_REGION = {
+  latitude: 33.8938,
+  longitude: 35.5200,
+  latitudeDelta: 0.18,
+  longitudeDelta: 0.18,
+};
 
 const WalletScreen = () => {
   const headerInsets = useHeaderInsets(20);
@@ -16,8 +35,26 @@ const WalletScreen = () => {
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [locationsExpanded, setLocationsExpanded] = useState(false);
+  const [viewMode, setViewMode] = useState('map'); // 'map' | 'list'
+  const [selectedStation, setSelectedStation] = useState(null);
+  const [userLocation, setUserLocation] = useState(null);
+  const [locPermission, setLocPermission] = useState(null);
   const balanceAnim = useRef(new Animated.Value(1)).current;
+  const mapRef = useRef(null);
+  const listScrollRef = useRef(null);
+
+  useEffect(() => { requestLocation(); }, []);
+
+  const requestLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      setLocPermission(status);
+      if (status === 'granted') {
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        setUserLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+      }
+    } catch (_) {}
+  };
 
   const loadData = useCallback(async () => {
     try {
@@ -34,7 +71,9 @@ const WalletScreen = () => {
         ]).start();
       }
       if (txRes.status === 'fulfilled') setTransactions(txRes.value.data ?? []);
-      if (locRes.status === 'fulfilled') setLocations(locRes.value.data ?? []);
+
+      const apiLocations = locRes.status === 'fulfilled' ? (locRes.value.data ?? []) : [];
+      setLocations(apiLocations.length > 0 ? apiLocations : MOCK_LOCATIONS);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -49,13 +88,34 @@ const WalletScreen = () => {
     .filter(t => t.type === 'debit')
     .reduce((sum, t) => sum + parseFloat(t.amount ?? 0), 0);
 
-  const visibleLocations = locationsExpanded ? locations : locations.slice(0, 3);
+  const handleMarkerPress = (loc) => {
+    setSelectedStation(loc.location_id);
+    if (viewMode === 'map') {
+      mapRef.current?.animateToRegion({
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        latitudeDelta: 0.04,
+        longitudeDelta: 0.04,
+      }, 400);
+    }
+  };
+
+  const centerOnUser = () => {
+    if (userLocation && mapRef.current) {
+      mapRef.current.animateToRegion({
+        ...userLocation,
+        latitudeDelta: 0.06,
+        longitudeDelta: 0.06,
+      }, 400);
+    }
+  };
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
 
       <ScrollView
+        ref={listScrollRef}
         showsVerticalScrollIndicator={false}
         bounces={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.white} />}
@@ -95,51 +155,125 @@ const WalletScreen = () => {
             <View style={{ flex: 1 }}>
               <Text style={styles.noticeTitle}>In-Person Recharge Only</Text>
               <Text style={styles.noticeText}>
-                For your security, wallet top-ups are handled exclusively at our authorised offices,
-                kiosks, and agent counters. Visit any location below to add funds.
+                Wallet top-ups are handled at authorised offices, kiosks, and agent counters.
+                Visit any nearby location below to add funds.
               </Text>
             </View>
           </View>
 
-          {/* ── Top-Up Locations ── */}
+          {/* ── Top-Up Locations header + toggle ── */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Top-Up Locations</Text>
-            {locations.length > 3 && (
-              <TouchableOpacity onPress={() => setLocationsExpanded(e => !e)} activeOpacity={0.7}>
-                <Text style={styles.seeAll}>{locationsExpanded ? 'Show less' : `See all ${locations.length}`}</Text>
+            <Text style={styles.sectionTitle}>Nearest Top-Up Stations</Text>
+            <View style={styles.viewToggle}>
+              <TouchableOpacity
+                style={[styles.toggleBtn, viewMode === 'map' && styles.toggleBtnActive]}
+                onPress={() => setViewMode('map')}
+              >
+                <Ionicons name="map-outline" size={14} color={viewMode === 'map' ? COLORS.white : COLORS.textMuted} />
+                <Text style={[styles.toggleText, viewMode === 'map' && styles.toggleTextActive]}>Map</Text>
               </TouchableOpacity>
-            )}
+              <TouchableOpacity
+                style={[styles.toggleBtn, viewMode === 'list' && styles.toggleBtnActive]}
+                onPress={() => setViewMode('list')}
+              >
+                <Ionicons name="list-outline" size={14} color={viewMode === 'list' ? COLORS.white : COLORS.textMuted} />
+                <Text style={[styles.toggleText, viewMode === 'list' && styles.toggleTextActive]}>List</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
+          {/* ── Map View ── */}
+          {viewMode === 'map' && (
+            <View style={styles.mapContainer}>
+              <MapView
+                ref={mapRef}
+                style={styles.map}
+                provider={Platform.OS === 'android' ? 'google' : PROVIDER_DEFAULT}
+                initialRegion={userLocation
+                  ? { ...userLocation, latitudeDelta: 0.10, longitudeDelta: 0.10 }
+                  : MAP_REGION
+                }
+                showsUserLocation={locPermission === 'granted'}
+                showsMyLocationButton={false}
+              >
+                {locations.map((loc) => (
+                  <Marker
+                    key={loc.location_id}
+                    coordinate={{ latitude: loc.latitude, longitude: loc.longitude }}
+                    title={loc.name}
+                    description={`${loc.address}, ${loc.city}`}
+                    onPress={() => handleMarkerPress(loc)}
+                    pinColor={selectedStation === loc.location_id ? COLORS.secondary : COLORS.primary}
+                  />
+                ))}
+              </MapView>
+
+              {/* My Location button */}
+              {locPermission === 'granted' && (
+                <TouchableOpacity style={styles.myLocBtn} onPress={centerOnUser} activeOpacity={0.85}>
+                  <Ionicons name="locate-outline" size={20} color={COLORS.primary} />
+                </TouchableOpacity>
+              )}
+
+              {/* Station count badge */}
+              <View style={styles.stationBadge}>
+                <Ionicons name="location" size={13} color={COLORS.white} />
+                <Text style={styles.stationBadgeText}>{locations.length} stations nearby</Text>
+              </View>
+            </View>
+          )}
+
+          {/* ── Station list (always visible under map, or as full list) ── */}
           {locations.length === 0 ? (
             <View style={styles.emptyLocations}>
               <Ionicons name="location-outline" size={28} color={COLORS.textMuted} />
-              <Text style={styles.emptyText}>No locations listed yet</Text>
+              <Text style={styles.emptyText}>No locations found</Text>
             </View>
           ) : (
-            visibleLocations.map((loc) => (
-              <View key={loc.location_id} style={styles.locationCard}>
-                <View style={styles.locationIconWrap}>
-                  <Ionicons name="location" size={18} color={COLORS.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.locationName}>{loc.name}</Text>
-                  <Text style={styles.locationAddress}>{loc.address}, {loc.city}</Text>
-                  {loc.hours ? (
-                    <View style={styles.locationHoursRow}>
-                      <Ionicons name="time-outline" size={12} color={COLORS.textMuted} />
-                      <Text style={styles.locationHours}>{loc.hours}</Text>
-                    </View>
-                  ) : null}
-                  {loc.phone ? (
-                    <View style={styles.locationPhoneRow}>
-                      <Ionicons name="call-outline" size={12} color={COLORS.textMuted} />
-                      <Text style={styles.locationPhone}>{loc.phone}</Text>
-                    </View>
-                  ) : null}
-                </View>
-              </View>
-            ))
+            <View style={viewMode === 'map' ? styles.compactList : undefined}>
+              {locations.map((loc) => (
+                <TouchableOpacity
+                  key={loc.location_id}
+                  style={[
+                    styles.locationCard,
+                    selectedStation === loc.location_id && styles.locationCardSelected,
+                  ]}
+                  onPress={() => {
+                    handleMarkerPress(loc);
+                    setViewMode('map');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={[
+                    styles.locationIconWrap,
+                    selectedStation === loc.location_id && { backgroundColor: COLORS.secondary },
+                  ]}>
+                    <Ionicons
+                      name="location"
+                      size={18}
+                      color={selectedStation === loc.location_id ? COLORS.white : COLORS.primary}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.locationName}>{loc.name}</Text>
+                    <Text style={styles.locationAddress}>{loc.address}, {loc.city}</Text>
+                    {loc.hours ? (
+                      <View style={styles.locationMetaRow}>
+                        <Ionicons name="time-outline" size={12} color={COLORS.textMuted} />
+                        <Text style={styles.locationMeta}>{loc.hours}</Text>
+                      </View>
+                    ) : null}
+                    {loc.phone ? (
+                      <View style={styles.locationMetaRow}>
+                        <Ionicons name="call-outline" size={12} color={COLORS.textMuted} />
+                        <Text style={styles.locationMeta}>{loc.phone}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              ))}
+            </View>
           )}
 
           {/* ── Transaction History ── */}
@@ -174,10 +308,7 @@ const WalletScreen = () => {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.txDesc}>{t.description}</Text>
                     {isCredit && t.location_name ? (
-                      <Text style={styles.txMeta}>
-                        <Ionicons name="location-outline" size={11} /> {t.location_name}
-                        {t.tx_ref ? `  ·  Ref: ${t.tx_ref}` : ''}
-                      </Text>
+                      <Text style={styles.txMeta}>{t.location_name}{t.tx_ref ? `  ·  Ref: ${t.tx_ref}` : ''}</Text>
                     ) : null}
                     {isCredit && t.processed_by ? (
                       <Text style={styles.txMeta}>Processed by {t.processed_by}</Text>
@@ -238,12 +369,12 @@ const styles = StyleSheet.create({
   /* Body */
   body: { padding: 16 },
 
-  /* In-person notice */
+  /* Notice */
   noticeBanner: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 12,
-    backgroundColor: COLORS.primaryLight ?? '#EEF2FF',
+    backgroundColor: COLORS.primaryLight,
     borderRadius: 16, padding: 14, marginBottom: 20,
-    borderWidth: 1, borderColor: COLORS.primaryBorder ?? '#C7D2FE',
+    borderWidth: 1, borderColor: COLORS.primaryMid,
   },
   noticeIcon: {
     width: 36, height: 36, borderRadius: 10,
@@ -253,44 +384,92 @@ const styles = StyleSheet.create({
   noticeTitle: { fontSize: 14, fontWeight: '700', color: COLORS.primary, marginBottom: 3 },
   noticeText: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 19 },
 
-  /* Sections */
+  /* Section header */
   sectionHeader: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between', marginBottom: 12,
   },
   sectionTitle: { fontSize: 16, fontWeight: '800', color: COLORS.textPrimary },
-  seeAll: { fontSize: 13, fontWeight: '600', color: COLORS.primary },
+
+  /* View toggle */
+  viewToggle: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.surfaceAlt,
+    borderRadius: 10,
+    padding: 3,
+    gap: 2,
+  },
+  toggleBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 8,
+  },
+  toggleBtnActive: { backgroundColor: COLORS.primary },
+  toggleText: { fontSize: 12, fontWeight: '600', color: COLORS.textMuted },
+  toggleTextActive: { color: COLORS.white },
+
+  /* Map */
+  mapContainer: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    marginBottom: 12,
+    height: 240,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    position: 'relative',
+  },
+  map: { flex: 1 },
+  myLocBtn: {
+    position: 'absolute',
+    bottom: 12, right: 12,
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: COLORS.white,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15, shadowRadius: 6, elevation: 4,
+  },
+  stationBadge: {
+    position: 'absolute',
+    top: 12, left: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: COLORS.primary,
+    borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5,
+  },
+  stationBadgeText: { fontSize: 12, fontWeight: '600', color: COLORS.white },
+
+  /* Compact list under map */
+  compactList: {},
 
   /* Locations */
-  emptyLocations: {
-    alignItems: 'center', paddingVertical: 24, gap: 8,
-  },
+  emptyLocations: { alignItems: 'center', paddingVertical: 24, gap: 8 },
   emptyText: { fontSize: 14, color: COLORS.textMuted, fontWeight: '500' },
   locationCard: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
     backgroundColor: COLORS.white, borderRadius: 16,
     padding: 14, marginBottom: 8,
+    borderWidth: 1.5, borderColor: 'transparent',
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
   },
+  locationCardSelected: {
+    borderColor: COLORS.secondary,
+    backgroundColor: COLORS.secondaryLight,
+  },
   locationIconWrap: {
     width: 38, height: 38, borderRadius: 11,
-    backgroundColor: COLORS.primaryLight ?? '#EEF2FF',
+    backgroundColor: COLORS.primaryLight,
     alignItems: 'center', justifyContent: 'center',
-    marginTop: 1,
+    flexShrink: 0,
   },
   locationName: { fontSize: 14, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 2 },
-  locationAddress: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 4 },
-  locationHoursRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
-  locationHours: { fontSize: 12, color: COLORS.textMuted },
-  locationPhoneRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  locationPhone: { fontSize: 12, color: COLORS.textMuted },
+  locationAddress: { fontSize: 12, color: COLORS.textSecondary, marginBottom: 3 },
+  locationMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
+  locationMeta: { fontSize: 11, color: COLORS.textMuted },
 
   /* Transactions */
   txCount: { fontSize: 12, color: COLORS.textMuted, fontWeight: '500' },
-  emptyTx: {
-    alignItems: 'center', paddingVertical: 36, gap: 8,
-  },
+  emptyTx: { alignItems: 'center', paddingVertical: 36, gap: 8 },
   emptyTxText: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary },
   emptyTxSub: { fontSize: 13, color: COLORS.textMuted },
   txCard: {
@@ -300,10 +479,7 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
   },
-  txIconWrap: {
-    width: 42, height: 42, borderRadius: 13,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  txIconWrap: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   txDesc: { fontSize: 14, fontWeight: '600', color: COLORS.textPrimary },
   txMeta: { fontSize: 12, color: COLORS.textMuted, marginTop: 1 },
   txDate: { fontSize: 12, color: COLORS.textMuted, marginTop: 2, fontWeight: '500' },

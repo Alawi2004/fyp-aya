@@ -75,7 +75,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const AuthContext = createContext();
 
-const MOCK_PASSENGER = { _id: '1', name: 'Alex Morgan', email: 'alex@email.com', phone: '+1 234 567 8900' };
+const MOCK_PASSENGER = { _id: '1', name: 'Alex Morgan', email: 'alex@email.com', phone: '+1 234 567 8900', category: 'regular' };
 const MOCK_DRIVER = { _id: '2', name: 'James Carter', email: 'driver@email.com', phone: '+1 987 654 3210' };
 
 export const AuthProvider = ({ children }) => {
@@ -111,6 +111,42 @@ export const AuthProvider = ({ children }) => {
     return mockUser;
   };
 
+  const loginWithPhone = async (phone, pin, userRole, extraData = {}) => {
+    const mockUser = {
+      _id: extraData._id || MOCK_PASSENGER._id,
+      name: extraData.name || MOCK_PASSENGER.name,
+      phone: phone || MOCK_PASSENGER.phone,
+      email: extraData.email || MOCK_PASSENGER.email,
+      category: extraData.category || 'regular',
+    };
+    await AsyncStorage.setItem('userRole', userRole);
+    await AsyncStorage.setItem('userData', JSON.stringify(mockUser));
+    setToken('mock-token');
+    setUser(mockUser);
+    setRole(userRole);
+    return mockUser;
+  };
+
+  const biometricLogin = async () => {
+    const storedRole = await AsyncStorage.getItem('userRole');
+    const storedUser = await AsyncStorage.getItem('userData');
+    if (!storedRole || !storedUser) throw new Error('No stored credentials');
+    const parsedUser = JSON.parse(storedUser);
+    setToken('mock-token');
+    setUser(parsedUser);
+    setRole(storedRole);
+    return parsedUser;
+  };
+
+  const setBiometricEnabled = async (enabled) => {
+    await AsyncStorage.setItem('biometricEnabled', enabled ? 'true' : 'false');
+  };
+
+  const isBiometricEnabled = async () => {
+    const val = await AsyncStorage.getItem('biometricEnabled');
+    return val === 'true';
+  };
+
   const register = async (data, userRole) => {
     const mockUser = { _id: Date.now().toString(), name: data.name, email: data.email, phone: data.phone };
     await AsyncStorage.setItem('userRole', userRole);
@@ -129,7 +165,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, role, loading, login, register, logout, setUser }}>
+    <AuthContext.Provider value={{
+      user, token, role, loading,
+      login, loginWithPhone, biometricLogin,
+      setBiometricEnabled, isBiometricEnabled,
+      register, logout, setUser,
+    }}>
       {children}
     </AuthContext.Provider>
   );

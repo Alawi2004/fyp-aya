@@ -17,6 +17,7 @@ import NotificationsScreen from '../screens/passenger/NotificationsScreen';
 import FeedbackScreen from '../screens/passenger/FeedbackScreen';
 import FavoriteRoutesScreen from '../screens/passenger/FavoriteRoutesScreen';
 import TripPlannerScreen from '../screens/passenger/TripPlannerScreen';
+import DeleteAccountScreen from '../screens/passenger/DeleteAccountScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -39,6 +40,7 @@ const ProfileStack = () => (
     <Stack.Screen name="TripHistory"    component={TripHistoryScreen} />
     <Stack.Screen name="Notifications"  component={NotificationsScreen} />
     <Stack.Screen name="FavoriteRoutes" component={FavoriteRoutesScreen} />
+    <Stack.Screen name="DeleteAccount"  component={DeleteAccountScreen} />
   </Stack.Navigator>
 );
 

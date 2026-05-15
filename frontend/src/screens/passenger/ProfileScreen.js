@@ -1,13 +1,21 @@
 import React from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, Alert, Platform, StatusBar,
+  TouchableOpacity, Alert, StatusBar,
 } from 'react-native';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { COLORS } from '../../constants/colors';
+
+const CATEGORY_META = {
+  regular:      { label: 'Regular Passenger', icon: 'person-outline',    color: COLORS.primary,  bg: COLORS.primaryLight,  discount: 'Full fare' },
+  student:      { label: 'Student',           icon: 'school-outline',    color: '#7C3AED',        bg: '#F5F3FF',            discount: '30% off' },
+  senior:       { label: 'Senior (60+)',      icon: 'walk-outline',      color: COLORS.secondary, bg: COLORS.secondaryLight, discount: '50% off' },
+  employee:     { label: 'Employee',          icon: 'briefcase-outline', color: COLORS.warning,   bg: COLORS.warningLight,  discount: '25% off' },
+  school_child: { label: 'School Child',      icon: 'bus-outline',       color: '#EA580C',        bg: '#FFF7ED',            discount: '50% off' },
+};
 
 const MenuItem = ({ icon, label, value, onPress, danger = false, rightEl }) => (
   <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.7}>
@@ -26,6 +34,9 @@ const ProfileScreen = ({ navigation }) => {
   const headerInsets = useHeaderInsets();
   const { user, logout } = useAuth();
   const { walletBalance, bookings } = useApp();
+
+  const catKey = user?.category || 'regular';
+  const cat = CATEGORY_META[catKey] || CATEGORY_META.regular;
 
   const initials = user?.name
     ? user.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -82,15 +93,15 @@ const ProfileScreen = ({ navigation }) => {
         {/* Membership Badge */}
         <View style={styles.body}>
           <View style={styles.memberCard}>
-            <View style={[styles.memberIcon, { backgroundColor: COLORS.warningLight }]}>
-              <Ionicons name="ribbon" size={20} color={COLORS.warning} />
+            <View style={[styles.memberIcon, { backgroundColor: cat.bg }]}>
+              <Ionicons name={cat.icon} size={20} color={cat.color} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.memberTitle}>Regular Passenger</Text>
-              <Text style={styles.memberSub}>{completedTrips} completed trips · Keep riding!</Text>
+              <Text style={styles.memberTitle}>{cat.label}</Text>
+              <Text style={styles.memberSub}>{completedTrips} completed trips · {cat.discount} fare</Text>
             </View>
-            <View style={styles.memberBadge}>
-              <Text style={styles.memberBadgeText}>Active</Text>
+            <View style={[styles.memberBadge, { backgroundColor: cat.bg }]}>
+              <Text style={[styles.memberBadgeText, { color: cat.color }]}>Active</Text>
             </View>
           </View>
 
@@ -137,6 +148,18 @@ const ProfileScreen = ({ navigation }) => {
               icon="log-out-outline"
               label="Sign Out"
               onPress={handleLogout}
+              danger
+            />
+          </View>
+
+          {/* Danger zone */}
+          <Text style={styles.sectionLabel}>Danger Zone</Text>
+          <View style={styles.menuCard}>
+            <MenuItem
+              icon="trash-outline"
+              label="Delete Account"
+              value="30-day cooling off period"
+              onPress={() => navigation.navigate('DeleteAccount')}
               danger
             />
           </View>
