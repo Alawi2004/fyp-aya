@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { captureRef } from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import QRCode from 'react-native-qrcode-svg';
 import { Ionicons } from '@expo/vector-icons';
@@ -62,9 +64,11 @@ const TicketScreen = ({ route, navigation }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [linkedCard, setLinkedCard]     = useState(null);
 
-  const pulseAnim  = useRef(new Animated.Value(1)).current;
-  const flashAnim  = useRef(new Animated.Value(1)).current;
-  const lastWindow = useRef(currentWindowExp());
+  const pulseAnim   = useRef(new Animated.Value(1)).current;
+  const flashAnim   = useRef(new Animated.Value(1)).current;
+  const lastWindow  = useRef(currentWindowExp());
+  const ticketRef   = useRef(null);   // view-shot target
+  const [sharing, setSharing] = useState(false);
 
   // Network monitoring
   useEffect(() => {
@@ -141,9 +145,41 @@ const TicketScreen = ({ route, navigation }) => {
     : COLORS.warning;
 
   const shareTicket = async () => {
-    await Share.share({
-      message: `My bus ticket: ${booking.bus?.name} | Seat ${booking.seatId} | ${formatDateTime(booking.date)}`,
-    });
+    if (sharing) return;
+    setSharing(true);
+    try {
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare && ticketRef.current) {
+        // Capture the ticket card as a PNG image (includes QR + booking details)
+        const uri = await captureRef(ticketRef, {
+          format: 'png',
+          quality: 1.0,
+          result: 'tmpfile',
+          // Ensure animations are fully opaque at capture time
+          snapshotContentContainer: false,
+        });
+        await Sharing.shareAsync(uri, {
+          mimeType: 'image/png',
+          dialogTitle: 'Share Ticket',
+          UTI: 'public.png',
+        });
+      } else {
+        // Fallback: text share when image capture not available
+        await Share.share({
+          message:
+            `🎟 Yalla Transit Ticket\n\n` +
+            `Bus: ${booking.bus?.name}\n` +
+            `Route: ${booking.bus?.origin} → ${booking.bus?.destination}\n` +
+            `Seat: ${booking.seatId}  |  Fare: $${booking.price}\n` +
+            `Date: ${formatDateTime(booking.date)}\n` +
+            `Booking #${booking._id}`,
+        });
+      }
+    } catch {
+      // Silent fail — user may have cancelled
+    } finally {
+      setSharing(false);
+    }
   };
 
   return (
@@ -164,8 +200,12 @@ const TicketScreen = ({ route, navigation }) => {
           <Text style={styles.headerTitle}>Your Ticket</Text>
           <Text style={styles.headerSub}>Present QR or NFC card to board</Text>
         </View>
-        <TouchableOpacity style={styles.shareBtn} onPress={shareTicket}>
-          <Ionicons name="share-social-outline" size={20} color={COLORS.white} />
+        <TouchableOpacity style={styles.shareBtn} onPress={shareTicket} disabled={sharing}>
+          <Ionicons
+            name={sharing ? 'hourglass-outline' : 'share-social-outline'}
+            size={20}
+            color={COLORS.white}
+          />
         </TouchableOpacity>
       </View>
 
@@ -180,7 +220,7 @@ const TicketScreen = ({ route, navigation }) => {
       )}
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <View style={styles.ticket}>
+        <View ref={ticketRef} style={styles.ticket} collapsable={false}>
 
           {/* Status Banner */}
           <View style={[styles.ticketBanner, !isOnline && { backgroundColor: COLORS.warning }]}>

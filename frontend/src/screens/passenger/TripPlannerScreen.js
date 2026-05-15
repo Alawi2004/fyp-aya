@@ -302,31 +302,53 @@ const TripPlannerScreen = ({ navigation, route }) => {
 
   const handleShare = useCallback(async () => {
     if (!displayTrip || !fromStop || !toStop) return;
-    const segments = displayTrip.segments || [];
-    const segLines = segments.map((s, i) => {
+    const segments   = displayTrip.segments || [];
+    const modeLabel  = mode === 'fastest' ? 'Fastest' : mode === 'easiest' ? 'Easiest' : 'Cheapest';
+    const mapsLink   = (name) =>
+      `https://maps.google.com/search/?q=${encodeURIComponent(name + ' Beirut Lebanon')}`;
+
+    const divider = '─────────────────────';
+
+    const segLines = segments.flatMap((s, i) => {
+      const num = `${i + 1}.`;
       if (s.type === 'walk') {
-        return `  ${i + 1}. 🚶 Walk ${s.estimated_time_min} min  (${s.from} → ${s.to})`;
+        return [
+          `${num} 🚶 Walk  ${s.estimated_time_min} min${s.distance_m ? ` (${s.distance_m} m)` : ''}`,
+          `   From: ${s.from}`,
+          `   To:   ${s.to}`,
+          `   📍 ${mapsLink(s.to)}`,
+        ];
       }
-      return `  ${i + 1}. 🚌 ${s.line} · ${s.from} → ${s.to}  (${s.estimated_time_min} min · ${money(s.price)})`;
+      return [
+        `${num} 🚌 Bus ${s.line} — ${s.route_name || 'Route'}  (${s.estimated_time_min} min · ${money(s.price)})`,
+        `   Board at:  ${s.from}`,
+        `   Exit at:   ${s.to}${s.stops ? ` (${s.stops} stop${s.stops === 1 ? '' : 's'})` : ''}`,
+        s.boarding_instruction ? `   ℹ️  ${s.boarding_instruction}` : null,
+        `   📍 ${mapsLink(s.from)}`,
+      ].filter(Boolean);
     });
-    const modeLabel = mode === 'fastest' ? 'Fastest' : mode === 'easiest' ? 'Easiest' : 'Cheapest';
+
     const message = [
-      '🚌 Trip Plan — Yalla Transit',
+      '🚌 TRIP PLAN — Yalla Transit',
+      divider,
+      `📍 From:  ${fromStop.stop_name}`,
+      `🏁 To:    ${toStop.stop_name}`,
+      `🕐 Time:  ${displayTrip.total_duration_min} min  |  💰 ${money(displayTrip.total_price)}`,
+      displayTrip.total_transfers
+        ? `🔄 Transfers: ${displayTrip.total_transfers}`
+        : `✅ Direct route`,
+      `⚡ Mode:  ${modeLabel}`,
+      divider,
+      'ROUTE STEPS:',
       '',
-      `From:  ${fromStop.stop_name}`,
-      `To:    ${toStop.stop_name}`,
-      `Mode:  ${modeLabel}`,
-      `Time:  ${displayTrip.total_duration_min} min`,
-      `Fare:  ${money(displayTrip.total_price)}`,
-      displayTrip.total_transfers ? `Transfers: ${displayTrip.total_transfers}` : null,
-      '',
-      'Route:',
       ...segLines,
       '',
-      '— Planned with Yalla Transit',
-    ].filter(Boolean).join('\n');
+      divider,
+      `📲 Open in Yalla Transit for live bus tracking`,
+    ].join('\n');
+
     try {
-      await Share.share({ title: 'My Trip Plan', message });
+      await Share.share({ title: 'My Trip Plan — Yalla Transit', message });
     } catch (_) {}
   }, [displayTrip, fromStop, toStop, mode]);
 
