@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, FlatList, Dimensions,
-  TouchableOpacity, StatusBar, Animated,
+  TouchableOpacity, StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -43,7 +43,6 @@ const SLIDES = [
 const OnboardingScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const flatRef = useRef(null);
-  const scrollX = useRef(new Animated.Value(0)).current;
   const [current, setCurrent] = useState(0);
 
   const finish = async () => {
@@ -51,11 +50,14 @@ const OnboardingScreen = ({ navigation }) => {
     navigation.replace('Login');
   };
 
+  const goTo = (index) => {
+    flatRef.current?.scrollToIndex({ index, animated: true });
+    setCurrent(index);
+  };
+
   const next = () => {
     if (current < SLIDES.length - 1) {
-      const next = current + 1;
-      flatRef.current?.scrollToIndex({ index: next, animated: true });
-      setCurrent(next);
+      goTo(current + 1);
     } else {
       finish();
     }
@@ -67,15 +69,15 @@ const OnboardingScreen = ({ navigation }) => {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
-      {/* Skip button */}
+      {/* Skip */}
       {current < SLIDES.length - 1 && (
         <TouchableOpacity style={styles.skip} onPress={finish}>
           <Text style={styles.skipText}>Skip</Text>
         </TouchableOpacity>
       )}
 
-      {/* Slides */}
-      <Animated.FlatList
+      {/* Slides — scrollEnabled off so only Next button advances */}
+      <FlatList
         ref={flatRef}
         data={SLIDES}
         horizontal
@@ -83,10 +85,7 @@ const OnboardingScreen = ({ navigation }) => {
         scrollEnabled={false}
         showsHorizontalScrollIndicator={false}
         keyExtractor={(item) => item.key}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-          { useNativeDriver: false }
-        )}
+        getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
         renderItem={({ item }) => (
           <View style={styles.slide}>
             <View style={[styles.illustrationWrap, { backgroundColor: item.bgColor }]}>
@@ -100,29 +99,23 @@ const OnboardingScreen = ({ navigation }) => {
         )}
       />
 
-      {/* Dot indicators */}
+      {/* State-driven dot indicators */}
       <View style={styles.dotsRow}>
-        {SLIDES.map((_, i) => {
-          const dotWidth = scrollX.interpolate({
-            inputRange: [(i - 1) * width, i * width, (i + 1) * width],
-            outputRange: [8, 24, 8],
-            extrapolate: 'clamp',
-          });
-          const dotColor = scrollX.interpolate({
-            inputRange: [(i - 1) * width, i * width, (i + 1) * width],
-            outputRange: [COLORS.border, slide.iconColor, COLORS.border],
-            extrapolate: 'clamp',
-          });
-          return (
-            <Animated.View
-              key={i}
-              style={[styles.dot, { width: dotWidth, backgroundColor: dotColor }]}
+        {SLIDES.map((s, i) => (
+          <TouchableOpacity key={i} onPress={() => goTo(i)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <View
+              style={[
+                styles.dot,
+                i === current
+                  ? { width: 24, backgroundColor: slide.iconColor }
+                  : { width: 8, backgroundColor: COLORS.border },
+              ]}
             />
-          );
-        })}
+          </TouchableOpacity>
+        ))}
       </View>
 
-      {/* CTA Button */}
+      {/* CTA */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 24 }]}>
         <TouchableOpacity
           style={[styles.btn, { backgroundColor: slide.iconColor }]}
@@ -156,11 +149,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: COLORS.background,
   },
-  skipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
+  skipText: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary },
 
   slide: {
     width,
@@ -234,11 +223,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  btnText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: COLORS.white,
-  },
+  btnText: { fontSize: 17, fontWeight: '700', color: COLORS.white },
 });
 
 export default OnboardingScreen;

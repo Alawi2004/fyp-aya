@@ -5,7 +5,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as LocalAuthentication from 'expo-local-authentication';
+// expo-local-authentication — optional; biometric UI degrades gracefully if unavailable
+let LocalAuthentication = null;
+try { LocalAuthentication = require('expo-local-authentication'); } catch (_) {}
 import { useAuth } from '../../context/AuthContext';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
@@ -38,9 +40,10 @@ const LoginScreen = ({ navigation }) => {
   }, []);
 
   const checkBiometric = async () => {
+    if (!LocalAuthentication) return;
     try {
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      const isEnrolled  = await LocalAuthentication.isEnrolledAsync();
       if (hasHardware && isEnrolled) {
         setBiometricAvailable(true);
         const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
@@ -110,6 +113,7 @@ const LoginScreen = ({ navigation }) => {
   };
 
   const handleBiometricLogin = async () => {
+    if (!LocalAuthentication) return;
     try {
       const label = biometricType === 'face' ? 'Face ID' : biometricType === 'fingerprint' ? 'Fingerprint' : 'Biometrics';
       const result = await LocalAuthentication.authenticateAsync({
