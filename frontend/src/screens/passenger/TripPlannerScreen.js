@@ -10,6 +10,7 @@ import {
   TextInput,
   ActivityIndicator,
   StatusBar,
+  Share,
 } from 'react-native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
@@ -299,6 +300,36 @@ const TripPlannerScreen = ({ navigation, route }) => {
   const displayTrip = selectedAlt !== null ? alternatives[selectedAlt] : result;
   const canSearch = !!(fromStop && toStop && fromStop.stop_id !== toStop.stop_id);
 
+  const handleShare = useCallback(async () => {
+    if (!displayTrip || !fromStop || !toStop) return;
+    const segments = displayTrip.segments || [];
+    const segLines = segments.map((s, i) => {
+      if (s.type === 'walk') {
+        return `  ${i + 1}. 🚶 Walk ${s.estimated_time_min} min  (${s.from} → ${s.to})`;
+      }
+      return `  ${i + 1}. 🚌 ${s.line} · ${s.from} → ${s.to}  (${s.estimated_time_min} min · ${money(s.price)})`;
+    });
+    const modeLabel = mode === 'fastest' ? 'Fastest' : mode === 'easiest' ? 'Easiest' : 'Cheapest';
+    const message = [
+      '🚌 Trip Plan — Yalla Transit',
+      '',
+      `From:  ${fromStop.stop_name}`,
+      `To:    ${toStop.stop_name}`,
+      `Mode:  ${modeLabel}`,
+      `Time:  ${displayTrip.total_duration_min} min`,
+      `Fare:  ${money(displayTrip.total_price)}`,
+      displayTrip.total_transfers ? `Transfers: ${displayTrip.total_transfers}` : null,
+      '',
+      'Route:',
+      ...segLines,
+      '',
+      '— Planned with Yalla Transit',
+    ].filter(Boolean).join('\n');
+    try {
+      await Share.share({ title: 'My Trip Plan', message });
+    } catch (_) {}
+  }, [displayTrip, fromStop, toStop, mode]);
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
@@ -422,7 +453,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
         {/* ── Results ── */}
         {displayTrip ? (
           <>
-            {/* Route type badge */}
+            {/* Route type badge + Share */}
             <View style={styles.routeBadgeRow}>
               <View style={[
                 styles.routeBadge,
@@ -445,6 +476,11 @@ const TripPlannerScreen = ({ navigation, route }) => {
                   <Text style={styles.directAvailText}>Direct also available</Text>
                 </View>
               )}
+              {/* Share button */}
+              <TouchableOpacity style={styles.shareBtn} onPress={handleShare} activeOpacity={0.8}>
+                <Ionicons name="share-social-outline" size={14} color={COLORS.primary} />
+                <Text style={styles.shareBtnText}>Share</Text>
+              </TouchableOpacity>
             </View>
 
             {/* Embedded route sheet */}
@@ -748,6 +784,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: COLORS.warningDark,
+  },
+  shareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: 'auto',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryMid,
+  },
+  shareBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
 
   /* Alternatives */

@@ -130,16 +130,16 @@
 </div>
 
 <div class="summary-bar">
-  <div class="stat-card stat-done"><div class="num">140</div><div class="label">Done</div></div>
+  <div class="stat-card stat-done"><div class="num">143</div><div class="label">Done</div></div>
   <div class="stat-card stat-partial"><div class="num">0</div><div class="label">Partial</div></div>
-  <div class="stat-card stat-missing"><div class="num">47</div><div class="label">Missing</div></div>
+  <div class="stat-card stat-missing"><div class="num">44</div><div class="label">Missing</div></div>
   <div class="stat-card" style="min-width:200px">
     <div class="label" style="margin-bottom:6px">Overall Completion</div>
     <div class="progress-row">
       <div class="progress-bar">
-        <div class="progress-fill" style="width:75%;background:linear-gradient(90deg,#16a34a,#84cc16)"></div>
+        <div class="progress-fill" style="width:76%;background:linear-gradient(90deg,#16a34a,#84cc16)"></div>
       </div>
-      <span class="pct">~75%</span>
+      <span class="pct">~76%</span>
     </div>
   </div>
 </div>
@@ -310,9 +310,9 @@
       <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Favorite Routes</div><div class="feat-detail">FavoriteRoutesScreen to bookmark and quickly access frequent routes</div></div></div>
       <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Nearby Stops Screen</div><div class="feat-detail">NearbyStopsScreen: expo-location + haversine distance; 240px MapView with stop markers (selected pin turns green); list sorted by distance showing distance + walk-time (5 km/h); route badges per stop; "Plan Route From Here" tap navigates to TripPlanner with stop pre-filled; Map/List toggle; falls back to MOCK_STOPS when API is empty; HomeScreen "Nearby" quick-access button</div></div></div>
       <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">GPS-Based Stop Auto-Suggest</div><div class="feat-detail">TripPlannerScreen: GPS location fetched silently on mount; StopPickerModal shows "Nearest to you" section (top 5 sorted by haversine distance with walk time) before the All Stops list when query is empty; falls back to MOCK_STOPS when API returns empty; accepts initialFromStop route param from NearbyStopsScreen</div></div></div>
-      <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Bus Approaching Alert (2 stops away)</div><div class="feat-detail missing">Push notification when bus is 2 stops or X minutes away</div></div></div>
-      <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">ETA Confidence Indicator</div><div class="feat-detail missing">High/medium/low confidence based on GPS signal quality</div></div></div>
-      <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Share Trip Plan</div><div class="feat-detail missing">Share journey plan via link or screenshot</div></div></div>
+      <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Bus Approaching Alert (2 stops away)</div><div class="feat-detail">BusTrackingScreen: expo-notifications local alert fires when stopsList.length ≤ 2 OR eta_min ≤ 5; alertSent ref prevents duplicates; permission requested on mount; in-app Alert fallback if permission denied; mock stop ETAs decrement 1 min/30 s so alert demos without a live backend; in-screen approaching banner also shown</div></div></div>
+      <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">ETA Confidence Indicator</div><div class="feat-detail">deriveConfidence(isLive, timeSinceUpdate, hasEtaData) → High (green, live GPS &lt;30s) / Medium (amber, GPS 30–120s or no ETA data) / Low (red, GPS &gt;120s or offline); displayed as a coloured pill with dot in the ETA row replacing the stale traffic sub-label</div></div></div>
+      <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Share Trip Plan</div><div class="feat-detail">TripPlannerScreen: Share button in results header row; handleShare() formats segments as labelled text (🚌 Bus / 🚶 Walk, with time and fare per segment) plus origin, destination, total time, fare, mode; uses RN Share.share() — triggers native share sheet (Messages, WhatsApp, copy, etc.)</div></div></div>
     </div>
   </div>
 
