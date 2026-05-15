@@ -8,6 +8,9 @@ import {
   reportIssue,
   sendEmergency,
   updateLocation,
+  submitChecklist,
+  scanPassengerQr,
+  markStopArrival,
 } from "../controllers/driverApp.controller.js";
 
 const router = express.Router();
@@ -72,6 +75,7 @@ router.put("/trips/:id/start", startTrip);
  *         description: Trip completed
  */
 router.put("/trips/:id/complete", completeTrip);
+router.post("/trips/:id/checklist", submitChecklist);
 
 /**
  * @swagger
@@ -194,5 +198,7 @@ router.post("/emergency", sendEmergency);
  *         description: Location updated
  */
 router.post("/location", updateLocation);
+router.post("/scan-qr", scanPassengerQr);
+router.post("/trips/:id/stops/:stopId/arrive", markStopArrival);
 
 export default router;

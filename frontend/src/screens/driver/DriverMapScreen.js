@@ -6,8 +6,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import { COLORS } from '../../constants/colors';
+import { useLocation } from '../../hooks/useLocation';
+import { markStopArrivalApi } from '../../api/driverApi';
 
 const MOCK_ROUTE = [
   { latitude: 3.1390, longitude: 101.6869 },
@@ -17,7 +18,7 @@ const MOCK_ROUTE = [
   { latitude: 3.1510, longitude: 101.7005 },
 ];
 
-const STOPS = [
+const INITIAL_STOPS = [
   { id: 1, name: 'Terminal North',  lat: 3.1390, lng: 101.6869, done: true  },
   { id: 2, name: 'Midpoint Hub',    lat: 3.1455, lng: 101.6925, done: true  },
   { id: 3, name: 'City Center',     lat: 3.1478, lng: 101.6960, done: false },
@@ -30,20 +31,35 @@ const TRIP_INFO = {
   totalStops: 4,
 };
 
-const DriverMapScreen = ({ navigation }) => {
+const DriverMapScreen = ({ navigation, route }) => {
+  const tripId = route?.params?.tripId ?? null;
   const insets = useSafeAreaInsets();
   const mapRef      = useRef(null);
   const pulseAnim   = useRef(new Animated.Value(1)).current;
   const panelAnim   = useRef(new Animated.Value(100)).current;
   const routeAnim   = useRef(new Animated.Value(0)).current;
-  const [location, setLocation]     = useState(MOCK_ROUTE[1]);
+  const [location, setLocation]         = useState(MOCK_ROUTE[1]);
   const [broadcasting, setBroadcasting] = useState(true);
-  const [speed]     = useState(38);
-  const [onBoard]   = useState(18);
-  const [etaMins]   = useState(12);
+  const [stops, setStops]               = useState(INITIAL_STOPS);
+  const [markingStop, setMarkingStop]   = useState(false);
+  const [speed]      = useState(38);
+  const [onBoard]    = useState(18);
+  const [etaMins]    = useState(12);
   const [distanceKm] = useState(2.1);
-  const nextStop = STOPS.find(s => !s.done);
-  const doneStops = STOPS.filter(s => s.done).length;
+  useLocation({ tripId, broadcasting, onLocationUpdate: setLocation });
+
+  const nextStop  = stops.find(s => !s.done);
+  const doneStops = stops.filter(s => s.done).length;
+
+  const handleMarkArrived = async () => {
+    if (!nextStop || markingStop) return;
+    setMarkingStop(true);
+    try {
+      if (tripId) await markStopArrivalApi(tripId, nextStop.id);
+    } catch {}
+    setStops(prev => prev.map(s => s.id === nextStop.id ? { ...s, done: true } : s));
+    setMarkingStop(false);
+  };
 
   useEffect(() => {
     Animated.parallel([
@@ -58,14 +74,6 @@ const DriverMapScreen = ({ navigation }) => {
       ])
     );
     pulse.start();
-
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const loc = await Location.getCurrentPositionAsync({});
-        setLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-      }
-    })();
 
     return () => pulse.stop();
   }, []);
@@ -113,7 +121,7 @@ const DriverMapScreen = ({ navigation }) => {
         </Marker>
 
         {/* Stop Markers */}
-        {STOPS.map(stop => (
+        {stops.map(stop => (
           <Marker key={stop.id} coordinate={{ latitude: stop.lat, longitude: stop.lng }} anchor={{ x: 0.5, y: 0.5 }}>
             <View style={[styles.stopPin, stop.done && styles.stopPinDone]}>
               {stop.done
@@ -172,15 +180,25 @@ const DriverMapScreen = ({ navigation }) => {
                 <Text style={styles.nextStopName}>{nextStop.name}</Text>
               </View>
             </View>
-            <View style={styles.nextEtaBadge}>
-              <Text style={styles.nextEtaText}>{etaMins} min</Text>
+            <View style={styles.nextStopRight}>
+              <View style={styles.nextEtaBadge}>
+                <Text style={styles.nextEtaText}>{etaMins} min</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.arrivedBtn, markingStop && { opacity: 0.6 }]}
+                onPress={handleMarkArrived}
+                disabled={markingStop}
+              >
+                <Ionicons name="checkmark-circle" size={13} color={COLORS.white} />
+                <Text style={styles.arrivedBtnText}>Arrived</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
 
         {/* Route progress */}
         <View style={styles.progressRow}>
-          {STOPS.map((stop, i) => (
+          {stops.map((stop, i) => (
             <View key={stop.id} style={styles.progressItem}>
               <View style={[
                 styles.progressDot,
@@ -193,7 +211,7 @@ const DriverMapScreen = ({ navigation }) => {
               <Text style={[styles.progressLabel, stop.done && { color: COLORS.secondary }]} numberOfLines={1}>
                 {stop.name.split(' ')[0]}
               </Text>
-              {i < STOPS.length - 1 && (
+              {i < stops.length - 1 && (
                 <View style={[styles.progressLine, stop.done && styles.progressLineDone]} />
               )}
             </View>
@@ -337,7 +355,8 @@ const styles = StyleSheet.create({
     padding: 13, marginBottom: 14,
     borderWidth: 1, borderColor: COLORS.primaryMid,
   },
-  nextStopLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  nextStopLeft:  { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  nextStopRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   nextStopIconWrap: {
     width: 34, height: 34, borderRadius: 10,
     backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center',
@@ -349,6 +368,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 6,
   },
   nextEtaText: { fontSize: 13, fontWeight: '800', color: COLORS.white },
+  arrivedBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: COLORS.secondary, borderRadius: 10,
+    paddingHorizontal: 10, paddingVertical: 6,
+  },
+  arrivedBtnText: { fontSize: 11, fontWeight: '800', color: COLORS.white },
 
   /* Route progress */
   progressRow: { flexDirection: 'row', marginBottom: 14 },

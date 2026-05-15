@@ -130,16 +130,16 @@
 </div>
 
 <div class="summary-bar">
-  <div class="stat-card stat-done"><div class="num">131</div><div class="label">Done</div></div>
-  <div class="stat-card stat-partial"><div class="num">1</div><div class="label">Partial</div></div>
-  <div class="stat-card stat-missing"><div class="num">55</div><div class="label">Missing</div></div>
+  <div class="stat-card stat-done"><div class="num">136</div><div class="label">Done</div></div>
+  <div class="stat-card stat-partial"><div class="num">0</div><div class="label">Partial</div></div>
+  <div class="stat-card stat-missing"><div class="num">50</div><div class="label">Missing</div></div>
   <div class="stat-card" style="min-width:200px">
     <div class="label" style="margin-bottom:6px">Overall Completion</div>
     <div class="progress-row">
       <div class="progress-bar">
-        <div class="progress-fill" style="width:70%;background:linear-gradient(90deg,#16a34a,#84cc16)"></div>
+        <div class="progress-fill" style="width:73%;background:linear-gradient(90deg,#16a34a,#84cc16)"></div>
       </div>
-      <span class="pct">~70%</span>
+      <span class="pct">~73%</span>
     </div>
   </div>
 </div>
@@ -343,16 +343,16 @@
     <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Issue Report Screen</div><div class="feat-detail">Vehicle defect reporting with categories and description</div></div></div>
     <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Vehicle Status Screen</div><div class="feat-detail">Fuel, maintenance alerts, equipment status</div></div></div>
     <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Passenger List Screen</div><div class="feat-detail">Boarding manifest with seat assignments</div></div></div>
-    <div class="feature-card partial"><span class="icon">⚠️</span><div class="feat-content"><div class="feat-name">GPS Broadcasting</div><div class="feat-detail partial">GPS location posting to backend implemented; offline buffering not confirmed</div></div></div>
-    <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Pre-Trip Vehicle Checklist</div><div class="feat-detail missing">Driver must confirm fuel, lights, tire condition before starting trip</div></div></div>
-    <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">QR Scan → Fare Deduction</div><div class="feat-detail missing">QR scan should auto-deduct fare from passenger wallet; backend integration unconfirmed</div></div></div>
-    <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Mark Arrival at Each Stop</div><div class="feat-detail missing">Auto-detect via geofence or manual tap on each stop along route</div></div></div>
+    <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">GPS Broadcasting</div><div class="feat-detail">useLocation hook posts to /driver/location every 10 s; offline points buffered in AsyncStorage and flushed on reconnect; broadcast toggle in DriverMapScreen controls the interval</div></div></div>
+    <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Pre-Trip Vehicle Checklist</div><div class="feat-detail">TripChecklistScreen: fuel, lights, and tires must all be confirmed before Start Trip is enabled; submits to POST /api/driver/trips/:id/checklist then calls startTrip; stored in trip_checklists table (migration 006)</div></div></div>
+    <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">QR Scan → Fare Deduction</div><div class="feat-detail">POST /api/driver/scan-qr: verifies rotating HMAC QR, marks token used, deducts fare from wallet in a DB transaction, logs to wallet_transactions, sets ticket status to boarded; PassengerVerifyScreen shows passenger name, seat, and amount deducted</div></div></div>
+    <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Mark Arrival at Each Stop</div><div class="feat-detail">DriverMapScreen: stops converted to state; "Arrived" button on the next-stop card; tapping calls POST /api/driver/trips/:id/stops/:stopId/arrive which upserts into trip_stop_arrivals; stop progress dots update immediately in UI</div></div></div>
     <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Delay Reporting</div><div class="feat-detail missing">Driver logs delay with reason; auto-notifies affected passengers</div></div></div>
     <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Route Deviation Alert</div><div class="feat-detail missing">Alert if driver goes off the planned route path</div></div></div>
     <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">SOS Hold-to-Activate (3 sec)</div><div class="feat-detail missing">Emergency should require 3-second hold to prevent accidental trigger</div></div></div>
     <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Weekly Schedule Calendar View</div><div class="feat-detail missing">Calendar showing upcoming trips for the week with day detail</div></div></div>
     <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Biometric Login</div><div class="feat-detail missing">Fingerprint/Face ID unlock after initial login</div></div></div>
-    <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Offline GPS Buffering</div><div class="feat-detail missing">Queue GPS updates when offline and flush when connectivity restored</div></div></div>
+    <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Offline GPS Buffering</div><div class="feat-detail">Implemented in useLocation hook — failed posts saved to AsyncStorage under gps_offline_buffer; flushed automatically on next successful connection</div></div></div>
   </div>
 </div>
 

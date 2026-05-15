@@ -17,6 +17,7 @@ import EmergencyScreen         from '../screens/driver/EmergencyScreen';
 import RatingsScreen           from '../screens/driver/RatingsScreen';
 import VehicleStatusScreen     from '../screens/driver/VehicleStatusScreen';
 import DriverProfileScreen     from '../screens/driver/DriverProfileScreen';
+import TripChecklistScreen     from '../screens/driver/TripChecklistScreen';
 
 const Tab   = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -35,12 +36,14 @@ const DashboardStack = () => (
     {/* Profile screen re-routes to VehicleStatus / Earnings via tab navigation */}
     <Stack.Screen name="VehicleStatus"     component={VehicleStatusScreen}    />
     <Stack.Screen name="Earnings"          component={EarningsScreen}         />
+    <Stack.Screen name="TripChecklist"     component={TripChecklistScreen}    />
   </Stack.Navigator>
 );
 
 // ── Map tab stack ────────────────────────────────────────────────────────────
 const MapStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="TripChecklist"     component={TripChecklistScreen}    />
     <Stack.Screen name="DriverMap"         component={DriverMapScreen}        />
     <Stack.Screen name="PassengerVerify"   component={PassengerVerifyScreen}  />
     <Stack.Screen name="PassengerList"     component={PassengerListScreen}    />

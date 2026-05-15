@@ -1,22 +1,24 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Alert, Platform, StatusBar, Animated,
+  Alert, Platform, StatusBar, Animated, ActivityIndicator,
 } from 'react-native';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
+import { scanQrApi } from '../../api/driverApi';
 
 const PassengerVerifyScreen = ({ navigation }) => {
   const headerInsets = useHeaderInsets();
   const [permission, requestPermission] = useCameraPermissions();
-  const [scanned, setScanned] = useState(false);
-  const [result, setResult]   = useState(null); // 'valid' | 'invalid'
-  const [ticketInfo, setTicketInfo] = useState(null);
-  const scaleAnim   = useRef(new Animated.Value(0)).current;
-  const scanAnim    = useRef(new Animated.Value(0)).current;
-  const [scanCount, setScanCount] = useState(0);
+  const [scanned, setScanned]       = useState(false);
+  const [loading, setLoading]       = useState(false);
+  const [result, setResult]         = useState(null); // 'valid' | 'invalid'
+  const [scanData, setScanData]     = useState(null);
+  const scaleAnim = useRef(new Animated.Value(0)).current;
+  const scanAnim  = useRef(new Animated.Value(0)).current;
+  const [scanCount, setScanCount]   = useState(0);
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -29,28 +31,31 @@ const PassengerVerifyScreen = ({ navigation }) => {
     return () => loop.stop();
   }, []);
 
-  const showResult = (valid, info = null) => {
+  const showResult = (valid, data = null) => {
     setResult(valid ? 'valid' : 'invalid');
-    setTicketInfo(info);
+    setScanData(data);
     setScanned(true);
     Animated.spring(scaleAnim, { toValue: 1, tension: 55, useNativeDriver: true }).start();
   };
 
-  const handleBarCodeScanned = ({ data }) => {
-    if (scanned) return;
+  const handleBarCodeScanned = async ({ data }) => {
+    if (scanned || loading) return;
+    setLoading(true);
     try {
-      const ticket = JSON.parse(data);
-      const isValid = ticket && ticket._id && ticket.status === 'upcoming';
-      showResult(isValid, isValid ? ticket : null);
-    } catch {
-      showResult(false);
+      const response = await scanQrApi(data);
+      showResult(true, response.data);
+    } catch (err) {
+      const msg = err?.response?.data?.message ?? 'Invalid or expired QR code';
+      showResult(false, { errorMessage: msg });
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleReset = () => {
     setScanned(false);
     setResult(null);
-    setTicketInfo(null);
+    setScanData(null);
     scaleAnim.setValue(0);
     setScanCount(c => c + 1);
   };
@@ -155,19 +160,41 @@ const PassengerVerifyScreen = ({ navigation }) => {
 
       {/* Bottom panel */}
       <View style={styles.bottomPanel}>
-        {scanned && ticketInfo && result === 'valid' && (
+        {loading && (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator color={COLORS.white} size="small" />
+            <Text style={styles.hintText}>Verifying…</Text>
+          </View>
+        )}
+
+        {scanned && result === 'valid' && scanData && (
           <View style={styles.ticketInfoCard}>
             <View style={styles.ticketInfoRow}>
-              <Ionicons name="ticket-outline" size={14} color={COLORS.primary} />
+              <Ionicons name="person-outline" size={14} color={COLORS.primary} />
+              <Text style={styles.ticketInfoLabel}>Passenger</Text>
+              <Text style={styles.ticketInfoVal}>{scanData.passenger?.name ?? '—'}</Text>
+            </View>
+            <View style={styles.ticketInfoDivider} />
+            <View style={styles.ticketInfoRow}>
+              <Ionicons name="ticket-outline" size={14} color={COLORS.secondary} />
               <Text style={styles.ticketInfoLabel}>Seat</Text>
-              <Text style={styles.ticketInfoVal}>{ticketInfo.seatId ?? '—'}</Text>
+              <Text style={styles.ticketInfoVal}>{scanData.passenger?.seat_number ?? '—'}</Text>
             </View>
             <View style={styles.ticketInfoDivider} />
             <View style={styles.ticketInfoRow}>
               <Ionicons name="cash-outline" size={14} color={COLORS.secondary} />
               <Text style={styles.ticketInfoLabel}>Fare</Text>
-              <Text style={styles.ticketInfoVal}>${ticketInfo.price ?? '—'}</Text>
+              <Text style={styles.ticketInfoVal}>
+                {scanData.fare_deducted ? `$${scanData.amount_deducted?.toFixed(2)} deducted` : '—'}
+              </Text>
             </View>
+          </View>
+        )}
+
+        {scanned && result === 'invalid' && scanData?.errorMessage && (
+          <View style={styles.errorCard}>
+            <Ionicons name="alert-circle-outline" size={14} color="#FCA5A5" />
+            <Text style={styles.errorText}>{scanData.errorMessage}</Text>
           </View>
         )}
 
@@ -176,12 +203,12 @@ const PassengerVerifyScreen = ({ navigation }) => {
             <Ionicons name="refresh" size={16} color={COLORS.white} />
             <Text style={styles.nextBtnText}>Scan Next Passenger</Text>
           </TouchableOpacity>
-        ) : (
+        ) : !loading ? (
           <View style={styles.hintRow}>
             <Ionicons name="qr-code-outline" size={14} color='rgba(255,255,255,0.6)' />
             <Text style={styles.hintText}>Camera auto-detects QR codes</Text>
           </View>
-        )}
+        ) : null}
       </View>
     </View>
   );
@@ -263,8 +290,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28, paddingVertical: 14, width: '100%', justifyContent: 'center',
   },
   nextBtnText: { fontSize: 15, fontWeight: '800', color: COLORS.white },
-  hintRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  hintText: { color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: '500' },
+  hintRow:    { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  hintText:   { color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: '500' },
+  errorCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(239,68,68,0.2)', borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 10, width: '100%',
+  },
+  errorText: { flex: 1, color: '#FCA5A5', fontSize: 12, fontWeight: '600' },
 
   /* Permission */
   permHeader: {

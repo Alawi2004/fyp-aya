@@ -175,7 +175,7 @@ const DriverDashboardScreen = ({ navigation }) => {
           {/* ─── Quick Actions ─── */}
           <View style={styles.actionsRow}>
             {[
-              { icon: 'navigate',      label: 'Navigate',   color: COLORS.primary,    bg: COLORS.primaryLight,  onPress: () => navigation.navigate('DriverMap')      },
+              { icon: 'navigate',      label: 'Navigate',   color: COLORS.primary,    bg: COLORS.primaryLight,  onPress: () => navigation.navigate('TripChecklist')  },
               { icon: 'qr-code',       label: 'Scan QR',    color: COLORS.secondary,  bg: COLORS.secondaryLight, onPress: () => navigation.navigate('PassengerVerify') },
               { icon: 'people',        label: 'Passengers', color: COLORS.primary,    bg: COLORS.primaryLight,  onPress: () => navigation.navigate('PassengerList')   },
               { icon: 'warning',       label: 'Emergency',  color: COLORS.danger,     bg: COLORS.dangerLight,   onPress: () => navigation.navigate('Emergency')       },
@@ -228,7 +228,10 @@ const DriverDashboardScreen = ({ navigation }) => {
                 key={trip._id}
                 style={styles.tripCard}
                 activeOpacity={0.85}
-                onPress={() => trip.status === 'active' && navigation.navigate('DriverMap')}
+                onPress={() => {
+                  if (trip.status === 'active') navigation.navigate('DriverMap', { tripId: trip._id });
+                  else if (trip.status === 'upcoming') navigation.navigate('TripChecklist', { tripId: trip._id, tripInfo: trip });
+                }}
               >
                 {/* Card header */}
                 <View style={styles.tripCardHeader}>

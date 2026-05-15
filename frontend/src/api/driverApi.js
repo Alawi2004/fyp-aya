@@ -7,3 +7,6 @@ export const getEarningsApi = () => apiClient.get('/driver/earnings');
 export const reportIssueApi = (data) => apiClient.post('/driver/issues', data);
 export const sendEmergencyApi = (data) => apiClient.post('/driver/emergency', data);
 export const updateLocationApi = (data) => apiClient.post('/driver/location', data);
+export const submitChecklistApi   = (tripId, data)           => apiClient.post(`/driver/trips/${tripId}/checklist`, data);
+export const scanQrApi            = (token)                  => apiClient.post('/driver/scan-qr', { token });
+export const markStopArrivalApi   = (tripId, stopId)         => apiClient.post(`/driver/trips/${tripId}/stops/${stopId}/arrive`);
