@@ -1,53 +1,94 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Share,
-  Platform, StatusBar, TouchableOpacity, Animated,
+  StatusBar, TouchableOpacity, Animated,
 } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import QRCode from 'react-native-qrcode-svg';
-import * as Crypto from 'expo-crypto';
 import { Ionicons } from '@expo/vector-icons';
 import Button from '../../components/common/Button';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS } from '../../constants/colors';
 import { formatDateTime } from '../../utils/formatters';
 
-// In production this secret lives server-side; the QR token would be fetched via API
-const HMAC_SECRET = 'yalla-transit-qr-secret-2026';
-const QR_WINDOW_SECS = 60;
+// expo-crypto — optional; falls back to a simpler digest if unavailable
+let Crypto = null;
+try { Crypto = require('expo-crypto'); } catch (_) {}
 
+const HMAC_SECRET    = 'yalla-transit-qr-secret-2026';
+const QR_WINDOW_SECS = 60;
+const NFC_CARD_KEY   = 'linkedNfcCard';
+
+// ── HMAC helpers ─────────────────────────────────────────────────────────────
 const computeHmac = async (payload) => {
-  const message = `${payload.bid}:${payload.uid}:${payload.seat}:${payload.exp}`;
-  const digest = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    `${HMAC_SECRET}:${message}`,
-    { encoding: Crypto.CryptoEncoding.HEX }
-  );
-  return digest.slice(0, 32);
+  const msg = `${payload.bid}:${payload.uid}:${payload.seat}:${payload.exp}`;
+  if (Crypto) {
+    const digest = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      `${HMAC_SECRET}:${msg}`,
+      { encoding: Crypto.CryptoEncoding.HEX }
+    );
+    return digest.slice(0, 32);
+  }
+  return `${msg.length.toString(16).padStart(8, '0')}${payload.exp.toString(16)}`.slice(0, 32);
 };
 
 const secondsLeftInWindow = () => QR_WINDOW_SECS - (Math.floor(Date.now() / 1000) % QR_WINDOW_SECS);
-const currentWindowExp   = () => Math.floor(Date.now() / (QR_WINDOW_SECS * 1000)) * (QR_WINDOW_SECS * 1000) + QR_WINDOW_SECS * 1000;
+const currentWindowExp    = () =>
+  Math.floor(Date.now() / (QR_WINDOW_SECS * 1000)) * (QR_WINDOW_SECS * 1000) + QR_WINDOW_SECS * 1000;
 
+// ── Static QR payload (offline, no expiry) ───────────────────────────────────
+const buildStaticQr = (booking, userId) =>
+  JSON.stringify({
+    bid:    booking._id,
+    uid:    userId ?? 'guest',
+    seat:   booking.seatId,
+    fare:   booking.price,
+    mode:   'offline-static',
+  });
+
+// ── Component ────────────────────────────────────────────────────────────────
 const TicketScreen = ({ route, navigation }) => {
-  const headerInsets = useHeaderInsets();
-  const { booking } = route.params;
-  const { user } = useAuth();
+  const headerInsets        = useHeaderInsets();
+  const { booking }         = route.params;
+  const { user }            = useAuth();
 
-  const [qrToken, setQrToken]         = useState('');
-  const [secondsLeft, setSecondsLeft] = useState(secondsLeftInWindow());
+  const [tab, setTab]                   = useState('qr');      // 'qr' | 'nfc'
+  const [isOnline, setIsOnline]         = useState(true);
+  const [qrToken, setQrToken]           = useState('');
+  const [secondsLeft, setSecondsLeft]   = useState(secondsLeftInWindow());
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [linkedCard, setLinkedCard]     = useState(null);
+
   const pulseAnim  = useRef(new Animated.Value(1)).current;
   const flashAnim  = useRef(new Animated.Value(1)).current;
   const lastWindow = useRef(currentWindowExp());
 
+  // Network monitoring
+  useEffect(() => {
+    const unsub = NetInfo.addEventListener((state) => {
+      setIsOnline(!!state.isConnected && state.isInternetReachable !== false);
+    });
+    return () => unsub();
+  }, []);
+
+  // Load linked NFC card
+  useEffect(() => {
+    AsyncStorage.getItem(NFC_CARD_KEY)
+      .then((raw) => { if (raw) setLinkedCard(JSON.parse(raw)); })
+      .catch(() => {});
+  }, []);
+
+  // ── Online: rotating HMAC QR ────────────────────────────────────────────
   const generateToken = useCallback(async () => {
+    if (!isOnline) return;
     setIsRefreshing(true);
     Animated.sequence([
       Animated.timing(flashAnim, { toValue: 0, duration: 120, useNativeDriver: true }),
       Animated.timing(flashAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
     ]).start();
-
     const payload = {
       bid:  booking._id,
       uid:  user?._id ?? 'guest',
@@ -59,37 +100,45 @@ const TicketScreen = ({ route, navigation }) => {
     setQrToken(JSON.stringify({ ...payload, sig }));
     setIsRefreshing(false);
     lastWindow.current = currentWindowExp();
-  }, [booking, user]);
+  }, [booking, user, isOnline]);
 
-  // Countdown ticker — regenerate when window rolls over
+  // ── Offline: static QR ─────────────────────────────────────────────────
   useEffect(() => {
+    if (!isOnline) {
+      setQrToken(buildStaticQr(booking, user?._id));
+    }
+  }, [isOnline, booking, user]);
+
+  // Online countdown & token rotation
+  useEffect(() => {
+    if (!isOnline) return;
     generateToken();
     const tick = setInterval(() => {
       const secs = secondsLeftInWindow();
       setSecondsLeft(secs);
-      if (currentWindowExp() !== lastWindow.current) {
-        generateToken();
-      }
+      if (currentWindowExp() !== lastWindow.current) generateToken();
     }, 1000);
     return () => clearInterval(tick);
-  }, [generateToken]);
+  }, [generateToken, isOnline]);
 
-  // Subtle pulse on countdown <= 10
+  // Pulse animation near expiry (online only)
   useEffect(() => {
-    if (secondsLeft <= 10) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.03, duration: 400, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1,    duration: 400, useNativeDriver: true }),
-        ])
-      ).start();
-    } else {
+    if (!isOnline || secondsLeft > 10) {
       pulseAnim.stopAnimation();
       pulseAnim.setValue(1);
+      return;
     }
-  }, [secondsLeft <= 10]);
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.03, duration: 400, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1,    duration: 400, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [secondsLeft <= 10, isOnline]);
 
-  const urgencyColor = secondsLeft <= 10 ? COLORS.danger : secondsLeft <= 20 ? COLORS.warning : COLORS.secondary;
+  const urgencyColor = isOnline
+    ? (secondsLeft <= 10 ? COLORS.danger : secondsLeft <= 20 ? COLORS.warning : COLORS.secondary)
+    : COLORS.warning;
 
   const shareTicket = async () => {
     await Share.share({
@@ -97,13 +146,11 @@ const TicketScreen = ({ route, navigation }) => {
     });
   };
 
-  const progressArc = Math.max(0, Math.min(1, secondsLeft / QR_WINDOW_SECS));
-
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
 
-      {/* Header */}
+      {/* ── Header ── */}
       <View style={[styles.header, headerInsets]}>
         <View style={styles.headerDecor} />
         <TouchableOpacity
@@ -115,25 +162,35 @@ const TicketScreen = ({ route, navigation }) => {
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Your Ticket</Text>
-          <Text style={styles.headerSub}>Scan QR code to board</Text>
+          <Text style={styles.headerSub}>Present QR or NFC card to board</Text>
         </View>
         <TouchableOpacity style={styles.shareBtn} onPress={shareTicket}>
           <Ionicons name="share-social-outline" size={20} color={COLORS.white} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      {/* ── Offline banner ── */}
+      {!isOnline && (
+        <View style={styles.offlineBanner}>
+          <Ionicons name="cloud-offline-outline" size={16} color={COLORS.white} />
+          <Text style={styles.offlineBannerText}>
+            You're offline — static QR shown. Driver will verify manually.
+          </Text>
+        </View>
+      )}
 
-        {/* Ticket Card */}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.ticket}>
 
           {/* Status Banner */}
-          <View style={styles.ticketBanner}>
-            <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />
-            <Text style={styles.ticketBannerText}>Booking Confirmed</Text>
+          <View style={[styles.ticketBanner, !isOnline && { backgroundColor: COLORS.warning }]}>
+            <Ionicons name={isOnline ? 'checkmark-circle' : 'cloud-offline-outline'} size={16} color={COLORS.white} />
+            <Text style={styles.ticketBannerText}>
+              {isOnline ? 'Booking Confirmed' : 'Offline Mode'}
+            </Text>
           </View>
 
-          {/* Ticket Top */}
+          {/* Route info */}
           <View style={styles.ticketTop}>
             <View style={styles.busIconWrap}>
               <Ionicons name="bus" size={26} color={COLORS.primary} />
@@ -148,7 +205,7 @@ const TicketScreen = ({ route, navigation }) => {
             </View>
           </View>
 
-          {/* Times row */}
+          {/* Times */}
           <View style={styles.timesRow}>
             <View style={styles.timeStop}>
               <Text style={styles.timeLabel}>DEPARTURE</Text>
@@ -169,26 +226,22 @@ const TicketScreen = ({ route, navigation }) => {
           </View>
 
           {/* Tear line */}
-          <View style={styles.tearLine}>
-            <View style={styles.tearCircleLeft} />
-            <View style={styles.tearDashes} />
-            <View style={styles.tearCircleRight} />
-          </View>
+          <TearLine />
 
-          {/* Details Grid */}
+          {/* Details grid */}
           <View style={styles.detailsGrid}>
             {[
               { label: 'SEAT',   value: booking.seatId,              highlight: false },
               { label: 'FARE',   value: `$${booking.price}`,         highlight: true  },
               { label: 'DATE',   value: formatDateTime(booking.date), highlight: false },
               { label: 'STATUS', value: 'Confirmed', highlight: true, green: true },
-            ].map(d => (
+            ].map((d) => (
               <View key={d.label} style={styles.detailItem}>
                 <Text style={styles.detailLabel}>{d.label}</Text>
                 <Text style={[
                   styles.detailValue,
                   d.highlight && { color: COLORS.primary },
-                  d.green && { color: COLORS.secondary },
+                  d.green     && { color: COLORS.secondary },
                 ]}>
                   {d.value}
                 </Text>
@@ -197,73 +250,145 @@ const TicketScreen = ({ route, navigation }) => {
           </View>
 
           {/* Tear line */}
-          <View style={styles.tearLine}>
-            <View style={styles.tearCircleLeft} />
-            <View style={styles.tearDashes} />
-            <View style={styles.tearCircleRight} />
+          <TearLine />
+
+          {/* ── Boarding method tabs ── */}
+          <View style={styles.tabRow}>
+            <TouchableOpacity
+              style={[styles.tabBtn, tab === 'qr' && styles.tabBtnActive]}
+              onPress={() => setTab('qr')}
+            >
+              <Ionicons name="qr-code-outline" size={15} color={tab === 'qr' ? COLORS.primary : COLORS.textMuted} />
+              <Text style={[styles.tabText, tab === 'qr' && styles.tabTextActive]}>QR Code</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tabBtn, tab === 'nfc' && styles.tabBtnActive]}
+              onPress={() => setTab('nfc')}
+            >
+              <Ionicons name="card-outline" size={15} color={tab === 'nfc' ? COLORS.primary : COLORS.textMuted} />
+              <Text style={[styles.tabText, tab === 'nfc' && styles.tabTextActive]}>NFC Card</Text>
+            </TouchableOpacity>
           </View>
 
-          {/* ── Rotating HMAC QR Section ── */}
-          <View style={styles.qrSection}>
-            <Text style={styles.qrLabel}>Scan to board · Rotates every 60 s</Text>
+          {/* ── QR tab ── */}
+          {tab === 'qr' && (
+            <View style={styles.qrSection}>
+              <Text style={styles.qrLabel}>
+                {isOnline ? 'Scan to board · Rotates every 60s' : 'Offline static QR — driver verifies manually'}
+              </Text>
 
-            {/* QR + animated border */}
-            <Animated.View style={[styles.qrOuter, { transform: [{ scale: pulseAnim }], opacity: flashAnim }]}>
-              <View style={[styles.qrBorder, { borderColor: urgencyColor }]}>
-                {qrToken ? (
-                  <QRCode
-                    value={qrToken}
-                    size={148}
-                    color={COLORS.textPrimary}
-                    backgroundColor={COLORS.white}
-                  />
-                ) : (
-                  <View style={styles.qrPlaceholder}>
-                    <Ionicons name="qr-code-outline" size={60} color={COLORS.border} />
+              <Animated.View style={[
+                styles.qrOuter,
+                { transform: [{ scale: isOnline ? pulseAnim : 1 }], opacity: isOnline ? flashAnim : 1 },
+              ]}>
+                <View style={[styles.qrBorder, { borderColor: urgencyColor }]}>
+                  {qrToken ? (
+                    <QRCode value={qrToken} size={148} color={COLORS.textPrimary} backgroundColor={COLORS.white} />
+                  ) : (
+                    <View style={styles.qrPlaceholder}>
+                      <Ionicons name="qr-code-outline" size={60} color={COLORS.border} />
+                    </View>
+                  )}
+                </View>
+
+                {/* Badge: HMAC online / OFFLINE static */}
+                <View style={[styles.modeBadge, { backgroundColor: isOnline ? COLORS.primary : COLORS.warning }]}>
+                  <Ionicons name={isOnline ? 'lock-closed' : 'cloud-offline-outline'} size={10} color={COLORS.white} />
+                  <Text style={styles.modeBadgeText}>{isOnline ? 'HMAC-SHA256' : 'OFFLINE'}</Text>
+                </View>
+              </Animated.View>
+
+              {/* Online countdown bar */}
+              {isOnline && (
+                <View style={styles.countdownWrap}>
+                  <View style={styles.countdownBar}>
+                    <View
+                      style={[
+                        styles.countdownFill,
+                        {
+                          width: `${(secondsLeft / QR_WINDOW_SECS) * 100}%`,
+                          backgroundColor: urgencyColor,
+                        },
+                      ]}
+                    />
                   </View>
-                )}
-              </View>
+                  <View style={styles.countdownRow}>
+                    <Ionicons name="refresh-outline" size={12} color={urgencyColor} />
+                    <Text style={[styles.countdownText, { color: urgencyColor }]}>
+                      {isRefreshing ? 'Refreshing…' : `Refreshes in ${secondsLeft}s`}
+                    </Text>
+                  </View>
+                </View>
+              )}
 
-              {/* Lock icon overlay — shows HMAC-signed */}
-              <View style={styles.hmacBadge}>
-                <Ionicons name="lock-closed" size={10} color={COLORS.white} />
-                <Text style={styles.hmacBadgeText}>HMAC-SHA256</Text>
-              </View>
-            </Animated.View>
+              {/* Offline instruction */}
+              {!isOnline && (
+                <View style={styles.offlineNote}>
+                  <Ionicons name="information-circle-outline" size={14} color={COLORS.warning} />
+                  <Text style={styles.offlineNoteText}>
+                    Show this to the driver. They will verify your booking ID manually.
+                  </Text>
+                </View>
+              )}
 
-            {/* Countdown progress bar */}
-            <View style={styles.countdownWrap}>
-              <View style={styles.countdownBar}>
-                <Animated.View
-                  style={[
-                    styles.countdownFill,
-                    { width: `${progressArc * 100}%`, backgroundColor: urgencyColor },
-                  ]}
-                />
-              </View>
-              <View style={styles.countdownRow}>
-                <Ionicons name="refresh-outline" size={12} color={urgencyColor} />
-                <Text style={[styles.countdownText, { color: urgencyColor }]}>
-                  {isRefreshing ? 'Refreshing…' : `Refreshes in ${secondsLeft}s`}
-                </Text>
+              <View style={styles.bookingIdRow}>
+                <Ionicons name="barcode-outline" size={14} color={COLORS.textMuted} />
+                <Text style={styles.bookingId}>#{booking._id}</Text>
               </View>
             </View>
+          )}
 
-            <View style={styles.bookingIdRow}>
-              <Ionicons name="barcode-outline" size={14} color={COLORS.textMuted} />
-              <Text style={styles.bookingId}>#{booking._id}</Text>
+          {/* ── NFC tab ── */}
+          {tab === 'nfc' && (
+            <View style={styles.nfcSection}>
+              {linkedCard ? (
+                <>
+                  <View style={styles.nfcCardPreview}>
+                    <View style={styles.nfcCardIcon}>
+                      <Ionicons name="radio-outline" size={28} color={COLORS.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.nfcCardNumber}>{linkedCard.cardNumber}</Text>
+                      <Text style={styles.nfcCardUid}>UID: {linkedCard.uid}</Text>
+                    </View>
+                    <View style={styles.nfcActivePill}>
+                      <Text style={styles.nfcActivePillText}>Active</Text>
+                    </View>
+                  </View>
+                  <View style={styles.nfcInstruction}>
+                    <Ionicons name="card-outline" size={40} color={COLORS.primary} style={{ marginBottom: 12 }} />
+                    <Text style={styles.nfcInstructionTitle}>Hold card to reader</Text>
+                    <Text style={styles.nfcInstructionSub}>
+                      Tap your NFC card on the reader at the bus door to board instantly.
+                    </Text>
+                  </View>
+                </>
+              ) : (
+                <View style={styles.nfcNoCard}>
+                  <Ionicons name="card-outline" size={48} color={COLORS.textMuted} />
+                  <Text style={styles.nfcNoCardTitle}>No NFC Card Linked</Text>
+                  <Text style={styles.nfcNoCardSub}>
+                    Link a physical NFC card to your account for contactless boarding.
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.nfcLinkBtn}
+                    onPress={() => navigation.navigate('NfcCard')}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="add-circle-outline" size={18} color={COLORS.white} />
+                    <Text style={styles.nfcLinkBtnText}>Link NFC Card</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
-          </View>
+          )}
         </View>
 
         {/* Actions */}
         <View style={styles.actions}>
           <Button
             title="Track My Bus"
-            onPress={() => navigation.navigate('BusTracking', {
-              busId: booking.bus?._id || 'bus1',
-              busName: booking.bus?.name,
-            })}
+            onPress={() => navigation.navigate('BusTracking', { busId: booking.bus?._id || 'bus1', busName: booking.bus?.name })}
             icon={<Ionicons name="navigate-outline" size={18} color={COLORS.white} />}
             size="lg"
           />
@@ -286,15 +411,23 @@ const TicketScreen = ({ route, navigation }) => {
   );
 };
 
+// ── Tear line helper ──────────────────────────────────────────────────────────
+const TearLine = () => (
+  <View style={styles.tearLine}>
+    <View style={styles.tearCircleLeft} />
+    <View style={styles.tearDashes} />
+    <View style={styles.tearCircleRight} />
+  </View>
+);
+
+// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
 
-  /* Header */
   header: {
     backgroundColor: COLORS.headerBg,
     flexDirection: 'row', alignItems: 'center',
-    paddingBottom: 16, paddingHorizontal: 16,
-    overflow: 'hidden',
+    paddingBottom: 16, paddingHorizontal: 16, overflow: 'hidden',
   },
   headerDecor: {
     position: 'absolute', width: 180, height: 180, borderRadius: 90,
@@ -307,23 +440,27 @@ const styles = StyleSheet.create({
   },
   headerCenter: { flex: 1, alignItems: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.white },
-  headerSub: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 1, fontWeight: '500' },
+  headerSub: { fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 1, fontWeight: '500' },
   shareBtn: {
     width: 38, height: 38, borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center', justifyContent: 'center',
   },
 
+  /* Offline banner */
+  offlineBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: COLORS.warning, paddingHorizontal: 16, paddingVertical: 10,
+  },
+  offlineBannerText: { flex: 1, fontSize: 13, fontWeight: '600', color: COLORS.white },
+
   scroll: { padding: 16, paddingBottom: 40 },
 
-  /* Ticket */
+  /* Ticket card */
   ticket: {
-    backgroundColor: COLORS.white,
-    borderRadius: 24, overflow: 'hidden',
-    shadowColor: '#1E293B',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12, shadowRadius: 20, elevation: 8,
-    marginBottom: 20,
+    backgroundColor: COLORS.white, borderRadius: 24, overflow: 'hidden',
+    shadowColor: '#1E293B', shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12, shadowRadius: 20, elevation: 8, marginBottom: 20,
   },
   ticketBanner: {
     backgroundColor: COLORS.secondary,
@@ -331,109 +468,110 @@ const styles = StyleSheet.create({
     gap: 6, paddingVertical: 8,
   },
   ticketBannerText: { fontSize: 13, fontWeight: '700', color: COLORS.white },
-  ticketTop: {
-    flexDirection: 'row', alignItems: 'center',
-    gap: 12, padding: 20, paddingBottom: 16,
-  },
+
+  ticketTop: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 20, paddingBottom: 16 },
   busIconWrap: {
     width: 52, height: 52, borderRadius: 16,
-    backgroundColor: COLORS.primaryLight,
-    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
   },
   busName: { fontSize: 17, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.2 },
   routePill: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
   routeText: { fontSize: 12, color: COLORS.textSecondary, fontWeight: '600' },
 
-  /* Times */
-  timesRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 20, paddingBottom: 16,
-  },
+  timesRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 16 },
   timeStop: { alignItems: 'flex-start' },
-  timeLabel: {
-    fontSize: 9, fontWeight: '700', color: COLORS.textMuted,
-    textTransform: 'uppercase', letterSpacing: 0.6,
-  },
+  timeLabel: { fontSize: 9, fontWeight: '700', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: 0.6 },
   timeValue: { fontSize: 17, fontWeight: '900', color: COLORS.textPrimary, marginTop: 3 },
   timeDuration: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 },
   timeLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
   timeChip: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: COLORS.background, borderRadius: 999,
-    paddingHorizontal: 8, paddingVertical: 3,
+    backgroundColor: COLORS.background, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3,
   },
   timeChipText: { fontSize: 10, color: COLORS.textMuted, fontWeight: '600' },
 
-  /* Tear line */
   tearLine: { flexDirection: 'row', alignItems: 'center', marginVertical: 2 },
-  tearCircleLeft: {
-    width: 24, height: 24, borderRadius: 12,
-    backgroundColor: COLORS.background, marginLeft: -12,
-  },
-  tearDashes: {
-    flex: 1, height: 1.5,
-    borderStyle: 'dashed', borderWidth: 1, borderColor: COLORS.border,
-  },
-  tearCircleRight: {
-    width: 24, height: 24, borderRadius: 12,
-    backgroundColor: COLORS.background, marginRight: -12,
-  },
+  tearCircleLeft: { width: 24, height: 24, borderRadius: 12, backgroundColor: COLORS.background, marginLeft: -12 },
+  tearDashes: { flex: 1, height: 1.5, borderStyle: 'dashed', borderWidth: 1, borderColor: COLORS.border },
+  tearCircleRight: { width: 24, height: 24, borderRadius: 12, backgroundColor: COLORS.background, marginRight: -12 },
 
-  /* Details grid */
-  detailsGrid: {
-    flexDirection: 'row', flexWrap: 'wrap',
-    paddingHorizontal: 20, paddingVertical: 18, gap: 16,
-  },
+  detailsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 20, paddingVertical: 18, gap: 16 },
   detailItem: { width: '45%' },
-  detailLabel: {
-    fontSize: 10, color: COLORS.textMuted,
-    fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8,
-  },
+  detailLabel: { fontSize: 10, color: COLORS.textMuted, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 },
   detailValue: { fontSize: 16, fontWeight: '800', color: COLORS.textPrimary, marginTop: 4 },
+
+  /* Tab selector */
+  tabRow: {
+    flexDirection: 'row', margin: 16, marginBottom: 0,
+    backgroundColor: COLORS.background, borderRadius: 12, padding: 4,
+  },
+  tabBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 9, borderRadius: 9,
+  },
+  tabBtnActive: { backgroundColor: COLORS.white, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
+  tabText: { fontSize: 13, fontWeight: '600', color: COLORS.textMuted },
+  tabTextActive: { color: COLORS.primary },
 
   /* QR section */
   qrSection: { alignItems: 'center', paddingVertical: 20, paddingHorizontal: 20 },
-  qrLabel: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '600', marginBottom: 16 },
-
+  qrLabel: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '600', marginBottom: 16, textAlign: 'center' },
   qrOuter: { position: 'relative', marginBottom: 16 },
-  qrBorder: {
-    padding: 14,
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
-    borderWidth: 2.5,
-  },
-  qrPlaceholder: {
-    width: 148, height: 148,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-  },
-  hmacBadge: {
-    position: 'absolute',
-    bottom: -10, left: '50%',
-    transform: [{ translateX: -44 }],
+  qrBorder: { padding: 14, backgroundColor: COLORS.white, borderRadius: 20, borderWidth: 2.5 },
+  qrPlaceholder: { width: 148, height: 148, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.background, borderRadius: 12 },
+  modeBadge: {
+    position: 'absolute', bottom: -10, left: '50%', transform: [{ translateX: -44 }],
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: COLORS.primary,
     borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
     borderWidth: 2, borderColor: COLORS.white,
   },
-  hmacBadgeText: { fontSize: 10, fontWeight: '700', color: COLORS.white },
+  modeBadgeText: { fontSize: 10, fontWeight: '700', color: COLORS.white },
 
-  /* Countdown */
   countdownWrap: { width: '90%', marginTop: 8, marginBottom: 14 },
-  countdownBar: {
-    height: 5, borderRadius: 4,
-    backgroundColor: COLORS.border, overflow: 'hidden',
-    marginBottom: 8,
-  },
+  countdownBar: { height: 5, borderRadius: 4, backgroundColor: COLORS.border, overflow: 'hidden', marginBottom: 8 },
   countdownFill: { height: '100%', borderRadius: 4 },
   countdownRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
   countdownText: { fontSize: 12, fontWeight: '700' },
 
+  offlineNote: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: COLORS.warningLight, borderRadius: 10, padding: 12,
+    marginBottom: 12, width: '100%',
+  },
+  offlineNoteText: { flex: 1, fontSize: 12, color: COLORS.warningDark, lineHeight: 18 },
+
   bookingIdRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   bookingId: { fontSize: 11, color: COLORS.textMuted, letterSpacing: 0.8, fontWeight: '600' },
 
-  /* Actions */
+  /* NFC section */
+  nfcSection: { padding: 20 },
+  nfcCardPreview: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: COLORS.primaryLight, borderRadius: 16, padding: 14, marginBottom: 20,
+    borderWidth: 1.5, borderColor: COLORS.primaryMid,
+  },
+  nfcCardIcon: {
+    width: 48, height: 48, borderRadius: 14,
+    backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center',
+  },
+  nfcCardNumber: { fontSize: 15, fontWeight: '700', color: COLORS.primary },
+  nfcCardUid: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2, fontWeight: '500' },
+  nfcActivePill: { backgroundColor: COLORS.secondary, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  nfcActivePillText: { fontSize: 11, fontWeight: '700', color: COLORS.white },
+  nfcInstruction: { alignItems: 'center', paddingVertical: 12 },
+  nfcInstructionTitle: { fontSize: 17, fontWeight: '800', color: COLORS.textPrimary, marginBottom: 8 },
+  nfcInstructionSub: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 21 },
+
+  nfcNoCard: { alignItems: 'center', paddingVertical: 24, gap: 8 },
+  nfcNoCardTitle: { fontSize: 17, fontWeight: '700', color: COLORS.textPrimary },
+  nfcNoCardSub: { fontSize: 13, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 20 },
+  nfcLinkBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: COLORS.primary, borderRadius: 12,
+    paddingHorizontal: 20, paddingVertical: 12, marginTop: 8,
+  },
+  nfcLinkBtnText: { fontSize: 14, fontWeight: '700', color: COLORS.white },
+
   actions: {},
 });
 

@@ -130,16 +130,16 @@
 </div>
 
 <div class="summary-bar">
-  <div class="stat-card stat-done"><div class="num">136</div><div class="label">Done</div></div>
+  <div class="stat-card stat-done"><div class="num">138</div><div class="label">Done</div></div>
   <div class="stat-card stat-partial"><div class="num">0</div><div class="label">Partial</div></div>
-  <div class="stat-card stat-missing"><div class="num">50</div><div class="label">Missing</div></div>
+  <div class="stat-card stat-missing"><div class="num">49</div><div class="label">Missing</div></div>
   <div class="stat-card" style="min-width:200px">
     <div class="label" style="margin-bottom:6px">Overall Completion</div>
     <div class="progress-row">
       <div class="progress-bar">
-        <div class="progress-fill" style="width:73%;background:linear-gradient(90deg,#16a34a,#84cc16)"></div>
+        <div class="progress-fill" style="width:74%;background:linear-gradient(90deg,#16a34a,#84cc16)"></div>
       </div>
-      <span class="pct">~73%</span>
+      <span class="pct">~74%</span>
     </div>
   </div>
 </div>
@@ -295,8 +295,8 @@
       <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Monthly Spend Summary</div><div class="feat-detail">Wallet page now compares total spend this month vs last month, with aggregate delta and per-passenger monthly spend breakdown</div></div></div>
       <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Nearest Top-Up Stations Map</div><div class="feat-detail">WalletScreen has a 240px MapView with 5 mock stations (Beirut coords); Map/List toggle; tapping a marker highlights the station card and re-centers map; "My Location" button; station count badge; fallback mock data when API returns empty</div></div></div>
       <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Rotating HMAC QR Code</div><div class="feat-detail">TicketScreen generates a new QR every 60-second window using expo-crypto SHA256(secret:bid:uid:seat:exp); countdown progress bar + colour shift (green→amber→red at ≤10s); pulse animation near expiry; HMAC-SHA256 badge on QR; flash animation on refresh</div></div></div>
-      <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">NFC Card Support</div><div class="feat-detail missing">Tap NFC card linked to passenger account</div></div></div>
-      <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Offline Static QR Fallback</div><div class="feat-detail missing">Static QR when app is offline (driver confirms manually)</div></div></div>
+      <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">NFC Card Support</div><div class="feat-detail">NfcCardScreen: link/unlink physical NFC card via tap (react-native-nfc-manager; mocks gracefully in Expo Go); animated pulse rings during scan; card UID stored in AsyncStorage; TicketScreen NFC tab shows linked card + "Hold to reader" instruction; Profile → Boarding section links to screen</div></div></div>
+      <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Offline Static QR Fallback</div><div class="feat-detail">NetInfo listener auto-detects connectivity; when offline: amber system banner, ticket banner changes to "Offline Mode", static QR (no HMAC, no expiry) shown with OFFLINE badge, countdown bar hidden, "Driver will verify manually" note shown; auto-reverts to rotating HMAC QR when back online</div></div></div>
     </div>
   </div>
 
