@@ -24,6 +24,7 @@
     "expo-clipboard": "~8.0.8",
     "expo-crypto": "~15.0.9",
     "expo-file-system": "~19.0.22",
+    "expo-image-picker": "~17.0.11",
     "expo-local-authentication": "~17.0.8",
     "expo-location": "~19.0.8",
     "expo-notifications": "~0.32.16",
