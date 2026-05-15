@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Alert, Platform, StatusBar,
+  View, Text, StyleSheet, ScrollView, Alert, Platform, StatusBar, TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import SeatPicker from '../../components/passenger/SeatPicker';
@@ -16,9 +16,10 @@ const BookingScreen = ({ route, navigation }) => {
   const [selectedSeat, setSelectedSeat] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const price = parseFloat(bus.price);
+  const price              = parseFloat(bus.price);
   const insufficientBalance = walletBalance < price;
-  const availableSeats = bus.totalSeats - bus.bookedSeats;
+  const shortfall           = Math.max(0, price - walletBalance).toFixed(2);
+  const availableSeats      = bus.totalSeats - bus.bookedSeats;
 
   const handleConfirm = async () => {
     if (!selectedSeat) {
@@ -133,13 +134,48 @@ const BookingScreen = ({ route, navigation }) => {
             </View>
           </View>
 
-          {/* Insufficient warning */}
+          {/* Insufficient balance warning */}
           {insufficientBalance && (
-            <View style={styles.warningBanner}>
-              <Ionicons name="warning-outline" size={15} color={COLORS.danger} />
-              <Text style={styles.warningText}>
-                Insufficient balance — please top up your wallet before booking.
-              </Text>
+            <View style={styles.warningCard}>
+              <View style={styles.warningTop}>
+                <Ionicons name="wallet-outline" size={18} color={COLORS.danger} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.warningTitle}>Insufficient Balance</Text>
+                  <Text style={styles.warningText}>
+                    You need{' '}
+                    <Text style={{ fontWeight: '800' }}>${shortfall} more</Text>
+                    {' '}to book this trip.
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.warningRow}>
+                <View style={styles.warningAmt}>
+                  <Text style={styles.warningAmtLabel}>Ticket price</Text>
+                  <Text style={styles.warningAmtVal}>${price.toFixed(2)}</Text>
+                </View>
+                <Ionicons name="remove-outline" size={14} color={COLORS.textMuted} />
+                <View style={styles.warningAmt}>
+                  <Text style={styles.warningAmtLabel}>Your balance</Text>
+                  <Text style={[styles.warningAmtVal, { color: COLORS.danger }]}>
+                    ${walletBalance.toFixed(2)}
+                  </Text>
+                </View>
+                <Ionicons name="remove-outline" size={14} color={COLORS.textMuted} />
+                <View style={styles.warningAmt}>
+                  <Text style={styles.warningAmtLabel}>Shortfall</Text>
+                  <Text style={[styles.warningAmtVal, { color: COLORS.danger, fontWeight: '900' }]}>
+                    ${shortfall}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.topUpInlineBtn}
+                onPress={() => navigation.navigate('Wallet')}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="add-circle-outline" size={16} color={COLORS.white} />
+                <Text style={styles.topUpInlineBtnText}>Top Up Wallet Now</Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>
@@ -266,12 +302,28 @@ const styles = StyleSheet.create({
   priceValue: { fontSize: 18, fontWeight: '800', color: COLORS.textPrimary, marginTop: 3 },
   priceDivider: { width: 1, height: 36, backgroundColor: COLORS.border, marginHorizontal: 12 },
 
-  warningBanner: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    backgroundColor: COLORS.dangerLight, borderRadius: 12,
-    padding: 12, marginTop: 12, borderWidth: 1, borderColor: COLORS.dangerMid,
+  warningCard: {
+    backgroundColor: COLORS.dangerLight, borderRadius: 14,
+    padding: 14, marginTop: 12, borderWidth: 1.5, borderColor: COLORS.dangerMid,
+    gap: 12,
   },
-  warningText: { flex: 1, fontSize: 12, color: COLORS.danger, fontWeight: '600', lineHeight: 18 },
+  warningTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  warningTitle: { fontSize: 14, fontWeight: '800', color: COLORS.danger, marginBottom: 2 },
+  warningText: { fontSize: 12, color: COLORS.danger, lineHeight: 18 },
+  warningRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: COLORS.white, borderRadius: 10, padding: 10,
+  },
+  warningAmt: { alignItems: 'center', flex: 1 },
+  warningAmtLabel: { fontSize: 10, color: COLORS.textMuted, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3 },
+  warningAmtVal: { fontSize: 15, fontWeight: '800', color: COLORS.textPrimary, marginTop: 2 },
+  topUpInlineBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: COLORS.danger, borderRadius: 11, paddingVertical: 12,
+    shadowColor: COLORS.danger, shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25, shadowRadius: 6, elevation: 3,
+  },
+  topUpInlineBtnText: { fontSize: 14, fontWeight: '700', color: COLORS.white },
 
   /* Seat card */
   seatCard: { marginBottom: 12 },

@@ -18,8 +18,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { getStopsApi } from '../../api/stopsApi';
 import { getMultiTripRouteApi } from '../../api/multiTripApi';
+import { useApp } from '../../context/AppContext';
 import { MOCK_STOPS, stopsWithDistance, formatDist } from '../../utils/mockStops';
 import MultiTripBottomSheet from '../../components/passenger/MultiTripBottomSheet';
+
+// Approximate exchange rate used only for balance sufficiency check (display purposes)
+const LBP_PER_USD = 89_500;
 
 const MODES = [
   { key: 'fastest', label: 'Fastest', icon: 'flash-outline' },
@@ -183,6 +187,7 @@ const AlternativeChip = ({ alt, label, selected, onPress }) => (
 // ── Main Screen ────────────────────────────────────────────────────────────────
 const TripPlannerScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
+  const { walletBalance } = useApp();
 
   const [stops, setStops] = useState([]);
   const [loadingStops, setLoadingStops] = useState(false);
@@ -505,6 +510,98 @@ const TripPlannerScreen = ({ navigation, route }) => {
               </TouchableOpacity>
             </View>
 
+            {/* ── Fare Estimate Card ── */}
+            {(() => {
+              const fareUsd    = displayTrip.total_price / LBP_PER_USD;
+              const sufficient = walletBalance >= fareUsd;
+              const shortfall  = fareUsd - walletBalance;
+              const busSeg     = (displayTrip.segments || []).filter(s => s.type !== 'walk');
+              return (
+                <View style={styles.fareCard}>
+                  {/* Header row */}
+                  <View style={styles.fareHeader}>
+                    <View style={styles.fareIconWrap}>
+                      <Ionicons name="pricetag-outline" size={18} color={COLORS.primary} />
+                    </View>
+                    <Text style={styles.fareTitle}>Fare Estimate</Text>
+                    <View style={[
+                      styles.fareSuffBadge,
+                      { backgroundColor: sufficient ? COLORS.secondaryLight : COLORS.dangerLight,
+                        borderColor:      sufficient ? COLORS.secondaryMid  : COLORS.dangerMid },
+                    ]}>
+                      <Ionicons
+                        name={sufficient ? 'checkmark-circle-outline' : 'alert-circle-outline'}
+                        size={13}
+                        color={sufficient ? COLORS.secondary : COLORS.danger}
+                      />
+                      <Text style={[styles.fareSuffText, { color: sufficient ? COLORS.secondary : COLORS.danger }]}>
+                        {sufficient ? 'Balance OK' : 'Low Balance'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Total fare + trip summary */}
+                  <View style={styles.fareTotalRow}>
+                    <View style={styles.fareStat}>
+                      <Text style={styles.fareStatLabel}>TOTAL FARE</Text>
+                      <Text style={styles.fareStatValue}>{money(displayTrip.total_price)}</Text>
+                      <Text style={styles.fareStatSub}>≈ ${fareUsd.toFixed(2)} USD</Text>
+                    </View>
+                    <View style={styles.fareStatDivider} />
+                    <View style={styles.fareStat}>
+                      <Text style={styles.fareStatLabel}>DURATION</Text>
+                      <Text style={styles.fareStatValue}>{displayTrip.total_duration_min} min</Text>
+                      <Text style={styles.fareStatSub}>{displayTrip.total_transfers ?? 0} transfer{displayTrip.total_transfers !== 1 ? 's' : ''}</Text>
+                    </View>
+                    <View style={styles.fareStatDivider} />
+                    <View style={styles.fareStat}>
+                      <Text style={styles.fareStatLabel}>YOUR BALANCE</Text>
+                      <Text style={[styles.fareStatValue, { color: sufficient ? COLORS.secondary : COLORS.danger }]}>
+                        ${walletBalance.toFixed(2)}
+                      </Text>
+                      <Text style={styles.fareStatSub}>USD</Text>
+                    </View>
+                  </View>
+
+                  {/* Per-segment fare breakdown */}
+                  {busSeg.length > 0 && (
+                    <View style={styles.fareBreakdown}>
+                      {busSeg.map((s, i) => (
+                        <View key={i} style={styles.fareBreakdownRow}>
+                          <View style={styles.fareSegIcon}>
+                            <Ionicons name="bus-outline" size={12} color={COLORS.primary} />
+                          </View>
+                          <Text style={styles.fareSegName} numberOfLines={1}>
+                            {s.from} → {s.to}
+                          </Text>
+                          <Text style={styles.fareSegPrice}>{money(s.price)}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  {/* Insufficient balance warning */}
+                  {!sufficient && (
+                    <View style={styles.fareWarning}>
+                      <Ionicons name="wallet-outline" size={15} color={COLORS.danger} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.fareWarningText}>
+                          Your wallet is ${shortfall.toFixed(2)} short for this trip.
+                          Top up before booking.
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.fareTopUpBtn}
+                        onPress={() => navigation.navigate('ProfileStack', { screen: 'Wallet' })}
+                      >
+                        <Text style={styles.fareTopUpText}>Top Up</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              );
+            })()}
+
             {/* Embedded route sheet */}
             <MultiTripBottomSheet
               trip={displayTrip}
@@ -826,6 +923,62 @@ const styles = StyleSheet.create({
   },
 
   /* Alternatives */
+  /* Fare Estimate Card */
+  fareCard: {
+    backgroundColor: COLORS.white, borderRadius: 16,
+    padding: 16, borderWidth: 1.5, borderColor: COLORS.primaryMid,
+    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08, shadowRadius: 8, elevation: 3,
+  },
+  fareHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
+  fareIconWrap: {
+    width: 32, height: 32, borderRadius: 9,
+    backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
+  },
+  fareTitle: { fontSize: 14, fontWeight: '800', color: COLORS.textPrimary, flex: 1 },
+  fareSuffBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    borderWidth: 1, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4,
+  },
+  fareSuffText: { fontSize: 11, fontWeight: '700' },
+
+  fareTotalRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: COLORS.background, borderRadius: 12, padding: 12, marginBottom: 12,
+  },
+  fareStat: { flex: 1, alignItems: 'center' },
+  fareStatLabel: {
+    fontSize: 9, fontWeight: '700', color: COLORS.textMuted,
+    textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 4,
+  },
+  fareStatValue: { fontSize: 15, fontWeight: '800', color: COLORS.textPrimary },
+  fareStatSub: { fontSize: 10, color: COLORS.textMuted, marginTop: 2, fontWeight: '500' },
+  fareStatDivider: { width: 1, height: 36, backgroundColor: COLORS.border, marginHorizontal: 4 },
+
+  fareBreakdown: {
+    gap: 6, marginBottom: 10,
+    borderTopWidth: 1, borderTopColor: COLORS.borderLight, paddingTop: 10,
+  },
+  fareBreakdownRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  fareSegIcon: {
+    width: 22, height: 22, borderRadius: 6,
+    backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
+  },
+  fareSegName: { flex: 1, fontSize: 12, color: COLORS.textSecondary, fontWeight: '500' },
+  fareSegPrice: { fontSize: 12, fontWeight: '700', color: COLORS.textPrimary },
+
+  fareWarning: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: COLORS.dangerLight, borderRadius: 10, padding: 10,
+    borderWidth: 1, borderColor: COLORS.dangerMid,
+  },
+  fareWarningText: { fontSize: 12, color: COLORS.danger, fontWeight: '600', lineHeight: 18 },
+  fareTopUpBtn: {
+    backgroundColor: COLORS.danger, borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 6,
+  },
+  fareTopUpText: { fontSize: 12, fontWeight: '700', color: COLORS.white },
+
   altSection: {
     gap: 10,
   },
