@@ -18,7 +18,11 @@ import { COLORS } from '../../constants/colors';
 let Crypto = null;
 try { Crypto = require('expo-crypto'); } catch (_) {}
 
-const SHARE_BASE = 'https://yallatransit.app';
+// Share URL uses the real backend so links actually open in a browser.
+// Change EXPO_PUBLIC_API_URL in .env to your LAN IP (e.g. http://192.168.1.x:4000/api)
+// for cross-device sharing during development.
+const SHARE_BASE = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000/api')
+  .replace(/\/api\/?$/, '');
 
 // ── Client-side token fallback (mock / offline) ───────────────────────────────
 const buildClientToken = async (booking, user) => {

@@ -94,13 +94,14 @@ const mockResponse = (config) => {
   if (url.includes('/driver/earnings')) return { total: 0, trips: 0, history: [] };
   // Share ticket endpoints
   if (url.includes('/share/ticket/token') && method === 'post') {
-    const bid  = body.bookingId ?? 'b1';
-    const seat = body.seatId ?? 'B3';
-    const exp  = Math.floor(Date.now() / 1000) + 604800;
+    const bid   = body.bookingId ?? 'b1';
+    const seat  = body.seatId ?? 'B3';
+    const exp   = Math.floor(Date.now() / 1000) + 604800;
     const token = `bW9ja3BheWxvYWQ.${bid}${seat}${exp}`.replace(/[^a-zA-Z0-9._-]/g, 'x');
+    const base  = (BASE_URL || 'http://localhost:4000/api').replace(/\/api\/?$/, '');
     return {
       token,
-      shareUrl: `https://yallatransit.app/ticket/share?t=${token}`,
+      shareUrl: `${base}/api/share/ticket?t=${token}`,
       deepLink: `yallatransit://ticket/share?t=${token}`,
       expiresAt: new Date(exp * 1000).toISOString(),
     };
