@@ -20,6 +20,7 @@ import TripPlannerScreen from '../screens/passenger/TripPlannerScreen';
 import DeleteAccountScreen from '../screens/passenger/DeleteAccountScreen';
 import NfcCardScreen from '../screens/passenger/NfcCardScreen';
 import NearbyStopsScreen from '../screens/passenger/NearbyStopsScreen';
+import ComplaintScreen from '../screens/passenger/ComplaintScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -33,6 +34,7 @@ const HomeStack = () => (
     <Stack.Screen name="Feedback"    component={FeedbackScreen} />
     <Stack.Screen name="TripPlanner"   component={TripPlannerScreen} />
     <Stack.Screen name="NearbyStops"   component={NearbyStopsScreen} />
+    <Stack.Screen name="Complaint"     component={ComplaintScreen} />
   </Stack.Navigator>
 );
 

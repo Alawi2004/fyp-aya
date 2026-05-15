@@ -130,16 +130,16 @@
 </div>
 
 <div class="summary-bar">
-  <div class="stat-card stat-done"><div class="num">145</div><div class="label">Done</div></div>
+  <div class="stat-card stat-done"><div class="num">148</div><div class="label">Done</div></div>
   <div class="stat-card stat-partial"><div class="num">0</div><div class="label">Partial</div></div>
-  <div class="stat-card stat-missing"><div class="num">42</div><div class="label">Missing</div></div>
+  <div class="stat-card stat-missing"><div class="num">39</div><div class="label">Missing</div></div>
   <div class="stat-card" style="min-width:200px">
     <div class="label" style="margin-bottom:6px">Overall Completion</div>
     <div class="progress-row">
       <div class="progress-bar">
-        <div class="progress-fill" style="width:77%;background:linear-gradient(90deg,#16a34a,#84cc16)"></div>
+        <div class="progress-fill" style="width:79%;background:linear-gradient(90deg,#16a34a,#84cc16)"></div>
       </div>
-      <span class="pct">~77%</span>
+      <span class="pct">~79%</span>
     </div>
   </div>
 </div>
@@ -324,9 +324,9 @@
       <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Notifications Screen</div><div class="feat-detail">Notification center with mark as read</div></div></div>
       <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Fare Estimator</div><div class="feat-detail">TripPlannerScreen: FareEstimateCard appears in results above the route sheet; shows total fare (LBP + USD equiv at 89,500 LBP/USD), trip duration, transfer count, per-bus-segment fare breakdown; wallet balance vs fare comparison with Balance OK / Low Balance badge</div></div></div>
       <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Insufficient Balance Warning</div><div class="feat-detail">TripPlannerScreen: fare card shows exact shortfall amount + inline "Top Up" button that navigates to WalletScreen. BookingScreen: enhanced warning card shows ticket price / wallet balance / shortfall in a comparison row + full-width "Top Up Wallet Now" CTA button; Book Now button disabled when insufficient</div></div></div>
-      <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Complaint Submission Screen</div><div class="feat-detail missing">Full complaint form with categories, photo, trip linking — not just rating</div></div></div>
-      <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Export Trip History (PDF)</div><div class="feat-detail missing">Download past trips as a PDF report</div></div></div>
-      <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Rating Categories</div><div class="feat-detail missing">Punctuality, driver behavior, cleanliness, comfort — sub-scores per category</div></div></div>
+      <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Complaint Submission Screen</div><div class="feat-detail">ComplaintScreen: 8-category chip grid (Delay, Driver Behaviour, Vehicle Issue, Cleanliness, Overcharging, Safety, Lost Item, Other); trip link dropdown from bookings list; Low/Medium/High priority selector; 1000-char description with 20-char minimum validation; photo attach (expo-image-picker optional, mock fallback); submitter info card; success screen with auto-generated CMP-XXXXXX reference number; accessible from TripHistoryScreen completed trips</div></div></div>
+      <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Export Trip History (PDF)</div><div class="feat-detail">TripHistoryScreen: "Export PDF" button in header; expo-print generates branded A4 HTML → PDF; includes summary stats (trips shown, completed count, total spend), full trip table (bus name, route, date, seat, fare, colour-coded status badge), Yalla Transit header gradient; expo-sharing opens native share sheet; respects active filter; hourglass spinner during export</div></div></div>
+      <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Rating Categories</div><div class="feat-detail">FeedbackScreen rebuilt: 4 independent star rows — Punctuality (blue), Driver Behaviour (purple), Cleanliness (green), Comfort (amber); overall score auto-calculated as average of all four; overall stars animate on each rating change; quick tags and comment only shown after all 4 categories rated; success screen shows per-category score grid; category data saved alongside overall rating in AppContext</div></div></div>
     </div>
   </div>
 </div>

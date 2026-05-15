@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Alert, Platform, StatusBar,
 } from 'react-native';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import EmptyState from '../../components/common/EmptyState';
 import { COLORS } from '../../constants/colors';
 import { formatDateTime } from '../../utils/formatters';
@@ -26,9 +29,90 @@ const STATUS_CONFIG = {
 const TripHistoryScreen = ({ navigation }) => {
   const headerInsets = useHeaderInsets();
   const { bookings, cancelBooking } = useApp();
-  const [filter, setFilter] = useState('all');
+  const { user } = useAuth();
+  const [filter, setFilter]       = useState('all');
+  const [exporting, setExporting] = useState(false);
 
   const filtered = (bookings || []).filter(b => filter === 'all' || b.status === filter);
+
+  // ── PDF Export ────────────────────────────────────────────────────────────
+  const handleExportPdf = useCallback(async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const rows = filtered.map((b, i) => `
+        <tr style="background:${i % 2 === 0 ? '#F8FAFC' : '#FFFFFF'}">
+          <td>${b.bus?.name || '—'}</td>
+          <td>${b.bus?.origin || '—'} → ${b.bus?.destination || '—'}</td>
+          <td>${formatDateTime(b.date)}</td>
+          <td>${b.seatId || '—'}</td>
+          <td style="color:#2563EB;font-weight:700">$${parseFloat(b.price || 0).toFixed(2)}</td>
+          <td>
+            <span style="padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700;
+              background:${b.status === 'completed' ? '#DCFCE7' : b.status === 'upcoming' ? '#DBEAFE' : '#FEE2E2'};
+              color:${b.status === 'completed' ? '#16A34A' : b.status === 'upcoming' ? '#2563EB' : '#DC2626'}">
+              ${b.status.charAt(0).toUpperCase() + b.status.slice(1)}
+            </span>
+          </td>
+        </tr>`).join('');
+
+      const total = filtered
+        .filter(b => b.status !== 'cancelled')
+        .reduce((s, b) => s + parseFloat(b.price || 0), 0);
+
+      const html = `<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, 'Helvetica Neue', sans-serif; color: #1E293B; background: #fff; }
+  .hdr { background: linear-gradient(135deg,#1D4ED8,#2563EB); color: #fff; padding: 28px 32px; }
+  .logo { font-size: 22px; font-weight: 900; letter-spacing: 1px; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; opacity: .75; }
+  .meta { margin-top: 12px; font-size: 12px; opacity: .8; }
+  .body { padding: 24px 32px; }
+  .summary { display: flex; gap: 16px; margin-bottom: 24px; }
+  .stat { background: #F1F5F9; border-radius: 10px; padding: 14px 18px; flex: 1; }
+  .stat-num { font-size: 24px; font-weight: 800; color: #2563EB; }
+  .stat-lbl { font-size: 11px; color: #64748B; margin-top: 2px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #1E293B; color: #fff; padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+  td { padding: 10px 12px; border-bottom: 1px solid #E2E8F0; }
+  .footer { text-align: center; margin-top: 24px; font-size: 11px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div class="logo">🚌 YALLA TRANSIT</div>
+  <div class="subtitle">Trip History Report</div>
+  <div class="meta">Passenger: ${user?.name || 'Passenger'} &nbsp;·&nbsp; Generated: ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} &nbsp;·&nbsp; Filter: ${filter.charAt(0).toUpperCase() + filter.slice(1)}</div>
+</div>
+<div class="body">
+  <div class="summary">
+    <div class="stat"><div class="stat-num">${filtered.length}</div><div class="stat-lbl">Trips Shown</div></div>
+    <div class="stat"><div class="stat-num">${filtered.filter(b=>b.status==='completed').length}</div><div class="stat-lbl">Completed</div></div>
+    <div class="stat"><div class="stat-num">$${total.toFixed(2)}</div><div class="stat-lbl">Total Spent</div></div>
+  </div>
+  <table>
+    <thead><tr><th>Bus</th><th>Route</th><th>Date & Time</th><th>Seat</th><th>Fare</th><th>Status</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:#94A3B8;padding:20px">No trips found</td></tr>'}</tbody>
+  </table>
+  <div class="footer">Yalla Transit — Official Trip History &nbsp;·&nbsp; Document generated automatically</div>
+</div>
+</body></html>`;
+
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      await Sharing.shareAsync(uri, {
+        mimeType: 'application/pdf',
+        dialogTitle: 'Save Trip History PDF',
+        UTI: 'com.adobe.pdf',
+      });
+    } catch {
+      Alert.alert('Export failed', 'Could not generate the PDF. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  }, [filtered, filter, user, exporting]);
 
   const handleCancel = (booking) => {
     Alert.alert(
@@ -122,10 +206,22 @@ const TripHistoryScreen = ({ navigation }) => {
         )}
 
         {item.status === 'completed' && (
-          <TouchableOpacity style={styles.rateBtn} onPress={() => navigation.navigate('HomeStack', { screen: 'Feedback', params: { booking: item } })}>
-            <Ionicons name="star-outline" size={14} color={COLORS.warning} />
-            <Text style={styles.rateText}>Rate this trip</Text>
-          </TouchableOpacity>
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={styles.actionBtnBlue}
+              onPress={() => navigation.navigate('HomeStack', { screen: 'Feedback', params: { booking: item } })}
+            >
+              <Ionicons name="star-outline" size={14} color={COLORS.warning} />
+              <Text style={[styles.actionTextBlue, { color: COLORS.warning }]}>Rate</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtnBlue, { backgroundColor: COLORS.dangerLight }]}
+              onPress={() => navigation.navigate('HomeStack', { screen: 'Complaint', params: { booking: item } })}
+            >
+              <Ionicons name="flag-outline" size={14} color={COLORS.danger} />
+              <Text style={[styles.actionTextBlue, { color: COLORS.danger }]}>Complaint</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {item.status === 'cancelled' && (
@@ -148,9 +244,14 @@ const TripHistoryScreen = ({ navigation }) => {
           <Text style={styles.pageTitle}>My Trips</Text>
           <Text style={styles.pageSubtitle}>{(bookings || []).length} bookings total</Text>
         </View>
-        <View style={styles.headerBadge}>
-          <Ionicons name="receipt-outline" size={18} color={COLORS.primary} />
-        </View>
+        <TouchableOpacity
+          style={[styles.exportBtn, exporting && { opacity: 0.55 }]}
+          onPress={handleExportPdf}
+          disabled={exporting || filtered.length === 0}
+        >
+          <Ionicons name={exporting ? 'hourglass-outline' : 'download-outline'} size={16} color={COLORS.primary} />
+          <Text style={styles.exportBtnText}>{exporting ? 'Exporting…' : 'Export PDF'}</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Filters */}
@@ -194,11 +295,13 @@ const styles = StyleSheet.create({
   },
   pageTitle: { fontSize: 24, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.3 },
   pageSubtitle: { fontSize: 13, color: COLORS.textMuted, marginTop: 2, fontWeight: '500' },
-  headerBadge: {
-    width: 44, height: 44, borderRadius: 14,
-    backgroundColor: COLORS.primaryLight,
-    alignItems: 'center', justifyContent: 'center',
+  exportBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: COLORS.primaryLight, borderRadius: 12,
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderWidth: 1, borderColor: COLORS.primaryMid,
   },
+  exportBtnText: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
 
   /* Filters */
   filterRow: {
