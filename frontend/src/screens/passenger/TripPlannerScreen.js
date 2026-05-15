@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,13 @@ import {
   ActivityIndicator,
   StatusBar,
 } from 'react-native';
+import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { getStopsApi } from '../../api/stopsApi';
 import { getMultiTripRouteApi } from '../../api/multiTripApi';
+import { MOCK_STOPS, stopsWithDistance, formatDist } from '../../utils/mockStops';
 import MultiTripBottomSheet from '../../components/passenger/MultiTripBottomSheet';
 
 const MODES = [
@@ -26,24 +28,57 @@ const MODES = [
 
 const money = (v) => `${Number(v || 0).toLocaleString()} LBP`;
 
-// ── Stop Picker Modal ──────────────────────────────────────────────────────────
-const StopPickerModal = ({ visible, onClose, onSelect, title, stops, loadingStops }) => {
+// ── Stop Picker Modal (with GPS auto-suggest) ──────────────────────────────────
+const StopPickerModal = ({ visible, onClose, onSelect, title, stops, loadingStops, userLocation }) => {
   const [query, setQuery] = useState('');
 
+  const allStops = useMemo(() => {
+    if (stops.length > 0) return stops;
+    return MOCK_STOPS;
+  }, [stops]);
+
   const filtered = useMemo(
-    () => stops.filter((s) => s.stop_name.toLowerCase().includes(query.toLowerCase())),
-    [stops, query],
+    () => allStops.filter((s) => s.stop_name.toLowerCase().includes(query.toLowerCase())),
+    [allStops, query],
   );
 
-  const handleClose = () => {
-    setQuery('');
-    onClose();
-  };
+  // Nearest stops for auto-suggest (only when query is empty and location is known)
+  const nearbyStops = useMemo(() => {
+    if (!userLocation || query) return [];
+    return stopsWithDistance(allStops, userLocation.latitude, userLocation.longitude).slice(0, 5);
+  }, [userLocation, allStops, query]);
 
-  const handleSelect = (stop) => {
-    setQuery('');
-    onSelect(stop);
-  };
+  const handleClose = () => { setQuery(''); onClose(); };
+  const handleSelect = (stop) => { setQuery(''); onSelect(stop); };
+
+  const StopRow = ({ item, isNearby }) => (
+    <TouchableOpacity
+      style={pickerStyles.stopItem}
+      onPress={() => handleSelect(item)}
+      activeOpacity={0.76}
+    >
+      <View style={[pickerStyles.stopIconWrap, isNearby && { backgroundColor: COLORS.secondaryLight }]}>
+        <Ionicons
+          name={isNearby ? 'walk-outline' : 'location-outline'}
+          size={18}
+          color={isNearby ? COLORS.secondary : COLORS.primary}
+        />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={pickerStyles.stopName}>{item.stop_name}</Text>
+        {isNearby && item.distKm != null ? (
+          <Text style={pickerStyles.stopDist}>
+            {formatDist(item.distKm)} · {item.walkMins} min walk
+          </Text>
+        ) : item.latitude && item.longitude ? (
+          <Text style={pickerStyles.stopCoords}>
+            {Number(item.latitude).toFixed(4)}, {Number(item.longitude).toFixed(4)}
+          </Text>
+        ) : null}
+      </View>
+      <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+    </TouchableOpacity>
+  );
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
@@ -81,30 +116,30 @@ const StopPickerModal = ({ visible, onClose, onSelect, title, stops, loadingStop
           <ActivityIndicator style={{ marginTop: 48 }} size="large" color={COLORS.primary} />
         ) : (
           <FlatList
-            data={filtered}
+            data={query ? filtered : allStops}
             keyExtractor={(item) => String(item.stop_id)}
             contentContainerStyle={{ paddingBottom: 40 }}
             keyboardShouldPersistTaps="handled"
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={pickerStyles.stopItem}
-                onPress={() => handleSelect(item)}
-                activeOpacity={0.76}
-              >
-                <View style={pickerStyles.stopIconWrap}>
-                  <Ionicons name="location-outline" size={18} color={COLORS.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={pickerStyles.stopName}>{item.stop_name}</Text>
-                  {item.latitude && item.longitude ? (
-                    <Text style={pickerStyles.stopCoords}>
-                      {Number(item.latitude).toFixed(4)}, {Number(item.longitude).toFixed(4)}
-                    </Text>
-                  ) : null}
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
-              </TouchableOpacity>
-            )}
+            ListHeaderComponent={
+              !query && nearbyStops.length > 0 ? (
+                <>
+                  {/* ── Nearby GPS suggestions ── */}
+                  <View style={pickerStyles.sectionHeader}>
+                    <Ionicons name="locate-outline" size={14} color={COLORS.secondary} />
+                    <Text style={pickerStyles.sectionTitle}>Nearest to you</Text>
+                  </View>
+                  {nearbyStops.map((s) => (
+                    <StopRow key={`nearby-${s.stop_id}`} item={s} isNearby />
+                  ))}
+                  <View style={pickerStyles.sectionDivider} />
+                  <View style={pickerStyles.sectionHeader}>
+                    <Ionicons name="list-outline" size={14} color={COLORS.textMuted} />
+                    <Text style={pickerStyles.sectionTitle}>All stops</Text>
+                  </View>
+                </>
+              ) : null
+            }
+            renderItem={({ item }) => <StopRow item={item} isNearby={false} />}
             ListEmptyComponent={
               <View style={pickerStyles.emptyWrap}>
                 <Ionicons name="search-outline" size={36} color={COLORS.border} />
@@ -145,13 +180,15 @@ const AlternativeChip = ({ alt, label, selected, onPress }) => (
 );
 
 // ── Main Screen ────────────────────────────────────────────────────────────────
-const TripPlannerScreen = ({ navigation }) => {
+const TripPlannerScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
 
   const [stops, setStops] = useState([]);
   const [loadingStops, setLoadingStops] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
 
-  const [fromStop, setFromStop] = useState(null);
+  // Accept a pre-selected stop coming from NearbyStopsScreen
+  const [fromStop, setFromStop] = useState(route?.params?.initialFromStop ?? null);
   const [toStop, setToStop] = useState(null);
   const [mode, setMode] = useState('fastest');
 
@@ -161,6 +198,25 @@ const TripPlannerScreen = ({ navigation }) => {
   const [alternatives, setAlternatives] = useState([]);
   const [selectedAlt, setSelectedAlt] = useState(null);
   const [error, setError] = useState(null);
+
+  // Fetch GPS location once for auto-suggest (silent — no prompt unless permitted)
+  useEffect(() => {
+    Location.getForegroundPermissionsAsync().then(({ status }) => {
+      if (status === 'granted') {
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+          .then((pos) => setUserLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }))
+          .catch(() => {});
+      } else {
+        Location.requestForegroundPermissionsAsync().then(({ status: s }) => {
+          if (s === 'granted') {
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+              .then((pos) => setUserLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }))
+              .catch(() => {});
+          }
+        });
+      }
+    });
+  }, []);
 
   const loadStops = useCallback(async () => {
     if (stops.length) return;
@@ -468,6 +524,7 @@ const TripPlannerScreen = ({ navigation }) => {
         loadingStops={loadingStops}
         onSelect={handleSelectStop}
         onClose={() => setPickerFor(null)}
+        userLocation={userLocation}
       />
     </View>
   );
@@ -839,6 +896,31 @@ const pickerStyles = StyleSheet.create({
   stopCoords: {
     fontSize: 12,
     color: COLORS.textMuted,
+  },
+  stopDist: {
+    fontSize: 12,
+    color: COLORS.secondary,
+    fontWeight: '600',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: COLORS.background,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: 4,
   },
   emptyWrap: {
     alignItems: 'center',
