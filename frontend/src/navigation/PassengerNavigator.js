@@ -18,6 +18,7 @@ import FeedbackScreen from '../screens/passenger/FeedbackScreen';
 import FavoriteRoutesScreen from '../screens/passenger/FavoriteRoutesScreen';
 import TripPlannerScreen from '../screens/passenger/TripPlannerScreen';
 import DeleteAccountScreen from '../screens/passenger/DeleteAccountScreen';
+import NfcCardScreen from '../screens/passenger/NfcCardScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -41,6 +42,7 @@ const ProfileStack = () => (
     <Stack.Screen name="Notifications"  component={NotificationsScreen} />
     <Stack.Screen name="FavoriteRoutes" component={FavoriteRoutesScreen} />
     <Stack.Screen name="DeleteAccount"  component={DeleteAccountScreen} />
+    <Stack.Screen name="NfcCard"        component={NfcCardScreen} />
   </Stack.Navigator>
 );
 
