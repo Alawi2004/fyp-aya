@@ -10,3 +10,4 @@ export const updateLocationApi = (data) => apiClient.post('/driver/location', da
 export const submitChecklistApi   = (tripId, data)           => apiClient.post(`/driver/trips/${tripId}/checklist`, data);
 export const scanQrApi            = (token)                  => apiClient.post('/driver/scan-qr', { token });
 export const markStopArrivalApi   = (tripId, stopId)         => apiClient.post(`/driver/trips/${tripId}/stops/${stopId}/arrive`);
+export const reportDelayApi       = (tripId, data)           => apiClient.post(`/driver/trips/${tripId}/delay`, data);

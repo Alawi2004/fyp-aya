@@ -11,6 +11,7 @@ import {
   submitChecklist,
   scanPassengerQr,
   markStopArrival,
+  reportDelay,
 } from "../controllers/driverApp.controller.js";
 
 const router = express.Router();
@@ -200,5 +201,6 @@ router.post("/emergency", sendEmergency);
 router.post("/location", updateLocation);
 router.post("/scan-qr", scanPassengerQr);
 router.post("/trips/:id/stops/:stopId/arrive", markStopArrival);
+router.post("/trips/:id/delay", reportDelay);
 
 export default router;

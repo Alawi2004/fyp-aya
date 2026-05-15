@@ -18,6 +18,8 @@ import RatingsScreen           from '../screens/driver/RatingsScreen';
 import VehicleStatusScreen     from '../screens/driver/VehicleStatusScreen';
 import DriverProfileScreen     from '../screens/driver/DriverProfileScreen';
 import TripChecklistScreen     from '../screens/driver/TripChecklistScreen';
+import DelayReportScreen      from '../screens/driver/DelayReportScreen';
+import WeeklyScheduleScreen   from '../screens/driver/WeeklyScheduleScreen';
 
 const Tab   = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -37,18 +39,22 @@ const DashboardStack = () => (
     <Stack.Screen name="VehicleStatus"     component={VehicleStatusScreen}    />
     <Stack.Screen name="Earnings"          component={EarningsScreen}         />
     <Stack.Screen name="TripChecklist"     component={TripChecklistScreen}    />
+    <Stack.Screen name="DriverMap"         component={DriverMapScreen}        />
+    <Stack.Screen name="DelayReport"       component={DelayReportScreen}      />
+    <Stack.Screen name="WeeklySchedule"   component={WeeklyScheduleScreen}   />
   </Stack.Navigator>
 );
 
 // ── Map tab stack ────────────────────────────────────────────────────────────
 const MapStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="TripChecklist"     component={TripChecklistScreen}    />
     <Stack.Screen name="DriverMap"         component={DriverMapScreen}        />
+    <Stack.Screen name="TripChecklist"     component={TripChecklistScreen}    />
     <Stack.Screen name="PassengerVerify"   component={PassengerVerifyScreen}  />
     <Stack.Screen name="PassengerList"     component={PassengerListScreen}    />
     <Stack.Screen name="Emergency"         component={EmergencyScreen}        />
     <Stack.Screen name="IssueReport"       component={IssueReportScreen}      />
+    <Stack.Screen name="DelayReport"       component={DelayReportScreen}      />
   </Stack.Navigator>
 );
 
@@ -74,6 +80,7 @@ const HistoryStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="HistoryMain"       component={DriverTripHistoryScreen} />
     <Stack.Screen name="Ratings"           component={RatingsScreen}           />
+    <Stack.Screen name="WeeklySchedule"   component={WeeklyScheduleScreen}   />
   </Stack.Navigator>
 );
 

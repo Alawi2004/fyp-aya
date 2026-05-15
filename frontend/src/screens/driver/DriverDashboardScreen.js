@@ -175,10 +175,10 @@ const DriverDashboardScreen = ({ navigation }) => {
           {/* ─── Quick Actions ─── */}
           <View style={styles.actionsRow}>
             {[
-              { icon: 'navigate',      label: 'Navigate',   color: COLORS.primary,    bg: COLORS.primaryLight,  onPress: () => navigation.navigate('TripChecklist')  },
-              { icon: 'qr-code',       label: 'Scan QR',    color: COLORS.secondary,  bg: COLORS.secondaryLight, onPress: () => navigation.navigate('PassengerVerify') },
-              { icon: 'people',        label: 'Passengers', color: COLORS.primary,    bg: COLORS.primaryLight,  onPress: () => navigation.navigate('PassengerList')   },
-              { icon: 'warning',       label: 'Emergency',  color: COLORS.danger,     bg: COLORS.dangerLight,   onPress: () => navigation.navigate('Emergency')       },
+              { icon: 'navigate',      label: 'Navigate',   color: COLORS.primary,    bg: COLORS.primaryLight,   onPress: () => navigation.navigate('TripChecklist')   },
+              { icon: 'qr-code',       label: 'Scan QR',    color: COLORS.secondary,  bg: COLORS.secondaryLight, onPress: () => navigation.navigate('PassengerVerify')  },
+              { icon: 'calendar',      label: 'Schedule',   color: COLORS.primary,    bg: COLORS.primaryLight,   onPress: () => navigation.navigate('WeeklySchedule')   },
+              { icon: 'warning',       label: 'Emergency',  color: COLORS.danger,     bg: COLORS.dangerLight,    onPress: () => navigation.navigate('Emergency')        },
             ].map(a => (
               <TouchableOpacity key={a.label} style={styles.actionBtn} activeOpacity={0.8} onPress={a.onPress}>
                 <View style={[styles.actionIcon, { backgroundColor: a.bg }]}>
@@ -213,8 +213,8 @@ const DriverDashboardScreen = ({ navigation }) => {
           {/* ─── Today's Schedule ─── */}
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Today's Schedule</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('DriverTripHistory')}>
-              <Text style={styles.sectionLink}>View All</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('WeeklySchedule')}>
+              <Text style={styles.sectionLink}>Week View</Text>
             </TouchableOpacity>
           </View>
 

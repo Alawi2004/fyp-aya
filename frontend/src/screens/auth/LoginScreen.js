@@ -15,7 +15,11 @@ import { COLORS } from '../../constants/colors';
 
 const LoginScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { login, loginWithPhone, biometricLogin, isBiometricEnabled, setBiometricEnabled } = useAuth();
+  const {
+    login, loginWithPhone, biometricLogin,
+    isBiometricEnabled, setBiometricEnabled,
+    getBiometricPreferredType, setBiometricPreferredType,
+  } = useAuth();
   const [role, setRole] = useState('passenger');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -29,9 +33,10 @@ const LoginScreen = ({ navigation }) => {
   const [password, setPassword] = useState('');
 
   // Biometric state
-  const [biometricAvailable, setBiometricAvailable] = useState(false);
-  const [biometricEnabled, setBiometricEnabledState] = useState(false);
-  const [biometricType, setBiometricType] = useState('biometrics'); // 'fingerprint' | 'face' | 'biometrics'
+  const [biometricAvailable, setBiometricAvailable]   = useState(false);
+  const [biometricEnabled, setBiometricEnabledState]   = useState(false);
+  const [biometricType, setBiometricType]               = useState('biometrics');
+  const [supportsBothTypes, setSupportsBothTypes]       = useState(false);
 
   const isPassenger = role === 'passenger';
 
@@ -46,12 +51,17 @@ const LoginScreen = ({ navigation }) => {
       const isEnrolled  = await LocalAuthentication.isEnrolledAsync();
       if (hasHardware && isEnrolled) {
         setBiometricAvailable(true);
-        const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
-        if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {
-          setBiometricType('face');
-        } else if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) {
-          setBiometricType('fingerprint');
-        }
+        const types    = await LocalAuthentication.supportedAuthenticationTypesAsync();
+        const hasFace  = types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION);
+        const hasFingerprint = types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT);
+        setSupportsBothTypes(hasFace && hasFingerprint);
+
+        // Load stored preference, otherwise default to best available
+        const savedPref = await getBiometricPreferredType();
+        if (savedPref === 'face' && hasFace)               setBiometricType('face');
+        else if (savedPref === 'fingerprint' && hasFingerprint) setBiometricType('fingerprint');
+        else if (hasFace)                                  setBiometricType('face');
+        else if (hasFingerprint)                           setBiometricType('fingerprint');
       }
       const enabled = await isBiometricEnabled();
       setBiometricEnabledState(enabled);
@@ -77,22 +87,48 @@ const LoginScreen = ({ navigation }) => {
 
   const offerBiometricSetup = async () => {
     if (!biometricAvailable || biometricEnabled) return;
-    const label = biometricType === 'face' ? 'Face ID' : biometricType === 'fingerprint' ? 'Fingerprint' : 'Biometrics';
-    Alert.alert(
-      `Enable ${label}?`,
-      `Speed up future logins with ${label} instead of entering your PIN every time.`,
-      [
-        { text: 'Not Now', style: 'cancel' },
-        {
-          text: `Enable ${label}`,
-          onPress: async () => {
-            await setBiometricEnabled(true);
-            setBiometricEnabledState(true);
-            Alert.alert('Enabled!', `${label} login is now active.`);
-          },
-        },
-      ]
-    );
+
+    const doEnable = async (preferredType) => {
+      // Save the user's chosen type (null = keep auto-detected default)
+      if (preferredType) {
+        await setBiometricPreferredType(preferredType);
+        setBiometricType(preferredType);
+      }
+      // setBiometricEnabled copies current session → bio_* keys for post-logout use
+      await setBiometricEnabled(true);
+      setBiometricEnabledState(true);
+      const chosenLabel =
+        preferredType === 'face'        ? 'Face ID'     :
+        preferredType === 'fingerprint' ? 'Fingerprint' : biometricLabel;
+      Alert.alert('Enabled!', `${chosenLabel} login is now active for future sign-ins.`);
+    };
+
+    if (supportsBothTypes) {
+      Alert.alert(
+        'Enable Biometric Login',
+        'Choose your preferred authentication method:',
+        [
+          { text: 'Use Face ID',      onPress: () => doEnable('face')        },
+          { text: 'Use Fingerprint',  onPress: () => doEnable('fingerprint') },
+          { text: 'Not Now',          style: 'cancel'                        },
+        ]
+      );
+    } else {
+      Alert.alert(
+        `Enable ${biometricLabel}?`,
+        `Speed up future logins with ${biometricLabel} instead of entering your credentials.`,
+        [
+          { text: 'Not Now', style: 'cancel' },
+          { text: `Enable ${biometricLabel}`, onPress: () => doEnable(null) },
+        ]
+      );
+    }
+  };
+
+  const handleSwitchBiometricType = async () => {
+    const newType = biometricType === 'face' ? 'fingerprint' : 'face';
+    setBiometricType(newType);
+    await setBiometricPreferredType(newType);
   };
 
   const handleLogin = async () => {
@@ -101,10 +137,10 @@ const LoginScreen = ({ navigation }) => {
     try {
       if (isPassenger) {
         await loginWithPhone(phone, pin, 'passenger');
-        await offerBiometricSetup();
       } else {
         await login(email, password, 'driver');
       }
+      await offerBiometricSetup();
     } catch (err) {
       Alert.alert('Login Failed', err.response?.data?.message || 'Check your credentials and try again.');
     } finally {
@@ -114,23 +150,45 @@ const LoginScreen = ({ navigation }) => {
 
   const handleBiometricLogin = async () => {
     if (!LocalAuthentication) return;
+    const label     = biometricType === 'face' ? 'Face ID' : biometricType === 'fingerprint' ? 'Fingerprint' : 'Biometrics';
+    const credLabel = isPassenger ? 'PIN' : 'password';
+    setLoading(true);
     try {
-      const label = biometricType === 'face' ? 'Face ID' : biometricType === 'fingerprint' ? 'Fingerprint' : 'Biometrics';
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: `Sign in with ${label}`,
-        fallbackLabel: 'Use PIN instead',
-        cancelLabel: 'Cancel',
-        disableDeviceFallback: false,
-      });
-      if (result.success) {
-        setLoading(true);
-        await biometricLogin();
-        setLoading(false);
-      } else if (result.error !== 'user_cancel' && result.error !== 'system_cancel') {
-        Alert.alert('Authentication Failed', 'Please use your PIN to sign in.');
+      // 1. Prompt biometric hardware
+      let result;
+      try {
+        result = await LocalAuthentication.authenticateAsync({
+          promptMessage:          `Sign in with ${label}`,
+          fallbackLabel:          `Use ${credLabel} instead`,
+          cancelLabel:            'Cancel',
+          disableDeviceFallback:  false,
+        });
+      } catch {
+        Alert.alert('Not Available', `${label} is not available on this device. Please sign in with your ${credLabel}.`);
+        return;
       }
-    } catch (err) {
-      Alert.alert('Error', 'Biometric authentication unavailable.');
+
+      if (!result.success) {
+        if (result.error !== 'user_cancel' && result.error !== 'system_cancel') {
+          Alert.alert('Authentication Failed', `${label} verification was unsuccessful. Please use your ${credLabel}.`);
+        }
+        return;
+      }
+
+      // 2. Restore session from stored credentials
+      try {
+        await biometricLogin();
+      } catch {
+        // Stored credentials cleared (logout or data reset) — disable biometric and prompt re-login
+        await setBiometricEnabled(false);
+        setBiometricEnabledState(false);
+        Alert.alert(
+          'Session Expired',
+          `Please sign in with your ${credLabel} once to re-activate ${label} login.`,
+        );
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -201,20 +259,34 @@ const LoginScreen = ({ navigation }) => {
               <>
                 {/* Biometric button (shown only when enabled and hardware available) */}
                 {biometricAvailable && biometricEnabled && (
-                  <TouchableOpacity
-                    style={styles.biometricBtn}
-                    onPress={handleBiometricLogin}
-                    activeOpacity={0.8}
-                  >
-                    <View style={styles.biometricIconWrap}>
-                      <Ionicons name={biometricIcon} size={28} color={COLORS.primary} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.biometricLabel}>Sign in with {biometricLabel}</Text>
-                      <Text style={styles.biometricSub}>Touch to authenticate</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
-                  </TouchableOpacity>
+                  <View style={styles.biometricWrap}>
+                    <TouchableOpacity
+                      style={styles.biometricBtn}
+                      onPress={handleBiometricLogin}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.biometricIconWrap}>
+                        <Ionicons name={biometricIcon} size={28} color={COLORS.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.biometricLabel}>Sign in with {biometricLabel}</Text>
+                        <Text style={styles.biometricSub}>Touch to authenticate</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+                    </TouchableOpacity>
+                    {supportsBothTypes && (
+                      <TouchableOpacity style={styles.switchTypeBtn} onPress={handleSwitchBiometricType}>
+                        <Ionicons
+                          name={biometricType === 'face' ? 'finger-print-outline' : 'scan-outline'}
+                          size={13}
+                          color={COLORS.primary}
+                        />
+                        <Text style={styles.switchTypeText}>
+                          Use {biometricType === 'face' ? 'Fingerprint' : 'Face ID'} instead
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 )}
 
                 <Input
@@ -241,8 +313,41 @@ const LoginScreen = ({ navigation }) => {
                 </TouchableOpacity>
               </>
             ) : (
-              /* Driver: email + password */
+              /* Driver: email + password + biometric */
               <>
+                {biometricAvailable && biometricEnabled && (
+                  <View style={styles.biometricWrap}>
+                    <TouchableOpacity
+                      style={[styles.biometricBtn, { borderColor: COLORS.warningMid, backgroundColor: COLORS.warningLight }]}
+                      onPress={handleBiometricLogin}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.biometricIconWrap}>
+                        <Ionicons name={biometricIcon} size={28} color={COLORS.driverPrimary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.biometricLabel, { color: COLORS.driverPrimary }]}>
+                          Sign in with {biometricLabel}
+                        </Text>
+                        <Text style={styles.biometricSub}>Touch to authenticate</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+                    </TouchableOpacity>
+                    {supportsBothTypes && (
+                      <TouchableOpacity style={styles.switchTypeBtn} onPress={handleSwitchBiometricType}>
+                        <Ionicons
+                          name={biometricType === 'face' ? 'finger-print-outline' : 'scan-outline'}
+                          size={13}
+                          color={COLORS.driverPrimary}
+                        />
+                        <Text style={[styles.switchTypeText, { color: COLORS.driverPrimary }]}>
+                          Use {biometricType === 'face' ? 'Fingerprint' : 'Face ID'} instead
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+
                 <Input
                   label="Email Address"
                   value={email}
@@ -282,14 +387,21 @@ const LoginScreen = ({ navigation }) => {
             />
 
             {/* Biometric setup prompt (when available but not yet enabled) */}
-            {isPassenger && biometricAvailable && !biometricEnabled && (
+            {biometricAvailable && !biometricEnabled && (
               <TouchableOpacity
                 style={styles.biometricSetupHint}
                 onPress={() => offerBiometricSetup()}
                 activeOpacity={0.7}
               >
-                <Ionicons name={biometricIcon} size={15} color={COLORS.primary} />
-                <Text style={styles.biometricSetupText}>
+                <Ionicons
+                  name={biometricIcon}
+                  size={15}
+                  color={isPassenger ? COLORS.primary : COLORS.driverPrimary}
+                />
+                <Text style={[
+                  styles.biometricSetupText,
+                  !isPassenger && { color: COLORS.driverPrimary },
+                ]}>
                   Enable {biometricLabel} for faster login
                 </Text>
               </TouchableOpacity>
@@ -371,6 +483,7 @@ const styles = StyleSheet.create({
   roleBtnTextActive: { color: COLORS.white },
 
   /* Biometric */
+  biometricWrap: { marginBottom: 20 },
   biometricBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -380,7 +493,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: COLORS.primaryMid,
     padding: 14,
-    marginBottom: 20,
   },
   biometricIconWrap: {
     width: 48,
@@ -392,6 +504,15 @@ const styles = StyleSheet.create({
   },
   biometricLabel: { fontSize: 15, fontWeight: '700', color: COLORS.primary },
   biometricSub: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
+
+  switchTypeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+  },
+  switchTypeText: { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
 
   biometricSetupHint: {
     flexDirection: 'row',

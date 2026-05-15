@@ -289,6 +289,43 @@ export const submitChecklist = async (req, res) => {
   }
 };
 
+// POST /api/driver/trips/:id/delay — record delay and count affected passengers
+export const reportDelay = async (req, res) => {
+  try {
+    const tripId = parseInt(req.params.id, 10);
+    const { reason, delay_minutes, notes } = req.body;
+    if (!reason || !delay_minutes) {
+      return res.status(400).json({ error: 'reason and delay_minutes required' });
+    }
+    const pool = await poolPromise;
+
+    await pool.request()
+      .input('trip_id',       sql.Int,           tripId)
+      .input('reason',        sql.NVarChar(100),  reason)
+      .input('delay_minutes', sql.Int,            delay_minutes)
+      .input('notes',         sql.NVarChar(500),  notes ?? null)
+      .query(`
+        INSERT INTO trip_delays (trip_id, reason, delay_minutes, notes, reported_at)
+        VALUES (@trip_id, @reason, @delay_minutes, @notes, GETDATE())
+      `);
+
+    const countResult = await pool.request()
+      .input('trip_id', sql.Int, tripId)
+      .query(`
+        SELECT COUNT(*) AS cnt
+        FROM tickets
+        WHERE trip_id = @trip_id AND status IN ('confirmed', 'boarded')
+      `);
+
+    res.status(201).json({
+      message: 'Delay reported',
+      affected_passengers: countResult.recordset[0]?.cnt ?? 0,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to report delay' });
+  }
+};
+
 // POST /api/driver/location
 export const updateLocation = async (req, res) => {
   try {

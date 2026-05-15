@@ -31,6 +31,20 @@ const TRIP_INFO = {
   totalStops: 4,
 };
 
+const ARRIVAL_RADIUS_M   = 50;   // auto-mark arrived within 50 m
+const APPROACH_RADIUS_M  = 200;  // show "Approaching" indicator within 200 m
+const DEVIATION_RADIUS_M = 150;  // warn if driver is more than 150 m from any route waypoint
+
+const haversine = (lat1, lon1, lat2, lon2) => {
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
 const DriverMapScreen = ({ navigation, route }) => {
   const tripId = route?.params?.tripId ?? null;
   const insets = useSafeAreaInsets();
@@ -38,10 +52,13 @@ const DriverMapScreen = ({ navigation, route }) => {
   const pulseAnim   = useRef(new Animated.Value(1)).current;
   const panelAnim   = useRef(new Animated.Value(100)).current;
   const routeAnim   = useRef(new Animated.Value(0)).current;
+  const triggeredRef = useRef(new Set()); // stop IDs already auto-marked
   const [location, setLocation]         = useState(MOCK_ROUTE[1]);
   const [broadcasting, setBroadcasting] = useState(true);
   const [stops, setStops]               = useState(INITIAL_STOPS);
-  const [markingStop, setMarkingStop]   = useState(false);
+  const [approaching, setApproaching]         = useState(false);
+  const [deviating, setDeviating]             = useState(false);
+  const [deviationDismissed, setDeviationDismissed] = useState(false);
   const [speed]      = useState(38);
   const [onBoard]    = useState(18);
   const [etaMins]    = useState(12);
@@ -51,15 +68,32 @@ const DriverMapScreen = ({ navigation, route }) => {
   const nextStop  = stops.find(s => !s.done);
   const doneStops = stops.filter(s => s.done).length;
 
-  const handleMarkArrived = async () => {
-    if (!nextStop || markingStop) return;
-    setMarkingStop(true);
-    try {
-      if (tripId) await markStopArrivalApi(tripId, nextStop.id);
-    } catch {}
-    setStops(prev => prev.map(s => s.id === nextStop.id ? { ...s, done: true } : s));
-    setMarkingStop(false);
-  };
+  // Auto-detect arrival by geofence whenever location updates
+  useEffect(() => {
+    if (!nextStop) { setApproaching(false); return; }
+    const dist = haversine(
+      location.latitude, location.longitude,
+      nextStop.lat, nextStop.lng,
+    );
+    setApproaching(dist <= APPROACH_RADIUS_M);
+    if (dist <= ARRIVAL_RADIUS_M && !triggeredRef.current.has(nextStop.id)) {
+      triggeredRef.current.add(nextStop.id);
+      setStops(prev => prev.map(s => s.id === nextStop.id ? { ...s, done: true } : s));
+      if (tripId) markStopArrivalApi(tripId, nextStop.id).catch(() => {});
+    }
+  }, [location, nextStop?.id]);
+
+  // Route deviation: flag when driver is >150 m from every waypoint on the planned route
+  useEffect(() => {
+    const minDist = Math.min(
+      ...MOCK_ROUTE.map(pt =>
+        haversine(location.latitude, location.longitude, pt.latitude, pt.longitude)
+      )
+    );
+    const offRoute = minDist > DEVIATION_RADIUS_M;
+    setDeviating(offRoute);
+    if (!offRoute) setDeviationDismissed(false); // reset dismiss once back on route
+  }, [location]);
 
   useEffect(() => {
     Animated.parallel([
@@ -165,6 +199,19 @@ const DriverMapScreen = ({ navigation, route }) => {
         ))}
       </View>
 
+      {/* ─── Route Deviation Banner ─── */}
+      {deviating && !deviationDismissed && (
+        <View style={[styles.deviationBanner, {
+          top: Platform.OS === 'ios' ? 170 : (StatusBar.currentHeight ?? 24) + 124,
+        }]}>
+          <Ionicons name="warning" size={16} color={COLORS.white} />
+          <Text style={styles.deviationText}>Off Route — You have left the planned path</Text>
+          <TouchableOpacity onPress={() => setDeviationDismissed(true)} style={styles.deviationClose}>
+            <Ionicons name="close" size={14} color={COLORS.white} />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* ─── Bottom Panel ─── */}
       <Animated.View style={[styles.panel, { transform: [{ translateY: panelAnim }] }]}>
 
@@ -184,14 +231,12 @@ const DriverMapScreen = ({ navigation, route }) => {
               <View style={styles.nextEtaBadge}>
                 <Text style={styles.nextEtaText}>{etaMins} min</Text>
               </View>
-              <TouchableOpacity
-                style={[styles.arrivedBtn, markingStop && { opacity: 0.6 }]}
-                onPress={handleMarkArrived}
-                disabled={markingStop}
-              >
-                <Ionicons name="checkmark-circle" size={13} color={COLORS.white} />
-                <Text style={styles.arrivedBtnText}>Arrived</Text>
-              </TouchableOpacity>
+              {approaching && (
+                <View style={styles.approachingBadge}>
+                  <Ionicons name="radio-button-on" size={11} color={COLORS.white} />
+                  <Text style={styles.approachingText}>Approaching</Text>
+                </View>
+              )}
             </View>
           </View>
         )}
@@ -241,21 +286,25 @@ const DriverMapScreen = ({ navigation, route }) => {
         </View>
 
         {/* Action buttons */}
-        <View style={styles.actionRow}>
+        <View style={[styles.actionRow, { gap: 6 }]}>
           <TouchableOpacity style={styles.actionSecondary} onPress={() => navigation.navigate('PassengerList')}>
-            <Ionicons name="people" size={15} color={COLORS.primary} />
-            <Text style={styles.actionSecText}>Passengers</Text>
+            <Ionicons name="people" size={14} color={COLORS.primary} />
+            <Text style={styles.actionSecText}>Manifest</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionSecondary} onPress={() => navigation.navigate('PassengerVerify')}>
-            <Ionicons name="qr-code" size={15} color={COLORS.primary} />
+            <Ionicons name="qr-code" size={14} color={COLORS.primary} />
             <Text style={styles.actionSecText}>Scan QR</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.actionSecondary} onPress={() => navigation.navigate('DelayReport', { tripId })}>
+            <Ionicons name="time" size={14} color={COLORS.warning} />
+            <Text style={[styles.actionSecText, { color: COLORS.warning }]}>Delay</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.actionSecondary} onPress={() => navigation.navigate('IssueReport')}>
-            <Ionicons name="document-text" size={15} color={COLORS.warning} />
+            <Ionicons name="document-text" size={14} color={COLORS.warning} />
             <Text style={[styles.actionSecText, { color: COLORS.warning }]}>Report</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionDanger} onPress={() => navigation.navigate('Emergency')}>
-            <Ionicons name="warning" size={15} color={COLORS.white} />
+            <Ionicons name="warning" size={14} color={COLORS.white} />
             <Text style={styles.actionDangerText}>SOS</Text>
           </TouchableOpacity>
         </View>
@@ -368,12 +417,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 6,
   },
   nextEtaText: { fontSize: 13, fontWeight: '800', color: COLORS.white },
-  arrivedBtn: {
+  approachingBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: COLORS.secondary, borderRadius: 10,
+    backgroundColor: COLORS.warning, borderRadius: 10,
     paddingHorizontal: 10, paddingVertical: 6,
   },
-  arrivedBtnText: { fontSize: 11, fontWeight: '800', color: COLORS.white },
+  approachingText: { fontSize: 11, fontWeight: '800', color: COLORS.white },
+
+  /* Deviation banner */
+  deviationBanner: {
+    position: 'absolute',
+    left: 14, right: 14,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: COLORS.danger, borderRadius: 13,
+    paddingHorizontal: 14, paddingVertical: 10,
+    shadowColor: COLORS.danger, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35, shadowRadius: 10, elevation: 8,
+  },
+  deviationText: {
+    flex: 1, fontSize: 12, fontWeight: '700', color: COLORS.white,
+  },
+  deviationClose: {
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center', justifyContent: 'center',
+  },
 
   /* Route progress */
   progressRow: { flexDirection: 'row', marginBottom: 14 },
