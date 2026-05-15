@@ -109,7 +109,7 @@ const TripHistoryScreen = ({ navigation }) => {
           <View style={styles.actions}>
             <TouchableOpacity
               style={styles.actionBtnBlue}
-              onPress={() => navigation.navigate('BusTracking', { busId: item.bus?._id || 'bus1', busName: item.bus?.name })}
+              onPress={() => navigation.navigate('HomeStack', { screen: 'BusTracking', params: { busId: item.bus?._id || 'bus1', busName: item.bus?.name } })}
             >
               <Ionicons name="navigate-outline" size={14} color={COLORS.primary} />
               <Text style={styles.actionTextBlue}>Track Bus</Text>
@@ -122,7 +122,7 @@ const TripHistoryScreen = ({ navigation }) => {
         )}
 
         {item.status === 'completed' && (
-          <TouchableOpacity style={styles.rateBtn} onPress={() => navigation.navigate('Feedback', { booking: item })}>
+          <TouchableOpacity style={styles.rateBtn} onPress={() => navigation.navigate('HomeStack', { screen: 'Feedback', params: { booking: item } })}>
             <Ionicons name="star-outline" size={14} color={COLORS.warning} />
             <Text style={styles.rateText}>Rate this trip</Text>
           </TouchableOpacity>

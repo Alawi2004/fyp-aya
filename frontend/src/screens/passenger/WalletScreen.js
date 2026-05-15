@@ -196,9 +196,9 @@ const WalletScreen = () => {
                 showsUserLocation={locPermission === 'granted'}
                 showsMyLocationButton={false}
               >
-                {locations.map((loc) => (
+                {locations.map((loc, i) => (
                   <Marker
-                    key={loc.location_id}
+                    key={`marker-${loc.location_id ?? i}`}
                     coordinate={{ latitude: loc.latitude, longitude: loc.longitude }}
                     title={loc.name}
                     description={`${loc.address}, ${loc.city}`}
@@ -231,9 +231,9 @@ const WalletScreen = () => {
             </View>
           ) : (
             <View style={viewMode === 'map' ? styles.compactList : undefined}>
-              {locations.map((loc) => (
+              {locations.map((loc, i) => (
                 <TouchableOpacity
-                  key={loc.location_id}
+                  key={`loc-${loc.location_id ?? i}`}
                   style={[
                     styles.locationCard,
                     selectedStation === loc.location_id && styles.locationCardSelected,
