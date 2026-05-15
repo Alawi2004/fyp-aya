@@ -237,25 +237,37 @@ const HomeScreen = ({ navigation }) => {
           ) : null}
         </View>
 
-        {/* Plan a Trip banner */}
-        <TouchableOpacity
-          style={styles.planTripBanner}
-          onPress={() => navigation.navigate('TripPlanner')}
-          activeOpacity={0.85}
-        >
-          <View style={styles.planTripLeft}>
-            <View style={styles.planTripIconWrap}>
+        {/* Quick actions row */}
+        <View style={styles.quickActions}>
+          <TouchableOpacity
+            style={[styles.quickActionCard, { flex: 1.6 }]}
+            onPress={() => navigation.navigate('TripPlanner')}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.quickActionIcon, { backgroundColor: COLORS.primaryLight }]}>
               <Ionicons name="git-branch-outline" size={20} color={COLORS.primary} />
             </View>
-            <View>
-              <Text style={styles.planTripTitle}>Plan a Trip</Text>
-              <Text style={styles.planTripSub}>Multi-line routes with transfers</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.quickActionTitle}>Plan a Trip</Text>
+              <Text style={styles.quickActionSub}>Multi-line routes</Text>
             </View>
-          </View>
-          <View style={styles.planTripArrow}>
-            <Ionicons name="arrow-forward" size={16} color={COLORS.primary} />
-          </View>
-        </TouchableOpacity>
+            <Ionicons name="arrow-forward" size={15} color={COLORS.primary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.quickActionCard, { flex: 1 }]}
+            onPress={() => navigation.navigate('NearbyStops')}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.quickActionIcon, { backgroundColor: COLORS.secondaryLight }]}>
+              <Ionicons name="walk-outline" size={20} color={COLORS.secondary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.quickActionTitle, { color: COLORS.secondary }]}>Nearby</Text>
+              <Text style={styles.quickActionSub}>Stops near me</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
 
         {/* Vehicle type pills */}
         <ScrollView
@@ -421,50 +433,46 @@ const styles = StyleSheet.create({
   },
 
   /* Plan a Trip banner */
-  planTripBanner: {
+  quickActions: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.white,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    gap: 10,
     marginHorizontal: 20,
     marginBottom: 10,
-    borderWidth: 1.5,
-    borderColor: COLORS.primaryMid,
   },
-  planTripLeft: {
+  quickActionCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    backgroundColor: COLORS.white,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  planTripIconWrap: {
+  quickActionIcon: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: COLORS.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
-  planTripTitle: {
-    fontSize: 14,
+  quickActionTitle: {
+    fontSize: 13,
     fontWeight: '800',
     color: COLORS.primary,
     marginBottom: 1,
   },
-  planTripSub: {
-    fontSize: 12,
+  quickActionSub: {
+    fontSize: 11,
     color: COLORS.textMuted,
     fontWeight: '500',
-  },
-  planTripArrow: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    backgroundColor: COLORS.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 
   /* Vehicle type pills */
