@@ -249,6 +249,98 @@ export const getDashboardOverview = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/dashboard/issues
+// Returns all non-emergency issues with driver, vehicle context and derived
+// category/priority fields. Status is not stored in DB yet — defaults to 'open'.
+// ─────────────────────────────────────────────────────────────────────────────
+export const getAdminIssues = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT TOP 200
+        i.issue_id,
+        i.driver_id,
+        i.trip_id,
+        i.description,
+        i.created_at,
+        u.full_name    AS driver_name,
+        v.plate_number AS vehicle,
+        CASE WHEN i.trip_id IS NULL THEN NULL
+             ELSE CONCAT('TRP-', RIGHT('000' + CAST(i.trip_id AS VARCHAR), 3))
+        END AS trip_ref
+      FROM issues i
+      LEFT JOIN drivers  d ON d.driver_id  = i.driver_id
+      LEFT JOIN users    u ON u.user_id    = d.user_id
+      LEFT JOIN trips    t ON t.trip_id    = i.trip_id
+      LEFT JOIN vehicles v ON v.vehicle_id = t.vehicle_id
+      WHERE i.description NOT LIKE 'EMERGENCY:%'
+      ORDER BY i.created_at DESC
+    `);
+
+    res.json(result.recordset.map(r => ({
+      ...r,
+      status:   'open',
+      category: _issueCategory(r.description),
+      priority: _issuePriority(r.description),
+    })));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch issues' });
+  }
+};
+
+function _issueCategory(desc = '') {
+  const d = desc.toLowerCase();
+  if (d.match(/brake|engine|tire|wheel|oil|fuel|mechanical|ac|heat|wiper|light/)) return 'Mechanical';
+  if (d.match(/passenger|fight|argument|injury|medical/)) return 'Passenger Incident';
+  if (d.match(/road|block|police|checkpoint|obstruct|reroute/)) return 'Road Obstruction';
+  if (d.match(/suspicious|security|theft|weapon/)) return 'Security';
+  return 'General';
+}
+
+function _issuePriority(desc = '') {
+  const d = desc.toLowerCase();
+  if (d.match(/brake|fire|collision|injury|weapon|suspicious|soft|broken/)) return 'high';
+  if (d.match(/ac|wiper|radio|light|noise/)) return 'medium';
+  return 'low';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/dashboard/emergency-alerts
+// Returns all emergency alerts (issues with EMERGENCY: prefix) joined with
+// driver name and vehicle, newest first.
+// ─────────────────────────────────────────────────────────────────────────────
+export const getEmergencyAlerts = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT TOP 50
+        i.issue_id  AS id,
+        i.driver_id,
+        i.trip_id,
+        LTRIM(SUBSTRING(i.description, 11, LEN(i.description))) AS message,
+        i.created_at,
+        u.full_name    AS driver_name,
+        v.plate_number AS vehicle,
+        CASE WHEN i.trip_id IS NULL THEN NULL
+             ELSE CONCAT('TRP-', RIGHT('000' + CAST(i.trip_id AS VARCHAR), 3))
+        END AS trip_ref
+      FROM issues i
+      LEFT JOIN drivers  d ON d.driver_id  = i.driver_id
+      LEFT JOIN users    u ON u.user_id    = d.user_id
+      LEFT JOIN trips    t ON t.trip_id    = i.trip_id
+      LEFT JOIN vehicles v ON v.vehicle_id = t.vehicle_id
+      WHERE i.description LIKE 'EMERGENCY:%'
+      ORDER BY i.created_at DESC
+    `);
+    res.json(result.recordset.map(r => ({ ...r, status: 'active' })));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch emergency alerts' });
+  }
+};
+
 function _cap(s) {
   if (!s) return "";
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();

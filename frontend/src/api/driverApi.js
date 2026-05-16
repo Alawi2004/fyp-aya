@@ -11,3 +11,6 @@ export const submitChecklistApi   = (tripId, data)           => apiClient.post(`
 export const scanQrApi            = (token)                  => apiClient.post('/driver/scan-qr', { token });
 export const markStopArrivalApi   = (tripId, stopId)         => apiClient.post(`/driver/trips/${tripId}/stops/${stopId}/arrive`);
 export const reportDelayApi       = (tripId, data)           => apiClient.post(`/driver/trips/${tripId}/delay`, data);
+export const getDriverNotificationsApi = (userId)            => apiClient.get(`/notifications/user/${userId}`).then(r => r.data);
+export const markNotificationReadApi   = (notifId)           => apiClient.put(`/notifications/${notifId}/read`, {}).then(r => r.data);
+export const getRouteWaypointsApi      = (routeId)           => apiClient.get(`/routes/${routeId}/waypoints`).then(r => r.data);

@@ -1,4 +1,47 @@
 import { poolPromise, sql } from "../db/db.js";
+import { Expo } from "expo-server-sdk";
+
+const expo = new Expo({ accessToken: process.env.EXPO_ACCESS_TOKEN });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fetch push tokens for a target group and deliver via Expo push service.
+// Runs fire-and-forget — errors are logged, not surfaced to the API caller.
+// ─────────────────────────────────────────────────────────────────────────────
+async function _sendPush(pool, target, title, body, specificUserId = null) {
+  try {
+    let rows;
+    if (specificUserId) {
+      rows = (await pool.request()
+        .input("uid", sql.Int, specificUserId)
+        .query("SELECT push_token FROM users WHERE user_id = @uid AND push_token IS NOT NULL")
+      ).recordset;
+    } else {
+      const roleClause =
+        target === "all_passengers" ? "role = 'passenger'" :
+        target === "all_drivers"    ? "role = 'driver'"    : "1=1";
+      rows = (await pool.request()
+        .query(`SELECT push_token FROM users WHERE push_token IS NOT NULL AND ${roleClause}`)
+      ).recordset;
+    }
+
+    const messages = rows
+      .map((r) => r.push_token)
+      .filter((t) => Expo.isExpoPushToken(t))
+      .map((to) => ({ to, sound: "default", title, body, channelId: "default" }));
+
+    if (messages.length === 0) return;
+
+    for (const chunk of expo.chunkPushNotifications(messages)) {
+      try {
+        await expo.sendPushNotificationsAsync(chunk);
+      } catch (e) {
+        console.warn("[push] chunk error:", e.message);
+      }
+    }
+  } catch (err) {
+    console.warn("[push] dispatch error:", err.message);
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Ensure delivery-tracking columns exist (idempotent — safe on every startup)
@@ -118,6 +161,9 @@ export const createNotification = async (req, res) => {
             (@uid, @msg, @title, @body, @type, @target, @sent, 0)
         `);
 
+      // Fire push delivery asynchronously — don't await so DB insert isn't blocked
+      _sendPush(pool, target, title, body);
+
       return res.status(201).json({
         notification_id: ins.recordset[0].notification_id,
         sent_count:      sentCount,
@@ -138,6 +184,9 @@ export const createNotification = async (req, res) => {
         INSERT INTO notifications (user_id, message, sent_count, read_count)
         VALUES (@uid, @msg, @sent, 0)
       `);
+
+    // Push to the specific user (best-effort)
+    _sendPush(pool, "specific_user", "New notification", message, user_id);
 
     res.status(201).json({ message: "Notification sent" });
   } catch (err) {

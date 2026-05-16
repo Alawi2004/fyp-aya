@@ -138,6 +138,21 @@ export const cancelScheduled            = (id)     => apiClient.delete(`/notific
 // Trip conflicts (server-side detection)
 export const getTripConflicts = () => apiClient.get('/trips/conflicts');
 
+// Trip delays (admin delay management)
+export const getTripDelays = () => apiClient.get('/trips/delays');
+
+// Pre-trip checklists (admin compliance audit)
+export const getTripChecklists = () => apiClient.get('/trips/checklists');
+
+// Stop arrivals for a specific trip
+export const getTripStopArrivals = (tripId) => apiClient.get(`/trips/${tripId}/arrivals`);
+
+// Emergency alerts (admin view of driver-submitted emergencies)
+export const getEmergencyAlerts = () => apiClient.get('/dashboard/emergency-alerts');
+
+// Driver-reported issues inbox
+export const getAdminIssues = () => apiClient.get('/dashboard/issues');
+
 // Roles & permissions CRUD
 export const getRoles                = ()           => apiClient.get('/roles');
 export const createRole              = (data)       => apiClient.post('/roles', data);
@@ -155,6 +170,7 @@ export const getGpsHeatmap       = (params = {}) => {
 // GPS
 export const recordGpsLog = (data) => apiClient.post('/gps/log', data);
 export const getTripGpsLogs_v2 = (tripId) => apiClient.get(`/gps/trip/${tripId}`);
+export const getLiveGps = () => apiClient.get('/gps/live');
 
 // Passenger Count
 export const recordPassengerCount = (data) => apiClient.post('/passenger-count/record', data);

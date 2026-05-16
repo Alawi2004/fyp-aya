@@ -12,6 +12,7 @@ import {
   getDriverPerformance, getDriverSchedules, updateDriverSchedule,
 } from "../api/endpoints";
 import { MOCK_DRIVERS, MOCK_DRIVER_LICENSE_ALERTS, MOCK_PERFORMANCE, MOCK_SCHEDULES, MOCK_TRIPS, MOCK_RATINGS } from "../data/mockData";
+import { getTripChecklists } from "../api/endpoints";
 
 import { CAMERA_REST_URL } from '../config/camera';
 const CAMERA_SERVER_REST = CAMERA_REST_URL;
@@ -1018,6 +1019,171 @@ function LicenseAlertsTab({ drivers, onEdit }) {
   );
 }
 
+// ── Checklist audit tab ───────────────────────────────────────────────────────
+const MOCK_CHECKLISTS_LOCAL = [
+  { checklist_id: 1, trip_id: 41, trip_ref: "TRP-041", driver: "Karim Moussa",   vehicle: "BUS-01", route: "Route 12A", fuel_ok: 1, lights_ok: 1, tires_ok: 1, submitted_at: "2026-05-16T05:45:00" },
+  { checklist_id: 2, trip_id: 38, trip_ref: "TRP-038", driver: "Sara Khoury",    vehicle: "BUS-07", route: "Route 7B",  fuel_ok: 1, lights_ok: 0, tires_ok: 1, submitted_at: "2026-05-16T06:10:00" },
+  { checklist_id: 3, trip_id: 29, trip_ref: "TRP-029", driver: "Joe Pharaon",    vehicle: "BUS-09", route: "Route 3C",  fuel_ok: 0, lights_ok: 1, tires_ok: 0, submitted_at: "2026-05-16T06:30:00" },
+  { checklist_id: 4, trip_id: 33, trip_ref: "TRP-033", driver: "Maya Salameh",   vehicle: "BUS-02", route: "Route 5D",  fuel_ok: 1, lights_ok: 1, tires_ok: 1, submitted_at: "2026-05-15T06:20:00" },
+  { checklist_id: 5, trip_id: 45, trip_ref: "TRP-045", driver: "Lara Abi Nader", vehicle: "BUS-05", route: "Route 9E",  fuel_ok: 1, lights_ok: 1, tires_ok: 1, submitted_at: "2026-05-15T07:00:00" },
+  { checklist_id: 6, trip_id: 50, trip_ref: "TRP-050", driver: "Karim Moussa",   vehicle: "BUS-01", route: "Route 12A", fuel_ok: 1, lights_ok: 1, tires_ok: 0, submitted_at: "2026-05-14T05:50:00" },
+];
+
+function CheckMark({ ok }) {
+  return ok
+    ? <span style={{ color: "#059669", fontWeight: 700, fontSize: 15 }}>✓</span>
+    : <span style={{ color: "#DC2626", fontWeight: 700, fontSize: 15 }}>✗</span>;
+}
+
+function ChecklistsTab() {
+  const [rows,    setRows]    = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search,  setSearch]  = useState("");
+  const [filter,  setFilter]  = useState("All"); // All | Pass | Fail
+
+  useEffect(() => {
+    getTripChecklists()
+      .then(d => setRows(Array.isArray(d) && d.length ? d : MOCK_CHECKLISTS_LOCAL))
+      .catch(() => setRows(MOCK_CHECKLISTS_LOCAL))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <PageLoading message="Loading checklists…" />;
+
+  const allPass = r => r.fuel_ok && r.lights_ok && r.tires_ok;
+
+  const visible = rows.filter(r => {
+    const q = search.toLowerCase();
+    const matchSearch = !q || (r.driver ?? "").toLowerCase().includes(q)
+      || (r.trip_ref ?? "").toLowerCase().includes(q)
+      || (r.vehicle  ?? "").toLowerCase().includes(q);
+    const matchFilter = filter === "All" || (filter === "Pass" ? allPass(r) : !allPass(r));
+    return matchSearch && matchFilter;
+  });
+
+  // Per-driver compliance summary
+  const driverMap = {};
+  rows.forEach(r => {
+    if (!driverMap[r.driver]) driverMap[r.driver] = { total: 0, passed: 0 };
+    driverMap[r.driver].total++;
+    if (allPass(r)) driverMap[r.driver].passed++;
+  });
+  const summaryRows = Object.entries(driverMap)
+    .map(([name, s]) => ({ name, total: s.total, passed: s.passed, pct: Math.round((s.passed / s.total) * 100) }))
+    .sort((a, b) => a.pct - b.pct);
+
+  const totalPass = rows.filter(allPass).length;
+  const passRate  = rows.length ? Math.round((totalPass / rows.length) * 100) : 0;
+
+  function fmtDt(dt) {
+    if (!dt) return "—";
+    return new Date(dt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* KPI row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
+        {[
+          { label: "Total Submissions", value: rows.length,                  color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE" },
+          { label: "All-Clear Passes",  value: totalPass,                    color: "#059669", bg: "#ECFDF5", border: "#A7F3D0" },
+          { label: "Failed Checks",     value: rows.length - totalPass,      color: "#DC2626", bg: "#FEF2F2", border: "#FECACA" },
+          { label: "Overall Pass Rate", value: `${passRate}%`,               color: passRate >= 80 ? "#059669" : "#D97706", bg: passRate >= 80 ? "#ECFDF5" : "#FFFBEB", border: passRate >= 80 ? "#A7F3D0" : "#FDE68A" },
+        ].map(k => (
+          <div key={k.label} style={{ background: k.bg, border: `1px solid ${k.border}`, borderRadius: 12, padding: "16px 20px", textAlign: "center" }}>
+            <div style={{ fontSize: 30, fontWeight: 800, color: k.color, lineHeight: 1 }}>{k.value}</div>
+            <div style={{ fontSize: 12, color: k.color, marginTop: 6, fontWeight: 600 }}>{k.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Per-driver compliance summary */}
+      <Panel title="Per-Driver Compliance">
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {summaryRows.map(s => (
+            <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 130, fontSize: 12, fontWeight: 600, color: "#0F172A", flexShrink: 0 }}>{s.name}</div>
+              <div style={{ flex: 1, height: 8, background: "#F1F5F9", borderRadius: 4, overflow: "hidden" }}>
+                <div style={{ width: `${s.pct}%`, height: "100%", borderRadius: 4, transition: "width .5s ease",
+                  background: s.pct >= 80 ? "#10B981" : s.pct >= 60 ? "#F59E0B" : "#EF4444" }} />
+              </div>
+              <div style={{ width: 80, fontSize: 11, fontWeight: 700, color: s.pct >= 80 ? "#059669" : s.pct >= 60 ? "#D97706" : "#DC2626", textAlign: "right", flexShrink: 0 }}>
+                {s.passed}/{s.total} ({s.pct}%)
+              </div>
+            </div>
+          ))}
+        </div>
+      </Panel>
+
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <input
+          placeholder="Search driver, trip, vehicle…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #E2E8F0", fontSize: 13, outline: "none", width: 260 }}
+        />
+        <div style={{ display: "flex", gap: 6 }}>
+          {["All", "Pass", "Fail"].map(f => (
+            <button key={f} onClick={() => setFilter(f)} style={{
+              padding: "5px 14px", borderRadius: 20, fontSize: 11, cursor: "pointer",
+              border:     filter === f ? "none" : "1px solid #E2E8F0",
+              background: filter === f ? (f === "Pass" ? "#059669" : f === "Fail" ? "#DC2626" : "#2563EB") : "#fff",
+              color:      filter === f ? "#fff" : "#64748B",
+              fontWeight: filter === f ? 600 : 400,
+            }}>{f}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Detail table */}
+      <Panel title={`${visible.length} checklist submission${visible.length !== 1 ? "s" : ""}`} noPad>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ background: "#FAFAFA", borderBottom: "1px solid #F1F5F9" }}>
+              {["Trip", "Driver", "Vehicle", "Route", "Fuel", "Lights", "Tires", "Status", "Submitted At"].map(h => (
+                <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".05em", whiteSpace: "nowrap" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((r, i) => {
+              const pass = allPass(r);
+              return (
+                <tr key={r.checklist_id} style={{ borderBottom: "1px solid #F8FAFC", background: i % 2 === 0 ? "#fff" : "#FAFAFA" }}>
+                  <td style={{ padding: "11px 14px" }}>
+                    <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#2563EB", fontSize: 12 }}>{r.trip_ref}</span>
+                  </td>
+                  <td style={{ padding: "11px 14px", fontSize: 12, fontWeight: 600, color: "#0F172A" }}>{r.driver}</td>
+                  <td style={{ padding: "11px 14px", fontSize: 12, fontFamily: "monospace", color: "#2563EB", fontWeight: 600 }}>{r.vehicle}</td>
+                  <td style={{ padding: "11px 14px", fontSize: 12 }}>{r.route}</td>
+                  <td style={{ padding: "11px 14px", textAlign: "center" }}><CheckMark ok={r.fuel_ok} /></td>
+                  <td style={{ padding: "11px 14px", textAlign: "center" }}><CheckMark ok={r.lights_ok} /></td>
+                  <td style={{ padding: "11px 14px", textAlign: "center" }}><CheckMark ok={r.tires_ok} /></td>
+                  <td style={{ padding: "11px 14px" }}>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, padding: "2px 9px", borderRadius: 20,
+                      background: pass ? "#ECFDF5" : "#FEF2F2",
+                      color:      pass ? "#059669"  : "#DC2626",
+                      border:     `1px solid ${pass ? "#A7F3D0" : "#FECACA"}`,
+                    }}>
+                      {pass ? "ALL CLEAR" : "ISSUES"}
+                    </span>
+                  </td>
+                  <td style={{ padding: "11px 14px", fontSize: 11, color: "#64748B", whiteSpace: "nowrap" }}>{fmtDt(r.submitted_at)}</td>
+                </tr>
+              );
+            })}
+            {visible.length === 0 && (
+              <tr><td colSpan={9} style={{ padding: "32px 0", textAlign: "center", color: "#bbb", fontSize: 13 }}>No checklists match your filter.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </Panel>
+    </div>
+  );
+}
+
 export default function DriversPage() {
   const [tab, setTab] = useState("Overview");
   const [drivers, setDrivers] = useState([]);
@@ -1094,7 +1260,7 @@ export default function DriversPage() {
             </button>
           </>
         )}
-        <TabNav tabs={["Overview", "Performance", "Schedules", "License Alerts"]} active={tab} onChange={setTab} />
+        <TabNav tabs={["Overview", "Performance", "Schedules", "License Alerts", "Checklists"]} active={tab} onChange={setTab} />
       </div>
 
       {/* Tab content */}
@@ -1124,9 +1290,10 @@ export default function DriversPage() {
           onEdit={d => { setProfile(null); openEdit(d); }}
         />
       )}
-      {tab === "Performance" && <PerformanceTab />}
-      {tab === "Schedules"   && <ScheduleTab />}
+      {tab === "Performance"    && <PerformanceTab />}
+      {tab === "Schedules"      && <ScheduleTab />}
       {tab === "License Alerts" && <LicenseAlertsTab drivers={drivers} onEdit={openEdit} />}
+      {tab === "Checklists"     && <ChecklistsTab />}
 
       {/* Add / Edit modal */}
       {modalOpen && (

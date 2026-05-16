@@ -9,7 +9,7 @@ import {
   getTrips, createTrip, updateTripStatus,
   getTimetableTrips, getRecurringSchedules,
   createRecurringSchedule, updateRecurringSchedule, deleteRecurringSchedule,
-  getTripConflicts,
+  getTripConflicts, getTripDelays, getTripStopArrivals,
 } from "../api/endpoints";
 import {
   MOCK_TRIPS, MOCK_TIMETABLE_TRIPS, MOCK_RECURRING_SCHEDULES,
@@ -267,7 +267,7 @@ function TripModal({ trip, allTrips, onClose, onSave }) {
 }
 
 // ── Tab 1: Trips list ─────────────────────────────────────────────────────────
-function TripsListTab({ trips, allTrips, onAdd, onEdit }) {
+function TripsListTab({ trips, allTrips, onAdd, onEdit, onDetail }) {
   const [filter, setFilter] = useState("All");
   const [search, setSearch] = useState("");
 
@@ -300,10 +300,16 @@ function TripsListTab({ trips, allTrips, onAdd, onEdit }) {
     {
       key: "id", label: "Actions",
       render: (_, row) => (
-        <button onClick={e => { e.stopPropagation(); onEdit(row); }} style={{
-          fontSize: 11, color: "#2563EB", background: "#EFF6FF",
-          border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer",
-        }}>Edit</button>
+        <div style={{ display: "flex", gap: 5 }}>
+          <button onClick={e => { e.stopPropagation(); onDetail(row); }} style={{
+            fontSize: 11, color: "#059669", background: "#ECFDF5",
+            border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer",
+          }}>Details</button>
+          <button onClick={e => { e.stopPropagation(); onEdit(row); }} style={{
+            fontSize: 11, color: "#2563EB", background: "#EFF6FF",
+            border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer",
+          }}>Edit</button>
+        </div>
       ),
     },
   ];
@@ -788,6 +794,335 @@ function ConflictsTab({ conflicts, onResolve }) {
   );
 }
 
+// ── Tab 5: Delay reports ──────────────────────────────────────────────────────
+const DELAY_REASONS = ["Traffic", "Mechanical", "Road Block", "Passenger Incident", "Weather", "Other"];
+
+const DELAY_REASON_COLORS = {
+  "Traffic":            { bg: "#FEF3C7", color: "#D97706", border: "#FDE68A" },
+  "Mechanical":         { bg: "#FEE2E2", color: "#DC2626", border: "#FECACA" },
+  "Road Block":         { bg: "#EDE9FE", color: "#7C3AED", border: "#C4B5FD" },
+  "Passenger Incident": { bg: "#FFF7ED", color: "#EA580C", border: "#FED7AA" },
+  "Weather":            { bg: "#F0F9FF", color: "#0284C7", border: "#BAE6FD" },
+  "Other":              { bg: "#F8FAFC", color: "#64748B", border: "#E2E8F0" },
+};
+
+const MOCK_TRIP_DELAYS = [
+  { delay_id: 1, trip_id: 41, trip_ref: "TRP-041", route: "Route 12A", driver: "Karim Moussa",   vehicle: "BUS-01", reason: "Traffic",            delay_minutes: 15, notes: "Heavy traffic near downtown intersection",          reported_at: "2026-05-15T08:22:00", affected_passengers: 24 },
+  { delay_id: 2, trip_id: 38, trip_ref: "TRP-038", route: "Route 7B",  driver: "Sara Khoury",    vehicle: "BUS-07", reason: "Road Block",          delay_minutes: 30, notes: "Police checkpoint at Jounieh highway",              reported_at: "2026-05-15T09:45:00", affected_passengers: 18 },
+  { delay_id: 3, trip_id: 29, trip_ref: "TRP-029", route: "Route 3C",  driver: "Joe Pharaon",    vehicle: "BUS-09", reason: "Mechanical",          delay_minutes: 45, notes: "Engine warning light — waiting for inspection",     reported_at: "2026-05-15T10:10:00", affected_passengers: 30 },
+  { delay_id: 4, trip_id: 33, trip_ref: "TRP-033", route: "Route 5D",  driver: "Maya Salameh",   vehicle: "BUS-02", reason: "Passenger Incident",  delay_minutes: 10, notes: "Medical situation onboard, waiting for paramedics", reported_at: "2026-05-14T14:30:00", affected_passengers: 11 },
+  { delay_id: 5, trip_id: 45, trip_ref: "TRP-045", route: "Route 9E",  driver: "Lara Abi Nader", vehicle: "BUS-05", reason: "Traffic",             delay_minutes: 20, notes: null,                                               reported_at: "2026-05-14T16:55:00", affected_passengers: 22 },
+];
+
+function DelaysTab({ delays, loading, error, onRetry }) {
+  const [reasonFilter, setReasonFilter] = useState("All");
+  const [search,       setSearch]       = useState("");
+
+  const visible = delays.filter(d => {
+    const matchReason = reasonFilter === "All" || d.reason === reasonFilter;
+    const q = search.toLowerCase();
+    const matchSearch = !q ||
+      (d.trip_ref  ?? "").toLowerCase().includes(q) ||
+      (d.route     ?? "").toLowerCase().includes(q) ||
+      (d.driver    ?? "").toLowerCase().includes(q) ||
+      (d.reason    ?? "").toLowerCase().includes(q);
+    return matchReason && matchSearch;
+  });
+
+  const totalAffected = visible.reduce((s, d) => s + (d.affected_passengers ?? 0), 0);
+  const avgDelay      = visible.length
+    ? Math.round(visible.reduce((s, d) => s + (d.delay_minutes ?? 0), 0) / visible.length)
+    : 0;
+
+  function fmtDate(dt) {
+    if (!dt) return "—";
+    return new Date(dt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  }
+
+  if (loading) return <PageLoading message="Loading delay reports…" />;
+  if (error)   return <PageError  message={error} onRetry={onRetry} />;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Summary cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 12 }}>
+        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12, padding: "16px 20px", textAlign: "center" }}>
+          <div style={{ fontSize: 32, fontWeight: 800, color: "#DC2626", lineHeight: 1 }}>{visible.length}</div>
+          <div style={{ fontSize: 12, color: "#B91C1C", marginTop: 6, fontWeight: 600 }}>Total Delays</div>
+          <div style={{ fontSize: 11, color: "#EF4444", marginTop: 2 }}>matching current filter</div>
+        </div>
+        <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 12, padding: "16px 20px", textAlign: "center" }}>
+          <div style={{ fontSize: 32, fontWeight: 800, color: "#D97706", lineHeight: 1 }}>{avgDelay}</div>
+          <div style={{ fontSize: 12, color: "#B45309", marginTop: 6, fontWeight: 600 }}>Avg Delay (min)</div>
+          <div style={{ fontSize: 11, color: "#F59E0B", marginTop: 2 }}>across visible records</div>
+        </div>
+        <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 12, padding: "16px 20px", textAlign: "center" }}>
+          <div style={{ fontSize: 32, fontWeight: 800, color: "#2563EB", lineHeight: 1 }}>{totalAffected}</div>
+          <div style={{ fontSize: 12, color: "#1D4ED8", marginTop: 6, fontWeight: 600 }}>Passengers Affected</div>
+          <div style={{ fontSize: 11, color: "#3B82F6", marginTop: 2 }}>confirmed + boarded tickets</div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <input
+          placeholder="Search trip, route, driver, reason…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #E2E8F0", fontSize: 13, outline: "none", width: 280 }}
+        />
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {["All", ...DELAY_REASONS].map(r => (
+            <button key={r} onClick={() => setReasonFilter(r)} style={{
+              padding: "5px 12px", borderRadius: 20, fontSize: 11, cursor: "pointer",
+              border:      reasonFilter === r ? "none" : "1px solid #E2E8F0",
+              background:  reasonFilter === r ? "#2563EB" : "#fff",
+              color:       reasonFilter === r ? "#fff" : "#64748B",
+              fontWeight:  reasonFilter === r ? 600 : 400,
+            }}>{r}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Table */}
+      <Panel title={`${visible.length} delay report${visible.length !== 1 ? "s" : ""}`} noPad>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ background: "#FAFAFA", borderBottom: "1px solid #F1F5F9" }}>
+              {["Trip", "Route", "Driver", "Vehicle", "Reason", "Delay", "Notes", "Reported At", "Passengers"].map(h => (
+                <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".05em", whiteSpace: "nowrap" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((d, i) => {
+              const rc = DELAY_REASON_COLORS[d.reason] ?? DELAY_REASON_COLORS["Other"];
+              return (
+                <tr key={d.delay_id} style={{ borderBottom: "1px solid #F8FAFC", background: i % 2 === 0 ? "#fff" : "#FAFAFA" }}>
+                  <td style={{ padding: "12px 14px" }}>
+                    <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#2563EB", fontSize: 12 }}>{d.trip_ref}</span>
+                  </td>
+                  <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 600, color: "#0F172A" }}>{d.route}</td>
+                  <td style={{ padding: "12px 14px", fontSize: 12 }}>{d.driver}</td>
+                  <td style={{ padding: "12px 14px", fontSize: 12, fontFamily: "monospace", color: "#2563EB", fontWeight: 600 }}>{d.vehicle}</td>
+                  <td style={{ padding: "12px 14px" }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: rc.bg, color: rc.color, border: `1px solid ${rc.border}` }}>
+                      {d.reason}
+                    </span>
+                  </td>
+                  <td style={{ padding: "12px 14px", whiteSpace: "nowrap" }}>
+                    <span style={{ fontWeight: 800, fontSize: 15, color: (d.delay_minutes ?? 0) >= 30 ? "#DC2626" : "#D97706" }}>
+                      {d.delay_minutes}
+                    </span>
+                    <span style={{ fontSize: 10, color: "#94A3B8", marginLeft: 3 }}>min</span>
+                  </td>
+                  <td style={{ padding: "12px 14px", fontSize: 11, color: "#64748B", maxWidth: 200 }}>
+                    {d.notes ?? <span style={{ color: "#CBD5E1" }}>—</span>}
+                  </td>
+                  <td style={{ padding: "12px 14px", fontSize: 11, color: "#64748B", whiteSpace: "nowrap" }}>{fmtDate(d.reported_at)}</td>
+                  <td style={{ padding: "12px 14px", textAlign: "center" }}>
+                    <span style={{ fontWeight: 800, fontSize: 14, color: (d.affected_passengers ?? 0) > 20 ? "#DC2626" : "#475569" }}>
+                      {d.affected_passengers ?? 0}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+            {visible.length === 0 && (
+              <tr>
+                <td colSpan={9} style={{ padding: "32px 0", textAlign: "center", color: "#bbb", fontSize: 13 }}>
+                  No delay reports match your filter.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </Panel>
+    </div>
+  );
+}
+
+// ── Trip detail drawer with stop arrival timeline ─────────────────────────────
+const ARRIVAL_STATUS_CFG = {
+  on_time:  { label: "On Time",  bg: "#ECFDF5", color: "#059669", border: "#A7F3D0", icon: "✓" },
+  late:     { label: "Late",     bg: "#FEF2F2", color: "#DC2626", border: "#FECACA", icon: "!" },
+  early:    { label: "Early",    bg: "#EFF6FF", color: "#2563EB", border: "#BFDBFE", icon: "↑" },
+  pending:  { label: "Pending",  bg: "#F8FAFC", color: "#64748B", border: "#E2E8F0", icon: "…" },
+  skipped:  { label: "Skipped",  bg: "#FFFBEB", color: "#D97706", border: "#FDE68A", icon: "—" },
+};
+
+function TripDetailDrawer({ trip, onClose, onEdit }) {
+  const [arrivals, setArrivals] = useState([]);
+  const [loading,  setLoading]  = useState(true);
+
+  useEffect(() => {
+    if (!trip) return;
+    setLoading(true);
+    getTripStopArrivals(trip.id)
+      .then(d => setArrivals(Array.isArray(d) ? d : []))
+      .catch(() => setArrivals([]))
+      .finally(() => setLoading(false));
+  }, [trip?.id]);
+
+  if (!trip) return null;
+
+  function fmtTime(dt) {
+    if (!dt) return "—";
+    return new Date(dt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function fmtDelay(sec) {
+    if (sec == null) return null;
+    if (sec === 0) return "On time";
+    const abs = Math.abs(sec);
+    const m = Math.floor(abs / 60), s = abs % 60;
+    const str = m > 0 ? `${m}m ${s}s` : `${s}s`;
+    return sec > 0 ? `+${str} late` : `${str} early`;
+  }
+
+  const onTimeCount  = arrivals.filter(a => a.arrival_status === "on_time").length;
+  const lateCount    = arrivals.filter(a => a.arrival_status === "late").length;
+  const pendingCount = arrivals.filter(a => a.arrival_status === "pending").length;
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "stretch", justifyContent: "flex-end" }}>
+      <style>{`@keyframes slideInRight { from { transform:translateX(40px); opacity:0 } to { transform:none; opacity:1 } }`}</style>
+      <div onClick={onClose} style={{ flex: 1, background: "rgba(15,23,42,.40)", backdropFilter: "blur(3px)" }} />
+
+      <div style={{ width: "min(92vw, 560px)", background: "#fff", display: "flex", flexDirection: "column", boxShadow: "-8px 0 40px rgba(0,0,0,.14)", overflowY: "auto", animation: "slideInRight .25s ease" }}>
+
+        {/* Header */}
+        <div style={{ padding: "22px 24px 18px", borderBottom: "1px solid #F1F5F9", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <span style={{ fontSize: 15, fontWeight: 800, color: "#0F172A" }}>Trip Details</span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => { onClose(); onEdit(trip); }} style={{ background: "#EFF6FF", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", color: "#2563EB", fontSize: 12, fontWeight: 600 }}>
+                Edit Trip
+              </button>
+              <button onClick={onClose} style={{ background: "#F1F5F9", border: "none", borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: "#64748B", fontSize: 15, lineHeight: 1 }}>✕</button>
+            </div>
+          </div>
+
+          {/* Trip ID + status */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 48, height: 48, borderRadius: 12, background: "#EFF6FF", border: "2px solid #BFDBFE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>🚌</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "#0F172A", fontFamily: "monospace", marginBottom: 4 }}>{trip.id}</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <StatusPill status={trip.status} />
+                <span style={{ fontSize: 11, color: "#64748B" }}>{trip.date} · {trip.time}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Trip info grid */}
+        <div style={{ padding: "18px 24px", borderBottom: "1px solid #F1F5F9" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#94A3B8", marginBottom: 12 }}>Trip Information</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {[
+              { label: "Route",   value: trip.route   },
+              { label: "Driver",  value: trip.driver  },
+              { label: "Vehicle", value: trip.vehicle },
+              { label: "Seats",   value: trip.seats   },
+            ].map(({ label, value }) => (
+              <div key={label}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 3 }}>{label}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{value || "—"}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Stop arrivals */}
+        <div style={{ padding: "18px 24px", flex: 1 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#94A3B8" }}>
+              Stop Arrival Timeline
+            </div>
+            {arrivals.length > 0 && (
+              <div style={{ display: "flex", gap: 8 }}>
+                {[
+                  { label: `${onTimeCount} on time`, color: "#059669" },
+                  { label: `${lateCount} late`,      color: "#DC2626" },
+                  { label: `${pendingCount} pending`, color: "#64748B" },
+                ].map(s => (
+                  <span key={s.label} style={{ fontSize: 10, fontWeight: 600, color: s.color }}>{s.label}</span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {loading ? (
+            <div style={{ padding: "32px 0", textAlign: "center", color: "#94A3B8", fontSize: 13 }}>Loading stop data…</div>
+          ) : arrivals.length === 0 ? (
+            <div style={{ padding: "32px 0", textAlign: "center" }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>📍</div>
+              <div style={{ fontSize: 13, color: "#94A3B8", fontWeight: 600 }}>No stop arrival data yet</div>
+              <div style={{ fontSize: 11, color: "#CBD5E1", marginTop: 4 }}>Stop arrivals are recorded as the driver marks each stop.</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              {arrivals.map((a, i) => {
+                const cfg = ARRIVAL_STATUS_CFG[a.arrival_status] ?? ARRIVAL_STATUS_CFG.pending;
+                const delayStr = fmtDelay(a.delay_seconds);
+                const isLast = i === arrivals.length - 1;
+                return (
+                  <div key={a.id ?? i} style={{ display: "flex", gap: 14, position: "relative" }}>
+                    {/* Timeline spine */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0, width: 32 }}>
+                      <div style={{
+                        width: 28, height: 28, borderRadius: "50%",
+                        background: cfg.bg, border: `2px solid ${cfg.border}`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 12, fontWeight: 800, color: cfg.color, flexShrink: 0,
+                        marginTop: 8,
+                      }}>
+                        {a.stop_order ?? (i + 1)}
+                      </div>
+                      {!isLast && (
+                        <div style={{ width: 2, flex: 1, minHeight: 16, background: "#E2E8F0", borderRadius: 1 }} />
+                      )}
+                    </div>
+
+                    {/* Stop info */}
+                    <div style={{ flex: 1, paddingBottom: isLast ? 0 : 14, paddingTop: 10 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 3 }}>
+                            {a.stop_name ?? `Stop ${a.stop_order ?? i + 1}`}
+                          </div>
+                          <div style={{ display: "flex", gap: 10, fontSize: 11, color: "#64748B" }}>
+                            <span>Sched: <strong>{fmtTime(a.scheduled_arrival_at)}</strong></span>
+                            <span>Actual: <strong style={{ color: a.arrival_status === "late" ? "#DC2626" : a.arrival_status === "on_time" ? "#059669" : "#64748B" }}>
+                              {fmtTime(a.actual_arrival_at)}
+                            </strong></span>
+                          </div>
+                          {delayStr && (
+                            <div style={{ fontSize: 11, color: a.delay_seconds > 0 ? "#DC2626" : a.delay_seconds < 0 ? "#2563EB" : "#059669", marginTop: 3, fontWeight: 600 }}>
+                              {delayStr}
+                            </div>
+                          )}
+                          {a.notes && (
+                            <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 3, fontStyle: "italic" }}>{a.notes}</div>
+                          )}
+                        </div>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`, whiteSpace: "nowrap", flexShrink: 0 }}>
+                          {cfg.label}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Shared style helpers ──────────────────────────────────────────────────────
 const lbl = { fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 };
 const inp = { width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" };
@@ -802,6 +1137,10 @@ export default function TripsPage() {
   const [recurring,       setRecurring]       = useState([]);
   const [serverConflicts, setServerConflicts] = useState(null); // null = not yet loaded
   const [tripModal,       setTripModal]       = useState(null); // null = closed, false = new, trip obj = edit
+  const [delays,          setDelays]          = useState([]);
+  const [delaysLoading,   setDelaysLoading]   = useState(true);
+  const [delaysError,     setDelaysError]     = useState(null);
+  const [detailTrip,      setDetailTrip]      = useState(null);
 
   const loadTrips = useCallback(() => {
     setTripsLoading(true);
@@ -832,6 +1171,11 @@ export default function TripsPage() {
     getTripConflicts()
       .then(d => setServerConflicts(Array.isArray(d) ? d : null))
       .catch(() => setServerConflicts(null));
+
+    getTripDelays()
+      .then(d => setDelays(Array.isArray(d) ? d : MOCK_TRIP_DELAYS))
+      .catch(() => setDelays(MOCK_TRIP_DELAYS))
+      .finally(() => setDelaysLoading(false));
   }, []);
 
   // All trips for conflict checking (list + timetable for today)
@@ -883,6 +1227,7 @@ export default function TripsPage() {
     { id: "timetable", label: "Timetable",  badge: 0 },
     { id: "recurring", label: "Recurring",  badge: 0 },
     { id: "conflicts", label: "Conflicts",  badge: conflicts.length },
+    { id: "delays",    label: "Delays",     badge: delays.length },
   ];
 
   return (
@@ -892,7 +1237,7 @@ export default function TripsPage() {
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", margin: 0, letterSpacing: "-.3px" }}>Trips</h1>
           <p style={{ fontSize: 12, color: "#64748B", margin: "2px 0 0" }}>
-            {trips.length} trips · {recurring.length} recurring · {conflicts.length} conflict{conflicts.length !== 1 ? "s" : ""}
+            {trips.length} trips · {recurring.length} recurring · {conflicts.length} conflict{conflicts.length !== 1 ? "s" : ""} · {delays.length} delay{delays.length !== 1 ? "s" : ""}
           </p>
         </div>
         <div style={{ flex: 1 }} />
@@ -920,7 +1265,7 @@ export default function TripsPage() {
           ? <PageLoading message="Loading trips…" />
           : tripsError
           ? <PageError message={tripsError} onRetry={loadTrips} />
-          : <TripsListTab trips={trips} allTrips={allTrips} onAdd={() => setTripModal(false)} onEdit={t => setTripModal(t)} />
+          : <TripsListTab trips={trips} allTrips={allTrips} onAdd={() => setTripModal(false)} onEdit={t => setTripModal(t)} onDetail={t => setDetailTrip(t)} />
       )}
       {tab === "timetable" && <TimetableTab  timetableTrips={timetableTrips} />}
       {tab === "recurring" && (
@@ -933,6 +1278,30 @@ export default function TripsPage() {
         />
       )}
       {tab === "conflicts" && <ConflictsTab conflicts={conflicts} onResolve={handleResolve} />}
+      {tab === "delays" && (
+        <DelaysTab
+          delays={delays}
+          loading={delaysLoading}
+          error={delaysError}
+          onRetry={() => {
+            setDelaysLoading(true);
+            setDelaysError(null);
+            getTripDelays()
+              .then(d => setDelays(Array.isArray(d) ? d : MOCK_TRIP_DELAYS))
+              .catch(err => setDelaysError(err?.message ?? "Could not load delay reports"))
+              .finally(() => setDelaysLoading(false));
+          }}
+        />
+      )}
+
+      {/* Trip detail drawer */}
+      {detailTrip && (
+        <TripDetailDrawer
+          trip={detailTrip}
+          onClose={() => setDetailTrip(null)}
+          onEdit={t => { setDetailTrip(null); setTripModal(t); }}
+        />
+      )}
 
       {/* Create / Edit modal */}
       {tripModal !== null && (

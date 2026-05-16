@@ -130,16 +130,16 @@
 </div>
 
 <div class="summary-bar">
-  <div class="stat-card stat-done"><div class="num">154</div><div class="label">Done</div></div>
+  <div class="stat-card stat-done"><div class="num">157</div><div class="label">Done</div></div>
   <div class="stat-card stat-partial"><div class="num">0</div><div class="label">Partial</div></div>
-  <div class="stat-card stat-missing"><div class="num">33</div><div class="label">Missing</div></div>
+  <div class="stat-card stat-missing"><div class="num">30</div><div class="label">Missing</div></div>
   <div class="stat-card" style="min-width:200px">
     <div class="label" style="margin-bottom:6px">Overall Completion</div>
     <div class="progress-row">
       <div class="progress-bar">
-        <div class="progress-fill" style="width:82%;background:linear-gradient(90deg,#16a34a,#84cc16)"></div>
+        <div class="progress-fill" style="width:84%;background:linear-gradient(90deg,#16a34a,#84cc16)"></div>
       </div>
-      <span class="pct">~82%</span>
+      <span class="pct">~84%</span>
     </div>
   </div>
 </div>
@@ -391,7 +391,7 @@
     <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">OpenAPI / Swagger Documentation</div><div class="feat-detail">`/api/docs` and `/api/docs.json` now expose the merged route spec, including auth, bookings, passenger QR, complaints, reports, vehicles nearby, and staff shift endpoints</div></div></div>
     <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Refresh Token Rotation</div><div class="feat-detail">Refresh tokens are one-time rotated and rotated/logout token hashes are persisted in a server-side blacklist for replay detection without depending on Redis</div></div></div>
     <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">2FA Middleware</div><div class="feat-detail">POST /api/auth/verify-2fa with 5-min temp token gate; setup/confirm/disable/status endpoints; speakeasy TOTP verification</div></div></div>
-    <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Redis Caching &amp; Pub/Sub</div><div class="feat-detail missing">No Redis integration — needed for token blacklisting, QR replay prevention, real-time alerts</div></div></div>
+    <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Redis Caching (QR Replay)</div><div class="feat-detail">ioredis client with lazyConnect + graceful offline fallback; used for QR JTI deduplication (SET NX EX); REDIS_URL env var; flushQrKeys() helper for testing</div></div></div>
     <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">SMS OTP Integration</div><div class="feat-detail missing">Phone OTP verification for passenger registration and PIN reset</div></div></div>
     <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Rotating QR Generation Endpoint</div><div class="feat-detail">GET /api/passenger/qr returns an HMAC-signed 60-second boarding token; prior active QR codes are revoked and consumed scans are blocked from replay</div></div></div>
     <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Staff Shift APIs</div><div class="feat-detail">POST /api/staff/shift/open, POST /api/staff/shift/close, plus GET /api/staff/shift/current with cash-summary reconciliation</div></div></div>
@@ -432,9 +432,9 @@
     <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Live Camera WebSocket Streams</div><div class="feat-detail">Admin dashboard receives annotated JPEG frames via WebSocket from camera server</div></div></div>
     <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Seat Availability Estimation</div><div class="feat-detail">Live tracking now shows passenger-camera-derived seat availability estimates with remaining-seat labels for each active trip</div></div></div>
     <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Traffic-Aware ETA / Route Hints</div><div class="feat-detail">Live tracking now applies Beirut time-of-day traffic ETA adjustments and route-specific traffic hints directly in bus cards and trip details</div></div></div>
-    <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Delay Prediction ML Model</div><div class="feat-detail missing">Train regression/time-series model on historical trip data to predict delays before departure</div></div></div>
+    <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Delay Prediction ML Model</div><div class="feat-detail">Multivariate linear regression (gradient descent + L2 regularisation) trained on trip_delays history; features: hour, day-of-week, rush-hour flags, per-route historical avg; GET /api/ml/delay-prediction?route_id&amp;departure_time returns predicted_delay_minutes + risk_level + factors; POST /api/ml/train (admin) re-trains in-memory model; lazy auto-trains on first request; RMSE reported in model-status endpoint</div></div></div>
     <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Fraud Detection Engine</div><div class="feat-detail missing">Rule-based + anomaly detection on top-up transactions; flagged review queue</div></div></div>
-    <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">QR Replay Prevention (Redis)</div><div class="feat-detail missing">Store last N used QR tokens per passenger with TTL to prevent reuse</div></div></div>
+    <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">QR Replay Prevention (Redis)</div><div class="feat-detail">ioredis integrated; claimQrJti() uses atomic SET NX EX 120 before every scan — concurrent re-scans of the same JTI are rejected sub-millisecond (before the DB transaction opens); graceful fallback to DB used_at check when Redis is unavailable; redis.service.js with configurable REDIS_URL; qr:jti:{jti} keys auto-expire after 120 s</div></div></div>
     <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Emergency: Auto-SMS to Dispatch</div><div class="feat-detail missing">On SOS press: automatic SMS to emergency contacts + live GPS share link</div></div></div>
     <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Scheduled Report Emails</div><div class="feat-detail">sendScheduledReport() in email.service.js; reportScheduler.js polls every 30 min on app boot; Analytics "Schedule Reports" tab — CRUD for daily/weekly/monthly reports with recipient list, "Send Now" test, enable/disable toggle; HTML email with styled table</div></div></div>
     <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Predictive Demand Analytics</div><div class="feat-detail missing">Forecast passenger demand for upcoming trips based on historical patterns</div></div></div>
@@ -467,7 +467,7 @@
 </main>
 
 <footer>
-  Updated 2026-05-16 — Staff: Shift Management, QR/NFC Card Scanner, Digital Receipt Generation, Offline Mode, Idempotency/Duplicate Prevention, Cash Collection Report &nbsp;·&nbsp; Yalla Transit &nbsp;·&nbsp; FYP PRFE322-EM20
+  Updated 2026-05-16 — Staff: Shift Mgmt, QR/NFC Scanner, Digital Receipt, Offline Mode, Idempotency, Cash Report; ML Delay Prediction, Redis QR Replay Prevention, Admin panels, Driver Inbox, Real GPS polling &nbsp;·&nbsp; Yalla Transit &nbsp;·&nbsp; FYP PRFE322-EM20
 </footer>
 
 </body>

@@ -1,6 +1,50 @@
 import { poolPromise, sql } from "../db/db.js";
 import { ensureOperationalTables } from "../db/featureSetup.js";
 import { verifyPassengerQrToken } from "../utils/passengerQr.js";
+import { Expo } from "expo-server-sdk";
+import { claimQrJti } from "../services/redis.service.js";
+
+const _expo = new Expo({ accessToken: process.env.EXPO_ACCESS_TOKEN });
+
+// Push delay alert to all passengers with confirmed/boarded tickets on the trip.
+// Fire-and-forget — errors are logged but never returned to the driver app.
+async function _pushDelayToPassengers(pool, tripId, delayMin, reason) {
+  try {
+    const result = await pool.request()
+      .input("trip_id", sql.Int, tripId)
+      .query(`
+        SELECT u.push_token
+        FROM tickets t
+        JOIN users u ON u.user_id = t.user_id
+        WHERE t.trip_id = @trip_id
+          AND t.status IN ('confirmed', 'boarded')
+          AND u.push_token IS NOT NULL
+      `);
+
+    const tokens = result.recordset
+      .map(r => r.push_token)
+      .filter(t => Expo.isExpoPushToken(t));
+
+    if (!tokens.length) return;
+
+    const reasonSuffix = reason ? ` — ${reason}` : "";
+    const messages = tokens.map(to => ({
+      to,
+      sound: "default",
+      title: "⚠️ Trip Delay",
+      body:  `Your trip is delayed by ${delayMin} min${reasonSuffix}.`,
+      channelId: "default",
+    }));
+
+    for (const chunk of _expo.chunkPushNotifications(messages)) {
+      try { await _expo.sendPushNotificationsAsync(chunk); } catch (e) {
+        console.warn("[push] delay chunk error:", e.message);
+      }
+    }
+  } catch (err) {
+    console.warn("[push] delay push error:", err.message);
+  }
+}
 
 // GET /api/driver/trips — trips assigned to the authenticated driver
 // Uses driver_id from query param until auth middleware is added
@@ -150,6 +194,14 @@ export const scanPassengerQr = async (req, res) => {
   const passengerQr = verifyPassengerQrToken(token);
   if (!passengerQr.valid) {
     return res.status(401).json({ valid: false, message: "Invalid or malformed QR token" });
+  }
+
+  // Redis fast-path replay guard: atomic SET NX prevents concurrent re-scans
+  // even within the same DB transaction window. Falls back to DB check if Redis
+  // is unavailable (claimQrJti returns true on error).
+  const firstUse = await claimQrJti(passengerQr.payload.jti);
+  if (!firstUse) {
+    return res.status(409).json({ valid: false, message: "QR already used" });
   }
 
   const tx = pool.transaction();
@@ -317,10 +369,15 @@ export const reportDelay = async (req, res) => {
         WHERE trip_id = @trip_id AND status IN ('confirmed', 'boarded')
       `);
 
+    const affectedCount = countResult.recordset[0]?.cnt ?? 0;
+
     res.status(201).json({
       message: 'Delay reported',
-      affected_passengers: countResult.recordset[0]?.cnt ?? 0,
+      affected_passengers: affectedCount,
     });
+
+    // Push to passengers asynchronously after response is sent
+    _pushDelayToPassengers(pool, tripId, delay_minutes, reason);
   } catch (err) {
     res.status(500).json({ error: 'Failed to report delay' });
   }

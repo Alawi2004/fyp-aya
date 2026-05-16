@@ -31,6 +31,50 @@ import {
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 const FRONTEND_ONLY = import.meta.env.VITE_FRONTEND_ONLY !== 'false';
 
+// Pre-trip checklist submissions (trip_checklists + joins)
+const MOCK_CHECKLISTS = [
+  { checklist_id: 1, trip_id: 41, trip_ref: "TRP-041", driver: "Karim Moussa",   vehicle: "BUS-01", route: "Route 12A", fuel_ok: 1, lights_ok: 1, tires_ok: 1, submitted_at: "2026-05-16T05:45:00" },
+  { checklist_id: 2, trip_id: 38, trip_ref: "TRP-038", driver: "Sara Khoury",    vehicle: "BUS-07", route: "Route 7B",  fuel_ok: 1, lights_ok: 0, tires_ok: 1, submitted_at: "2026-05-16T06:10:00" },
+  { checklist_id: 3, trip_id: 29, trip_ref: "TRP-029", driver: "Joe Pharaon",    vehicle: "BUS-09", route: "Route 3C",  fuel_ok: 0, lights_ok: 1, tires_ok: 0, submitted_at: "2026-05-16T06:30:00" },
+  { checklist_id: 4, trip_id: 33, trip_ref: "TRP-033", driver: "Maya Salameh",   vehicle: "BUS-02", route: "Route 5D",  fuel_ok: 1, lights_ok: 1, tires_ok: 1, submitted_at: "2026-05-15T06:20:00" },
+  { checklist_id: 5, trip_id: 45, trip_ref: "TRP-045", driver: "Lara Abi Nader", vehicle: "BUS-05", route: "Route 9E",  fuel_ok: 1, lights_ok: 1, tires_ok: 1, submitted_at: "2026-05-15T07:00:00" },
+  { checklist_id: 6, trip_id: 50, trip_ref: "TRP-050", driver: "Karim Moussa",   vehicle: "BUS-01", route: "Route 12A", fuel_ok: 1, lights_ok: 1, tires_ok: 0, submitted_at: "2026-05-14T05:50:00" },
+];
+
+// Per-trip stop arrival data (trip_stop_arrivals + stops)
+const MOCK_STOP_ARRIVALS = [
+  { id: 1, stop_id: 71, stop_name: "Hamra Station",          stop_order: 1, scheduled_arrival_at: "2026-05-15T08:00:00", actual_arrival_at: "2026-05-15T08:02:00", delay_seconds:  120, arrival_status: "on_time" },
+  { id: 2, stop_id: 48, stop_name: "Adliyeh Roundabout",     stop_order: 2, scheduled_arrival_at: "2026-05-15T08:15:00", actual_arrival_at: "2026-05-15T08:19:00", delay_seconds:  240, arrival_status: "late"    },
+  { id: 3, stop_id: 11, stop_name: "Chtaura Junction",       stop_order: 3, scheduled_arrival_at: "2026-05-15T08:35:00", actual_arrival_at: "2026-05-15T08:35:00", delay_seconds:    0, arrival_status: "on_time" },
+  { id: 4, stop_id: 22, stop_name: "Airport Road Terminal",  stop_order: 4, scheduled_arrival_at: "2026-05-15T08:55:00", actual_arrival_at: null,                   delay_seconds: null, arrival_status: "pending" },
+];
+
+// Driver-reported issues (issues table, non-emergency)
+const MOCK_ISSUES = [
+  { issue_id: 1, driver_id: 2, driver_name: "Sara Khoury",    vehicle: "BUS-07", trip_ref: "TRP-038", description: "Brake pedal feels soft, needs inspection",      category: "Mechanical",         priority: "high",   status: "open",        created_at: "2026-05-16T09:15:00" },
+  { issue_id: 2, driver_id: 3, driver_name: "Joe Pharaon",    vehicle: "BUS-09", trip_ref: "TRP-029", description: "AC not working, passengers complaining",         category: "Mechanical",         priority: "medium", status: "in_progress", created_at: "2026-05-16T10:30:00" },
+  { issue_id: 3, driver_id: 1, driver_name: "Karim Moussa",   vehicle: "BUS-01", trip_ref: "TRP-041", description: "Passenger argument — intervention required",     category: "Passenger Incident", priority: "high",   status: "open",        created_at: "2026-05-15T14:00:00" },
+  { issue_id: 4, driver_id: 4, driver_name: "Maya Salameh",   vehicle: "BUS-02", trip_ref: "TRP-033", description: "Road blockage — had to reroute via Highway 1",  category: "Road Obstruction",   priority: "low",    status: "resolved",    created_at: "2026-05-15T11:20:00" },
+  { issue_id: 5, driver_id: 5, driver_name: "Lara Abi Nader", vehicle: "BUS-05", trip_ref: null,      description: "Windscreen wiper broken, cannot drive in rain",  category: "Mechanical",         priority: "high",   status: "open",        created_at: "2026-05-14T08:45:00" },
+  { issue_id: 6, driver_id: 3, driver_name: "Joe Pharaon",    vehicle: "BUS-09", trip_ref: "TRP-029", description: "Suspicious package found under rear seat",      category: "Security",           priority: "high",   status: "resolved",    created_at: "2026-05-13T16:30:00" },
+];
+
+// Delay reports (trip_delays table joined with trip/route/driver/vehicle)
+const MOCK_TRIP_DELAYS = [
+  { delay_id: 1, trip_id: 41, trip_ref: "TRP-041", route: "Route 12A", driver: "Karim Moussa",   vehicle: "BUS-01", reason: "Traffic",            delay_minutes: 15, notes: "Heavy traffic near downtown intersection",          reported_at: "2026-05-15T08:22:00", affected_passengers: 24 },
+  { delay_id: 2, trip_id: 38, trip_ref: "TRP-038", route: "Route 7B",  driver: "Sara Khoury",    vehicle: "BUS-07", reason: "Road Block",          delay_minutes: 30, notes: "Police checkpoint at Jounieh highway",              reported_at: "2026-05-15T09:45:00", affected_passengers: 18 },
+  { delay_id: 3, trip_id: 29, trip_ref: "TRP-029", route: "Route 3C",  driver: "Joe Pharaon",    vehicle: "BUS-09", reason: "Mechanical",          delay_minutes: 45, notes: "Engine warning light — waiting for inspection",     reported_at: "2026-05-15T10:10:00", affected_passengers: 30 },
+  { delay_id: 4, trip_id: 33, trip_ref: "TRP-033", route: "Route 5D",  driver: "Maya Salameh",   vehicle: "BUS-02", reason: "Passenger Incident",  delay_minutes: 10, notes: "Medical situation onboard, waiting for paramedics", reported_at: "2026-05-14T14:30:00", affected_passengers: 11 },
+  { delay_id: 5, trip_id: 45, trip_ref: "TRP-045", route: "Route 9E",  driver: "Lara Abi Nader", vehicle: "BUS-05", reason: "Traffic",             delay_minutes: 20, notes: null,                                               reported_at: "2026-05-14T16:55:00", affected_passengers: 22 },
+];
+
+// Emergency alerts (issues table filtered by EMERGENCY: prefix)
+const MOCK_EMERGENCY_ALERTS = [
+  { id: 1, driver_id: 1, driver_name: "Karim Moussa",   vehicle: "BUS-01", trip_ref: "TRP-041", message: "Passenger collapse on board",           latitude: 33.8938, longitude: 35.5018, status: "active",   created_at: "2026-05-15T13:58:00" },
+  { id: 2, driver_id: 3, driver_name: "Joe Pharaon",    vehicle: "BUS-09", trip_ref: "TRP-029", message: "Vehicle collision — minor fender bender",latitude: 33.9800, longitude: 35.5500, status: "resolved", created_at: "2026-05-14T09:30:00" },
+  { id: 3, driver_id: 4, driver_name: "Maya Salameh",   vehicle: "BUS-02", trip_ref: null,      message: "Engine overheating warning",             latitude: 33.8700, longitude: 35.5100, status: "active",   created_at: "2026-05-15T11:22:00" },
+];
+
 // Conflict objects match the shape produced by detectConflicts(): { type, resource, a, b }
 const MOCK_TRIP_CONFLICTS = [
   {
@@ -57,7 +101,12 @@ const mockAdminResponse = (method, endpoint, data = {}) => {
   if (endpoint.startsWith('/trips/recurring'))  return MOCK_RECURRING_SCHEDULES;
   if (endpoint.startsWith('/trips/timetable'))  return MOCK_TIMETABLE_TRIPS;
   if (endpoint.startsWith('/trips/conflicts'))  return MOCK_TRIP_CONFLICTS;
+  if (endpoint.startsWith('/trips/delays'))      return MOCK_TRIP_DELAYS;
+  if (endpoint.startsWith('/trips/checklists')) return MOCK_CHECKLISTS;
+  if (endpoint.match(/\/trips\/\w+\/arrivals/)) return MOCK_STOP_ARRIVALS;
   if (endpoint.startsWith('/trips')) return endpoint.includes('/load') ? { current_passengers: 24, capacity: 40 } : MOCK_TRIPS;
+  if (endpoint.startsWith('/dashboard/emergency-alerts')) return MOCK_EMERGENCY_ALERTS;
+  if (endpoint.startsWith('/dashboard/issues'))           return MOCK_ISSUES;
   if (endpoint.startsWith('/vehicles/docs'))        return MOCK_VEHICLE_DOCS;
   if (endpoint.startsWith('/vehicles/maintenance')) return MOCK_MAINTENANCE_LOG;
   if (endpoint.startsWith('/vehicles/fuel'))        return MOCK_FUEL_LOG;
@@ -105,6 +154,15 @@ const mockAdminResponse = (method, endpoint, data = {}) => {
   if (endpoint.startsWith('/notifications/templates')) return MOCK_NOTIFICATION_TEMPLATES;
   if (endpoint.startsWith('/notifications/scheduled'))  return MOCK_SCHEDULED_NOTIFICATIONS;
   if (endpoint.startsWith('/notifications')) return MOCK_NOTIFICATIONS;
+  if (endpoint.startsWith('/gps/live')) {
+    // Slowly-drifting mock positions so the demo map animates on 5s polls
+    const t = Date.now() / 10000;
+    return [
+      { trip_ref: 'TRP-041', lat: 33.9280 + Math.sin(t)       * 0.0015, lng: 35.5340 + Math.cos(t)       * 0.001  },
+      { trip_ref: 'TRP-029', lat: 33.8700 + Math.sin(t + 1)   * 0.001,  lng: 35.6200 + Math.cos(t + 1)   * 0.0015 },
+      { trip_ref: 'TRP-045', lat: 34.1208 + Math.sin(t + 2)   * 0.0015, lng: 35.6484 + Math.cos(t + 2)   * 0.001  },
+    ];
+  }
   if (endpoint.startsWith('/gps')) return [];
   if (endpoint.startsWith('/passenger-count')) return [];
   if (endpoint.startsWith('/wallet/recharges')) return [];

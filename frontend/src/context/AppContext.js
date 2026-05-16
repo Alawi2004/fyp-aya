@@ -28,7 +28,9 @@
 
 // export const useApp = () => useContext(AppContext);
 
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useState, useContext, useEffect } from 'react';
+import * as Notifications from 'expo-notifications';
+import { registerPushToken } from '../api/apiClient';
 
 const AppContext = createContext();
 
@@ -46,6 +48,21 @@ const MOCK_BOOKINGS = [
 ];
 
 export const AppProvider = ({ children }) => {
+  // Register Expo push token once on mount so the backend can target this device
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await Notifications.getPermissionsAsync();
+        const granted = status === 'granted'
+          ? true
+          : (await Notifications.requestPermissionsAsync()).status === 'granted';
+        if (!granted) return;
+        const { data: token } = await Notifications.getExpoPushTokenAsync();
+        if (token) await registerPushToken(token);
+      } catch { /* push token registration is best-effort */ }
+    })();
+  }, []);
+
   const [walletBalance, setWalletBalance] = useState(35.50);
   const [ratings, setRatings] = useState(MOCK_RATINGS);
   const [bookings, setBookings] = useState(MOCK_BOOKINGS);

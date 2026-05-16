@@ -3,6 +3,8 @@ import {
   sendGpsLocation,
   getLatestGps,
   getTripGpsHistory,
+  getLiveGps,
+  getBusGps,
 } from "../controllers/gps.controller.js";
 
 const router = express.Router();
@@ -46,8 +48,10 @@ const router = express.Router();
  */
 router.post("/", sendGpsLocation);
 
-// Full GPS track for playback — must be before /:trip_id/latest to avoid capture
-router.get("/trip/:id", getTripGpsHistory);
+// Named routes must precede /:trip_id/latest to avoid param capture
+router.get("/live",          getLiveGps);
+router.get("/bus/:vehicleId", getBusGps);
+router.get("/trip/:id",      getTripGpsHistory);
 
 /**
  * @swagger

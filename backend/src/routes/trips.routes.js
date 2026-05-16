@@ -12,6 +12,9 @@ import {
   updateRecurringSchedule,
   deleteRecurringSchedule,
   getTimetableTrips,
+  getTripDelays,
+  getTripChecklists,
+  getTripStopArrivals,
 } from "../controllers/trips.controller.js";
 import { getTripEtaPredictions } from "../controllers/eta.controller.js";
 
@@ -175,6 +178,9 @@ router.get("/:id/eta-predictions", getTripEtaPredictions);
  *       200:
  *         description: Status updated
  */
+router.get("/delays",      getTripDelays);
+router.get("/checklists",  getTripChecklists);
+router.get("/:id/arrivals", getTripStopArrivals);
 router.get("/:id", getTripById);
 router.put("/:id/status", updateTripStatus);
 router.put("/:id", updateTripStatus);
