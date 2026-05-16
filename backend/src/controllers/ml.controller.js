@@ -1,12 +1,23 @@
-import { poolPromise, sql } from "../db/db.js";
-import { predictor } from "../ml/delayPredictor.js";
+/**
+ * ML Controller — Yalla Transit
+ *
+ * Exposes two predictive models:
+ *   1. Delay Predictor  — multivariate linear regression on trip_delays history
+ *   2. Demand Predictor — hybrid bucket + regression on ticket booking history
+ *
+ * Both models auto-augment with synthetic Lebanese transit data when the
+ * database contains fewer than SYNTHETIC_THRESHOLD records, so the API
+ * always returns meaningful predictions even with an empty database.
+ */
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Internal: load training rows from DB and fit the model.
-// Reads from trip_delays joined with trips to get route_id + start_time.
-// ─────────────────────────────────────────────────────────────────────────────
-async function _trainFromDb(pool) {
-  const result = await pool.request().query(`
+import { poolPromise } from "../db/db.js";
+import { predictor }       from "../ml/delayPredictor.js";
+import { demandPredictor } from "../ml/demandPredictor.js";
+
+// ── Internal training helpers ─────────────────────────────────────────────────
+
+async function _loadDelayRows(pool) {
+  const r = await pool.request().query(`
     SELECT
       td.delay_minutes,
       t.route_id,
@@ -15,75 +26,234 @@ async function _trainFromDb(pool) {
     LEFT JOIN trips t ON t.trip_id = td.trip_id
     WHERE td.delay_minutes > 0
   `);
-
-  const rows = result.recordset;
-  if (rows.length === 0) return { trained: false, reason: "no_data" };
-
-  predictor.train(rows);
-  return {
-    trained:      true,
-    sample_count: rows.length,
-    trained_at:   predictor._trainedAt,
-    rmse:         predictor._rmse,
-  };
+  return r.recordset;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /api/ml/train
-// Admin-only: re-trains the in-memory model from the full trip_delays history.
-// Auto-invoked on first prediction if the model has not been trained yet.
-// ─────────────────────────────────────────────────────────────────────────────
-export const trainModel = async (req, res) => {
+async function _loadDemandRows(pool) {
+  const r = await pool.request().query(`
+    SELECT
+      t.route_id,
+      ISNULL(v.capacity, 40)                                            AS capacity,
+      (SELECT COUNT(*) FROM tickets tk
+       WHERE tk.trip_id = t.trip_id
+         AND tk.status IN ('confirmed','boarded','completed'))           AS passengers,
+      t.start_time
+    FROM trips t
+    LEFT JOIN vehicles v ON v.vehicle_id = t.vehicle_id
+    WHERE t.start_time IS NOT NULL
+      AND LOWER(ISNULL(t.status,'')) IN ('completed','ongoing','active')
+  `);
+  return r.recordset;
+}
+
+// ── Delay model ───────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/ml/train
+ * Re-trains the in-memory delay model from trip_delays history.
+ * Admin-only.  Responds with training summary.
+ */
+export const trainDelayModel = async (req, res) => {
   try {
-    const pool   = await poolPromise;
-    const result = await _trainFromDb(pool);
-    res.json(result);
+    const pool = await poolPromise;
+    const rows = await _loadDelayRows(pool);
+    predictor.train(rows);
+    res.json({
+      ok:              true,
+      model:           "delay_predictor",
+      real_rows:       rows.length,
+      trained_on:      predictor.sampleCount,
+      augmented:       predictor.wasAugmented,
+      rmse_minutes:    predictor.rmse   != null ? +predictor.rmse.toFixed(2)   : null,
+      mae_minutes:     predictor.mae    != null ? +predictor.mae.toFixed(2)    : null,
+      trained_at:      predictor.trainedAt,
+    });
   } catch (err) {
-    console.error("[ml] train error:", err);
-    res.status(500).json({ error: "Training failed", detail: err.message });
+    console.error("[ml:delay] train error:", err);
+    res.status(500).json({ error: "Delay model training failed.", detail: err.message });
   }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /api/ml/delay-prediction?route_id=X&departure_time=ISO
-// Returns a delay risk estimate for the given route + departure window.
-// If the model hasn't been trained yet, triggers a lazy training run first.
-// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * GET /api/ml/delay-prediction
+ * Query params:
+ *   route_id        (required) integer
+ *   departure_time  (optional) ISO 8601 string, defaults to now
+ *
+ * Lazy-trains on first call if the model has not been trained yet.
+ */
 export const predictDelay = async (req, res) => {
   const { route_id, departure_time } = req.query;
+  if (!route_id) return res.status(400).json({ error: "route_id is required." });
 
-  if (!route_id) {
-    return res.status(400).json({ error: "route_id is required" });
+  const rid = Number(route_id);
+  if (!Number.isFinite(rid) || rid <= 0) {
+    return res.status(400).json({ error: "route_id must be a positive integer." });
   }
 
-  // Lazy-train on first request
   if (!predictor.isTrained) {
     try {
       const pool = await poolPromise;
-      await _trainFromDb(pool);
-    } catch (err) {
-      console.warn("[ml] lazy-train failed:", err.message);
-      // Proceed anyway — predictor returns route historical avg as fallback
+      predictor.train(await _loadDelayRows(pool));
+    } catch (e) {
+      console.warn("[ml:delay] lazy-train failed:", e.message);
     }
   }
 
-  const depTime = departure_time ?? new Date().toISOString();
-  const prediction = predictor.predict(Number(route_id), depTime);
-  res.json(prediction);
+  const depTime = departure_time ? new Date(departure_time) : new Date();
+  if (departure_time && isNaN(depTime)) {
+    return res.status(400).json({ error: "departure_time must be a valid ISO 8601 date-time." });
+  }
+
+  res.json(predictor.predict(rid, depTime));
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /api/ml/model-status
-// Returns current model metadata (training samples, RMSE, trained_at).
-// ─────────────────────────────────────────────────────────────────────────────
+// ── Demand model ──────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/ml/train-demand
+ * Re-trains the demand predictor from ticket booking history.
+ * Admin-only.  Responds with training summary.
+ */
+export const trainDemandModel = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const rows = await _loadDemandRows(pool);
+    demandPredictor.train(rows);
+    res.json({
+      ok:           true,
+      model:        "demand_predictor",
+      real_rows:    rows.length,
+      trained_on:   demandPredictor.sampleCount,
+      augmented:    demandPredictor.wasAugmented,
+      rmse_pct_pts: demandPredictor.rmse != null ? +(demandPredictor.rmse * 100).toFixed(2) : null,
+      mae_pct_pts:  demandPredictor.mae  != null ? +(demandPredictor.mae  * 100).toFixed(2) : null,
+      trained_at:   demandPredictor.trainedAt,
+    });
+  } catch (err) {
+    console.error("[ml:demand] train error:", err);
+    res.status(500).json({ error: "Demand model training failed.", detail: err.message });
+  }
+};
+
+/**
+ * GET /api/ml/demand-forecast
+ * Predict passenger demand for one departure slot.
+ * Query params:
+ *   route_id        (required) integer
+ *   departure_time  (optional) ISO 8601, defaults to now
+ */
+export const predictDemand = async (req, res) => {
+  const { route_id, departure_time } = req.query;
+  if (!route_id) return res.status(400).json({ error: "route_id is required." });
+
+  const rid = Number(route_id);
+  if (!Number.isFinite(rid) || rid <= 0) {
+    return res.status(400).json({ error: "route_id must be a positive integer." });
+  }
+
+  if (!demandPredictor.isTrained) {
+    try {
+      const pool = await poolPromise;
+      demandPredictor.train(await _loadDemandRows(pool));
+    } catch (e) {
+      console.warn("[ml:demand] lazy-train failed:", e.message);
+    }
+  }
+
+  const depTime = departure_time ? new Date(departure_time) : new Date();
+  if (departure_time && isNaN(depTime)) {
+    return res.status(400).json({ error: "departure_time must be a valid ISO 8601 date-time." });
+  }
+
+  res.json(demandPredictor.predict(rid, depTime));
+};
+
+/**
+ * GET /api/ml/demand-forecast/day
+ * Return a full-day demand schedule for a route.
+ * Query params:
+ *   route_id  (required) integer
+ *   date      (required) YYYY-MM-DD
+ *   interval  (optional) slot interval in hours (1 or 2), default 1
+ */
+export const forecastDemandDay = async (req, res) => {
+  const { route_id, date, interval } = req.query;
+  if (!route_id) return res.status(400).json({ error: "route_id is required." });
+  if (!date)     return res.status(400).json({ error: "date is required (YYYY-MM-DD)." });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: "date must be in YYYY-MM-DD format." });
+  }
+
+  const rid = Number(route_id);
+  if (!Number.isFinite(rid) || rid <= 0) {
+    return res.status(400).json({ error: "route_id must be a positive integer." });
+  }
+
+  const intervalHours = Math.max(1, Math.min(4, Number(interval) || 1));
+
+  if (!demandPredictor.isTrained) {
+    try {
+      const pool = await poolPromise;
+      demandPredictor.train(await _loadDemandRows(pool));
+    } catch (e) {
+      console.warn("[ml:demand] lazy-train failed:", e.message);
+    }
+  }
+
+  res.json(demandPredictor.forecastDay(rid, date, intervalHours));
+};
+
+// ── Train-all shortcut ────────────────────────────────────────────────────────
+
+/**
+ * POST /api/ml/train-all
+ * Re-trains both models in parallel.  Admin-only.
+ */
+export const trainAll = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const [delayRows, demandRows] = await Promise.all([
+      _loadDelayRows(pool),
+      _loadDemandRows(pool),
+    ]);
+    predictor.train(delayRows);
+    demandPredictor.train(demandRows);
+    res.json({
+      ok: true,
+      delay_model: {
+        real_rows:    delayRows.length,
+        trained_on:   predictor.sampleCount,
+        augmented:    predictor.wasAugmented,
+        rmse_minutes: predictor.rmse != null ? +predictor.rmse.toFixed(2) : null,
+      },
+      demand_model: {
+        real_rows:    demandRows.length,
+        trained_on:   demandPredictor.sampleCount,
+        augmented:    demandPredictor.wasAugmented,
+        rmse_pct_pts: demandPredictor.rmse != null ? +(demandPredictor.rmse * 100).toFixed(2) : null,
+      },
+      trained_at: new Date(),
+    });
+  } catch (err) {
+    console.error("[ml] train-all error:", err);
+    res.status(500).json({ error: "Training failed.", detail: err.message });
+  }
+};
+
+// ── Model status ──────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/ml/model-status
+ * Returns metadata for both models.
+ */
 export const modelStatus = (req, res) => {
   res.json({
-    trained:        predictor.isTrained,
-    trained_at:     predictor._trainedAt,
-    trained_on:     predictor._sampleCount,
-    training_rmse:  predictor._rmse ? +predictor._rmse.toFixed(2) : null,
-    feature_count:  7,
-    algorithm:      "multivariate_linear_regression",
-    regularisation: "L2 (ridge)",
+    delay_predictor:  predictor.describe(),
+    demand_predictor: demandPredictor.describe(),
+    timestamp: new Date(),
   });
 };
+
+// Legacy alias kept for backward compatibility
+export const trainModel = trainDelayModel;
