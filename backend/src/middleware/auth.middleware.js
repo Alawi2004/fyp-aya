@@ -5,11 +5,12 @@ import jwt from "jsonwebtoken";
  * Responds 401 if missing or invalid.
  */
 export const requireAuth = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Authentication required" });
-  }
-  const token = authHeader.slice(7);
+  const cookieToken  = req.cookies?.access_token;
+  const bearerHeader = req.headers.authorization;
+  const token = cookieToken || (bearerHeader?.startsWith("Bearer ") ? bearerHeader.slice(7) : null);
+
+  if (!token) return res.status(401).json({ error: "Authentication required" });
+
   try {
     req.user = jwt.verify(token, process.env.JWT_SECRET);
     next();

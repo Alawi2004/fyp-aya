@@ -18,14 +18,12 @@ export function AuthProvider({ children }) {
     setError(null);
     try {
       // ── Demo mode: accept any email/password without a backend ──
-      const DEMO_TOKEN = "demo-staff-token";
       const profile = {
         user_id:   1,
         full_name: "Staff Member",
         email,
         role:      "staff",
       };
-      apiClient.setToken(DEMO_TOKEN);
       localStorage.setItem(USER_KEY, JSON.stringify(profile));
       setUser(profile);
       return profile;
@@ -39,12 +37,11 @@ export function AuthProvider({ children }) {
 
   // ── logout ────────────────────────────────────────────────────────────────
   const logout = () => {
-    apiClient.clearToken();
     localStorage.removeItem(USER_KEY);
     setUser(null);
   };
 
-  const isAuthenticated = !!user && !!apiClient.getToken();
+  const isAuthenticated = !!user;
 
   return (
     <AuthContext.Provider value={{ user, loading, error, login, logout, isAuthenticated }}>

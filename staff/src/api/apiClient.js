@@ -1,11 +1,10 @@
 // Staff Portal API Client
-// Separate from admin — uses 'staff_token' localStorage key to avoid conflicts.
 // In dev, Vite proxies /api/* → localhost:4000 so no CORS issue.
 // In production set VITE_API_URL to your deployed backend URL.
+// Auth tokens are stored in HttpOnly cookies set by the backend — not localStorage.
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const FRONTEND_ONLY = import.meta.env.VITE_FRONTEND_ONLY !== "false";
-const TOKEN_KEY = "staff_token";
 
 let MOCK_USERS = [
   { user_id: 1001, full_name: "Aline Haddad", email: "aline.haddad@example.com", phone: "+961 70 111 222", balance: 35.5, status: "Active", joined: "2026-03-08" },
@@ -116,15 +115,8 @@ class StaffApiClient {
     this.base = base;
   }
 
-  getToken()        { return localStorage.getItem(TOKEN_KEY) || ""; }
-  setToken(t)       { localStorage.setItem(TOKEN_KEY, t); }
-  clearToken()      { localStorage.removeItem(TOKEN_KEY); }
-
   headers() {
-    return {
-      "Content-Type": "application/json",
-      Authorization:  `Bearer ${this.getToken()}`,
-    };
+    return { "Content-Type": "application/json" };
   }
 
   async handle(res) {
@@ -146,7 +138,7 @@ class StaffApiClient {
     }
 
     try {
-      const opts = { method, headers: this.headers() };
+      const opts = { method, credentials: "include", headers: this.headers() };
       if (body !== undefined) opts.body = JSON.stringify(body);
       const res = await fetch(`${this.base}${path}`, opts);
       return this.handle(res);

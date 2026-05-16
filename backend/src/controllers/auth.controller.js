@@ -8,10 +8,24 @@ import { ensureAuthTables } from "../db/featureSetup.js";
 import { sendPasswordResetEmail } from "../services/email.service.js";
 import { isForce2FA } from "../db/settingsCache.js";
 
-const ACCESS_TOKEN_TTL    = "15m";
+const ACCESS_TOKEN_TTL     = "15m";
+const ACCESS_TOKEN_TTL_MS  = 15 * 60 * 1000;
 const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const TEMP_2FA_TTL        = "5m";
-const RESET_TOKEN_TTL_MS  = 60 * 60 * 1000;
+const TEMP_2FA_TTL         = "5m";
+const RESET_TOKEN_TTL_MS   = 60 * 60 * 1000;
+
+const isProd = process.env.NODE_ENV === "production";
+const COOKIE_BASE = { httpOnly: true, secure: isProd, sameSite: "strict", path: "/" };
+
+function setCookies(res, accessToken, refreshToken) {
+  res.cookie("access_token",  accessToken,  { ...COOKIE_BASE, maxAge: ACCESS_TOKEN_TTL_MS  });
+  res.cookie("refresh_token", refreshToken, { ...COOKIE_BASE, maxAge: REFRESH_TOKEN_TTL_MS });
+}
+
+function clearCookies(res) {
+  res.clearCookie("access_token",  { ...COOKIE_BASE });
+  res.clearCookie("refresh_token", { ...COOKIE_BASE });
+}
 
 const MAX_ATTEMPTS        = 5;
 const MAX_LOCKOUT_MIN     = 60;
@@ -352,8 +366,9 @@ export const login = async (req, res) => {
 
     await writeLoginAudit(pool, { userId: user.user_id, email, req, success: true });
 
+    setCookies(res, access_token, refresh_token);
     const { password_hash, ...safeUser } = user;
-    return res.json({ access_token, refresh_token, user: safeUser });
+    return res.json({ user: safeUser });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Login failed" });
@@ -404,8 +419,9 @@ export const verify2fa = async (req, res) => {
 
     await writeLoginAudit(pool, { userId: user.user_id, email: user.email, req, success: true });
 
+    setCookies(res, access_token, refresh_token);
     const { password_hash, ...safeUser } = user;
-    return res.json({ access_token, refresh_token, user: safeUser });
+    return res.json({ user: safeUser });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "2FA verification failed" });
@@ -699,7 +715,8 @@ export const resetPassword = async (req, res) => {
 
 export const refresh = async (req, res) => {
   try {
-    const { refresh_token } = req.body;
+    const refresh_token = req.cookies?.refresh_token || req.body?.refresh_token;
+    if (!refresh_token) return res.status(401).json({ error: "Refresh token required" });
     const hash = hashToken(refresh_token);
     const pool = await poolPromise;
     await ensureAuthTables(pool);
@@ -738,7 +755,8 @@ export const refresh = async (req, res) => {
     try { await rotateSession(pool, hash, newHash, newExpiresAt); } catch {}
 
     const access_token = issueAccessToken({ user_id: record.user_id, role: record.role });
-    res.json({ access_token, refresh_token: new_refresh_token });
+    setCookies(res, access_token, new_refresh_token);
+    res.json({ ok: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Token refresh failed" });
@@ -749,14 +767,18 @@ export const refresh = async (req, res) => {
 
 export const logout = async (req, res) => {
   try {
-    const { refresh_token } = req.body;
-    if (!refresh_token) return res.status(400).json({ error: "Refresh token required" });
+    const refresh_token = req.cookies?.refresh_token || req.body?.refresh_token;
+    if (!refresh_token) {
+      clearCookies(res);
+      return res.json({ message: "Logged out" });
+    }
 
     const hash = hashToken(refresh_token);
     const pool = await poolPromise;
     await ensureAuthTables(pool);
 
     await revokeTokenHash(pool, hash);
+    clearCookies(res);
     res.json({ message: "Logged out" });
   } catch (err) {
     console.error(err);

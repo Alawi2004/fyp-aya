@@ -3,24 +3,23 @@ import { createContext, useContext, useState, useCallback } from "react";
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
 const FRONTEND_ONLY = import.meta.env.VITE_FRONTEND_ONLY !== "false";
 
-const TOKEN_KEY   = "admin_access_token";
-const REFRESH_KEY = "admin_refresh_token";
-const USER_KEY    = "admin_user";
+const USER_KEY = "admin_user";
 
 function loadStored() {
   try {
-    const user  = JSON.parse(localStorage.getItem(USER_KEY) || "null");
-    const token = localStorage.getItem(TOKEN_KEY) || null;
-    return { user, token };
+    return { user: JSON.parse(localStorage.getItem(USER_KEY) || "null") };
   } catch {
-    return { user: null, token: null };
+    return { user: null };
   }
 }
+
+const FETCH_OPTS = { credentials: "include" };
 
 async function apiPost(path, body) {
   let res;
   try {
     res = await fetch(`${API_BASE}${path}`, {
+      ...FETCH_OPTS,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -33,12 +32,10 @@ async function apiPost(path, body) {
   return data;
 }
 
-async function apiGet(path, token) {
+async function apiGet(path) {
   let res;
   try {
-    res = await fetch(`${API_BASE}${path}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    res = await fetch(`${API_BASE}${path}`, { ...FETCH_OPTS });
   } catch {
     throw new Error("Cannot reach the server.");
   }
@@ -47,13 +44,10 @@ async function apiGet(path, token) {
   return data;
 }
 
-async function apiDeleteAuth(path, token) {
+async function apiDeleteAuth(path) {
   let res;
   try {
-    res = await fetch(`${API_BASE}${path}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    res = await fetch(`${API_BASE}${path}`, { ...FETCH_OPTS, method: "DELETE" });
   } catch {
     throw new Error("Cannot reach the server.");
   }
@@ -62,12 +56,13 @@ async function apiDeleteAuth(path, token) {
   return data;
 }
 
-async function apiPostAuth(path, body, token) {
+async function apiPostAuth(path, body) {
   let res;
   try {
     res = await fetch(`${API_BASE}${path}`, {
+      ...FETCH_OPTS,
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
   } catch {
@@ -83,16 +78,12 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const stored = loadStored();
   const [user,    setUser]    = useState(stored.user);
-  const [token,   setToken]   = useState(stored.token);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState(null);
 
-  const persist = useCallback((u, at, rt) => {
+  const persist = useCallback((u) => {
     setUser(u);
-    setToken(at);
-    localStorage.setItem(USER_KEY,    JSON.stringify(u));
-    localStorage.setItem(TOKEN_KEY,   at);
-    if (rt) localStorage.setItem(REFRESH_KEY, rt);
+    localStorage.setItem(USER_KEY, JSON.stringify(u));
   }, []);
 
   // Auth operations always hit the real backend — never mocked
@@ -103,6 +94,7 @@ export function AuthProvider({ children }) {
       let res;
       try {
         res = await fetch(`${API_BASE}/auth/login`, {
+          ...FETCH_OPTS,
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
@@ -125,7 +117,7 @@ export function AuthProvider({ children }) {
       if (data.requires_2fa) {
         return { ok: false, requires_2fa: true, temp_token: data.temp_token };
       }
-      persist(data.user, data.access_token, data.refresh_token);
+      persist(data.user);
       return { ok: true };
     } catch (err) {
       setError(err.message);
@@ -140,7 +132,7 @@ export function AuthProvider({ children }) {
     setError(null);
     try {
       const data = await apiPost("/auth/verify-2fa", { temp_token: tempToken, totp_code: totpCode });
-      persist(data.user, data.access_token, data.refresh_token);
+      persist(data.user);
       return { ok: true };
     } catch (err) {
       setError(err.message);
@@ -159,58 +151,54 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(async () => {
-    const rt = localStorage.getItem(REFRESH_KEY);
     setUser(null);
-    setToken(null);
     localStorage.removeItem(USER_KEY);
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(REFRESH_KEY);
-    if (rt) apiPost("/auth/logout", { refresh_token: rt }).catch(() => {});
+    apiPost("/auth/logout", {}).catch(() => {});
   }, []);
 
   const getLoginAudit = useCallback(async (limit = 50) => {
     if (FRONTEND_ONLY) return MOCK_AUDIT;
-    return apiGet(`/auth/login-audit?limit=${limit}`, token);
-  }, [token]);
+    return apiGet(`/auth/login-audit?limit=${limit}`);
+  }, []);
 
   const getSessions = useCallback(async () => {
     if (FRONTEND_ONLY) return MOCK_SESSIONS;
-    return apiGet("/auth/sessions", token);
-  }, [token]);
+    return apiGet("/auth/sessions");
+  }, []);
 
   const revokeSession = useCallback(async (sessionId) => {
     if (FRONTEND_ONLY) return { message: "Session revoked (demo)" };
-    return apiDeleteAuth(`/auth/sessions/${sessionId}`, token);
-  }, [token]);
+    return apiDeleteAuth(`/auth/sessions/${sessionId}`);
+  }, []);
 
   const revokeAllOtherSessions = useCallback(async () => {
     if (FRONTEND_ONLY) return { revoked: 2 };
-    return apiDeleteAuth("/auth/sessions/others", token);
-  }, [token]);
+    return apiDeleteAuth("/auth/sessions/others");
+  }, []);
 
   const get2faStatus = useCallback(async () => {
     if (FRONTEND_ONLY) return { enabled: false };
-    return apiGet("/auth/2fa/status", token);
-  }, [token]);
+    return apiGet("/auth/2fa/status");
+  }, []);
 
   const setup2fa = useCallback(async () => {
     if (FRONTEND_ONLY) return { secret: "JBSWY3DPEHPK3PXP", qr_code: null };
-    return apiPostAuth("/auth/2fa/setup", {}, token);
-  }, [token]);
+    return apiPostAuth("/auth/2fa/setup", {});
+  }, []);
 
   const confirm2fa = useCallback(async (totpCode) => {
     if (FRONTEND_ONLY) return { message: "2FA enabled (demo)" };
-    return apiPostAuth("/auth/2fa/confirm", { totp_code: totpCode }, token);
-  }, [token]);
+    return apiPostAuth("/auth/2fa/confirm", { totp_code: totpCode });
+  }, []);
 
   const disable2fa = useCallback(async () => {
     if (FRONTEND_ONLY) return { message: "2FA disabled (demo)" };
-    return apiPostAuth("/auth/2fa/disable", {}, token);
-  }, [token]);
+    return apiPostAuth("/auth/2fa/disable", {});
+  }, []);
 
   return (
     <AuthContext.Provider value={{
-      user, token, loading, error,
+      user, loading, error,
       isAuthenticated: !!user,
       login, verify2fa, forgotPassword, resetPassword,
       logout, getLoginAudit,

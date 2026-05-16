@@ -9,6 +9,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./docs/swagger.js";
+import cookieParser from "cookie-parser";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -101,6 +102,7 @@ app.use(cors({
   credentials: true,   // needed if cookies are ever introduced; harmless now
 }));
 
+app.use(cookieParser());
 app.use(express.json());
 app.use(generalLimiter);        // 200 req/min per IP — global DoS floor
 
@@ -166,13 +168,15 @@ poolPromise.then(pool => {
 // Start scheduled report delivery (checks every 30 min)
 startReportScheduler();
 
-// API docs — split serve/setup to work with Express 5
-app.use("/api/docs", swaggerUi.serve);
-app.get("/api/docs", swaggerUi.setup(swaggerSpec, { explorer: false }));
-app.get("/api/docs.json", (req, res) => {
-  res.setHeader("Content-Type", "application/json");
-  res.send(swaggerSpec);
-});
+// API docs — disabled in production to avoid leaking schema to the public
+if (process.env.NODE_ENV !== "production") {
+  app.use("/api/docs", swaggerUi.serve);
+  app.get("/api/docs", swaggerUi.setup(swaggerSpec, { explorer: false }));
+  app.get("/api/docs.json", (req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    res.send(swaggerSpec);
+  });
+}
 
 // ── Health check — simple string for root (legacy / load-balancer ping) ──────
 app.get("/", (req, res) => {

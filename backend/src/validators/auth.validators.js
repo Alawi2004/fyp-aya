@@ -44,7 +44,7 @@ export const loginSchema = z.object({
 });
 
 export const refreshSchema = z.object({
-  refresh_token: z.string().min(1, "Refresh token required"),
+  refresh_token: z.string().min(1).optional(),
 });
 
 export const verify2faSchema = z.object({
