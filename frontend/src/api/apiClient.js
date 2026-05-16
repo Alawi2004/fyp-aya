@@ -105,6 +105,7 @@ const mockResponse = (config) => {
     { waypoint_id: 5, latitude: 33.9806, longitude: 35.6178, wp_order: 5 },
   ];
   if (url.includes('/auth/push-token')) return { ok: true };
+  if (url.includes('/auth/fcm-token'))  return { ok: true };
   if (url.includes('/driver/trips')) return { trips: [] };
   if (url.includes('/driver/earnings')) return { total: 0, trips: 0, history: [] };
   // Share ticket endpoints
@@ -171,5 +172,8 @@ export const fetchBusGps = (vehicleId) =>
 
 export const registerPushToken = (pushToken) =>
   apiClient.put('/auth/push-token', { token: pushToken }).then((r) => r.data);
+
+export const registerFcmToken = (fcmToken) =>
+  apiClient.put('/auth/fcm-token', { token: fcmToken }).then((r) => r.data);
 
 export default apiClient;

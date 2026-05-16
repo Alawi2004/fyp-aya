@@ -470,6 +470,29 @@ BEGIN
   ALTER TABLE users ADD push_token NVARCHAR(200) NULL;
 END;
 
+-- Raw FCM / APNs device token (non-Expo) for direct Firebase delivery
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='users' AND COLUMN_NAME='fcm_token')
+BEGIN
+  ALTER TABLE users ADD fcm_token NVARCHAR(300) NULL;
+END;
+
+-- Server-side geofence breach events
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='geofence_events')
+BEGIN
+  CREATE TABLE geofence_events (
+    event_id     INT            NOT NULL IDENTITY(1,1) PRIMARY KEY,
+    trip_id      INT            NOT NULL REFERENCES trips(trip_id) ON DELETE CASCADE,
+    route_id     INT            NULL     REFERENCES routes(route_id),
+    latitude     DECIMAL(9,6)   NOT NULL,
+    longitude    DECIMAL(9,6)   NOT NULL,
+    distance_m   INT            NOT NULL,
+    status       NVARCHAR(20)   NOT NULL DEFAULT 'active',
+    detected_at  DATETIME2      NOT NULL DEFAULT GETUTCDATE(),
+    resolved_at  DATETIME2      NULL
+  );
+  CREATE INDEX IX_geofence_events_trip ON geofence_events(trip_id, status);
+END;
+
 IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='user_suspension_logs')
 BEGIN
   CREATE TABLE user_suspension_logs (

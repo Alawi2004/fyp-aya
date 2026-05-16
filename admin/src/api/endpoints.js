@@ -171,6 +171,7 @@ export const getGpsHeatmap       = (params = {}) => {
 export const recordGpsLog = (data) => apiClient.post('/gps/log', data);
 export const getTripGpsLogs_v2 = (tripId) => apiClient.get(`/gps/trip/${tripId}`);
 export const getLiveGps = () => apiClient.get('/gps/live');
+export const getGeofenceAlerts = (status) => apiClient.get(`/gps/geofence-alerts${status ? `?status=${status}` : ''}`);
 
 // Passenger Count
 export const recordPassengerCount = (data) => apiClient.post('/passenger-count/record', data);

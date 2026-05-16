@@ -1,6 +1,47 @@
 // pages/LiveTrackingPage.jsx
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { getTripGpsLogs, getGpsHeatmap, getLiveGps } from '../api/endpoints';
+
+// ── WebSocket GPS stream (admin "subscribe_all") ──────────────────────────────
+const WS_URL = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api')
+  .replace(/\/api\/?$/, '')
+  .replace(/^http/, 'ws') + '/gps-stream';
+
+function useAdminGpsStream(onUpdate) {
+  const wsRef   = useRef(null);
+  const cbRef   = useRef(onUpdate);
+  cbRef.current = onUpdate;
+
+  useEffect(() => {
+    let retryTimer;
+    let dead = false;
+
+    const connect = () => {
+      if (dead) return;
+      try {
+        const ws = new WebSocket(WS_URL);
+        wsRef.current = ws;
+
+        ws.onopen  = () => ws.send(JSON.stringify({ type: 'subscribe_all' }));
+        ws.onmessage = (e) => {
+          try {
+            const msg = JSON.parse(e.data);
+            cbRef.current(msg);
+          } catch {}
+        };
+        ws.onclose = () => { if (!dead) retryTimer = setTimeout(connect, 4000); };
+        ws.onerror = () => {};
+      } catch {}
+    };
+
+    connect();
+    return () => {
+      dead = true;
+      clearTimeout(retryTimer);
+      if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); }
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+}
 import { createPortal } from 'react-dom';
 import { StatusPill } from '../components/StatusPill';
 import LiveMap from '../components/map/LiveMap';
@@ -706,12 +747,37 @@ export default function LiveTrackingPage() {
   ]);
   const [showSignalAlerts, setShowSignalAlerts] = useState(true);
 
-  const [showPlayback,   setShowPlayback]   = useState(false);
-  const [showHeatmap,    setShowHeatmap]    = useState(false);
-  const [heatmapPoints,  setHeatmapPoints]  = useState([]);  // [lat, lng, intensity]
-  const [heatmapFetched, setHeatmapFetched] = useState(false);
-  const [heatmapLoading, setHeatmapLoading] = useState(false);
+  const [showPlayback,    setShowPlayback]    = useState(false);
+  const [showHeatmap,     setShowHeatmap]     = useState(false);
+  const [heatmapPoints,   setHeatmapPoints]   = useState([]);
+  const [heatmapFetched,  setHeatmapFetched]  = useState(false);
+  const [heatmapLoading,  setHeatmapLoading]  = useState(false);
+  const [wsConnected,     setWsConnected]     = useState(false);
+  const [serverGeoAlerts, setServerGeoAlerts] = useState([]);
   const tickRef = useRef(0);
+
+  // ── WebSocket GPS stream ──────────────────────────────────────────────────
+  useAdminGpsStream((msg) => {
+    if (msg.type === 'connected')    { setWsConnected(true); return; }
+
+    if (msg.type === 'gps_update' && msg.trip_ref) {
+      lastSeenRef.current[msg.trip_ref] = Date.now();
+      setBuses((prev) => prev.map((bus) => {
+        if (bus.id !== msg.trip_ref) return bus;
+        return enrichBus({ ...bus, lat: msg.lat, lng: msg.lng });
+      }));
+    }
+
+    if (msg.type === 'geofence_breach') {
+      setServerGeoAlerts((prev) => {
+        const exists = prev.some(a => a.busId === msg.trip_ref && !a.dismissed);
+        if (exists) return prev;
+        return [{ busId: msg.trip_ref, vehicle: msg.vehicle, driver: msg.driver,
+                  distM: msg.distance_m, detectedAt: msg.detected_at, dismissed: false,
+                  source: 'server' }, ...prev];
+      });
+    }
+  });
 
   // Fetch real GPS heatmap data when the overlay is first toggled on
   useEffect(() => {

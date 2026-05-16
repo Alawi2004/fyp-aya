@@ -159,6 +159,7 @@ poolPromise.then(pool => {
   ensureAuthTables(pool).catch(err => console.error("[startup] ensureAuthTables:", err.message));
   ensureOperationalTables(pool).catch(err => console.error("[startup] ensureOperationalTables:", err.message));
 });
+// Note: geofencing engine is started in server.js after the HTTP server is up.
 
 // Start scheduled report delivery (checks every 30 min)
 startReportScheduler();

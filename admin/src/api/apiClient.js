@@ -154,6 +154,10 @@ const mockAdminResponse = (method, endpoint, data = {}) => {
   if (endpoint.startsWith('/notifications/templates')) return MOCK_NOTIFICATION_TEMPLATES;
   if (endpoint.startsWith('/notifications/scheduled'))  return MOCK_SCHEDULED_NOTIFICATIONS;
   if (endpoint.startsWith('/notifications')) return MOCK_NOTIFICATIONS;
+  if (endpoint.startsWith('/gps/geofence-alerts')) return [
+    { event_id: 1, trip_ref: 'TRP-047', vehicle: 'BUS-07', route: 'Route 3C', lat: 33.9100, lng: 35.6200, distance_m: 820, status: 'active',   detected_at: new Date(Date.now() - 3 * 60000).toISOString(), resolved_at: null },
+    { event_id: 2, trip_ref: 'TRP-033', vehicle: 'BUS-02', route: 'Route 5D', lat: 33.8500, lng: 35.4700, distance_m: 620, status: 'resolved', detected_at: new Date(Date.now() - 30 * 60000).toISOString(), resolved_at: new Date(Date.now() - 20 * 60000).toISOString() },
+  ];
   if (endpoint.startsWith('/gps/live')) {
     // Slowly-drifting mock positions so the demo map animates on 5s polls
     const t = Date.now() / 10000;

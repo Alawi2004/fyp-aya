@@ -780,3 +780,20 @@ export const savePushToken = async (req, res) => {
     res.status(500).json({ error: "Failed to save push token" });
   }
 };
+
+// PUT /api/auth/fcm-token — store raw FCM / APNs device token
+export const saveFcmToken = async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: "token required" });
+    const pool = await poolPromise;
+    await pool.request()
+      .input("uid",   sql.Int,          req.user.user_id)
+      .input("token", sql.NVarChar(300), token)
+      .query("UPDATE users SET fcm_token = @token WHERE user_id = @uid");
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to save FCM token" });
+  }
+};

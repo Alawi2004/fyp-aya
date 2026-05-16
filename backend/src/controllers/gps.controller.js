@@ -1,21 +1,48 @@
 import { poolPromise, sql } from "../db/db.js";
+import { broadcastGpsUpdate } from "../services/gps.stream.service.js";
 
-// POST /api/gps
+// POST /api/gps — save location and broadcast to WebSocket subscribers
 export const sendGpsLocation = async (req, res) => {
   try {
-    const { trip_id, latitude, longitude } = req.body;
+    const { trip_id, latitude, longitude, speed, heading } = req.body;
     const pool = await poolPromise;
+
+    // Resolve plate number for the WebSocket broadcast
+    const tripRow = await pool.request()
+      .input("tid", sql.Int, trip_id)
+      .query(`
+        SELECT
+          CONCAT('TRP-', RIGHT('000' + CAST(t.trip_id AS VARCHAR), 3)) AS trip_ref,
+          v.plate_number AS vehicle_id,
+          r.route_name   AS route
+        FROM trips t
+        LEFT JOIN vehicles v ON v.vehicle_id = t.vehicle_id
+        LEFT JOIN routes   r ON r.route_id   = t.route_id
+        WHERE t.trip_id = @tid
+      `);
 
     await pool
       .request()
-      .input("trip_id", sql.Int, trip_id)
-      .input("latitude", sql.Decimal(9, 6), latitude)
-      .input("longitude", sql.Decimal(9, 6), longitude).query(`
-        INSERT INTO gps_logs(trip_id, latitude, longitude)
-        VALUES(@trip_id, @latitude, @longitude)
-      `);
+      .input("trip_id",   sql.Int,          trip_id)
+      .input("latitude",  sql.Decimal(9, 6), latitude)
+      .input("longitude", sql.Decimal(9, 6), longitude)
+      .query(`INSERT INTO gps_logs(trip_id, latitude, longitude) VALUES(@trip_id, @latitude, @longitude)`);
 
     res.status(201).json({ message: "GPS location saved" });
+
+    // Fire-and-forget WebSocket broadcast after response is sent
+    const meta = tripRow.recordset[0] ?? {};
+    broadcastGpsUpdate({
+      trip_id:    trip_id,
+      trip_ref:   meta.trip_ref   ?? null,
+      vehicle_id: meta.vehicle_id ?? null,
+      route:      meta.route      ?? null,
+      lat:        parseFloat(latitude),
+      lng:        parseFloat(longitude),
+      speed:      speed   ?? null,
+      heading:    heading ?? null,
+      recorded_at: new Date().toISOString(),
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to save GPS data" });
@@ -145,5 +172,88 @@ export const getLatestGps = async (req, res) => {
     res.json(result.recordset[0] || null);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch GPS data" });
+  }
+};
+
+// GET /api/gps/sse/bus/:vehicleId — SSE stream for browser clients
+// Pushes a GPS position event every 3 seconds until the client disconnects.
+export const sseGpsBus = async (req, res) => {
+  const { vehicleId } = req.params;
+
+  res.writeHead(200, {
+    "Content-Type":  "text/event-stream",
+    "Cache-Control": "no-cache",
+    "Connection":    "keep-alive",
+    "X-Accel-Buffering": "no",   // disable nginx buffering
+  });
+
+  // Send a connected event immediately so the client doesn't wait 3 s
+  res.write(`data: ${JSON.stringify({ type: "connected", vehicle_id: vehicleId })}\n\n`);
+
+  const push = async () => {
+    try {
+      const pool   = await poolPromise;
+      const result = await pool.request()
+        .input("vid", sql.NVarChar(50), vehicleId)
+        .query(`
+          SELECT TOP 1
+            CAST(g.latitude  AS FLOAT) AS latitude,
+            CAST(g.longitude AS FLOAT) AS longitude,
+            g.recorded_at              AS updatedAt
+          FROM gps_logs g
+          JOIN  trips    t ON t.trip_id    = g.trip_id
+          JOIN  vehicles v ON v.vehicle_id = t.vehicle_id
+          WHERE (LOWER(v.plate_number) = LOWER(@vid) OR LOWER(REPLACE(v.plate_number,'-','')) = LOWER(REPLACE(@vid,'-','')))
+            AND LOWER(ISNULL(t.status,'')) IN ('ongoing','active')
+          ORDER BY g.recorded_at DESC
+        `);
+
+      if (result.recordset[0]) {
+        res.write(`data: ${JSON.stringify({ type: "gps_update", ...result.recordset[0] })}\n\n`);
+      }
+    } catch { /* keep stream alive on transient DB errors */ }
+  };
+
+  await push();
+  const interval = setInterval(push, 3_000);
+
+  req.on("close", () => clearInterval(interval));
+};
+
+// GET /api/gps/geofence-alerts — recent geofence breach events
+export const getGeofenceAlerts = async (req, res) => {
+  try {
+    const pool   = await poolPromise;
+    const limit  = Math.min(100, Number(req.query.limit) || 50);
+    const status = req.query.status;       // 'active' | 'resolved' | (all)
+
+    const r = pool.request().input("limit", sql.Int, limit);
+    const where = status ? ` AND ge.status = '${status === "active" ? "active" : "resolved"}'` : "";
+
+    const result = await r.query(`
+      SELECT TOP (@limit)
+        ge.event_id,
+        ge.trip_id,
+        CONCAT('TRP-', RIGHT('000' + CAST(ge.trip_id AS VARCHAR), 3)) AS trip_ref,
+        v.plate_number AS vehicle,
+        r.route_name   AS route,
+        CAST(ge.latitude  AS FLOAT) AS lat,
+        CAST(ge.longitude AS FLOAT) AS lng,
+        ge.distance_m,
+        ge.status,
+        ge.detected_at,
+        ge.resolved_at
+      FROM geofence_events ge
+      LEFT JOIN trips    t ON t.trip_id    = ge.trip_id
+      LEFT JOIN vehicles v ON v.vehicle_id = t.vehicle_id
+      LEFT JOIN routes   r ON r.route_id   = ge.route_id
+      WHERE 1=1 ${where}
+      ORDER BY ge.detected_at DESC
+    `);
+
+    res.json(result.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch geofence alerts" });
   }
 };

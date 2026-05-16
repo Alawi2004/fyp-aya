@@ -30,7 +30,7 @@
 
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import * as Notifications from 'expo-notifications';
-import { registerPushToken } from '../api/apiClient';
+import { registerPushToken, registerFcmToken } from '../api/apiClient';
 
 const AppContext = createContext();
 
@@ -48,7 +48,7 @@ const MOCK_BOOKINGS = [
 ];
 
 export const AppProvider = ({ children }) => {
-  // Register Expo push token once on mount so the backend can target this device
+  // Register push tokens on mount (Expo + raw FCM) — best-effort, no throw
   useEffect(() => {
     (async () => {
       try {
@@ -57,9 +57,17 @@ export const AppProvider = ({ children }) => {
           ? true
           : (await Notifications.requestPermissionsAsync()).status === 'granted';
         if (!granted) return;
-        const { data: token } = await Notifications.getExpoPushTokenAsync();
-        if (token) await registerPushToken(token);
-      } catch { /* push token registration is best-effort */ }
+
+        // 1. Expo push token (routes through Expo's proxy → FCM/APNs)
+        const { data: expoToken } = await Notifications.getExpoPushTokenAsync();
+        if (expoToken) await registerPushToken(expoToken).catch(() => {});
+
+        // 2. Raw device token (FCM on Android, APNs on iOS) for direct delivery
+        const { data: deviceToken, type } = await Notifications.getDevicePushTokenAsync();
+        if (deviceToken && (type === 'firebase' || type === 'ios')) {
+          await registerFcmToken(deviceToken).catch(() => {});
+        }
+      } catch { /* entirely best-effort */ }
     })();
   }, []);
 

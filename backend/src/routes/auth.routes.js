@@ -5,7 +5,7 @@ import {
   getLoginAudit,
   getSessions, revokeSession, revokeAllOtherSessions,
   forgotPassword, resetPassword,
-  refresh, logout, savePushToken,
+  refresh, logout, savePushToken, saveFcmToken,
 } from "../controllers/auth.controller.js";
 import { validate } from "../middleware/validate.middleware.js";
 import { requireAuth, requireAdminOnly } from "../middleware/auth.middleware.js";
@@ -48,6 +48,7 @@ router.delete("/sessions/:id",    requireAuth, revokeSession);
 // ── Push notification token (any authenticated user) ─────────────────────────
 
 router.put("/push-token", requireAuth, savePushToken);
+router.put("/fcm-token",  requireAuth, saveFcmToken);
 
 // ── Login audit (admin only) ──────────────────────────────────────────────────
 

@@ -1,10 +1,9 @@
 import { poolPromise, sql } from "../db/db.js";
-import { Expo } from "expo-server-sdk";
-
-const expo = new Expo({ accessToken: process.env.EXPO_ACCESS_TOKEN });
+import { dispatchToTokens } from "../services/fcm.service.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Fetch push tokens for a target group and deliver via Expo push service.
+// Fetch push + FCM tokens for a target group and deliver via Expo + FCM.
+// Dual-channel: Expo tokens → expo-server-sdk; FCM tokens → firebase-admin.
 // Runs fire-and-forget — errors are logged, not surfaced to the API caller.
 // ─────────────────────────────────────────────────────────────────────────────
 async function _sendPush(pool, target, title, body, specificUserId = null) {
@@ -13,31 +12,21 @@ async function _sendPush(pool, target, title, body, specificUserId = null) {
     if (specificUserId) {
       rows = (await pool.request()
         .input("uid", sql.Int, specificUserId)
-        .query("SELECT push_token FROM users WHERE user_id = @uid AND push_token IS NOT NULL")
+        .query("SELECT push_token, fcm_token FROM users WHERE user_id = @uid")
       ).recordset;
     } else {
       const roleClause =
         target === "all_passengers" ? "role = 'passenger'" :
         target === "all_drivers"    ? "role = 'driver'"    : "1=1";
       rows = (await pool.request()
-        .query(`SELECT push_token FROM users WHERE push_token IS NOT NULL AND ${roleClause}`)
+        .query(`SELECT push_token, fcm_token FROM users WHERE ${roleClause}`)
       ).recordset;
     }
 
-    const messages = rows
-      .map((r) => r.push_token)
-      .filter((t) => Expo.isExpoPushToken(t))
-      .map((to) => ({ to, sound: "default", title, body, channelId: "default" }));
+    const tokens = rows.flatMap(r => [r.push_token, r.fcm_token].filter(Boolean));
+    if (!tokens.length) return;
 
-    if (messages.length === 0) return;
-
-    for (const chunk of expo.chunkPushNotifications(messages)) {
-      try {
-        await expo.sendPushNotificationsAsync(chunk);
-      } catch (e) {
-        console.warn("[push] chunk error:", e.message);
-      }
-    }
+    await dispatchToTokens(tokens, title, body);
   } catch (err) {
     console.warn("[push] dispatch error:", err.message);
   }

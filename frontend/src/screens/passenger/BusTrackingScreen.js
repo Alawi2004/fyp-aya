@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
 import { getTripEtaPredictions } from '../../api/etaApi';
 import { fetchBusGps } from '../../api/apiClient';
+import { useGpsWebSocket } from '../../hooks/useGpsWebSocket';
 import { COLORS } from '../../constants/colors';
 
 const CAMERA_SERVER = 'http://localhost:9000';
@@ -96,10 +97,17 @@ const BusTrackingScreen = ({ route, navigation }) => {
   const mapRef      = useRef(null);
   const pulseAnim   = useRef(new Animated.Value(1)).current;
   const panelSlide  = useRef(new Animated.Value(0)).current;
-  const gpsInterval = useRef(null);
   const etaInterval = useRef(null);
-  const alertSent   = useRef(false);         // prevent duplicate alerts
+  const alertSent   = useRef(false);
   const notifGranted = useRef(false);
+
+  // WebSocket GPS stream (with HTTP polling fallback built in)
+  const {
+    location:    wsLocation,
+    isLive:      wsIsLive,
+    isConnected: wsConnected,
+    lastUpdated: wsLastUpdated,
+  } = useGpsWebSocket(busId, getBusLocation?.(busId) || { latitude: 33.8938, longitude: 35.5018 });
 
   const [busLocation, setBusLocation]   = useState(
     getBusLocation?.(busId) || { latitude: 33.8938, longitude: 35.5018 }
@@ -184,6 +192,18 @@ const BusTrackingScreen = ({ route, navigation }) => {
     finally { setEtaLoading(false); }
   }, [tripId]);
 
+  // Sync WebSocket / polling location into component state and map
+  useEffect(() => {
+    if (wsLocation?.latitude == null) return;
+    setBusLocation({ latitude: wsLocation.latitude, longitude: wsLocation.longitude });
+    setIsLive(wsIsLive);
+    if (wsLastUpdated) setLastUpdated(wsLastUpdated);
+    mapRef.current?.animateToRegion(
+      { latitude: wsLocation.latitude, longitude: wsLocation.longitude, latitudeDelta: 0.03, longitudeDelta: 0.03 },
+      600
+    );
+  }, [wsLocation, wsIsLive, wsLastUpdated]);
+
   useEffect(() => {
     // Request notification permission
     requestNotifPermission().then((granted) => { notifGranted.current = granted; });
@@ -197,30 +217,6 @@ const BusTrackingScreen = ({ route, navigation }) => {
     ).start();
     Animated.timing(panelSlide, { toValue: 1, duration: 600, delay: 300, useNativeDriver: true }).start();
 
-    // GPS polling — real API, falls back to AppContext mock on error
-    const pollGps = async () => {
-      try {
-        const loc = await fetchBusGps(busId);
-        if (loc?.latitude != null) {
-          setBusLocation({ latitude: loc.latitude, longitude: loc.longitude });
-          setLastUpdated(loc.updatedAt || new Date().toISOString());
-          setIsLive(true);
-          mapRef.current?.animateToRegion(
-            { latitude: loc.latitude, longitude: loc.longitude, latitudeDelta: 0.03, longitudeDelta: 0.03 },
-            1000
-          );
-        }
-      } catch {
-        const loc = getBusLocation?.(busId);
-        if (loc) {
-          setBusLocation({ latitude: loc.latitude, longitude: loc.longitude });
-          setLastUpdated(loc.updatedAt);
-        }
-      }
-    };
-    pollGps();
-    gpsInterval.current = setInterval(pollGps, GPS_POLL_MS);
-
     // ETA polling
     fetchEta();
     etaInterval.current = setInterval(fetchEta, ETA_POLL_MS);
@@ -233,7 +229,6 @@ const BusTrackingScreen = ({ route, navigation }) => {
     const mockTimer = setInterval(() => setMockOffset((o) => o + 1), 30_000);
 
     return () => {
-      clearInterval(gpsInterval.current);
       clearInterval(etaInterval.current);
       clearInterval(seatInterval.current);
       clearInterval(mockTimer);
