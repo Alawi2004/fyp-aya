@@ -3,6 +3,7 @@ import { Panel } from "../components/Panel";
 import { Modal } from "../components/Modal";
 import { StatCard } from "../components/StatCard";
 import { StatusPill } from "../components/StatusPill";
+import { useAuth } from "../context/AuthContext";
 import { getComplaints, createComplaint, updateComplaint, addComplaintComment } from "../api/endpoints";
 import { MOCK_COMPLAINTS, MOCK_DRIVERS, MOCK_ROUTES } from "../data/mockData";
 
@@ -83,7 +84,8 @@ function ComplaintDetail({ complaint, onClose, onUpdate, onAddComment }) {
 
   function handleComment() {
     if (!newComment.trim()) return;
-    const comment = { author: "Admin User", text: newComment.trim(), time: new Date().toISOString() };
+    const author  = user?.full_name ?? user?.email ?? "Admin";
+    const comment = { author, text: newComment.trim(), time: new Date().toISOString() };
     onAddComment(complaint.id, comment);
     setNewComment("");
   }
@@ -295,6 +297,7 @@ const inp = { width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", b
 
 // ── Main ComplaintsPage ───────────────────────────────────────────────────────
 export default function ComplaintsPage() {
+  const { user } = useAuth();
   const [complaints,   setComplaints]   = useState([]);
   const [statusFilter, setStatusFilter] = useState("All");
   const [prioFilter,   setPrioFilter]   = useState("All");

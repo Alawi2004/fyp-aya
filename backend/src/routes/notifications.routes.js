@@ -93,6 +93,5 @@ router.put("/:id/read", markNotificationRead);
  *         description: User's notifications
  */
 router.get("/user/:user_id", getUserNotifications);
-router.get("/:user_id", getUserNotifications);
 
 export default router;
