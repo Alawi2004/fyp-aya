@@ -130,16 +130,16 @@
 </div>
 
 <div class="summary-bar">
-  <div class="stat-card stat-done"><div class="num">157</div><div class="label">Done</div></div>
+  <div class="stat-card stat-done"><div class="num">158</div><div class="label">Done</div></div>
   <div class="stat-card stat-partial"><div class="num">0</div><div class="label">Partial</div></div>
-  <div class="stat-card stat-missing"><div class="num">30</div><div class="label">Missing</div></div>
+  <div class="stat-card stat-missing"><div class="num">29</div><div class="label">Missing</div></div>
   <div class="stat-card" style="min-width:200px">
     <div class="label" style="margin-bottom:6px">Overall Completion</div>
     <div class="progress-row">
       <div class="progress-bar">
-        <div class="progress-fill" style="width:84%;background:linear-gradient(90deg,#16a34a,#84cc16)"></div>
+        <div class="progress-fill" style="width:85%;background:linear-gradient(90deg,#16a34a,#84cc16)"></div>
       </div>
-      <span class="pct">~84%</span>
+      <span class="pct">~85%</span>
     </div>
   </div>
 </div>
@@ -432,12 +432,12 @@
     <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Live Camera WebSocket Streams</div><div class="feat-detail">Admin dashboard receives annotated JPEG frames via WebSocket from camera server</div></div></div>
     <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Seat Availability Estimation</div><div class="feat-detail">Live tracking now shows passenger-camera-derived seat availability estimates with remaining-seat labels for each active trip</div></div></div>
     <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Traffic-Aware ETA / Route Hints</div><div class="feat-detail">Live tracking now applies Beirut time-of-day traffic ETA adjustments and route-specific traffic hints directly in bus cards and trip details</div></div></div>
-    <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Delay Prediction ML Model</div><div class="feat-detail">Multivariate linear regression (gradient descent + L2 regularisation) trained on trip_delays history; features: hour, day-of-week, rush-hour flags, per-route historical avg; GET /api/ml/delay-prediction?route_id&amp;departure_time returns predicted_delay_minutes + risk_level + factors; POST /api/ml/train (admin) re-trains in-memory model; lazy auto-trains on first request; RMSE reported in model-status endpoint</div></div></div>
+    <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Delay Prediction ML Model</div><div class="feat-detail">Multivariate linear regression with L2 ridge regularisation; 9 cyclically-encoded + z-score standardised features (hour_sin/cos, dow_sin/cos, morning/evening rush, weekend, route_hist_avg, route_freq). Adaptive LR decay (×0.9 per 100 epochs) + delta early-stop. Augments with synthetic Lebanese seed data when DB &lt; 20 rows. GET /api/ml/delay-prediction → predicted_delay_minutes + risk_level + factors + RMSE; POST /api/ml/train (admin); POST /api/ml/train-all trains both models; GET /api/ml/model-status returns full training metadata.</div></div></div>
     <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Fraud Detection Engine</div><div class="feat-detail missing">Rule-based + anomaly detection on top-up transactions; flagged review queue</div></div></div>
     <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">QR Replay Prevention (Redis)</div><div class="feat-detail">ioredis integrated; claimQrJti() uses atomic SET NX EX 120 before every scan — concurrent re-scans of the same JTI are rejected sub-millisecond (before the DB transaction opens); graceful fallback to DB used_at check when Redis is unavailable; redis.service.js with configurable REDIS_URL; qr:jti:{jti} keys auto-expire after 120 s</div></div></div>
     <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Emergency: Auto-SMS to Dispatch</div><div class="feat-detail missing">On SOS press: automatic SMS to emergency contacts + live GPS share link</div></div></div>
     <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Scheduled Report Emails</div><div class="feat-detail">sendScheduledReport() in email.service.js; reportScheduler.js polls every 30 min on app boot; Analytics "Schedule Reports" tab — CRUD for daily/weekly/monthly reports with recipient list, "Send Now" test, enable/disable toggle; HTML email with styled table</div></div></div>
-    <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Predictive Demand Analytics</div><div class="feat-detail missing">Forecast passenger demand for upcoming trips based on historical patterns</div></div></div>
+    <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Predictive Demand Analytics</div><div class="feat-detail">Hybrid bucket + ridge-regression demand model: (route, dow, 2-hr slot) rolling bucket averages blended with z-score-standardised linear regression (9-feature cyclical encoding). GET /api/ml/demand-forecast?route_id&amp;departure_time → expected_passengers, occupancy_pct, demand_level, peak_type, recommendation. GET /api/ml/demand-forecast/day?route_id&amp;date → full 18-slot day schedule with peak_hour + total_expected_passengers. Augments with synthetic Lebanese transit seed when DB &lt; 20 rows.</div></div></div>
   </div>
 </div>
 
@@ -467,7 +467,7 @@
 </main>
 
 <footer>
-  Updated 2026-05-16 — Staff: Shift Mgmt, QR/NFC Scanner, Digital Receipt, Offline Mode, Idempotency, Cash Report; ML Delay Prediction, Redis QR Replay Prevention, Admin panels, Driver Inbox, Real GPS polling &nbsp;·&nbsp; Yalla Transit &nbsp;·&nbsp; FYP PRFE322-EM20
+  Updated 2026-05-16 — Staff: Shift Mgmt, QR/NFC Scanner, Digital Receipt, Offline Mode, Idempotency, Cash Report; Demand Analytics (hybrid bucket+regression), Delay ML rewritten (cyclical encoding, z-score, synthetic seed), Redis QR replay prevention, Admin panels, Driver Inbox &nbsp;·&nbsp; Yalla Transit &nbsp;·&nbsp; FYP PRFE322-EM20
 </footer>
 
 </body>
