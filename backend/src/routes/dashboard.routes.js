@@ -3,6 +3,8 @@ import {
   getTripsDashboard,
   getDashboardStats,
   getDashboardOverview,
+  getEmergencyAlerts,
+  getAdminIssues,
 } from "../controllers/dashboard.controller.js";
 import { requireAdminOnly } from "../middleware/auth.middleware.js";
 
@@ -64,5 +66,7 @@ router.get("/stats", getDashboardStats);
  *         description: Admin access required
  */
 router.get("/overview", getDashboardOverview);
+router.get("/emergency-alerts", getEmergencyAlerts);
+router.get("/issues",           getAdminIssues);
 
 export default router;

@@ -90,6 +90,21 @@ const mockResponse = (config) => {
   if (url.includes('/bookings') && method === 'post') return { booking: { _id: Date.now().toString(), ...body, status: 'upcoming' } };
   if (url.includes('/bookings')) return { bookings: mockPassengerData.bookings };
   if (url.includes('/stops')) return mockPassengerData.stops;
+  if (url.includes('/gps/bus/'))  return { latitude: 33.8938 + (Date.now() % 5000) * 0.0000002, longitude: 35.5018 + (Date.now() % 5000) * 0.0000003, updatedAt: new Date().toISOString() };
+  if (url.includes('/notifications/user/')) return [
+    { notification_id: 1, title: 'Route Delay Alert',    body: 'Trip TRP-041 delayed 15 min — heavy traffic on Jounieh Highway.', type: 'delay',   is_read: false, created_at: new Date(Date.now() - 5 * 60000).toISOString()    },
+    { notification_id: 2, title: 'Schedule Update',      body: 'Your shift tomorrow starts at 07:00 instead of 06:30.',            type: 'info',    is_read: false, created_at: new Date(Date.now() - 30 * 60000).toISOString()   },
+    { notification_id: 3, title: 'Passenger Feedback',   body: 'A passenger commented on trip TRP-033. Rating: 4 ★',               type: 'warning', is_read: true,  created_at: new Date(Date.now() - 2 * 3600000).toISOString()  },
+    { notification_id: 4, title: 'Route 7B Update',      body: 'Route 7B has been updated with two new stops.',                    type: 'info',    is_read: true,  created_at: new Date(Date.now() - 24 * 3600000).toISOString() },
+  ];
+  if (url.match(/\/routes\/\d+\/waypoints/) && method === 'get') return [
+    { waypoint_id: 1, latitude: 33.8938, longitude: 35.5018, wp_order: 1 },
+    { waypoint_id: 2, latitude: 33.9100, longitude: 35.5150, wp_order: 2 },
+    { waypoint_id: 3, latitude: 33.9280, longitude: 35.5340, wp_order: 3 },
+    { waypoint_id: 4, latitude: 33.9566, longitude: 35.5901, wp_order: 4 },
+    { waypoint_id: 5, latitude: 33.9806, longitude: 35.6178, wp_order: 5 },
+  ];
+  if (url.includes('/auth/push-token')) return { ok: true };
   if (url.includes('/driver/trips')) return { trips: [] };
   if (url.includes('/driver/earnings')) return { total: 0, trips: 0, history: [] };
   // Share ticket endpoints
@@ -148,5 +163,13 @@ apiClient.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// ── Named API helpers ─────────────────────────────────────────────────────────
+
+export const fetchBusGps = (vehicleId) =>
+  apiClient.get(`/gps/bus/${encodeURIComponent(vehicleId)}`).then((r) => r.data);
+
+export const registerPushToken = (pushToken) =>
+  apiClient.put('/auth/push-token', { token: pushToken }).then((r) => r.data);
 
 export default apiClient;

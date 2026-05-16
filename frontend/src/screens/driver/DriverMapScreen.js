@@ -8,21 +8,22 @@ import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
 import { useLocation } from '../../hooks/useLocation';
-import { markStopArrivalApi } from '../../api/driverApi';
+import { markStopArrivalApi, getRouteWaypointsApi } from '../../api/driverApi';
 
+// Fallback route — Lebanese coordinates (Beirut → Jounieh, Route 12A)
 const MOCK_ROUTE = [
-  { latitude: 3.1390, longitude: 101.6869 },
-  { latitude: 3.1420, longitude: 101.6895 },
-  { latitude: 3.1455, longitude: 101.6925 },
-  { latitude: 3.1478, longitude: 101.6960 },
-  { latitude: 3.1510, longitude: 101.7005 },
+  { latitude: 33.8938, longitude: 35.5018 },
+  { latitude: 33.9100, longitude: 35.5150 },
+  { latitude: 33.9280, longitude: 35.5340 },
+  { latitude: 33.9566, longitude: 35.5901 },
+  { latitude: 33.9806, longitude: 35.6178 },
 ];
 
 const INITIAL_STOPS = [
-  { id: 1, name: 'Terminal North',  lat: 3.1390, lng: 101.6869, done: true  },
-  { id: 2, name: 'Midpoint Hub',    lat: 3.1455, lng: 101.6925, done: true  },
-  { id: 3, name: 'City Center',     lat: 3.1478, lng: 101.6960, done: false },
-  { id: 4, name: 'City Mall',       lat: 3.1510, lng: 101.7005, done: false },
+  { id: 1, name: 'Hamra Station',    lat: 33.8938, lng: 35.5018, done: true  },
+  { id: 2, name: 'Adliyeh Junction', lat: 33.9280, lng: 35.5340, done: true  },
+  { id: 3, name: 'Jounieh Highway',  lat: 33.9566, lng: 35.5901, done: false },
+  { id: 4, name: 'Jounieh Terminal', lat: 33.9806, lng: 35.6178, done: false },
 ];
 
 const TRIP_INFO = {
@@ -46,14 +47,16 @@ const haversine = (lat1, lon1, lat2, lon2) => {
 };
 
 const DriverMapScreen = ({ navigation, route }) => {
-  const tripId = route?.params?.tripId ?? null;
+  const tripId  = route?.params?.tripId  ?? null;
+  const routeId = route?.params?.routeId ?? null;
   const insets = useSafeAreaInsets();
   const mapRef      = useRef(null);
   const pulseAnim   = useRef(new Animated.Value(1)).current;
   const panelAnim   = useRef(new Animated.Value(100)).current;
   const routeAnim   = useRef(new Animated.Value(0)).current;
   const triggeredRef = useRef(new Set()); // stop IDs already auto-marked
-  const [location, setLocation]         = useState(MOCK_ROUTE[1]);
+  const [routeWaypoints, setRouteWaypoints] = useState(MOCK_ROUTE);
+  const [location, setLocation]         = useState(MOCK_ROUTE[0]);
   const [broadcasting, setBroadcasting] = useState(true);
   const [stops, setStops]               = useState(INITIAL_STOPS);
   const [approaching, setApproaching]         = useState(false);
@@ -64,6 +67,20 @@ const DriverMapScreen = ({ navigation, route }) => {
   const [etaMins]    = useState(12);
   const [distanceKm] = useState(2.1);
   useLocation({ tripId, broadcasting, onLocationUpdate: setLocation });
+
+  // Fetch real route waypoints when a routeId is provided
+  useEffect(() => {
+    if (!routeId) return;
+    getRouteWaypointsApi(routeId)
+      .then(data => {
+        if (Array.isArray(data) && data.length >= 2) {
+          setRouteWaypoints(
+            data.map(w => ({ latitude: parseFloat(w.latitude), longitude: parseFloat(w.longitude) }))
+          );
+        }
+      })
+      .catch(() => { /* keep MOCK_ROUTE fallback on error */ });
+  }, [routeId]);
 
   const nextStop  = stops.find(s => !s.done);
   const doneStops = stops.filter(s => s.done).length;
@@ -85,15 +102,16 @@ const DriverMapScreen = ({ navigation, route }) => {
 
   // Route deviation: flag when driver is >150 m from every waypoint on the planned route
   useEffect(() => {
+    if (!routeWaypoints.length) return;
     const minDist = Math.min(
-      ...MOCK_ROUTE.map(pt =>
+      ...routeWaypoints.map(pt =>
         haversine(location.latitude, location.longitude, pt.latitude, pt.longitude)
       )
     );
     const offRoute = minDist > DEVIATION_RADIUS_M;
     setDeviating(offRoute);
     if (!offRoute) setDeviationDismissed(false); // reset dismiss once back on route
-  }, [location]);
+  }, [location, routeWaypoints]);
 
   useEffect(() => {
     Animated.parallel([
@@ -133,13 +151,13 @@ const DriverMapScreen = ({ navigation, route }) => {
         showsTraffic
       >
         <Polyline
-          coordinates={MOCK_ROUTE}
+          coordinates={routeWaypoints}
           strokeColor={COLORS.primary}
           strokeWidth={5}
         />
-        {/* Completed portion */}
+        {/* Completed portion up to first undone stop */}
         <Polyline
-          coordinates={MOCK_ROUTE.slice(0, 2)}
+          coordinates={routeWaypoints.slice(0, Math.max(2, stops.filter(s => s.done).length))}
           strokeColor={COLORS.secondary}
           strokeWidth={5}
         />

@@ -378,3 +378,110 @@ export const getTimetableTrips = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch timetable" });
   }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/trips/checklists — admin pre-trip checklist audit
+// Returns all driver checklist submissions joined with trip/route/driver/vehicle.
+// ─────────────────────────────────────────────────────────────────────────────
+export const getTripChecklists = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT
+        tc.checklist_id,
+        tc.trip_id,
+        CONCAT('TRP-', RIGHT('000' + CAST(tc.trip_id AS VARCHAR), 3)) AS trip_ref,
+        u.full_name    AS driver,
+        v.plate_number AS vehicle,
+        r.route_name   AS route,
+        tc.fuel_ok,
+        tc.lights_ok,
+        tc.tires_ok,
+        tc.submitted_at
+      FROM trip_checklists tc
+      LEFT JOIN trips    t ON t.trip_id    = tc.trip_id
+      LEFT JOIN routes   r ON r.route_id   = t.route_id
+      LEFT JOIN drivers  d ON d.driver_id  = t.driver_id
+      LEFT JOIN users    u ON u.user_id    = d.user_id
+      LEFT JOIN vehicles v ON v.vehicle_id = t.vehicle_id
+      ORDER BY tc.submitted_at DESC
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch trip checklists' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/trips/:id/arrivals — per-stop arrival data for a trip
+// Returns stop arrival records with stop name, scheduled/actual times, delay.
+// ─────────────────────────────────────────────────────────────────────────────
+export const getTripStopArrivals = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input('trip_id', sql.Int, parseInt(req.params.id, 10))
+      .query(`
+        SELECT
+          tsa.trip_stop_arrival_id AS id,
+          tsa.stop_id,
+          s.stop_name,
+          tsa.stop_order,
+          tsa.scheduled_arrival_at,
+          tsa.actual_arrival_at,
+          tsa.delay_seconds,
+          tsa.arrival_status,
+          tsa.notes
+        FROM trip_stop_arrivals tsa
+        LEFT JOIN stops s ON s.stop_id = tsa.stop_id
+        WHERE tsa.trip_id = @trip_id
+        ORDER BY ISNULL(tsa.stop_order, 9999) ASC, tsa.scheduled_arrival_at ASC
+      `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch stop arrivals' });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/trips/delays — admin delay management view
+// Returns all delay reports joined with trip, route, driver, vehicle, and
+// the count of confirmed/boarded passengers affected.
+// ─────────────────────────────────────────────────────────────────────────────
+export const getTripDelays = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT
+        td.delay_id,
+        td.trip_id,
+        CONCAT('TRP-', RIGHT('000' + CAST(td.trip_id AS VARCHAR), 3)) AS trip_ref,
+        r.route_name   AS route,
+        u.full_name    AS driver,
+        v.plate_number AS vehicle,
+        td.reason,
+        td.delay_minutes,
+        td.notes,
+        td.reported_at,
+        (
+          SELECT COUNT(*)
+          FROM tickets tk
+          WHERE tk.trip_id = td.trip_id
+            AND tk.status IN ('confirmed', 'boarded')
+        ) AS affected_passengers
+      FROM trip_delays td
+      LEFT JOIN trips    t ON t.trip_id    = td.trip_id
+      LEFT JOIN routes   r ON r.route_id   = t.route_id
+      LEFT JOIN drivers  d ON d.driver_id  = t.driver_id
+      LEFT JOIN users    u ON u.user_id    = d.user_id
+      LEFT JOIN vehicles v ON v.vehicle_id = t.vehicle_id
+      ORDER BY td.reported_at DESC
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch trip delays' });
+  }
+};

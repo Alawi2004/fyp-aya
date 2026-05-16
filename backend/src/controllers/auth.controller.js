@@ -763,3 +763,20 @@ export const logout = async (req, res) => {
     res.status(500).json({ error: "Logout failed" });
   }
 };
+
+// PUT /api/auth/push-token — store Expo push token for the authenticated user
+export const savePushToken = async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: "token required" });
+    const pool = await poolPromise;
+    await pool.request()
+      .input("uid",   sql.Int,          req.user.user_id)
+      .input("token", sql.NVarChar(200), token)
+      .query("UPDATE users SET push_token = @token WHERE user_id = @uid");
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to save push token" });
+  }
+};

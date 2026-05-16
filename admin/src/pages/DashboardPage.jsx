@@ -9,7 +9,7 @@ import {
 import { Panel }    from "../components/Panel";
 import { StatCard } from "../components/StatCard";
 import DashboardMap from "../components/map/DashboardMap";
-import { getDashboardStats, getDashboardOverview } from "../api/endpoints";
+import { getDashboardStats, getDashboardOverview, getEmergencyAlerts } from "../api/endpoints";
 import { MOCK_DASHBOARD_STATS } from "../data/mockData";
 
 // ─── Mock fallbacks (used until the real API responds) ────────────────────────
@@ -65,6 +65,12 @@ const DEFAULT_WEEK = [
   { day: "Fri", trips: 49, rev: 78 },
   { day: "Sat", trips: 32, rev: 55 },
   { day: "Sun", trips: 29, rev: 48 },
+];
+
+const DEFAULT_EMERGENCIES = [
+  { id: 1, driver_id: 1, driver_name: "Karim Moussa",   vehicle: "BUS-01", trip_ref: "TRP-041", message: "Passenger collapse on board",            latitude: 33.8938, longitude: 35.5018, status: "active",   created_at: "2026-05-15T13:58:00" },
+  { id: 2, driver_id: 3, driver_name: "Joe Pharaon",    vehicle: "BUS-09", trip_ref: "TRP-029", message: "Vehicle collision — minor fender bender", latitude: 33.9800, longitude: 35.5500, status: "resolved", created_at: "2026-05-14T09:30:00" },
+  { id: 3, driver_id: 4, driver_name: "Maya Salameh",   vehicle: "BUS-02", trip_ref: null,      message: "Engine overheating warning",              latitude: 33.8700, longitude: 35.5100, status: "active",   created_at: "2026-05-15T11:22:00" },
 ];
 
 const DEFAULT_LOAD_HOURS = [
@@ -205,7 +211,8 @@ export default function DashboardPage({ onNavigate }) {
   const [drivers,   setDrivers]   = useState(DEFAULT_DRIVERS);
   const [week,      setWeek]      = useState(DEFAULT_WEEK);
   const [loadHours, setLoadHours] = useState(DEFAULT_LOAD_HOURS);
-  const [revSummary, setRevSummary] = useState({ this_week: 8420, last_week: 7390, change_pct: 14 });
+  const [revSummary,   setRevSummary]   = useState({ this_week: 8420, last_week: 7390, change_pct: 14 });
+  const [emergencies,  setEmergencies]  = useState(DEFAULT_EMERGENCIES);
 
   useEffect(() => {
     getDashboardStats()
@@ -223,6 +230,10 @@ export default function DashboardPage({ onNavigate }) {
         if (d.load_hours?.length) setLoadHours(d.load_hours);
         if (d.rev_summary)        setRevSummary(d.rev_summary);
       })
+      .catch(() => {});
+
+    getEmergencyAlerts()
+      .then(d => { if (Array.isArray(d) && d.length) setEmergencies(d); })
       .catch(() => {});
   }, []);
 
@@ -337,6 +348,156 @@ export default function DashboardPage({ onNavigate }) {
           </div>
         ))}
       </div>
+
+      {/* ── 2.5. Emergency Alert Tray ──────────────────────────── */}
+      {(() => {
+        const active   = emergencies.filter(e => e.status === "active");
+        const hasActive = active.length > 0;
+
+        function fmtAgo(dt) {
+          if (!dt) return "—";
+          const min = Math.floor((Date.now() - new Date(dt)) / 60000);
+          if (min < 1)  return "just now";
+          if (min < 60) return `${min}m ago`;
+          const h = Math.floor(min / 60);
+          if (h < 24)   return `${h}h ago`;
+          return `${Math.floor(h / 24)}d ago`;
+        }
+
+        return (
+          <div style={{
+            border:       `2px solid ${hasActive ? "#FECACA" : "#A7F3D0"}`,
+            borderRadius: 14,
+            background:   hasActive ? "#FFF5F5" : "#F0FDF4",
+            overflow:     "hidden",
+            ...(hasActive ? { animation: "pulse-border 2s ease-in-out infinite" } : {}),
+          }}>
+            {/* Header */}
+            <div style={{
+              display:        "flex",
+              alignItems:     "center",
+              gap:            10,
+              padding:        "12px 18px",
+              background:     hasActive ? "#FEF2F2" : "#ECFDF5",
+              borderBottom:   `1px solid ${hasActive ? "#FECACA" : "#A7F3D0"}`,
+            }}>
+              <AlertTriangle size={16} color={hasActive ? "#EF4444" : "#10B981"} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: hasActive ? "#B91C1C" : "#065F46", flex: 1 }}>
+                Emergency Alerts
+              </span>
+              {hasActive ? (
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
+                  background: "#EF4444", color: "#fff",
+                }}>
+                  {active.length} ACTIVE
+                </span>
+              ) : (
+                <span style={{
+                  fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20,
+                  background: "#D1FAE5", color: "#065F46",
+                }}>
+                  All clear
+                </span>
+              )}
+            </div>
+
+            {!hasActive && emergencies.length === 0 ? (
+              <div style={{ padding: "20px 18px", display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ fontSize: 24 }}>✓</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#065F46" }}>No emergency alerts</div>
+                  <div style={{ fontSize: 11, color: "#6EE7B7", marginTop: 2 }}>All drivers are operating normally.</div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: hasActive ? "#FEF2F2" : "#ECFDF5" }}>
+                      {["Status", "Driver", "Vehicle", "Trip", "Message", "GPS", "Time", ""].map(h => (
+                        <th key={h} style={{
+                          padding: "8px 14px", textAlign: "left",
+                          fontSize: 10, fontWeight: 700, color: hasActive ? "#B91C1C" : "#065F46",
+                          textTransform: "uppercase", letterSpacing: ".05em", whiteSpace: "nowrap",
+                          borderBottom: `1px solid ${hasActive ? "#FECACA" : "#A7F3D0"}`,
+                        }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {emergencies.map((e, i) => {
+                      const isActive = e.status === "active";
+                      return (
+                        <tr key={e.id} style={{
+                          borderBottom: i < emergencies.length - 1 ? `1px solid ${hasActive ? "#FEE2E2" : "#D1FAE5"}` : "none",
+                          background: isActive
+                            ? (i % 2 === 0 ? "#FFF5F5" : "#FFF0F0")
+                            : (i % 2 === 0 ? "#F8FAFC" : "#F0FDF4"),
+                          opacity: isActive ? 1 : 0.7,
+                        }}>
+                          <td style={{ padding: "10px 14px" }}>
+                            {isActive ? (
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <div style={{ position: "relative", width: 9, height: 9, flexShrink: 0 }}>
+                                  <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#EF4444", position: "relative", zIndex: 1 }} />
+                                  <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#EF4444", animation: "pulse-ring 1.5s ease-out infinite" }} />
+                                </div>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: "#DC2626", textTransform: "uppercase" }}>Active</span>
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: 10, fontWeight: 600, color: "#10B981" }}>✓ Resolved</span>
+                            )}
+                          </td>
+                          <td style={{ padding: "10px 14px" }}>
+                            <div style={{ fontWeight: 700, color: "#0F172A", fontSize: 12 }}>{e.driver_name ?? "—"}</div>
+                          </td>
+                          <td style={{ padding: "10px 14px" }}>
+                            <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#2563EB", fontSize: 12 }}>{e.vehicle ?? "—"}</span>
+                          </td>
+                          <td style={{ padding: "10px 14px" }}>
+                            <span style={{ fontFamily: "monospace", fontSize: 11, color: "#64748B" }}>{e.trip_ref ?? "—"}</span>
+                          </td>
+                          <td style={{ padding: "10px 14px", maxWidth: 240 }}>
+                            <span style={{ fontSize: 12, color: isActive ? "#B91C1C" : "#475569", fontWeight: isActive ? 600 : 400 }}>
+                              {e.message}
+                            </span>
+                          </td>
+                          <td style={{ padding: "10px 14px", whiteSpace: "nowrap" }}>
+                            {e.latitude != null && e.longitude != null ? (
+                              <span style={{ fontSize: 10, color: "#64748B", fontFamily: "monospace" }}>
+                                {Number(e.latitude).toFixed(4)}, {Number(e.longitude).toFixed(4)}
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: 10, color: "#CBD5E1" }}>No GPS</span>
+                            )}
+                          </td>
+                          <td style={{ padding: "10px 14px", fontSize: 11, color: "#94A3B8", whiteSpace: "nowrap" }}>
+                            {fmtAgo(e.created_at)}
+                          </td>
+                          <td style={{ padding: "10px 14px" }}>
+                            {isActive && (
+                              <button
+                                onClick={() => setEmergencies(prev => prev.map(x => x.id === e.id ? { ...x, status: "resolved" } : x))}
+                                style={{
+                                  fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 7, border: "none",
+                                  background: "#ECFDF5", color: "#059669", cursor: "pointer",
+                                }}
+                              >
+                                Resolve
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── 3. Map + Alerts ────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "1.35fr 1fr", gap: 16 }}>

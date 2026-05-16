@@ -24,6 +24,7 @@ import ComplaintsPage   from "./pages/ComplaintsPage";
 import PassengersPage   from "./pages/PassengersPage";
 import AuditLogPage        from "./pages/AuditLogPage";
 import SystemSettingsPage  from "./pages/SystemSettingsPage";
+import IssuesPage          from "./pages/IssuesPage";
 
 export default function App() {
   return (
@@ -73,6 +74,7 @@ function AppShell() {
     settings:      <SystemSettingsPage />,
     staff:         <StaffPage />,
     complaints:    <ComplaintsPage />,
+    issues:        <IssuesPage />,
   };
 
   return (

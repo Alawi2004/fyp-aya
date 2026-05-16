@@ -18,8 +18,9 @@ import RatingsScreen           from '../screens/driver/RatingsScreen';
 import VehicleStatusScreen     from '../screens/driver/VehicleStatusScreen';
 import DriverProfileScreen     from '../screens/driver/DriverProfileScreen';
 import TripChecklistScreen     from '../screens/driver/TripChecklistScreen';
-import DelayReportScreen      from '../screens/driver/DelayReportScreen';
-import WeeklyScheduleScreen   from '../screens/driver/WeeklyScheduleScreen';
+import DelayReportScreen              from '../screens/driver/DelayReportScreen';
+import WeeklyScheduleScreen           from '../screens/driver/WeeklyScheduleScreen';
+import DriverNotificationsScreen      from '../screens/driver/DriverNotificationsScreen';
 
 const Tab   = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -84,13 +85,21 @@ const HistoryStack = () => (
   </Stack.Navigator>
 );
 
+// ── Notifications tab stack ───────────────────────────────────────────────────
+const NotificationsStack = () => (
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="DriverNotifications" component={DriverNotificationsScreen} />
+  </Stack.Navigator>
+);
+
 // ── Tab config ───────────────────────────────────────────────────────────────
 const TAB_CONFIG = {
-  DashboardStack: { label: 'Dashboard', icon: 'speedometer',  iconOutline: 'speedometer-outline' },
-  MapStack:       { label: 'Navigate',  icon: 'navigate',     iconOutline: 'navigate-outline'    },
-  VehicleStack:   { label: 'Vehicle',   icon: 'car',          iconOutline: 'car-outline'          },
-  EarningsStack:  { label: 'Earnings',  icon: 'cash',         iconOutline: 'cash-outline'         },
-  HistoryStack:   { label: 'History',   icon: 'time',         iconOutline: 'time-outline'         },
+  DashboardStack:      { label: 'Dashboard', icon: 'speedometer',      iconOutline: 'speedometer-outline'      },
+  MapStack:            { label: 'Navigate',  icon: 'navigate',         iconOutline: 'navigate-outline'         },
+  VehicleStack:        { label: 'Vehicle',   icon: 'car',              iconOutline: 'car-outline'              },
+  EarningsStack:       { label: 'Earnings',  icon: 'cash',             iconOutline: 'cash-outline'             },
+  HistoryStack:        { label: 'History',   icon: 'time',             iconOutline: 'time-outline'             },
+  NotificationsStack:  { label: 'Inbox',     icon: 'notifications',    iconOutline: 'notifications-outline'    },
 };
 
 const CustomTabBar = ({ state, descriptors, navigation }) => {
@@ -134,11 +143,12 @@ const DriverNavigator = () => (
     tabBar={props => <CustomTabBar {...props} />}
     screenOptions={{ headerShown: false }}
   >
-    <Tab.Screen name="DashboardStack" component={DashboardStack} options={{ tabBarLabel: 'Dashboard' }} />
-    <Tab.Screen name="MapStack"       component={MapStack}       options={{ tabBarLabel: 'Navigate'  }} />
-    <Tab.Screen name="VehicleStack"   component={VehicleStack}   options={{ tabBarLabel: 'Vehicle'   }} />
-    <Tab.Screen name="EarningsStack"  component={EarningsStack}  options={{ tabBarLabel: 'Earnings'  }} />
-    <Tab.Screen name="HistoryStack"   component={HistoryStack}   options={{ tabBarLabel: 'History'   }} />
+    <Tab.Screen name="DashboardStack"     component={DashboardStack}     options={{ tabBarLabel: 'Dashboard' }} />
+    <Tab.Screen name="MapStack"           component={MapStack}           options={{ tabBarLabel: 'Navigate'  }} />
+    <Tab.Screen name="VehicleStack"       component={VehicleStack}       options={{ tabBarLabel: 'Vehicle'   }} />
+    <Tab.Screen name="EarningsStack"      component={EarningsStack}      options={{ tabBarLabel: 'Earnings'  }} />
+    <Tab.Screen name="HistoryStack"       component={HistoryStack}       options={{ tabBarLabel: 'History'   }} />
+    <Tab.Screen name="NotificationsStack" component={NotificationsStack} options={{ tabBarLabel: 'Inbox'     }} />
   </Tab.Navigator>
 );
 

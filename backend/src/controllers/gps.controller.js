@@ -65,6 +65,69 @@ export const getTripGpsHistory = async (req, res) => {
   }
 };
 
+// GET /api/gps/live — latest GPS position per active trip (admin live map)
+export const getLiveGps = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT
+        t.trip_id,
+        CONCAT('TRP-', RIGHT('000' + CAST(t.trip_id AS VARCHAR), 3)) AS trip_ref,
+        CAST(g.latitude  AS FLOAT) AS lat,
+        CAST(g.longitude AS FLOAT) AS lng,
+        g.recorded_at,
+        r.route_name   AS route,
+        u.full_name    AS driver,
+        v.plate_number AS vehicle
+      FROM (
+        SELECT trip_id, latitude, longitude, recorded_at,
+               ROW_NUMBER() OVER (PARTITION BY trip_id ORDER BY recorded_at DESC) AS rn
+        FROM gps_logs
+        WHERE recorded_at >= DATEADD(minute, -30, GETUTCDATE())
+      ) g
+      JOIN  trips    t ON t.trip_id    = g.trip_id
+      LEFT JOIN routes   r ON r.route_id   = t.route_id
+      LEFT JOIN drivers  d ON d.driver_id  = t.driver_id
+      LEFT JOIN users    u ON u.user_id    = d.user_id
+      LEFT JOIN vehicles v ON v.vehicle_id = t.vehicle_id
+      WHERE g.rn = 1
+        AND LOWER(ISNULL(t.status, '')) IN ('ongoing', 'active')
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch live GPS data' });
+  }
+};
+
+// GET /api/gps/bus/:vehicleId — latest GPS for a vehicle's active trip (passenger app)
+export const getBusGps = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input('vid', sql.NVarChar(50), req.params.vehicleId)
+      .query(`
+        SELECT TOP 1
+          CAST(g.latitude  AS FLOAT) AS latitude,
+          CAST(g.longitude AS FLOAT) AS longitude,
+          g.recorded_at              AS updatedAt
+        FROM gps_logs g
+        JOIN  trips    t ON t.trip_id    = g.trip_id
+        JOIN  vehicles v ON v.vehicle_id = t.vehicle_id
+        WHERE (
+              LOWER(v.plate_number) = LOWER(@vid)
+          OR  LOWER(REPLACE(v.plate_number, '-', '')) = LOWER(REPLACE(@vid, '-', ''))
+        )
+          AND LOWER(ISNULL(t.status, '')) IN ('ongoing', 'active')
+        ORDER BY g.recorded_at DESC
+      `);
+    if (!result.recordset[0]) return res.status(404).json(null);
+    res.json(result.recordset[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch bus GPS' });
+  }
+};
+
 // GET /api/gps/:trip_id/latest
 export const getLatestGps = async (req, res) => {
   try {

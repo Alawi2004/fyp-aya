@@ -1,6 +1,6 @@
 // pages/LiveTrackingPage.jsx
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { getTripGpsLogs, getGpsHeatmap } from '../api/endpoints';
+import { getTripGpsLogs, getGpsHeatmap, getLiveGps } from '../api/endpoints';
 import { createPortal } from 'react-dom';
 import { StatusPill } from '../components/StatusPill';
 import LiveMap from '../components/map/LiveMap';
@@ -765,35 +765,35 @@ export default function LiveTrackingPage() {
     });
   }, []);
 
-  // Simulate real-time bus movement for Ongoing buses
+  // Poll real GPS every 5 s — replaces fake-delta simulation
   useEffect(() => {
-    const id = setInterval(() => {
+    const poll = async () => {
       tickRef.current += 1;
-      setBuses((prev) =>
-        prev.map((bus) => {
-          if (bus.status !== 'Ongoing' || (bus._dlat === 0 && bus._dlng === 0)) {
-            return bus;
-          }
-          // Mark this bus as recently seen
-          lastSeenRef.current[bus.id] = Date.now();
-          // Slight jitter so it looks organic
-          const jitter = (Math.random() - 0.5) * 0.00004;
-          const movedBus = {
-            ...bus,
-            lat: bus.lat + bus._dlat + jitter,
-            lng: bus.lng + bus._dlng + jitter,
-          };
-          return enrichBus(movedBus);
-        })
-      );
+      try {
+        const data = await getLiveGps();
+        if (Array.isArray(data) && data.length > 0) {
+          const liveMap = {};
+          data.forEach((d) => { liveMap[d.trip_ref] = d; });
+          setBuses((prev) =>
+            prev.map((bus) => {
+              const live = liveMap[bus.id];
+              if (live) {
+                lastSeenRef.current[bus.id] = Date.now();
+                return enrichBus({ ...bus, lat: live.lat, lng: live.lng });
+              }
+              return bus;
+            })
+          );
+        }
+      } catch { /* keep current positions on API error */ }
 
-      // Geofence check every 5 ticks (~12.5 s)
-      if (tickRef.current % 5 === 0) {
+      // Geofence check every 3 polls (~15 s)
+      if (tickRef.current % 3 === 0) {
         setBuses((current) => { runGeofenceCheck(current); return current; });
       }
 
-      // Signal loss check every 8 ticks (~20 s)
-      if (tickRef.current % 8 === 0) {
+      // Signal loss check every 4 polls (~20 s)
+      if (tickRef.current % 4 === 0) {
         const now  = Date.now();
         const lost = new Set();
         const newAlerts = [];
@@ -816,7 +816,10 @@ export default function LiveTrackingPage() {
           return [...kept, ...fresh];
         });
       }
-    }, 2500);
+    };
+
+    poll(); // immediate first fetch
+    const id = setInterval(poll, 5000);
     return () => clearInterval(id);
   }, [runGeofenceCheck]);
 

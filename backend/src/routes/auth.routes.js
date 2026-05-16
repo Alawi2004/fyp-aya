@@ -5,7 +5,7 @@ import {
   getLoginAudit,
   getSessions, revokeSession, revokeAllOtherSessions,
   forgotPassword, resetPassword,
-  refresh, logout,
+  refresh, logout, savePushToken,
 } from "../controllers/auth.controller.js";
 import { validate } from "../middleware/validate.middleware.js";
 import { requireAuth, requireAdminOnly } from "../middleware/auth.middleware.js";
@@ -44,6 +44,10 @@ router.post("/2fa/disable",  requireAuth, validate(disable2faSchema), disable2fa
 router.get(   "/sessions",        requireAuth, getSessions);
 router.delete("/sessions/others", requireAuth, revokeAllOtherSessions);
 router.delete("/sessions/:id",    requireAuth, revokeSession);
+
+// ── Push notification token (any authenticated user) ─────────────────────────
+
+router.put("/push-token", requireAuth, savePushToken);
 
 // ── Login audit (admin only) ──────────────────────────────────────────────────
 
