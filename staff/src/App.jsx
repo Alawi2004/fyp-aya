@@ -1,16 +1,23 @@
 import { useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import Sidebar  from "./components/Sidebar";
-import Topbar   from "./components/Topbar";
-import LoginPage   from "./pages/LoginPage";
-import TopUpPage   from "./pages/TopUpPage";
-import HistoryPage from "./pages/HistoryPage";
+import { ShiftProvider } from "./context/ShiftContext";
+import { OfflineProvider } from "./context/OfflineContext";
+import Sidebar       from "./components/Sidebar";
+import Topbar        from "./components/Topbar";
+import OfflineBanner from "./components/OfflineBanner";
+import LoginPage     from "./pages/LoginPage";
+import TopUpPage     from "./pages/TopUpPage";
+import HistoryPage   from "./pages/HistoryPage";
+import ShiftPage     from "./pages/ShiftPage";
+import CashReportPage from "./pages/CashReportPage";
 
 // ─── Page titles ───────────────────────────────────────────────────────────
 const PAGE_TITLES = {
   "/topup":   "Wallet Top-Up",
   "/history": "My Top-Up History",
+  "/shift":   "Shift Management",
+  "/report":  "Cash Collection Report",
 };
 
 // ─── Protected route wrapper ────────────────────────────────────────────────
@@ -76,6 +83,7 @@ function InnerApp() {
               pageTitle={pageTitle}
             />
           )}
+          {showShell && <OfflineBanner />}
 
           <main style={{ flex: 1, overflowY: "auto", background: "#F1F5F9" }}>
             <Routes>
@@ -87,6 +95,14 @@ function InnerApp() {
 
               <Route path="/history" element={
                 <RequireStaff><HistoryPage /></RequireStaff>
+              } />
+
+              <Route path="/shift" element={
+                <RequireStaff><ShiftPage /></RequireStaff>
+              } />
+
+              <Route path="/report" element={
+                <RequireStaff><CashReportPage /></RequireStaff>
               } />
 
               {/* Default redirect */}
@@ -111,9 +127,13 @@ function LoginWithRedirect() {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <InnerApp />
-      </BrowserRouter>
+      <ShiftProvider>
+        <OfflineProvider>
+          <BrowserRouter>
+            <InnerApp />
+          </BrowserRouter>
+        </OfflineProvider>
+      </ShiftProvider>
     </AuthProvider>
   );
 }

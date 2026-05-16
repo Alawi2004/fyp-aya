@@ -1,15 +1,19 @@
 import { useState } from "react";
-import { Wallet, History, LogOut, Coins, ChevronLeft, ChevronRight } from "lucide-react";
+import { Wallet, History, LogOut, Coins, ChevronLeft, ChevronRight, Clock, FileText } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useShift } from "../context/ShiftContext";
 import { C } from "../styles/themes";
 
 const NAV = [
-  { id: "topup",   label: "Wallet Top-Up",    icon: Wallet  },
-  { id: "history", label: "My Top-Up History", icon: History },
+  { id: "topup",   label: "Wallet Top-Up",        icon: Wallet   },
+  { id: "history", label: "My Top-Up History",     icon: History  },
+  { id: "shift",   label: "Shift Management",      icon: Clock    },
+  { id: "report",  label: "Cash Collection Report", icon: FileText },
 ];
 
 export default function Sidebar({ activePage, onNavigate, collapsed, onToggle }) {
-  const { user, logout } = useAuth();
+  const { user, logout }   = useAuth();
+  const { isShiftOpen }    = useShift();
   const [hovered, setHovered] = useState(null);
   const W = collapsed ? 68 : 240;
 
@@ -80,12 +84,36 @@ export default function Sidebar({ activePage, onNavigate, collapsed, onToggle })
         </button>
       </div>
 
+      {/* ── Shift status pill ── */}
+      {!collapsed && (
+        <div style={{
+          margin: "10px 10px 2px",
+          padding: "7px 10px",
+          borderRadius: 8,
+          background: isShiftOpen ? "rgba(5,150,105,.15)" : "rgba(239,68,68,.12)",
+          border: `1px solid ${isShiftOpen ? "rgba(5,150,105,.3)" : "rgba(239,68,68,.25)"}`,
+          display: "flex", alignItems: "center", gap: 7,
+        }}>
+          <div style={{
+            width: 7, height: 7, borderRadius: "50%",
+            background: isShiftOpen ? C.primary : C.danger,
+            boxShadow: isShiftOpen ? `0 0 0 3px rgba(5,150,105,.2)` : `0 0 0 3px rgba(239,68,68,.2)`,
+            flexShrink: 0,
+          }} />
+          <span style={{ fontSize: 11, fontWeight: 600, color: isShiftOpen ? "#6EE7B7" : "#FCA5A5" }}>
+            {isShiftOpen ? "Shift Active" : "No Active Shift"}
+          </span>
+        </div>
+      )}
+
       {/* ── Nav ── */}
-      <nav style={{ flex: 1, padding: "10px 0", overflowY: "auto", overflowX: "hidden" }}>
+      <nav style={{ flex: 1, padding: "8px 0", overflowY: "auto", overflowX: "hidden" }}>
         {NAV.map(item => {
           const active = activePage === item.id;
           const isHov  = hovered === item.id;
           const Icon   = item.icon;
+          // Show a dot badge on Shift item when no shift is open
+          const showBadge = item.id === "shift" && !isShiftOpen;
 
           return (
             <div
@@ -118,12 +146,20 @@ export default function Sidebar({ activePage, onNavigate, collapsed, onToggle })
                   background: C.primary,
                 }} />
               )}
-              <Icon
-                size={18}
-                strokeWidth={active ? 2.2 : 1.8}
-                color={active ? C.primary : isHov ? "#CBD5E1" : "#64748B"}
-                style={{ flexShrink: 0 }}
-              />
+              <div style={{ position: "relative", flexShrink: 0 }}>
+                <Icon
+                  size={18}
+                  strokeWidth={active ? 2.2 : 1.8}
+                  color={active ? C.primary : isHov ? "#CBD5E1" : "#64748B"}
+                />
+                {showBadge && (
+                  <div style={{
+                    position: "absolute", top: -3, right: -3,
+                    width: 8, height: 8, borderRadius: "50%",
+                    background: C.danger, border: "1.5px solid #0F172A",
+                  }} />
+                )}
+              </div>
               {!collapsed && (
                 <span style={{
                   flex: 1,
@@ -134,6 +170,14 @@ export default function Sidebar({ activePage, onNavigate, collapsed, onToggle })
                   overflow: "hidden",
                 }}>
                   {item.label}
+                </span>
+              )}
+              {!collapsed && showBadge && (
+                <span style={{
+                  fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 99,
+                  background: C.danger, color: "#fff",
+                }}>
+                  OPEN
                 </span>
               )}
             </div>

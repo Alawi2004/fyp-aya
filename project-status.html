@@ -130,16 +130,16 @@
 </div>
 
 <div class="summary-bar">
-  <div class="stat-card stat-done"><div class="num">148</div><div class="label">Done</div></div>
+  <div class="stat-card stat-done"><div class="num">154</div><div class="label">Done</div></div>
   <div class="stat-card stat-partial"><div class="num">0</div><div class="label">Partial</div></div>
-  <div class="stat-card stat-missing"><div class="num">39</div><div class="label">Missing</div></div>
+  <div class="stat-card stat-missing"><div class="num">33</div><div class="label">Missing</div></div>
   <div class="stat-card" style="min-width:200px">
     <div class="label" style="margin-bottom:6px">Overall Completion</div>
     <div class="progress-row">
       <div class="progress-bar">
-        <div class="progress-fill" style="width:79%;background:linear-gradient(90deg,#16a34a,#84cc16)"></div>
+        <div class="progress-fill" style="width:82%;background:linear-gradient(90deg,#16a34a,#84cc16)"></div>
       </div>
-      <span class="pct">~79%</span>
+      <span class="pct">~82%</span>
     </div>
   </div>
 </div>
@@ -365,13 +365,13 @@
     <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Multi-Step Top-Up Flow</div><div class="feat-detail">Search → Confirm User → Amount → Payment Method → Confirm → Success</div></div></div>
     <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Top-Up History Page</div><div class="feat-detail">Transaction log with date/user/location/status filters</div></div></div>
     <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Payment Method Selection</div><div class="feat-detail">Cash, Card, Mobile Transfer, Bank Transfer, Voucher, Other</div></div></div>
-    <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Shift Management (Open/Close)</div><div class="feat-detail missing">Staff must open a shift before processing; shift close with cash summary</div></div></div>
-    <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">QR / NFC Card Scanner</div><div class="feat-detail missing">Camera-based QR scan to find passenger account; NFC card tap alternative</div></div></div>
-    <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Digital Receipt Generation</div><div class="feat-detail missing">Full receipt with receipt number, staff ID, station, previous/new balance — shareable via WhatsApp/SMS/email</div></div></div>
+    <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Shift Management (Open/Close)</div><div class="feat-detail">ShiftPage with open (opening cash + location) and close (closing cash, live discrepancy preview, print summary) flows; ShiftContext persists state; TopUpPage gated behind active shift; sidebar shows live shift status pill + OPEN badge</div></div></div>
+    <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">QR / NFC Card Scanner</div><div class="feat-detail">QRScanModal: camera stream via getUserMedia, BarcodeDetector auto-scan every 400ms, NFC via NDEFReader (Chrome Android), demo scan buttons for presentation, manual ID/email entry fallback; parses YALLA-USER-{id} format; auto-fills search on result</div></div></div>
+    <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Digital Receipt Generation</div><div class="feat-detail">Full receipt with auto-generated RCP-YYYYMMDD-NNNNN number, staff ID/name, shift ID, station, passenger details, previous/new balance arrow display; shareable via WhatsApp, SMS, Email, and Print (window.print with @media print CSS)</div></div></div>
     <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Admin Approval for High-Value Top-Ups</div><div class="feat-detail missing">Transactions above threshold require remote admin approval</div></div></div>
-    <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Offline Mode</div><div class="feat-detail missing">Queue top-ups offline with local signature; sync when reconnected</div></div></div>
-    <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Idempotency / Duplicate Prevention</div><div class="feat-detail missing">Server-side idempotency key; 30-second duplicate rejection</div></div></div>
-    <div class="feature-card missing"><span class="icon">❌</span><div class="feat-content"><div class="feat-name">Cash Collection Report</div><div class="feat-detail missing">End-of-shift: expected cash vs reported cash, discrepancy report, printable slip</div></div></div>
+    <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Offline Mode</div><div class="feat-detail">Top-ups queued offline via offlineQueue.js (localStorage); each item HMAC-SHA256 signed with SubtleCrypto (zero external deps); OfflineContext tracks navigator.onLine + auto-syncs on reconnect; OfflineBanner shows 4 states (offline/syncing/pending/complete); "Sync Now" manual trigger</div></div></div>
+    <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Idempotency / Duplicate Prevention</div><div class="feat-detail">idempotency.js stores userId:amountCents keys in localStorage with 30-second expiry; check() returns {isDuplicate, secondsLeft}; TopUpPage shows inline duplicate warning with countdown and "Override & Continue Anyway" escape hatch; headerKey() generates bucket-based key for real backend</div></div></div>
+    <div class="feature-card done"><span class="icon">✅</span><div class="feat-content"><div class="feat-name">Cash Collection Report</div><div class="feat-detail">CashReportPage (/report): shift header, 4 KPI cards, full transaction log table with tfoot totals, payment method breakdown grid, cash reconciliation table with expected vs reported, colour-coded discrepancy alert (green/amber/red), printable via @media print; offline queue toggle table; signature block</div></div></div>
   </div>
 </div>
 
@@ -467,7 +467,7 @@
 </main>
 
 <footer>
-  Updated 2026-05-15 — Delay Reporting, Route Deviation Alert, Weekly Schedule, Biometric Login (Driver + Passenger), trip_delays DB table &nbsp;·&nbsp; Yalla Transit &nbsp;·&nbsp; FYP PRFE322-EM20
+  Updated 2026-05-16 — Staff: Shift Management, QR/NFC Card Scanner, Digital Receipt Generation, Offline Mode, Idempotency/Duplicate Prevention, Cash Collection Report &nbsp;·&nbsp; Yalla Transit &nbsp;·&nbsp; FYP PRFE322-EM20
 </footer>
 
 </body>
