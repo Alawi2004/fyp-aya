@@ -2,6 +2,7 @@ import { poolPromise, sql } from "../db/db.js";
 import { ensureOperationalTables } from "../db/featureSetup.js";
 import { verifyPassengerQrToken } from "../utils/passengerQr.js";
 import { Expo } from "expo-server-sdk";
+import { claimQrJti } from "../services/redis.service.js";
 
 const _expo = new Expo({ accessToken: process.env.EXPO_ACCESS_TOKEN });
 
@@ -193,6 +194,14 @@ export const scanPassengerQr = async (req, res) => {
   const passengerQr = verifyPassengerQrToken(token);
   if (!passengerQr.valid) {
     return res.status(401).json({ valid: false, message: "Invalid or malformed QR token" });
+  }
+
+  // Redis fast-path replay guard: atomic SET NX prevents concurrent re-scans
+  // even within the same DB transaction window. Falls back to DB check if Redis
+  // is unavailable (claimQrJti returns true on error).
+  const firstUse = await claimQrJti(passengerQr.payload.jti);
+  if (!firstUse) {
+    return res.status(409).json({ valid: false, message: "QR already used" });
   }
 
   const tx = pool.transaction();
