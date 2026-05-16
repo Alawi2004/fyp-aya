@@ -99,7 +99,7 @@ router.get("/",               requirePermission("vehicles", "view"),   getVehicl
  *       200:
  *         description: Nearby vehicles
  */
-router.get("/nearby", getVehiclesNearby);
+router.get("/nearby", requirePermission("vehicles", "view"), getVehiclesNearby);
 
 // Static sub-resource routes — all before /:id to avoid wildcard capture
 router.get("/docs",               requireAdminOnly, getVehicleDocs);
