@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS } from '../../constants/colors';
+import { submitRating } from '../../api/apiClient';
 
 // ── Rating categories ─────────────────────────────────────────────────────────
 const RATING_CATS = [
@@ -62,7 +63,8 @@ const FeedbackScreen = ({ route, navigation }) => {
 
   const [comment,   setComment]   = useState('');
   const [activeTags, setActiveTags] = useState([]);
-  const [submitted, setSubmitted] = useState(false);
+  const [submitted,  setSubmitted]  = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const setScore = (key, val) => {
@@ -86,16 +88,33 @@ const FeedbackScreen = ({ route, navigation }) => {
     : 0;
   const allRated = Object.values(scores).every(v => v > 0);
 
-  const handleSubmit = () => {
-    if (!allRated) return;
+  const handleSubmit = async () => {
+    if (!allRated || submitting) return;
+    setSubmitting(true);
     const tagText = activeTags.length > 0 ? ` Tags: ${activeTags.join(', ')}.` : '';
+    const fullComment = comment + tagText;
+
+    // POST to real API — best-effort (don't block the success screen on failure)
+    try {
+      await submitRating({
+        user_id:    user?._id ?? user?.user_id ?? null,
+        trip_id:    booking?._id ?? booking?.trip_id ?? null,
+        rating:     overall,
+        comment:    fullComment || null,
+        categories: { ...scores },   // extended payload — backend ignores unknown fields
+      });
+    } catch { /* API failure should not block the success screen */ }
+
+    // Always update local AppContext state so the Ratings screen stays in sync
     addRating({
       passengerName: user?.name || 'Passenger',
-      rating: overall,
-      comment: comment + tagText,
-      trip: booking?.bus?.route || booking?.bus?.name || 'Route',
-      categories: { ...scores },
+      rating:        overall,
+      comment:       fullComment,
+      trip:          booking?.bus?.route || booking?.bus?.name || 'Route',
+      categories:    { ...scores },
     });
+
+    setSubmitting(false);
     setSubmitted(true);
   };
 
@@ -247,13 +266,13 @@ const FeedbackScreen = ({ route, navigation }) => {
 
         {/* Submit */}
         <TouchableOpacity
-          style={[styles.submitBtn, !allRated && styles.submitBtnDisabled]}
+          style={[styles.submitBtn, (!allRated || submitting) && styles.submitBtnDisabled]}
           onPress={handleSubmit}
-          disabled={!allRated}
+          disabled={!allRated || submitting}
           activeOpacity={0.85}
         >
-          <Ionicons name="send" size={18} color={COLORS.white} />
-          <Text style={styles.submitBtnText}>Submit Rating</Text>
+          <Ionicons name={submitting ? 'hourglass-outline' : 'send'} size={18} color={COLORS.white} />
+          <Text style={styles.submitBtnText}>{submitting ? 'Submitting…' : 'Submit Rating'}</Text>
         </TouchableOpacity>
 
         {!allRated && (

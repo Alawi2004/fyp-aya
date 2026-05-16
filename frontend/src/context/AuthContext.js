@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureGet, secureSave, secureDelete, secureMultiRemove } from '../utils/secureStorage';
 
 const AuthContext = createContext();
 
@@ -32,12 +33,14 @@ export const AuthProvider = ({ children }) => {
 
   const loadStoredAuth = async () => {
     try {
-      const storedRole = await AsyncStorage.getItem(K.userRole);
-      const storedUser = await AsyncStorage.getItem(K.userData);
+      const storedRole  = await AsyncStorage.getItem(K.userRole);
+      const storedUser  = await AsyncStorage.getItem(K.userData);
+      // authToken stored in SecureStore; read it back to restore the session
+      const storedToken = await secureGet('authToken');
       if (storedRole && storedUser) {
         setRole(storedRole);
         setUser(JSON.parse(storedUser));
-        setToken('mock-token');
+        setToken(storedToken ?? 'mock-token');
       }
     } catch (_) {}
     finally { setLoading(false); }
@@ -54,6 +57,7 @@ export const AuthProvider = ({ children }) => {
     const mockUser = userRole === 'driver' ? MOCK_DRIVER : MOCK_PASSENGER;
     await AsyncStorage.setItem(K.userRole, userRole);
     await AsyncStorage.setItem(K.userData, JSON.stringify(mockUser));
+    await secureSave('authToken', 'mock-token');   // store JWT securely
     // Keep bio credentials in sync if biometric is already enabled
     const bioEnabled = await AsyncStorage.getItem(K.bioEnabled);
     if (bioEnabled === 'true') await _persistBioCredentials(userRole, mockUser);
@@ -82,14 +86,15 @@ export const AuthProvider = ({ children }) => {
   };
 
   const biometricLogin = async () => {
-    // Uses persistent bio keys — unaffected by logout
-    const storedRole = await AsyncStorage.getItem(K.bioUserRole);
-    const storedUser = await AsyncStorage.getItem(K.bioUserData);
+    // bio_* keys live in SecureStore — survive logout, encrypted at rest
+    const storedRole = await secureGet(K.bioUserRole);
+    const storedUser = await secureGet(K.bioUserData);
     if (!storedRole || !storedUser) throw new Error('No stored biometric credentials');
     const parsedUser = JSON.parse(storedUser);
-    // Restore the main session storage so the rest of the app works normally
+    // Restore the main session
     await AsyncStorage.setItem(K.userRole, storedRole);
     await AsyncStorage.setItem(K.userData, storedUser);
+    await secureSave('authToken', 'mock-token');
     setToken('mock-token');
     setUser(parsedUser);
     setRole(storedRole);
@@ -99,16 +104,17 @@ export const AuthProvider = ({ children }) => {
   const setBiometricEnabled = async (enabled) => {
     await AsyncStorage.setItem(K.bioEnabled, enabled ? 'true' : 'false');
     if (enabled) {
-      // Snapshot the current session into persistent bio storage
+      // Snapshot current session into SecureStore so it survives logout
       const currentRole = await AsyncStorage.getItem(K.userRole);
       const currentUser = await AsyncStorage.getItem(K.userData);
       if (currentRole && currentUser) {
-        await AsyncStorage.setItem(K.bioUserRole, currentRole);
-        await AsyncStorage.setItem(K.bioUserData, currentUser);
+        await secureSave(K.bioUserRole, currentRole);
+        await secureSave(K.bioUserData, currentUser);
       }
     } else {
-      // Wipe persistent bio credentials and type preference
-      await AsyncStorage.multiRemove([K.bioUserRole, K.bioUserData, K.bioPrefType]);
+      // Wipe persistent bio credentials from SecureStore + pref from AsyncStorage
+      await secureMultiRemove([K.bioUserRole, K.bioUserData]);
+      await AsyncStorage.removeItem(K.bioPrefType);
     }
   };
 
@@ -132,6 +138,7 @@ export const AuthProvider = ({ children }) => {
     };
     await AsyncStorage.setItem(K.userRole, userRole);
     await AsyncStorage.setItem(K.userData, JSON.stringify(mockUser));
+    await secureSave('authToken', 'mock-token');
     setToken('mock-token');
     setUser(mockUser);
     setRole(userRole);
@@ -139,8 +146,9 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
-    // Only remove the active session — bio_* keys intentionally survive
+    // Remove active session — bio_* in SecureStore intentionally survive for re-auth
     await AsyncStorage.multiRemove([K.userRole, K.userData]);
+    await secureDelete('authToken');
     setToken(null);
     setUser(null);
     setRole(null);

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureGet, secureDelete } from '../utils/secureStorage';
 
 const FRONTEND_ONLY = process.env.EXPO_PUBLIC_FRONTEND_ONLY !== 'false';
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'mock://frontend-only';
@@ -106,6 +107,7 @@ const mockResponse = (config) => {
   ];
   if (url.includes('/auth/push-token')) return { ok: true };
   if (url.includes('/auth/fcm-token'))  return { ok: true };
+  if (url.includes('/ratings') && method === 'post') return { message: 'Rating added', rating_id: Date.now() };
   if (url.includes('/nfc/status'))  return { linked: false };
   if (url.includes('/nfc/link') && method === 'post') return { nfc_id: 1, uid: body.uid ?? 'AB:CD:EF:01', status: 'active', linked_at: new Date().toISOString(), message: 'NFC card linked successfully' };
   if (url.includes('/nfc/unlink')) return { message: 'NFC card unlinked' };
@@ -157,19 +159,26 @@ const apiClient = axios.create({
     : undefined,
 });
 
-// Attach token to every request
+// Attach token to every request — read from SecureStore (falls back to AsyncStorage)
 apiClient.interceptors.request.use(async (config) => {
-  const token = await AsyncStorage.getItem('authToken');
+  const token = await secureGet('authToken');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// Handle 401 globally
+// Handle 401 + 503 globally
 apiClient.interceptors.response.use(
   (res) => res,
   async (error) => {
     if (error.response?.status === 401) {
-      await AsyncStorage.removeItem('authToken');
+      await secureDelete('authToken');
+    }
+    if (
+      error.response?.status === 503 &&
+      error.response?.data?.code === 'MAINTENANCE_MODE'
+    ) {
+      const { triggerMaintenance } = await import('../utils/maintenanceState.js');
+      triggerMaintenance(error.response.data);
     }
     return Promise.reject(error);
   }
@@ -198,5 +207,8 @@ export const removeFavoriteRoute = (routeId)        => apiClient.delete(`/users/
 
 // Account deletion
 export const requestAccountDeletion = () => apiClient.delete('/users/me').then((r) => r.data);
+
+// Ratings
+export const submitRating = (payload) => apiClient.post('/ratings', payload).then((r) => r.data);
 
 export default apiClient;
