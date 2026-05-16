@@ -470,6 +470,12 @@ BEGIN
   ALTER TABLE users ADD push_token NVARCHAR(200) NULL;
 END;
 
+-- Soft-delete support for account deletion
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='users' AND COLUMN_NAME='deleted_at')
+BEGIN
+  ALTER TABLE users ADD deleted_at DATETIME2 NULL;
+END;
+
 -- Raw FCM / APNs device token (non-Expo) for direct Firebase delivery
 IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='users' AND COLUMN_NAME='fcm_token')
 BEGIN
@@ -491,6 +497,35 @@ BEGIN
     resolved_at  DATETIME2      NULL
   );
   CREATE INDEX IX_geofence_events_trip ON geofence_events(trip_id, status);
+END;
+
+-- NFC card linking (passengers link physical NFC cards for contactless boarding)
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='nfc_cards')
+BEGIN
+  CREATE TABLE nfc_cards (
+    nfc_id       INT           NOT NULL IDENTITY(1,1) PRIMARY KEY,
+    user_id      INT           NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    card_uid     NVARCHAR(64)  NOT NULL,
+    status       NVARCHAR(20)  NOT NULL DEFAULT 'active',
+    linked_at    DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+    unlinked_at  DATETIME2     NULL
+  );
+  CREATE INDEX IX_nfc_cards_user   ON nfc_cards(user_id, status);
+  CREATE INDEX IX_nfc_cards_uid    ON nfc_cards(card_uid);
+END;
+
+-- Favourite routes saved by passengers
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='user_favorite_routes')
+BEGIN
+  CREATE TABLE user_favorite_routes (
+    favorite_id  INT            NOT NULL IDENTITY(1,1) PRIMARY KEY,
+    user_id      INT            NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    route_id     INT            NOT NULL REFERENCES routes(route_id) ON DELETE CASCADE,
+    nickname     NVARCHAR(100)  NULL,
+    created_at   DATETIME2      NOT NULL DEFAULT GETUTCDATE(),
+    CONSTRAINT UQ_user_favorite_route UNIQUE (user_id, route_id)
+  );
+  CREATE INDEX IX_favorites_user ON user_favorite_routes(user_id, created_at DESC);
 END;
 
 IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='user_suspension_logs')

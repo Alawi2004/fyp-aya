@@ -106,6 +106,16 @@ const mockResponse = (config) => {
   ];
   if (url.includes('/auth/push-token')) return { ok: true };
   if (url.includes('/auth/fcm-token'))  return { ok: true };
+  if (url.includes('/nfc/status'))  return { linked: false };
+  if (url.includes('/nfc/link') && method === 'post') return { nfc_id: 1, uid: body.uid ?? 'AB:CD:EF:01', status: 'active', linked_at: new Date().toISOString(), message: 'NFC card linked successfully' };
+  if (url.includes('/nfc/unlink')) return { message: 'NFC card unlinked' };
+  if (url.includes('/users/me/favorites') && method === 'get') return [
+    { favorite_id: 1, route_id: 1, name: 'Route 12A', origin: 'Hamra Station', destination: 'Jounieh Terminal', nickname: null, created_at: new Date(Date.now() - 86400000 * 2).toISOString() },
+    { favorite_id: 2, route_id: 3, name: 'Route 3C',  origin: 'Beirut',        destination: 'Zahlé',           nickname: 'Work Route', created_at: new Date(Date.now() - 86400000).toISOString() },
+  ];
+  if (url.includes('/users/me/favorites') && method === 'post') return { favorite_id: Date.now(), route_id: body.route_id, nickname: body.nickname ?? null, created_at: new Date().toISOString() };
+  if (url.match(/\/users\/me\/favorites\/\d+/) && method === 'delete') return { message: 'Removed from favorites' };
+  if (url.includes('/users/me') && method === 'delete') return { message: 'Account deletion scheduled. You have been signed out of all devices.' };
   if (url.includes('/driver/trips')) return { trips: [] };
   if (url.includes('/driver/earnings')) return { total: 0, trips: 0, history: [] };
   // Share ticket endpoints
@@ -175,5 +185,18 @@ export const registerPushToken = (pushToken) =>
 
 export const registerFcmToken = (fcmToken) =>
   apiClient.put('/auth/fcm-token', { token: fcmToken }).then((r) => r.data);
+
+// NFC card management
+export const getNfcStatus   = ()    => apiClient.get('/nfc/status').then((r) => r.data);
+export const linkNfcCard    = (uid) => apiClient.post('/nfc/link', { uid }).then((r) => r.data);
+export const unlinkNfcCard  = ()    => apiClient.delete('/nfc/unlink').then((r) => r.data);
+
+// Favorite routes
+export const getFavoriteRoutes   = ()               => apiClient.get('/users/me/favorites').then((r) => r.data);
+export const addFavoriteRoute    = (routeId, nick)  => apiClient.post('/users/me/favorites', { route_id: routeId, nickname: nick ?? null }).then((r) => r.data);
+export const removeFavoriteRoute = (routeId)        => apiClient.delete(`/users/me/favorites/${routeId}`).then((r) => r.data);
+
+// Account deletion
+export const requestAccountDeletion = () => apiClient.delete('/users/me').then((r) => r.data);
 
 export default apiClient;

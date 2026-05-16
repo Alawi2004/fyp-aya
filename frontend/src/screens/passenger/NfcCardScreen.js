@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS } from '../../constants/colors';
+import { getNfcStatus, linkNfcCard, unlinkNfcCard } from '../../api/apiClient';
 
 // react-native-nfc-manager requires a dev build; mock gracefully in Expo Go
 let NfcManager = null;
@@ -90,6 +91,16 @@ const NfcCardScreen = ({ navigation }) => {
 
   const loadCard = async () => {
     try {
+      // Try the backend first; fall back to AsyncStorage cache
+      const status = await getNfcStatus();
+      if (status.linked) {
+        const card = { uid: status.uid, nfc_id: status.nfc_id, linkedAt: status.linked_at, status: status.status };
+        await AsyncStorage.setItem(NFC_CARD_KEY, JSON.stringify(card));
+        setLinkedCard(card);
+        return;
+      }
+    } catch (_) {}
+    try {
       const raw = await AsyncStorage.getItem(NFC_CARD_KEY);
       if (raw) setLinkedCard(JSON.parse(raw));
     } catch (_) {}
@@ -110,6 +121,9 @@ const NfcCardScreen = ({ navigation }) => {
           text: 'Remove',
           style: 'destructive',
           onPress: async () => {
+            try {
+              await unlinkNfcCard();
+            } catch (_) {}
             await AsyncStorage.removeItem(NFC_CARD_KEY);
             setLinkedCard(null);
           },
@@ -133,17 +147,25 @@ const NfcCardScreen = ({ navigation }) => {
   };
 
   const confirmLink = async () => {
-    const card = {
-      uid: scannedUid,
-      cardNumber: `****-****-****-${Math.floor(1000 + Math.random() * 9000)}`,
-      linkedAt: new Date().toISOString().split('T')[0],
-      linkedTo: user?._id ?? 'guest',
-      status: 'active',
-    };
-    await saveCard(card);
-    setScanning(false);
-    setScanState('idle');
-    Alert.alert('Card Linked!', `NFC card ${scannedUid} is now linked to your account.`);
+    try {
+      const resp = await linkNfcCard(scannedUid);
+      const card = {
+        uid:       resp.uid ?? scannedUid,
+        nfc_id:    resp.nfc_id,
+        cardNumber: `****-****-****-${Math.floor(1000 + Math.random() * 9000)}`,
+        linkedAt:  resp.linked_at ?? new Date().toISOString(),
+        linkedTo:  user?._id ?? 'guest',
+        status:    'active',
+      };
+      await saveCard(card);
+      setScanning(false);
+      setScanState('idle');
+      Alert.alert('Card Linked!', `NFC card ${scannedUid} is now linked to your account.`);
+    } catch (err) {
+      const msg = err?.response?.data?.error ?? 'Failed to link card. Try again.';
+      Alert.alert('Link Failed', msg);
+      setScanState('error');
+    }
   };
 
   const cancelScan = async () => {

@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS } from '../../constants/colors';
+import { requestAccountDeletion } from '../../api/apiClient';
 
 const DELETION_DATE_KEY = 'accountDeletionRequestedAt';
 
@@ -46,11 +47,17 @@ const DeleteAccountScreen = ({ navigation }) => {
           style: 'destructive',
           onPress: async () => {
             setLoading(true);
-            await AsyncStorage.setItem(DELETION_DATE_KEY, scheduledDate.toISOString());
-            setTimeout(() => {
+            try {
+              await requestAccountDeletion();
+            } catch (err) {
+              const msg = err?.response?.data?.error ?? 'Failed to process deletion request.';
               setLoading(false);
-              setStep('done');
-            }, 800);
+              Alert.alert('Error', msg);
+              return;
+            }
+            await AsyncStorage.setItem(DELETION_DATE_KEY, scheduledDate.toISOString());
+            setLoading(false);
+            setStep('done');
           },
         },
       ]

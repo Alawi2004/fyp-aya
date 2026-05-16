@@ -1,23 +1,54 @@
-import React, { useState } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert, Platform, StatusBar } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert, Platform, StatusBar, ActivityIndicator, RefreshControl } from 'react-native';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import { Ionicons } from '@expo/vector-icons';
 import EmptyState from '../../components/common/EmptyState';
 import { COLORS } from '../../constants/colors';
+import { getFavoriteRoutes, removeFavoriteRoute } from '../../api/apiClient';
 
 const MOCK_FAVORITES = [
-  { _id: '1', name: 'Express 101', origin: 'Home', destination: 'Work', time: '08:00 AM' },
-  { _id: '2', name: 'City Line 5', origin: 'Mall', destination: 'University', time: '09:15 AM' },
+  { favorite_id: '1', route_id: 1, name: 'Route 12A', origin: 'Hamra Station', destination: 'Jounieh Terminal', nickname: null },
+  { favorite_id: '2', route_id: 3, name: 'Route 3C',  origin: 'Beirut',        destination: 'Zahlé',           nickname: 'Work Route' },
 ];
 
 const FavoriteRoutesScreen = ({ navigation }) => {
   const headerInsets = useHeaderInsets();
-  const [favorites, setFavorites] = useState(MOCK_FAVORITES);
+  const [favorites,  setFavorites]  = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const remove = (id) => {
-    Alert.alert('Remove Favorite', 'Remove this route from favorites?', [
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const data = await getFavoriteRoutes();
+      setFavorites(Array.isArray(data) ? data : MOCK_FAVORITES);
+    } catch {
+      setFavorites(MOCK_FAVORITES);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const remove = (item) => {
+    Alert.alert('Remove Favorite', `Remove "${item.name}" from favorites?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => setFavorites(prev => prev.filter(f => f._id !== id)) },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          // Optimistic update
+          setFavorites(prev => prev.filter(f => f.favorite_id !== item.favorite_id && f.route_id !== item.route_id));
+          try {
+            await removeFavoriteRoute(item.route_id);
+          } catch {
+            // Revert on failure
+            load(true);
+          }
+        },
+      },
     ]);
   };
 
@@ -30,50 +61,66 @@ const FavoriteRoutesScreen = ({ navigation }) => {
         <Text style={styles.pageSubtitle}>{favorites.length} saved route{favorites.length !== 1 ? 's' : ''}</Text>
       </View>
 
-      <FlatList
-        data={favorites}
-        keyExtractor={i => i._id}
-        contentContainerStyle={{ padding: 16, flexGrow: 1 }}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <EmptyState icon="heart-outline" title="No favorites yet" message="Save routes for quick access and booking." />
-        }
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <View style={styles.iconWrap}>
-              <Ionicons name="heart" size={18} color={COLORS.danger} />
-            </View>
-            <View style={styles.info}>
-              <Text style={styles.routeName}>{item.name}</Text>
-              <View style={styles.routeRow}>
-                <Text style={styles.routeStop}>{item.origin}</Text>
-                <Ionicons name="arrow-forward" size={12} color={COLORS.textMuted} />
-                <Text style={styles.routeStop}>{item.destination}</Text>
-                <Text style={styles.routeTime}>· {item.time}</Text>
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={favorites}
+          keyExtractor={i => String(i.favorite_id ?? i.route_id)}
+          contentContainerStyle={{ padding: 16, flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => { setRefreshing(true); load(true); }}
+              tintColor={COLORS.primary}
+              colors={[COLORS.primary]}
+            />
+          }
+          ListEmptyComponent={
+            <EmptyState icon="heart-outline" title="No favorites yet" message="Save routes for quick access and booking." />
+          }
+          renderItem={({ item }) => (
+            <View style={styles.card}>
+              <View style={styles.iconWrap}>
+                <Ionicons name="heart" size={18} color={COLORS.danger} />
               </View>
+              <View style={styles.info}>
+                <Text style={styles.routeName}>
+                  {item.nickname ? `${item.name} · ${item.nickname}` : item.name}
+                </Text>
+                <View style={styles.routeRow}>
+                  <Text style={styles.routeStop}>{item.origin}</Text>
+                  <Ionicons name="arrow-forward" size={12} color={COLORS.textMuted} />
+                  <Text style={styles.routeStop}>{item.destination}</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.bookBtn}
+                onPress={() => navigation.navigate('HomeStack')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.bookBtnText}>Book</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => remove(item)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="trash-outline" size={18} color={COLORS.textMuted} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={styles.bookBtn}
-              onPress={() => navigation.navigate('HomeStack')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.bookBtnText}>Book</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => remove(item._id)}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Ionicons name="trash-outline" size={18} color={COLORS.textMuted} />
-            </TouchableOpacity>
-          </View>
-        )}
-      />
+          )}
+        />
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
+  center:    { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   pageHeader: {
     backgroundColor: COLORS.white,
@@ -82,7 +129,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  pageTitle: { fontSize: 24, fontWeight: '800', color: COLORS.textPrimary },
+  pageTitle:    { fontSize: 24, fontWeight: '800', color: COLORS.textPrimary },
   pageSubtitle: { fontSize: 13, color: COLORS.textMuted, marginTop: 2 },
 
   card: {
@@ -104,11 +151,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFEBEE',
     alignItems: 'center', justifyContent: 'center',
   },
-  info: { flex: 1 },
+  info:      { flex: 1 },
   routeName: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary },
-  routeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  routeRow:  { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
   routeStop: { fontSize: 12, color: COLORS.textSecondary, fontWeight: '500' },
-  routeTime: { fontSize: 12, color: COLORS.textMuted },
 
   bookBtn: {
     backgroundColor: COLORS.primaryLight,

@@ -12,6 +12,7 @@ import {
   scanPassengerQr,
   markStopArrival,
   reportDelay,
+  scanNfc,
 } from "../controllers/driverApp.controller.js";
 
 const router = express.Router();
@@ -199,7 +200,8 @@ router.post("/emergency", sendEmergency);
  *         description: Location updated
  */
 router.post("/location", updateLocation);
-router.post("/scan-qr", scanPassengerQr);
+router.post("/scan-qr",  scanPassengerQr);
+router.post("/nfc-scan", scanNfc);
 router.post("/trips/:id/stops/:stopId/arrive", markStopArrival);
 router.post("/trips/:id/delay", reportDelay);
 

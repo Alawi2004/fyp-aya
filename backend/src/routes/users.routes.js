@@ -9,8 +9,13 @@ import {
   suspendUser,
   restoreUser,
   getSuspensionLogs,
+  getFavorites,
+  addFavorite,
+  removeFavorite,
+  deleteMyAccount,
 } from "../controllers/users.controller.js";
 import { requirePermission } from "../middleware/permissions.middleware.js";
+import { requireAuth } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
@@ -33,6 +38,16 @@ const router = express.Router();
  *       200:
  *         description: List of users
  */
+// ── Self-service routes (any authenticated user) ─────────────────────────────
+// IMPORTANT: these must come BEFORE /:id to avoid route capture.
+
+router.get("/me/favorites",             requireAuth, getFavorites);
+router.post("/me/favorites",            requireAuth, addFavorite);
+router.delete("/me/favorites/:routeId", requireAuth, removeFavorite);
+router.delete("/me",                    requireAuth, deleteMyAccount);
+
+// ── Admin / permission-gated routes ──────────────────────────────────────────
+
 router.get("/", requirePermission("users", "view"), getAllUsers);
 
 /**

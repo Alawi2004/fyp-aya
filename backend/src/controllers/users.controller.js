@@ -255,3 +255,139 @@ export const getSuspensionLogs = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch suspension logs" });
   }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Favourite Routes  (self-service, authenticated passenger)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/users/me/favorites
+export const getFavorites = async (req, res) => {
+  try {
+    const pool   = await poolPromise;
+    const result = await pool.request()
+      .input("uid", sql.Int, req.user.user_id)
+      .query(`
+        SELECT
+          ufr.favorite_id,
+          ufr.route_id,
+          r.route_name     AS name,
+          r.start_location AS origin,
+          r.end_location   AS destination,
+          ufr.nickname,
+          ufr.created_at
+        FROM user_favorite_routes ufr
+        JOIN routes r ON r.route_id = ufr.route_id
+        WHERE ufr.user_id = @uid
+        ORDER BY ufr.created_at DESC
+      `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch favorites" });
+  }
+};
+
+// POST /api/users/me/favorites  — body: { route_id, nickname? }
+export const addFavorite = async (req, res) => {
+  try {
+    const { route_id, nickname } = req.body;
+    if (!route_id) return res.status(400).json({ error: "route_id is required" });
+
+    const pool = await poolPromise;
+
+    // Verify route exists
+    const routeCheck = await pool.request()
+      .input("rid", sql.Int, Number(route_id))
+      .query("SELECT route_id FROM routes WHERE route_id = @rid");
+    if (!routeCheck.recordset[0]) return res.status(404).json({ error: "Route not found" });
+
+    const ins = await pool.request()
+      .input("uid",  sql.Int,          req.user.user_id)
+      .input("rid",  sql.Int,          Number(route_id))
+      .input("nick", sql.NVarChar(100), nickname ?? null)
+      .query(`
+        INSERT INTO user_favorite_routes (user_id, route_id, nickname)
+        OUTPUT INSERTED.favorite_id, INSERTED.route_id, INSERTED.nickname, INSERTED.created_at
+        VALUES (@uid, @rid, @nick)
+      `);
+
+    res.status(201).json(ins.recordset[0]);
+  } catch (err) {
+    if (err.number === 2627 || err.number === 2601) {   // UNIQUE violation
+      return res.status(409).json({ error: "Route is already in favorites." });
+    }
+    console.error(err);
+    res.status(500).json({ error: "Failed to add favorite" });
+  }
+};
+
+// DELETE /api/users/me/favorites/:routeId
+export const removeFavorite = async (req, res) => {
+  try {
+    const pool   = await poolPromise;
+    const result = await pool.request()
+      .input("uid", sql.Int, req.user.user_id)
+      .input("rid", sql.Int, parseInt(req.params.routeId, 10))
+      .query(`
+        DELETE FROM user_favorite_routes
+        WHERE user_id = @uid AND route_id = @rid
+      `);
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).json({ error: "Favorite not found." });
+    }
+    res.json({ message: "Removed from favorites" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to remove favorite" });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Account Deletion  (self-service, authenticated user)
+// DELETE /api/users/me
+// Sets status='deleted', revokes all sessions, freezes wallet,
+// cancels confirmed tickets.  Irreversible without admin intervention.
+// ─────────────────────────────────────────────────────────────────────────────
+export const deleteMyAccount = async (req, res) => {
+  const pool   = await poolPromise;
+  const userId = req.user.user_id;
+  const tx     = pool.transaction();
+
+  try {
+    await tx.begin();
+
+    // 1. Soft-delete: mark user as deleted
+    await tx.request()
+      .input("uid", sql.Int, userId)
+      .query(`
+        UPDATE users
+        SET status = 'deleted', deleted_at = GETUTCDATE()
+        WHERE user_id = @uid
+      `);
+
+    // 2. Revoke all active sessions (force logout everywhere)
+    await tx.request()
+      .input("uid", sql.Int, userId)
+      .query(`DELETE FROM user_sessions WHERE user_id = @uid`);
+
+    // 3. Freeze wallet to prevent any transactions
+    await tx.request()
+      .input("uid", sql.Int, userId)
+      .query(`UPDATE wallets SET is_frozen = 1 WHERE user_id = @uid`);
+
+    // 4. Cancel confirmed tickets (pending bookings)
+    await tx.request()
+      .input("uid", sql.Int, userId)
+      .query(`
+        UPDATE tickets SET status = 'cancelled'
+        WHERE user_id = @uid AND status = 'confirmed'
+      `);
+
+    await tx.commit();
+    res.json({ message: "Account deletion scheduled. You have been signed out of all devices." });
+  } catch (err) {
+    await tx.rollback().catch(() => {});
+    console.error("[deleteAccount]", err);
+    res.status(500).json({ error: "Failed to process account deletion." });
+  }
+};
