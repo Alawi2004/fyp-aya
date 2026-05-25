@@ -660,8 +660,12 @@ export const forgotPassword = async (req, res) => {
       .query("INSERT INTO password_reset_tokens(user_id,token_hash,expires_at) VALUES(@user_id,@token_hash,@expires_at)");
 
     const adminBase = process.env.ADMIN_BASE_URL || "http://localhost:5173";
-    await sendPasswordResetEmail(email, `${adminBase}?token=${raw}`);
-    console.log(`[auth] Password reset email sent to ${email}`);
+    try {
+      await sendPasswordResetEmail(email, `${adminBase}?token=${raw}`);
+      console.log(`[auth] Password reset email sent to ${email}`);
+    } catch (emailErr) {
+      console.error("[auth] forgotPassword - SMTP error:", emailErr);
+    }
 
     return res.json({ message: "If that email exists, a reset link has been sent." });
   } catch (err) {

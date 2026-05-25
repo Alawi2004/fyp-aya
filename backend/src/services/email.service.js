@@ -18,8 +18,6 @@ function getTransporter() {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
-    // Keeps the TCP connection open across multiple sends (important for Mailgun/SES).
-    pool: true,
     // Accept self-signed certs in dev; in production TLS is verified by default.
     tls: { rejectUnauthorized: process.env.NODE_ENV === "production" },
   });
