@@ -34,17 +34,25 @@ export const getBusById = async (req, res) => {
       .input("id", sql.Int, req.params.id)
       .query(`
         SELECT
-          t.trip_id   AS _id,
-          v.model     AS name,
-          r.route_name AS route,
+          t.trip_id        AS _id,
+          v.model          AS name,
+          v.plate_number,
+          r.route_name     AS route,
           r.start_location AS origin,
           r.end_location   AS destination,
           t.start_time     AS departureTime,
           t.status,
-          v.capacity       AS totalSeats
+          v.capacity       AS totalSeats,
+          u.full_name      AS driver_name,
+          u.phone          AS driver_phone,
+          d.driver_id,
+          d.rating         AS driver_rating,
+          d.total_trips    AS driver_trips
         FROM trips t
         JOIN vehicles v ON t.vehicle_id = v.vehicle_id
         JOIN routes  r ON t.route_id   = r.route_id
+        LEFT JOIN drivers d ON t.driver_id = d.driver_id
+        LEFT JOIN users   u ON d.user_id   = u.user_id
         WHERE t.trip_id = @id
       `);
     res.json(result.recordset[0] || null);

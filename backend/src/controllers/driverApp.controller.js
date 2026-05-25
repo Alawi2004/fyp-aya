@@ -47,13 +47,20 @@ async function _pushDelayToPassengers(pool, tripId, delayMin, reason) {
 }
 
 // GET /api/driver/trips — trips assigned to the authenticated driver
-// Uses driver_id from query param until auth middleware is added
 export const getDriverTrips = async (req, res) => {
   try {
-    const driverId = req.query.driver_id || req.user?.driver_id;
+    const pool = await poolPromise;
+    let driverId = req.query.driver_id || req.user?.driver_id;
+
+    // Auto-resolve driver_id from JWT user_id if not supplied
+    if (!driverId && req.user?.user_id) {
+      const dr = await pool.request()
+        .input("uid", sql.Int, req.user.user_id)
+        .query("SELECT driver_id FROM drivers WHERE user_id = @uid");
+      driverId = dr.recordset[0]?.driver_id;
+    }
     if (!driverId) return res.status(400).json({ error: "driver_id required" });
 
-    const pool = await poolPromise;
     const result = await pool
       .request()
       .input("id", sql.Int, driverId)
@@ -79,7 +86,7 @@ export const startTrip = async (req, res) => {
     await pool
       .request()
       .input("id", sql.Int, req.params.id)
-      .query("UPDATE trips SET status='ongoing' WHERE trip_id=@id");
+      .query("UPDATE trips SET status='ongoing', start_time = ISNULL(start_time, GETDATE()) WHERE trip_id=@id");
     res.json({ message: "Trip started" });
   } catch (err) {
     res.status(500).json({ error: "Failed to start trip" });
@@ -93,7 +100,7 @@ export const completeTrip = async (req, res) => {
     await pool
       .request()
       .input("id", sql.Int, req.params.id)
-      .query("UPDATE trips SET status='completed' WHERE trip_id=@id");
+      .query("UPDATE trips SET status='completed', end_time = GETDATE() WHERE trip_id=@id");
     res.json({ message: "Trip completed" });
   } catch (err) {
     res.status(500).json({ error: "Failed to complete trip" });

@@ -14,26 +14,6 @@ import EmptyState from '../../components/common/EmptyState';
 import { getBusesApi } from '../../api/busApi';
 import { COLORS } from '../../constants/colors';
 
-const ALL_VEHICLES = [
-  // ── Bus ──────────────────────────────────────────────────────────────────
-  { _id: '1',  type: 'bus',     name: 'Express 101',   route: 'Route A', origin: 'Central Station',  destination: 'Airport',          departureTime: '08:00 AM', arrivalTime: '09:30 AM', duration: '1h 30m', price: '4.50', totalSeats: 40, bookedSeats: 32, status: 'active'   },
-  { _id: '2',  type: 'bus',     name: 'City Line 5',   route: 'Route B', origin: 'Mall Junction',    destination: 'University',       departureTime: '09:15 AM', arrivalTime: '10:00 AM', duration: '45m',    price: '2.00', totalSeats: 30, bookedSeats: 10, status: 'boarding' },
-  { _id: '3',  type: 'bus',     name: 'Night Owl',     route: 'Route C', origin: 'Downtown',         destination: 'Suburbs',          departureTime: '10:30 AM', arrivalTime: '11:45 AM', duration: '1h 15m', price: '3.00', totalSeats: 35, bookedSeats: 35, status: 'delayed'  },
-  { _id: '4',  type: 'bus',     name: 'Metro Bus 7',   route: 'Route D', origin: 'Hospital',         destination: 'Market',           departureTime: '11:00 AM', arrivalTime: '11:30 AM', duration: '30m',    price: '1.50', totalSeats: 40, bookedSeats: 20, status: 'active'   },
-  // ── Van ───────────────────────────────────────────────────────────────────
-  { _id: '5',  type: 'van',     name: 'QuickVan A1',   route: 'Route E', origin: 'Tech Park',        destination: 'City Center',      departureTime: '07:30 AM', arrivalTime: '08:10 AM', duration: '40m',    price: '3.50', totalSeats: 12, bookedSeats: 7,  status: 'active'   },
-  { _id: '6',  type: 'van',     name: 'MaxiVan B2',    route: 'Route F', origin: 'Riverside Plaza',  destination: 'Sports Complex',   departureTime: '09:00 AM', arrivalTime: '09:35 AM', duration: '35m',    price: '3.00', totalSeats: 12, bookedSeats: 4,  status: 'boarding' },
-  { _id: '7',  type: 'van',     name: 'Hiace VIP',     route: 'Route G', origin: 'Uptown Gate',      destination: 'Business District', departureTime: '08:45 AM', arrivalTime: '09:20 AM', duration: '35m',   price: '4.00', totalSeats: 10, bookedSeats: 9,  status: 'active'   },
-  // ── Taxi ──────────────────────────────────────────────────────────────────
-  { _id: '8',  type: 'taxi',    name: 'GrabCab 001',   route: 'On Demand', origin: 'Your Location', destination: 'Anywhere',          departureTime: 'On Call',  arrivalTime: 'Variable',  duration: 'Varies', price: '6.00', totalSeats: 4,  bookedSeats: 0,  status: 'active'   },
-  { _id: '9',  type: 'taxi',    name: 'BlueTaxi X2',   route: 'On Demand', origin: 'City Depot',    destination: 'Airport Terminal', departureTime: 'On Call',  arrivalTime: 'Variable',  duration: 'Varies', price: '8.50', totalSeats: 4,  bookedSeats: 0,  status: 'active'   },
-  { _id: '10', type: 'taxi',    name: 'AirportRide 3', route: 'Route H', origin: 'City Hub',         destination: 'Int\' Airport',    departureTime: '06:00 AM', arrivalTime: '07:15 AM', duration: '1h 15m', price: '12.00', totalSeats: 4, bookedSeats: 2,  status: 'boarding' },
-  // ── Shuttle ───────────────────────────────────────────────────────────────
-  { _id: '11', type: 'shuttle', name: 'Campus Shuttle', route: 'Route I', origin: 'Main Gate',       destination: 'Cafeteria Block',  departureTime: '07:00 AM', arrivalTime: '07:20 AM', duration: '20m',    price: '1.00', totalSeats: 20, bookedSeats: 15, status: 'active'   },
-  { _id: '12', type: 'shuttle', name: 'Airport Shuttle', route: 'Route J', origin: 'Hotel Row',      destination: 'Departure Hall',   departureTime: '05:30 AM', arrivalTime: '06:15 AM', duration: '45m',    price: '5.00', totalSeats: 18, bookedSeats: 10, status: 'active'   },
-  { _id: '13', type: 'shuttle', name: 'Mall Hopper',   route: 'Route K', origin: 'North Terminal',   destination: 'Grand Mall',       departureTime: '10:00 AM', arrivalTime: '10:25 AM', duration: '25m',    price: '2.50', totalSeats: 16, bookedSeats: 3,  status: 'boarding' },
-];
-
 const VEHICLE_TYPES = [
   { key: 'all',     label: 'All',     icon: 'apps-outline'       },
   { key: 'bus',     label: 'Bus',     icon: 'bus-outline'        },
@@ -110,9 +90,9 @@ const HomeScreen = ({ navigation }) => {
   const loadBuses = async () => {
     try {
       const res = await getBusesApi();
-      setBuses(res.data.buses || ALL_VEHICLES);
+      setBuses(res.data.buses ?? []);
     } catch {
-      setBuses(ALL_VEHICLES);
+      setBuses([]);
     } finally {
       setLoading(false);
       setRefreshing(false);

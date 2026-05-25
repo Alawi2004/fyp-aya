@@ -47,31 +47,6 @@ function mk(id, actor, role, action, entityType, entityId, ip, hoursAgo, oldV, n
   return { audit_log_id: id, actor_name: actor, actor_role: role, action_name: action, entity_type: entityType, entity_id: String(entityId), ip_address: ip, created_at: new Date(Date.now() - hoursAgo * 3600000).toISOString(), old_values_json: oldV ? JSON.stringify(oldV) : null, new_values_json: newV ? JSON.stringify(newV) : null };
 }
 
-const MOCK_LOGS = [
-  mk(1,  "Aya Ghazali",   "admin", "login.success",        "session",  "s-001",  "192.168.1.109", 0.1, null, { method: "email+password" }),
-  mk(2,  "Aya Ghazali",   "admin", "user.suspended",       "user",     3,        "192.168.1.109", 0.5, { status: "active" }, { status: "suspended", reason: "Fraud" }),
-  mk(3,  "Aya Ghazali",   "admin", "wallet.credited",      "wallet",   3,        "192.168.1.109", 0.6, { balance: 8.50 }, { balance: 58.50, amount: 50, reason: "Refund" }),
-  mk(4,  "Aya Ghazali",   "admin", "route.created",        "route",    6,        "192.168.1.109", 1.2, null, { route_name: "Route 14F", start_location: "Beirut", end_location: "Sidon" }),
-  mk(5,  "Aya Ghazali",   "admin", "driver.updated",       "driver",   2,        "192.168.1.109", 2.0, { phone: "+961 71 111111" }, { phone: "+961 71 222222" }),
-  mk(6,  "Aya Ghazali",   "admin", "trip.status.updated",  "trip",     42,       "192.168.1.109", 2.5, { status: "scheduled" }, { status: "ongoing" }),
-  mk(7,  "Aya Ghazali",   "admin", "vehicle.maintenance.added", "vehicle", "BUS-07", "192.168.1.109", 3.0, null, { type: "Oil Change", cost: 85, mechanic: "Auto Fix Garage" }),
-  mk(8,  "Aya Ghazali",   "admin", "user.restored",        "user",     5,        "192.168.1.109", 4.0, { status: "suspended" }, { status: "active" }),
-  mk(9,  "Aya Ghazali",   "admin", "fare_zone.created",    "fare_zone",1,        "192.168.1.109", 5.0, null, { zone_name: "Zone A", base_fare: 1.00 }),
-  mk(10, "Aya Ghazali",   "admin", "report.exported",      "report",   null,     "192.168.1.109", 5.5, null, { report_type: "driver-performance", format: "CSV" }),
-  mk(11, "System",        null,    "scheduled_report.sent","report",   1,        "127.0.0.1",     6.0, null, { recipients: ["admin@yallatransit.com"], report: "Weekly Driver Report" }),
-  mk(12, "Aya Ghazali",   "admin", "wallet.frozen",        "wallet",   10,       "192.168.1.109", 8.0, { status: "active" }, { status: "frozen", reason: "Suspicious Activity" }),
-  mk(13, "Aya Ghazali",   "admin", "notification.sent",    "notification", null, "192.168.1.109", 9.0, null, { target: "All Passengers", message: "Service delay on Route 7B" }),
-  mk(14, "Aya Ghazali",   "admin", "complaint.resolved",   "complaint","TRK-001","192.168.1.109", 12.0, { status: "open" }, { status: "resolved", resolution: "Driver warned" }),
-  mk(15, "Aya Ghazali",   "admin", "login.failed",         "session",  null,     "203.0.113.5",   14.0, null, { reason: "wrong_password", email: "admin@yallatransit.com" }),
-  mk(16, "Aya Ghazali",   "admin", "stop.amenities.updated","stop",   48,        "192.168.1.109", 16.0, { has_shelter: false }, { has_shelter: true, has_seating: true }),
-  mk(17, "Aya Ghazali",   "admin", "role.assigned",        "user",     7,        "192.168.1.109", 18.0, { role: "driver" }, { role: "transport_manager" }),
-  mk(18, "System",        null,    "session.expired",      "session",  "s-000",  "127.0.0.1",     20.0, { expires_at: new Date(Date.now() - 86400000).toISOString() }, null),
-  mk(19, "Aya Ghazali",   "admin", "vehicle.docs.updated", "vehicle",  "BUS-03", "192.168.1.109", 22.0, { registration_expiry: "2026-01-01" }, { registration_expiry: "2027-01-01" }),
-  mk(20, "Aya Ghazali",   "admin", "driver.schedule.updated","driver", 4,        "192.168.1.109", 24.0, { Mon: "morning" }, { Mon: "afternoon" }),
-];
-
-const ENTITY_TYPES = [...new Set(MOCK_LOGS.map(l => l.entity_type))].sort();
-const ACTION_NAMES  = [...new Set(MOCK_LOGS.map(l => l.action_name))].sort();
 
 const PAGE_SIZE = 10;
 
@@ -80,7 +55,7 @@ const PAGE_SIZE = 10;
 // ══════════════════════════════════════════════════════════════════════════════
 
 export default function AuditLogPage() {
-  const [all,      setAll]      = useState(MOCK_LOGS);
+  const [all,      setAll]      = useState([]);
   const [loading,  setLoading]  = useState(false);
   const [page,     setPage]     = useState(1);
   const [expanded, setExpanded] = useState(null);
@@ -102,8 +77,8 @@ export default function AuditLogPage() {
     if (search)       params.set("search",      search);
 
     apiClient.get(`/audit-logs?${params}`)
-      .then(d => setAll(Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : MOCK_LOGS))
-      .catch(() => setAll(MOCK_LOGS))
+      .then(d => setAll(Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []))
+      .catch(() => setAll([]))
       .finally(() => setLoading(false));
   }, [filterAction, filterEntity, filterFrom, filterTo, search]);
 
@@ -160,12 +135,12 @@ export default function AuditLogPage() {
 
         <select value={filterAction} onChange={e => setFilterAction(e.target.value)} style={{ ...INP, flex: "1 1 140px" }}>
           <option value="">All Actions</option>
-          {ACTION_NAMES.map(a => <option key={a} value={a}>{a}</option>)}
+          {[...new Set(all.map(l => l.action_name))].sort().map(a => <option key={a} value={a}>{a}</option>)}
         </select>
 
         <select value={filterEntity} onChange={e => setFilterEntity(e.target.value)} style={{ ...INP, flex: "1 1 120px" }}>
           <option value="">All Entities</option>
-          {ENTITY_TYPES.map(e => <option key={e} value={e}>{e}</option>)}
+          {[...new Set(all.map(l => l.entity_type).filter(Boolean))].sort().map(e => <option key={e} value={e}>{e}</option>)}
         </select>
 
         <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} style={{ ...INP, flex: "1 1 130px" }} title="From date" />

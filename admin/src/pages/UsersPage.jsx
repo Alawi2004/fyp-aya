@@ -7,11 +7,6 @@ import { StatusPill } from "../components/StatusPill";
 import { StatCard } from "../components/StatCard";
 import { getUsers, getPassengerHeatmap } from "../api/endpoints";
 import apiClient from "../api/apiClient";
-import {
-  MOCK_USERS, MOCK_DRIVERS, MOCK_PERFORMANCE, MOCK_TRIPS,
-  MOCK_RATINGS, MOCK_SCHEDULES, MOCK_STAFF, MOCK_STAFF_TRANSACTIONS,
-  MOCK_HEATMAP_DATA, MOCK_ROUTE_POPULARITY, MOCK_PEAK_HOURS,
-} from "../data/mockData";
 
 const ROLES = ["Passenger", "Driver", "Admin", "Staff"];
 
@@ -245,14 +240,10 @@ function DriverUserProfile({ user, onClose, onEdit }) {
   const rs       = ROLE_STYLE.Driver;
   const initials = user.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 
-  // Enrich with driver-specific mock data matched by name
-  const driverData = MOCK_DRIVERS.find(d => d.name === user.name) ?? {};
-  const perf       = MOCK_PERFORMANCE.find(p => p.name === user.name) ?? {
-    trips_week: 0, on_time_pct: 85, complaints: 0, avg_rating: driverData.rating ?? null, idle_hours: 3.0,
-  };
-  const schedule    = MOCK_SCHEDULES.find(s => s.driver_name === user.name);
-  const recentTrips = MOCK_TRIPS.filter(t => t.driver === user.name).slice(0, 5);
-  const ratings     = MOCK_RATINGS.filter(r => r.driver === user.name);
+  const perf       = { trips_week: 0, on_time_pct: 85, complaints: 0, avg_rating: null, idle_hours: 3.0 };
+  const schedule    = null;
+  const recentTrips = [];
+  const ratings     = [];
   const score       = calcScore(perf);
   const scoreColor  = score >= 85 ? "#10B981" : score >= 70 ? "#F59E0B" : "#EF4444";
 
@@ -471,8 +462,8 @@ function StaffUserProfile({ user, onClose, onEdit }) {
   const rs       = ROLE_STYLE.Staff;
   const initials = user.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 
-  const staffRec  = MOCK_STAFF.find(s => s.name === user.name) ?? {};
-  const staffTxns = MOCK_STAFF_TRANSACTIONS.filter(t => t.staff === user.name);
+  const staffRec  = {};
+  const staffTxns = [];
   const suspicious = staffTxns.filter(t => t.flags.length > 0);
 
   return (
@@ -770,11 +761,7 @@ function ActivityTab({ users }) {
   const maxPeak  = Math.max(...peakData.map(h => h.count), 1);
   const top3     = [...peakData].sort((a, b) => b.count - a.count).slice(0, 3).map(h => h.hour);
 
-  const catMaxRoute = Math.max(...MOCK_ROUTE_POPULARITY.map(r =>
-    catFilter === "All"
-      ? Object.values(r).filter(v => typeof v === "number").reduce((s, v) => s + v, 0)
-      : (r[catFilter] ?? 0)
-  ), 1);
+  const catMaxRoute = 1;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -904,7 +891,7 @@ function ActivityTab({ users }) {
         {/* Route popularity by category */}
         <Panel title={`Route Popularity${catFilter !== "All" ? ` — ${catFilter}` : " by Category"}`}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {MOCK_ROUTE_POPULARITY.map(route => {
+            {[].map(route => {
               const total = catFilter === "All"
                 ? Object.entries(route).filter(([k]) => k !== "route").reduce((s, [, v]) => s + v, 0)
                 : (route[catFilter] ?? 0);
@@ -962,7 +949,7 @@ function ActivityTab({ users }) {
         {Object.entries(CAT_COLORS).map(([cat, color]) => {
           const count = catCounts[cat] ?? 0;
           const pct   = totalPass > 0 ? Math.round((count / totalPass) * 100) : 0;
-          const totalTrips = MOCK_ROUTE_POPULARITY.reduce((s, r) => s + (r[cat] ?? 0), 0);
+          const totalTrips = 0;
           return (
             <div key={cat} style={{ background: "#fff", border: "1px solid #F1F5F9", borderRadius: 14, padding: "16px 18px", boxShadow: "0 1px 3px rgba(0,0,0,.05)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
@@ -1024,8 +1011,8 @@ export default function UsersPage() {
         setUsers((rows || []).map(normalizeUser));
       })
       .catch(err => {
-        setUsers(MOCK_USERS.map(normalizeUser));
-        setUsersError(err?.message ?? "Could not reach server — showing demo data");
+        setUsers([]);
+        setUsersError(err?.message ?? "Could not reach server");
       })
       .finally(() => setUsersLoading(false));
   }, []);

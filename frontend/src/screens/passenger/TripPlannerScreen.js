@@ -19,7 +19,7 @@ import { COLORS } from '../../constants/colors';
 import { getStopsApi } from '../../api/stopsApi';
 import { getMultiTripRouteApi } from '../../api/multiTripApi';
 import { useApp } from '../../context/AppContext';
-import { MOCK_STOPS, stopsWithDistance, formatDist } from '../../utils/mockStops';
+import { stopsWithDistance, formatDist } from '../../utils/mockStops';
 import MultiTripBottomSheet from '../../components/passenger/MultiTripBottomSheet';
 
 // Approximate exchange rate used only for balance sufficiency check (display purposes)
@@ -37,10 +37,7 @@ const money = (v) => `${Number(v || 0).toLocaleString()} LBP`;
 const StopPickerModal = ({ visible, onClose, onSelect, title, stops, loadingStops, userLocation }) => {
   const [query, setQuery] = useState('');
 
-  const allStops = useMemo(() => {
-    if (stops.length > 0) return stops;
-    return MOCK_STOPS;
-  }, [stops]);
+  const allStops = useMemo(() => stops, [stops]);
 
   const filtered = useMemo(
     () => allStops.filter((s) => s.stop_name.toLowerCase().includes(query.toLowerCase())),

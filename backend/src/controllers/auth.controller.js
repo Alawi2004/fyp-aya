@@ -368,7 +368,19 @@ export const login = async (req, res) => {
 
     setCookies(res, access_token, refresh_token);
     const { password_hash, ...safeUser } = user;
-    return res.json({ user: safeUser });
+
+    // For driver users, include driver_id so mobile app can use it
+    if (safeUser.role === "driver") {
+      try {
+        const dr = await pool.request()
+          .input("uid", sql.Int, safeUser.user_id)
+          .query("SELECT driver_id FROM drivers WHERE user_id = @uid");
+        safeUser.driver_id = dr.recordset[0]?.driver_id ?? null;
+      } catch (_) { safeUser.driver_id = null; }
+    }
+
+    // Return access_token in body so mobile clients can store it as Bearer token
+    return res.json({ user: safeUser, access_token });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Login failed" });

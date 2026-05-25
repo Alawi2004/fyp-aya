@@ -6,11 +6,6 @@ import EmptyState from '../../components/common/EmptyState';
 import { COLORS } from '../../constants/colors';
 import { getFavoriteRoutes, removeFavoriteRoute } from '../../api/apiClient';
 
-const MOCK_FAVORITES = [
-  { favorite_id: '1', route_id: 1, name: 'Route 12A', origin: 'Hamra Station', destination: 'Jounieh Terminal', nickname: null },
-  { favorite_id: '2', route_id: 3, name: 'Route 3C',  origin: 'Beirut',        destination: 'Zahlé',           nickname: 'Work Route' },
-];
-
 const FavoriteRoutesScreen = ({ navigation }) => {
   const headerInsets = useHeaderInsets();
   const [favorites,  setFavorites]  = useState([]);
@@ -21,9 +16,9 @@ const FavoriteRoutesScreen = ({ navigation }) => {
     if (!silent) setLoading(true);
     try {
       const data = await getFavoriteRoutes();
-      setFavorites(Array.isArray(data) ? data : MOCK_FAVORITES);
+      setFavorites(Array.isArray(data) ? data : []);
     } catch {
-      setFavorites(MOCK_FAVORITES);
+      setFavorites([]);
     } finally {
       setLoading(false);
       setRefreshing(false);

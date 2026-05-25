@@ -573,11 +573,6 @@ const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
 const EMPTY_SCHED = { report_name: "", report_type: "driver-performance", frequency: "weekly", day_of_week: 1, hour_of_day: 8, recipients: "", enabled: true };
 
-const MOCK_SCHEDULES = [
-  { schedule_id: 1, report_name: "Weekly Driver Report",    report_type: "driver-performance",  frequency: "weekly",  day_of_week: 1, hour_of_day: 8,  recipients: ["admin@yallatransit.com"], enabled: true,  last_sent_at: new Date(Date.now() - 7*86400000).toISOString(), next_send_at: new Date(Date.now() + 86400000).toISOString() },
-  { schedule_id: 2, report_name: "Monthly Revenue Summary", report_type: "revenue",             frequency: "monthly", day_of_week: null, hour_of_day: 9, recipients: ["ceo@yallatransit.com", "admin@yallatransit.com"], enabled: true, last_sent_at: new Date(Date.now() - 30*86400000).toISOString(), next_send_at: new Date(Date.now() + 15*86400000).toISOString() },
-  { schedule_id: 3, report_name: "Daily Vehicle Check",    report_type: "vehicle-utilization", frequency: "daily",   day_of_week: null, hour_of_day: 7, recipients: ["ops@yallatransit.com"],   enabled: false, last_sent_at: null, next_send_at: null },
-];
 
 import apiClient from "../api/apiClient";
 
@@ -591,8 +586,8 @@ function ScheduledReportsTab() {
 
   const load = () => {
     apiClient.get("/reports/scheduled")
-      .then(d => setSchedules(Array.isArray(d) ? d : MOCK_SCHEDULES))
-      .catch(() => setSchedules(MOCK_SCHEDULES));
+      .then(d => setSchedules(Array.isArray(d) ? d : []))
+      .catch(() => setSchedules([]));
   };
 
   useEffect(() => { load(); }, []);

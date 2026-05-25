@@ -1,13 +1,13 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Alert, Platform, StatusBar, Animated,
+  Alert, Platform, StatusBar, Animated, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS } from '../../constants/colors';
+import { getDriverTripsApi } from '../../api/driverApi';
 
 const TRIP_STATUS = [
   { key: 'idle',       label: 'Not Started', icon: 'ellipse-outline',    color: COLORS.textMuted   },
@@ -16,29 +16,31 @@ const TRIP_STATUS = [
   { key: 'completed',  label: 'Completed',    icon: 'checkmark-circle',  color: COLORS.primary     },
 ];
 
-const MOCK_TRIPS = [
-  {
-    _id: '1', routeName: 'Route A — City Center', busNumber: 'BUS-101',
-    origin: 'Terminal North', destination: 'City Mall',
-    departureTime: '08:00', arrivalTime: '09:15',
-    passengers: 18, totalSeats: 30, status: 'active', earnings: 54.00,
-    stops: 6,
-  },
-  {
-    _id: '2', routeName: 'Route B — University', busNumber: 'BUS-202',
-    origin: 'Central Station', destination: 'University Campus',
-    departureTime: '10:30', arrivalTime: '11:20',
-    passengers: 24, totalSeats: 30, status: 'upcoming', earnings: 72.00,
-    stops: 4,
-  },
-  {
-    _id: '3', routeName: 'Route C — Airport Express', busNumber: 'BUS-303',
-    origin: 'Downtown Hub', destination: 'International Airport',
-    departureTime: '06:00', arrivalTime: '07:00',
-    passengers: 28, totalSeats: 30, status: 'completed', earnings: 84.00,
-    stops: 3,
-  },
-];
+function formatTime(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  return isNaN(d) ? dateStr : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function normaliseTrip(t) {
+  return {
+    _id:           String(t.trip_id ?? t._id ?? ''),
+    trip_id:       t.trip_id,
+    routeName:     t.route_name  ?? t.routeName  ?? 'Route',
+    busNumber:     t.plate_number ?? t.busNumber ?? (t.vehicle_model ?? 'Bus'),
+    origin:        t.start_location ?? t.origin      ?? '—',
+    destination:   t.end_location   ?? t.destination ?? '—',
+    departureTime: formatTime(t.start_time ?? t.departureTime),
+    arrivalTime:   formatTime(t.end_time   ?? t.arrivalTime),
+    passengers:    t.passengers   ?? 0,
+    totalSeats:    t.totalSeats   ?? t.capacity ?? 30,
+    status:        t.status       ?? 'upcoming',
+    earnings:      parseFloat(t.earnings ?? 0),
+    stops:         t.stops        ?? 0,
+    route_id:      t.route_id,
+    vehicle_id:    t.vehicle_id,
+  };
+}
 
 const STATUS_CFG = {
   active:    { label: 'Active',    bg: COLORS.secondaryLight, text: COLORS.secondary, dot: COLORS.secondary },
@@ -53,8 +55,25 @@ const DriverDashboardScreen = ({ navigation }) => {
   const fadeAnim   = useRef(new Animated.Value(0)).current;
   const slideAnim  = useRef(new Animated.Value(20)).current;
   const pulseAnim  = useRef(new Animated.Value(1)).current;
+  const timerRef   = useRef(null);
   const [tripStatus, setTripStatus] = useState('active');
-  const [trips] = useState(MOCK_TRIPS);
+  const [trips,      setTrips]      = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadTrips = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const res  = await getDriverTripsApi();
+      const data = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.trips) ? res.data.trips : []);
+      setTrips(data.map(normaliseTrip));
+    } catch {
+      setTrips([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
     Animated.parallel([
@@ -69,8 +88,12 @@ const DriverDashboardScreen = ({ navigation }) => {
       ])
     );
     pulse.start();
-    return () => pulse.stop();
-  }, []);
+
+    loadTrips();
+    timerRef.current = setInterval(() => loadTrips(true), 30000);
+
+    return () => { pulse.stop(); clearInterval(timerRef.current); };
+  }, [loadTrips]);
 
   const activeTrip    = trips.find(t => t.status === 'active');
   const upcomingCount = trips.filter(t => t.status === 'upcoming').length;
@@ -112,7 +135,7 @@ const DriverDashboardScreen = ({ navigation }) => {
           <View style={styles.headerRight}>
             <TouchableOpacity
               style={styles.notifBtn}
-              onPress={() => Alert.alert('No new notifications')}
+              onPress={() => navigation.navigate('DriverNotifications')}
             >
               <Ionicons name="notifications-outline" size={20} color={COLORS.white} />
             </TouchableOpacity>
@@ -169,7 +192,24 @@ const DriverDashboardScreen = ({ navigation }) => {
         ))}
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      {loading && trips.length === 0 ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={COLORS.driverPrimary ?? COLORS.primary} />
+        </View>
+      ) : null}
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scroll}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => { setRefreshing(true); loadTrips(true); }}
+            colors={[COLORS.primary]}
+            tintColor={COLORS.primary}
+          />
+        }
+      >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
 
           {/* ─── Quick Actions ─── */}
@@ -324,6 +364,7 @@ const DriverDashboardScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   scroll: { padding: 16 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
 
   /* Header */
   header: {

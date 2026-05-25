@@ -6,11 +6,8 @@ import {
   getNotifications, markNotificationAsRead, createNotification,
   getNotificationTemplates, getScheduledNotifications,
   scheduleNotification, cancelScheduled, createTemplate, updateTemplate, deleteTemplate,
+  getRoutes, getDrivers,
 } from "../api/endpoints";
-import {
-  MOCK_NOTIFICATIONS, MOCK_NOTIFICATION_TEMPLATES, MOCK_SCHEDULED_NOTIFICATIONS,
-  MOCK_ROUTES, MOCK_DRIVERS,
-} from "../data/mockData";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const ALERT_STYLE = {
@@ -235,7 +232,7 @@ function LogTab({ log, onMarkRead, onMarkAllRead }) {
 }
 
 // ── Tab 2: Compose ────────────────────────────────────────────────────────────
-function ComposeTab({ templates, onSent, onScheduled }) {
+function ComposeTab({ templates, routes, drivers, onSent, onScheduled }) {
   const [form, setForm]     = useState(EMPTY_FORM);
   const [sent, setSent]     = useState(false);
   const [sched, setSched]   = useState(false);
@@ -370,7 +367,12 @@ function ComposeTab({ templates, onSent, onScheduled }) {
                 <label style={lbl}>Select Route</label>
                 <select value={form.route} onChange={e => set("route")(e.target.value)} style={inputStyle}>
                   <option value="">— Pick a route —</option>
-                  {MOCK_ROUTES.map(r => <option key={r.id} value={r.name}>{r.name} ({r.origin} → {r.destination})</option>)}
+                  {routes.map(r => (
+                    <option key={r.route_id ?? r.id} value={r.route_name ?? r.name}>
+                      {r.route_name ?? r.name}
+                      {r.start_location && r.end_location ? ` (${r.start_location} → ${r.end_location})` : ''}
+                    </option>
+                  ))}
                 </select>
               </div>
             )}
@@ -380,7 +382,12 @@ function ComposeTab({ templates, onSent, onScheduled }) {
                 <label style={lbl}>Select Driver</label>
                 <select value={form.driver} onChange={e => set("driver")(e.target.value)} style={inputStyle}>
                   <option value="">— Pick a driver —</option>
-                  {MOCK_DRIVERS.map(d => <option key={d.id} value={d.name}>{d.name} · {d.license}</option>)}
+                  {drivers.map(d => (
+                    <option key={d.driver_id ?? d.user_id ?? d.id} value={d.full_name ?? d.name}>
+                      {d.full_name ?? d.name}
+                      {d.license_number ? ` · ${d.license_number}` : ''}
+                    </option>
+                  ))}
                 </select>
               </div>
             )}
@@ -566,19 +573,29 @@ export default function NotificationsPage() {
   const [log,       setLog]       = useState([]);
   const [templates, setTemplates] = useState([]);
   const [scheduled, setScheduled] = useState([]);
+  const [routes,    setRoutes]    = useState([]);
+  const [drivers,   setDrivers]   = useState([]);
 
   useEffect(() => {
     getNotifications()
-      .then(d => setLog((d || []).map(normalizeNotif)))
-      .catch(() => setLog(MOCK_NOTIFICATIONS.map(normalizeNotif)));
+      .then(d => setLog(Array.isArray(d) ? d.map(normalizeNotif) : []))
+      .catch(() => setLog([]));
 
     getNotificationTemplates()
-      .then(d => setTemplates((d || []).length ? d : MOCK_NOTIFICATION_TEMPLATES))
-      .catch(() => setTemplates(MOCK_NOTIFICATION_TEMPLATES));
+      .then(d => setTemplates(Array.isArray(d) ? d : []))
+      .catch(() => setTemplates([]));
 
     getScheduledNotifications()
-      .then(d => setScheduled((d || []).length ? d : MOCK_SCHEDULED_NOTIFICATIONS))
-      .catch(() => setScheduled(MOCK_SCHEDULED_NOTIFICATIONS));
+      .then(d => setScheduled(Array.isArray(d) ? d : []))
+      .catch(() => setScheduled([]));
+
+    getRoutes()
+      .then(d => setRoutes(Array.isArray(d) ? d : []))
+      .catch(() => {});
+
+    getDrivers()
+      .then(d => { const list = Array.isArray(d) ? d : d?.drivers ?? []; setDrivers(list); })
+      .catch(() => {});
   }, []);
 
   const unread    = log.filter(n => !n.read).length;
@@ -654,7 +671,7 @@ export default function NotificationsPage() {
 
       {/* Tab content */}
       {tab === "log"       && <LogTab       log={log}           onMarkRead={markRead}   onMarkAllRead={markAllRead} />}
-      {tab === "compose"   && <ComposeTab   templates={templates} onSent={handleSent}  onScheduled={handleScheduled} />}
+      {tab === "compose"   && <ComposeTab   templates={templates} routes={routes} drivers={drivers} onSent={handleSent}  onScheduled={handleScheduled} />}
       {tab === "scheduled" && <ScheduledTab scheduled={scheduled} onCancel={handleCancelScheduled} />}
       {tab === "templates" && (
         <TemplatesTab

@@ -92,8 +92,8 @@ function FareZonesPanel({ route }) {
 
   const load = () => {
     apiClient.get(`/routes/${route.id}/fare-zones`)
-      .then(data => setZones(Array.isArray(data) ? data : MOCK_ZONES(route)))
-      .catch(() => setZones(MOCK_ZONES(route)));
+      .then(data => setZones(Array.isArray(data) ? data : []))
+      .catch(() => setZones([]));
   };
 
   useEffect(() => { load(); }, [route.id]);
@@ -460,17 +460,6 @@ function StopAmenitiesPanel({ stop }) {
       </div>
     </div>
   );
-}
-
-// ── Mock zone data ────────────────────────────────────────────────────────────
-
-function MOCK_ZONES(route) {
-  if (!route || !route.stops || route.stops.length < 2) return [];
-  const stops = route.stops;
-  return [
-    { zone_id: 1, zone_name: "Zone A", zone_color: "#2563EB", base_fare: 1.00, stops: stops.slice(0, Math.ceil(stops.length / 2)).map(s => ({ stop_id: s.id ?? s.stop_id, stop_name: s.name ?? s.stop_name })) },
-    { zone_id: 2, zone_name: "Zone B", zone_color: "#059669", base_fare: 1.50, stops: stops.slice(Math.ceil(stops.length / 2)).map(s => ({ stop_id: s.id ?? s.stop_id, stop_name: s.name ?? s.stop_name })) },
-  ];
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

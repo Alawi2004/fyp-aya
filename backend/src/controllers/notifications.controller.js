@@ -98,9 +98,9 @@ export const getAllNotifications = async (req, res) => {
       SELECT
         notification_id,
         user_id,
-        ISNULL(title,   LEFT(ISNULL(message,''), 80))  AS title,
-        ISNULL(body,    ISNULL(message,''))             AS body,
-        ISNULL(message, '')                              AS message,
+        ISNULL(title,   LEFT(CAST(ISNULL(message,'') AS NVARCHAR(MAX)), 80)) AS title,
+        ISNULL(body,    CAST(ISNULL(message,'') AS NVARCHAR(MAX)))        AS body,
+        CAST(ISNULL(message,'') AS NVARCHAR(MAX))                          AS message,
         ISNULL(type,    'info')                         AS type,
         ISNULL(target_group, 'all_users')               AS target_group,
         is_read,
@@ -212,16 +212,38 @@ export const markNotificationRead = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/notifications/user/:user_id
+// Returns personal notifications + broadcast notifications targeted at the
+// user's role group (all_users, all_passengers, all_drivers).
 // ─────────────────────────────────────────────────────────────────────────────
 export const getUserNotifications = async (req, res) => {
   try {
     const pool = await poolPromise;
+    await ensureDeliveryColumns(pool);
+
+    // Look up the user's role so we can include the right broadcasts
+    const userRow = await pool.request()
+      .input("uid", sql.Int, req.params.user_id)
+      .query("SELECT role FROM users WHERE user_id = @uid");
+    const role = userRow.recordset[0]?.role ?? "passenger";
+
+    const roleGroup = role === "driver" ? "all_drivers" : "all_passengers";
+
     const result = await pool.request()
       .input("uid", sql.Int, req.params.user_id)
+      .input("roleGroup", sql.NVarChar(50), roleGroup)
       .query(`
-        SELECT notification_id, message, is_read, created_at
+        SELECT
+          notification_id,
+          ISNULL(title, LEFT(CAST(ISNULL(message,'') AS NVARCHAR(MAX)), 80)) AS title,
+          ISNULL(body,  CAST(ISNULL(message,'') AS NVARCHAR(MAX)))           AS body,
+          CAST(ISNULL(message,'') AS NVARCHAR(MAX))                          AS message,
+          ISNULL(type, 'info')                                               AS type,
+          ISNULL(target_group, 'all_users')                                  AS target_group,
+          is_read,
+          created_at
         FROM notifications
         WHERE user_id = @uid
+           OR (user_id IS NULL AND target_group IN ('all_users', @roleGroup))
         ORDER BY created_at DESC
       `);
     res.json(result.recordset);

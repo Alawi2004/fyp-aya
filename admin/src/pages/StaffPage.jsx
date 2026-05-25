@@ -9,7 +9,6 @@ import {
   getStaffTransactions, getSuspiciousTransactions,
   getReconciliation, submitReconciliation,
 } from "../api/endpoints";
-import { MOCK_STAFF, MOCK_STAFF_TRANSACTIONS, MOCK_RECONCILIATION } from "../data/mockData";
 
 // ── Flag config ───────────────────────────────────────────────────────────────
 const FLAG_CONFIG = {
@@ -627,16 +626,16 @@ export default function StaffPage() {
 
   useEffect(() => {
     getStaffAccounts()
-      .then(d => setStaff((d || []).length ? d : MOCK_STAFF))
-      .catch(() => setStaff(MOCK_STAFF));
+      .then(d => setStaff(Array.isArray(d) ? d : []))
+      .catch(() => setStaff([]));
 
     getStaffTransactions()
-      .then(d => setTransactions((d || []).length ? d : MOCK_STAFF_TRANSACTIONS))
-      .catch(() => setTransactions(MOCK_STAFF_TRANSACTIONS));
+      .then(d => setTransactions(Array.isArray(d) ? d : []))
+      .catch(() => setTransactions([]));
 
     getReconciliation("2026-05-08")
-      .then(d => setReconciliation((d || []).length ? d : MOCK_RECONCILIATION))
-      .catch(() => setReconciliation(MOCK_RECONCILIATION));
+      .then(d => setReconciliation(Array.isArray(d) ? d : []))
+      .catch(() => setReconciliation([]));
   }, []);
 
   const suspicious    = transactions.filter(t => t.flags.length > 0);

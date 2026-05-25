@@ -11,7 +11,6 @@ import {
   getVehiclePhotos, uploadVehiclePhoto, deleteVehiclePhotoApi,
 } from "../api/endpoints";
 import { PageLoading, PageError, PageEmpty } from "../components/DataStates";
-import { MOCK_VEHICLES, MOCK_VEHICLE_DOCS, MOCK_MAINTENANCE_LOG, MOCK_FUEL_LOG } from "../data/mockData";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const TODAY            = new Date("2026-05-10");
@@ -1182,7 +1181,7 @@ export default function VehiclesPage() {
   const [vehiclesError, setVehiclesError] = useState(null);
   const [docs,          setDocs]          = useState([]);
   const [mlog,          setMlog]          = useState([]);
-  const [fuelLog,       setFuelLog]       = useState(MOCK_FUEL_LOG);
+  const [fuelLog,       setFuelLog]       = useState([]);
   const [photos,        setPhotos]        = useState({});
   const [modalOpen,     setModalOpen]     = useState(false);
   const [editTarget,    setEditTarget]    = useState(null);
@@ -1223,8 +1222,8 @@ export default function VehiclesPage() {
         loadAllPhotos(normalised).catch(() => {});
       })
       .catch(err => {
-        setVehicles(MOCK_VEHICLES.map(normalizeVehicle));
-        setVehiclesError(err?.message ?? "Could not reach server — showing demo data");
+        setVehicles([]);
+        setVehiclesError(err?.message ?? "Could not reach server");
       })
       .finally(() => setVehiclesLoading(false));
   }, [loadAllPhotos]);
@@ -1233,16 +1232,16 @@ export default function VehiclesPage() {
     loadVehicles();
 
     getVehicleDocs()
-      .then(d => setDocs((d || []).length ? d : MOCK_VEHICLE_DOCS))
-      .catch(() => setDocs(MOCK_VEHICLE_DOCS));
+      .then(d => setDocs(Array.isArray(d) ? d : []))
+      .catch(() => setDocs([]));
 
     getMaintenanceLog()
-      .then(d => setMlog((d || []).length ? d : MOCK_MAINTENANCE_LOG))
-      .catch(() => setMlog(MOCK_MAINTENANCE_LOG));
+      .then(d => setMlog(Array.isArray(d) ? d : []))
+      .catch(() => setMlog([]));
 
     getFuelLog()
-      .then(d => setFuelLog((d || []).length ? d : MOCK_FUEL_LOG))
-      .catch(() => setFuelLog(MOCK_FUEL_LOG));
+      .then(d => setFuelLog(Array.isArray(d) ? d : []))
+      .catch(() => setFuelLog([]));
   }, [loadVehicles]);
 
   // Alert badge count for tab

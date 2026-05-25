@@ -8,7 +8,7 @@ import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { getStopsApi } from '../../api/stopsApi';
-import { MOCK_STOPS, stopsWithDistance, formatDist } from '../../utils/mockStops';
+import { stopsWithDistance, formatDist } from '../../utils/mockStops';
 import { COLORS } from '../../constants/colors';
 
 const WALKING_RADIUS_KM = 1.5; // show stops within 1.5 km
@@ -77,7 +77,7 @@ const NearbyStopsScreen = ({ navigation }) => {
     ]);
     const loc    = locResult.status    === 'fulfilled' ? locResult.value    : null;
     const rawSt  = stopsResult.status  === 'fulfilled' ? stopsResult.value  : [];
-    const src    = rawSt.length > 0 ? rawSt : MOCK_STOPS;
+    const src    = rawSt;
 
     if (loc) {
       setUserLocation(loc);

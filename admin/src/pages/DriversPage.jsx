@@ -11,7 +11,6 @@ import {
   getDrivers, createDriver, updateDriver,
   getDriverPerformance, getDriverSchedules, updateDriverSchedule,
 } from "../api/endpoints";
-import { MOCK_DRIVERS, MOCK_DRIVER_LICENSE_ALERTS, MOCK_PERFORMANCE, MOCK_SCHEDULES, MOCK_TRIPS, MOCK_RATINGS } from "../data/mockData";
 import { getTripChecklists } from "../api/endpoints";
 
 import { CAMERA_REST_URL } from '../config/camera';
@@ -29,14 +28,11 @@ const SHIFT_CONFIG = {
 };
 
 function normalizeDriver(d) {
-  const seeded = MOCK_DRIVER_LICENSE_ALERTS.find(
-    (entry) => entry.license === (d.license_number ?? d.license) || entry.name === (d.full_name ?? d.name)
-  );
   return {
     id: d.driver_id ?? d.id,
     name: d.full_name ?? d.name ?? "",
     license: d.license_number ?? d.license ?? "",
-    license_expiry: d.license_expiry ?? seeded?.expiry ?? "",
+    license_expiry: d.license_expiry ?? "",
     phone: d.phone ?? d.email ?? "",
     trips: d.trips ?? 0,
     rating: d.rating ?? null,
@@ -380,13 +376,13 @@ function BusSelector({ selectedBusId, onSelect }) {
 
 // ── Driver Profile Drawer (admin view) ───────────────────────────────────────
 function DriverProfile({ driver, onClose, onEdit }) {
-  const perf = MOCK_PERFORMANCE.find(p => p.name === driver.name) || {
+  const perf = {
     trips_week: driver.trips || 0, on_time_pct: 85, complaints: 0,
     avg_rating: driver.rating, idle_hours: 3.0,
   };
-  const schedule   = MOCK_SCHEDULES.find(s => s.driver_name === driver.name);
-  const recentTrips = MOCK_TRIPS.filter(t => t.driver === driver.name).slice(0, 5);
-  const driverRatings = MOCK_RATINGS.filter(r => r.driver === driver.name);
+  const schedule   = null;
+  const recentTrips = [];
+  const driverRatings = [];
   const score      = calcScore(perf);
   const scoreColor = score >= 85 ? "#10B981" : score >= 70 ? "#F59E0B" : "#EF4444";
   const initials   = driver.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
@@ -641,8 +637,8 @@ function PerformanceTab() {
 
   useEffect(() => {
     getDriverPerformance()
-      .then(d => setData((d || []).length ? d : MOCK_PERFORMANCE))
-      .catch(() => setData(MOCK_PERFORMANCE));
+      .then(d => setData(Array.isArray(d) ? d : []))
+      .catch(() => setData([]));
   }, []);
 
   const rows = data.map(d => ({ ...d, score: calcScore(d) }));
@@ -784,8 +780,8 @@ function ScheduleTab() {
 
   useEffect(() => {
     getDriverSchedules()
-      .then(d => setSchedules((d || []).length ? d : MOCK_SCHEDULES))
-      .catch(() => setSchedules(MOCK_SCHEDULES));
+      .then(d => setSchedules(Array.isArray(d) ? d : []))
+      .catch(() => setSchedules([]));
   }, []);
 
   // Compute dates for the displayed week
@@ -1020,14 +1016,6 @@ function LicenseAlertsTab({ drivers, onEdit }) {
 }
 
 // ── Checklist audit tab ───────────────────────────────────────────────────────
-const MOCK_CHECKLISTS_LOCAL = [
-  { checklist_id: 1, trip_id: 41, trip_ref: "TRP-041", driver: "Karim Moussa",   vehicle: "BUS-01", route: "Route 12A", fuel_ok: 1, lights_ok: 1, tires_ok: 1, submitted_at: "2026-05-16T05:45:00" },
-  { checklist_id: 2, trip_id: 38, trip_ref: "TRP-038", driver: "Sara Khoury",    vehicle: "BUS-07", route: "Route 7B",  fuel_ok: 1, lights_ok: 0, tires_ok: 1, submitted_at: "2026-05-16T06:10:00" },
-  { checklist_id: 3, trip_id: 29, trip_ref: "TRP-029", driver: "Joe Pharaon",    vehicle: "BUS-09", route: "Route 3C",  fuel_ok: 0, lights_ok: 1, tires_ok: 0, submitted_at: "2026-05-16T06:30:00" },
-  { checklist_id: 4, trip_id: 33, trip_ref: "TRP-033", driver: "Maya Salameh",   vehicle: "BUS-02", route: "Route 5D",  fuel_ok: 1, lights_ok: 1, tires_ok: 1, submitted_at: "2026-05-15T06:20:00" },
-  { checklist_id: 5, trip_id: 45, trip_ref: "TRP-045", driver: "Lara Abi Nader", vehicle: "BUS-05", route: "Route 9E",  fuel_ok: 1, lights_ok: 1, tires_ok: 1, submitted_at: "2026-05-15T07:00:00" },
-  { checklist_id: 6, trip_id: 50, trip_ref: "TRP-050", driver: "Karim Moussa",   vehicle: "BUS-01", route: "Route 12A", fuel_ok: 1, lights_ok: 1, tires_ok: 0, submitted_at: "2026-05-14T05:50:00" },
-];
 
 function CheckMark({ ok }) {
   return ok
@@ -1043,8 +1031,8 @@ function ChecklistsTab() {
 
   useEffect(() => {
     getTripChecklists()
-      .then(d => setRows(Array.isArray(d) && d.length ? d : MOCK_CHECKLISTS_LOCAL))
-      .catch(() => setRows(MOCK_CHECKLISTS_LOCAL))
+      .then(d => setRows(Array.isArray(d) ? d : []))
+      .catch(() => setRows([]))
       .finally(() => setLoading(false));
   }, []);
 
@@ -1206,7 +1194,7 @@ export default function DriversPage() {
         setDrivers((rows || []).map(normalizeDriver));
       })
       .catch(err => {
-        setDrivers(MOCK_DRIVERS);   // silent fallback to mock
+        setDrivers([]);
         setDriversError(err?.message ?? "Could not reach server — showing demo data");
       })
       .finally(() => setDriversLoading(false));

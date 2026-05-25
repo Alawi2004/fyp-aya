@@ -1,24 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TextInput,
-  TouchableOpacity, Platform, StatusBar,
+  TouchableOpacity, Platform, StatusBar, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
-
-const MOCK_PASSENGERS = [
-  { id: '1', name: 'Ahmad Al-Rashid',    seat: 'A3',  status: 'boarded',   time: '08:02', route: 'City Center' },
-  { id: '2', name: 'Siti Nur Aisyah',    seat: 'A7',  status: 'boarded',   time: '08:04', route: 'City Center' },
-  { id: '3', name: 'Muhammad Haziq',     seat: 'B1',  status: 'boarded',   time: '08:05', route: 'City Center' },
-  { id: '4', name: 'Priya Ramasamy',     seat: 'B4',  status: 'boarded',   time: '08:06', route: 'City Center' },
-  { id: '5', name: 'Lim Wei Chen',       seat: 'B8',  status: 'boarded',   time: '08:07', route: 'City Center' },
-  { id: '6', name: 'Kavitha Pillai',     seat: 'C2',  status: 'pending',   time: '—',     route: 'City Center' },
-  { id: '7', name: 'Amirul Faiz',        seat: 'C5',  status: 'pending',   time: '—',     route: 'City Center' },
-  { id: '8', name: 'Wong Mei Ling',      seat: 'C9',  status: 'no-show',   time: '—',     route: 'City Center' },
-  { id: '9', name: 'Rajan Krishnan',     seat: 'D2',  status: 'boarded',   time: '08:09', route: 'City Center' },
-  { id: '10', name: 'Nurul Hidayah',     seat: 'D6',  status: 'boarded',   time: '08:10', route: 'City Center' },
-];
+import { getPassengerListApi } from '../../api/driverApi';
 
 const STATUS_CFG = {
   boarded:  { label: 'Boarded',  bg: COLORS.secondaryLight, text: COLORS.secondary, icon: 'checkmark-circle' },
@@ -26,18 +14,55 @@ const STATUS_CFG = {
   'no-show':{ label: 'No Show',  bg: COLORS.dangerLight,    text: COLORS.danger,    icon: 'close-circle'     },
 };
 
-const PassengerListScreen = ({ navigation }) => {
+function normalizePassenger(p) {
+  let status = 'pending';
+  if (p.status === 'used')                          status = 'boarded';
+  else if (p.status === 'cancelled')                status = 'no-show';
+  else if (p.status === 'confirmed' || p.status === 'pending') status = 'pending';
+  return {
+    id:   String(p.ticket_id ?? p.id ?? Math.random()),
+    name: p.full_name ?? p.name ?? 'Passenger',
+    seat: p.seat_number ?? p.seat ?? '—',
+    status,
+    time: p.boarding_time ?? '—',
+    route: p.route ?? '',
+  };
+}
+
+const PassengerListScreen = ({ navigation, route: navRoute }) => {
   const headerInsets = useHeaderInsets();
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('all');
+  const tripId = navRoute?.params?.tripId;
+  const routeLabel = navRoute?.params?.routeName ?? 'Trip';
+
+  const [passengers, setPassengers] = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [search,     setSearch]     = useState('');
+  const [filter,     setFilter]     = useState('all');
+
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const res  = await getPassengerListApi(tripId);
+      const data = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+      setPassengers(data.map(normalizePassenger));
+    } catch {
+      setPassengers([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [tripId]);
+
+  useEffect(() => { load(); }, [load]);
 
   const counts = {
-    boarded:   MOCK_PASSENGERS.filter(p => p.status === 'boarded').length,
-    pending:   MOCK_PASSENGERS.filter(p => p.status === 'pending').length,
-    'no-show': MOCK_PASSENGERS.filter(p => p.status === 'no-show').length,
+    boarded:   passengers.filter(p => p.status === 'boarded').length,
+    pending:   passengers.filter(p => p.status === 'pending').length,
+    'no-show': passengers.filter(p => p.status === 'no-show').length,
   };
 
-  const filtered = MOCK_PASSENGERS.filter(p => {
+  const filtered = passengers.filter(p => {
     const matchFilter = filter === 'all' || p.status === filter;
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase())
       || p.seat.toLowerCase().includes(search.toLowerCase());
@@ -80,7 +105,6 @@ const PassengerListScreen = ({ navigation }) => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
 
-      {/* Header */}
       <View style={[styles.header, headerInsets]}>
         <View style={styles.headerDecor} />
         <View style={styles.headerTop}>
@@ -89,18 +113,17 @@ const PassengerListScreen = ({ navigation }) => {
           </TouchableOpacity>
           <View style={{ alignItems: 'center' }}>
             <Text style={styles.headerTitle}>Passenger List</Text>
-            <Text style={styles.headerSub}>Route A · {MOCK_PASSENGERS.length} registered</Text>
+            <Text style={styles.headerSub}>{routeLabel} · {passengers.length} registered</Text>
           </View>
           <View style={{ width: 40 }} />
         </View>
 
-        {/* Stats strip */}
         <View style={styles.statsStrip}>
           {[
-            { label: 'Boarded',  value: counts.boarded,          color: COLORS.secondary    },
-            { label: 'Pending',  value: counts.pending,          color: COLORS.warning       },
-            { label: 'No Show',  value: counts['no-show'],       color: COLORS.danger        },
-            { label: 'Total',    value: MOCK_PASSENGERS.length,  color: 'rgba(255,255,255,0.9)' },
+            { label: 'Boarded',  value: counts.boarded,       color: COLORS.secondary    },
+            { label: 'Pending',  value: counts.pending,       color: COLORS.warning       },
+            { label: 'No Show',  value: counts['no-show'],    color: COLORS.danger        },
+            { label: 'Total',    value: passengers.length,    color: 'rgba(255,255,255,0.9)' },
           ].map((s, i) => (
             <View key={s.label} style={[styles.statCell, i < 3 && styles.statCellBorder]}>
               <Text style={[styles.statVal, { color: s.color }]}>{s.value}</Text>
@@ -110,7 +133,6 @@ const PassengerListScreen = ({ navigation }) => {
         </View>
       </View>
 
-      {/* Search */}
       <View style={styles.searchWrap}>
         <Ionicons name="search-outline" size={16} color={COLORS.textMuted} />
         <TextInput
@@ -127,10 +149,9 @@ const PassengerListScreen = ({ navigation }) => {
         )}
       </View>
 
-      {/* Filters */}
       <View style={styles.filterWrap}>
         {[
-          { key: 'all',      label: `All (${MOCK_PASSENGERS.length})` },
+          { key: 'all',      label: `All (${passengers.length})` },
           { key: 'boarded',  label: `Boarded (${counts.boarded})`    },
           { key: 'pending',  label: `Pending (${counts.pending})`    },
           { key: 'no-show',  label: `No Show (${counts['no-show']})` },
@@ -147,19 +168,26 @@ const PassengerListScreen = ({ navigation }) => {
         ))}
       </View>
 
-      <FlatList
-        data={filtered}
-        keyExtractor={item => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyWrap}>
-            <Ionicons name="people-outline" size={38} color={COLORS.textMuted} />
-            <Text style={styles.emptyText}>No passengers found</Text>
-          </View>
-        }
-      />
+      {loading ? (
+        <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.primary} />
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={item => item.id}
+          renderItem={renderItem}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(true); }} />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyWrap}>
+              <Ionicons name="people-outline" size={38} color={COLORS.textMuted} />
+              <Text style={styles.emptyText}>No passengers found</Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 };
@@ -167,7 +195,6 @@ const PassengerListScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
 
-  /* Header */
   header: {
     backgroundColor: COLORS.headerBg,
     overflow: 'hidden',
@@ -198,7 +225,6 @@ const styles = StyleSheet.create({
   statVal: { fontSize: 18, fontWeight: '900' },
   statLbl: { fontSize: 9, color: 'rgba(255,255,255,0.55)', fontWeight: '600', textTransform: 'uppercase' },
 
-  /* Search */
   searchWrap: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: COLORS.white, borderRadius: 14,
@@ -208,7 +234,6 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 14, color: COLORS.textPrimary, fontWeight: '500' },
 
-  /* Filters */
   filterWrap: { flexDirection: 'row', paddingHorizontal: 14, gap: 6, marginBottom: 10 },
   filterBtn: {
     paddingHorizontal: 11, paddingVertical: 6,
@@ -221,7 +246,6 @@ const styles = StyleSheet.create({
 
   list: { paddingHorizontal: 14, paddingBottom: 24 },
 
-  /* Card */
   card: {
     flexDirection: 'row', alignItems: 'center', gap: 11,
     backgroundColor: COLORS.white, borderRadius: 14, padding: 13, marginBottom: 8,

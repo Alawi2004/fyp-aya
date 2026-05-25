@@ -12,6 +12,7 @@ import { getTripEtaPredictions } from '../../api/etaApi';
 import { fetchBusGps } from '../../api/apiClient';
 import { useGpsWebSocket } from '../../hooks/useGpsWebSocket';
 import { COLORS } from '../../constants/colors';
+import apiClient from '../../api/apiClient';
 
 const CAMERA_SERVER = 'http://localhost:9000';
 const SEAT_POLL_MS  = 5_000;
@@ -33,17 +34,8 @@ const ROUTE_WAYPOINTS = [
   { latitude: 33.9050, longitude: 35.5220 },
 ];
 
-// Mock stops used when ETA API is unavailable (frontend-only mode)
-const MOCK_STOPS_ETA = [
-  { stop_id: 'ms1', stop_name: 'Hamra Circle',    eta_min: 8,  eta_time: '—' },
-  { stop_id: 'ms2', stop_name: 'Verdun Square',   eta_min: 14, eta_time: '—' },
-  { stop_id: 'ms3', stop_name: 'Sassine Square',  eta_min: 21, eta_time: '—' },
-];
-
-const MOCK_DRIVER = {
-  name: 'Ahmad Al-Hassan', rating: 4.8, trips: 1243,
-  initials: 'AH', vehicle: 'Express 101 · White Bus', phone: '+961 70 000 000',
-};
+// Placeholder stops shown when ETA API has no data yet
+const EMPTY_STOPS = [];
 
 const ETA_POLL_MS = 30_000;
 const GPS_POLL_MS = 3_000;
@@ -116,23 +108,37 @@ const BusTrackingScreen = ({ route, navigation }) => {
   const [lastUpdated, setLastUpdated]   = useState(null);
   const [etaData, setEtaData]           = useState(null);
   const [etaLoading, setEtaLoading]     = useState(false);
-
-  // Mock ETA offset — decrements 1 min every 30 s so demo alert fires
-  const [mockOffset, setMockOffset]     = useState(0);
+  const [driverInfo, setDriverInfo]     = useState(null);
 
   // Seat availability
   const capacity = capacityFromBusId(busId);
   const [seatInfo, setSeatInfo]         = useState({ capacity, occupied: 0, available: capacity });
   const seatInterval                    = useRef(null);
 
-  // ── Derived stop list (real or mock) ──────────────────────────────────────
+  // Load driver info for the trip
+  useEffect(() => {
+    if (!tripId) return;
+    apiClient.get(`/buses/${tripId}`).then(r => {
+      const d = r.data;
+      if (d?.driver_name) {
+        const initials = d.driver_name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+        setDriverInfo({
+          name:     d.driver_name,
+          initials,
+          vehicle:  `${d.name ?? ''} · ${d.plate_number ?? ''}`.trim().replace(/^·\s*/, ''),
+          rating:   parseFloat(d.driver_rating ?? 0).toFixed(1),
+          trips:    d.driver_trips ?? 0,
+          phone:    d.driver_phone ?? null,
+        });
+      }
+    }).catch(() => {});
+  }, [tripId]);
+
+  // ── Derived stop list (real or empty) ────────────────────────────────────
   const stopsList = useMemo(() => {
     if (etaData?.stops?.length > 0) return etaData.stops;
-    return MOCK_STOPS_ETA.map((s) => ({
-      ...s,
-      eta_min: Math.max(0, s.eta_min - mockOffset),
-    }));
-  }, [etaData, mockOffset]);
+    return EMPTY_STOPS;
+  }, [etaData]);
 
   const nextStop   = stopsList[0];
   const etaDisplay = nextStop
@@ -427,23 +433,25 @@ const BusTrackingScreen = ({ route, navigation }) => {
         )}
 
         {/* Driver Card */}
-        <View style={styles.driverCard}>
-          <View style={styles.driverAvatar}>
-            <Text style={styles.driverAvatarText}>{MOCK_DRIVER.initials}</Text>
-          </View>
-          <View style={styles.driverInfo}>
-            <Text style={styles.driverName}>{MOCK_DRIVER.name}</Text>
-            <Text style={styles.driverVehicle}>{MOCK_DRIVER.vehicle}</Text>
-            <View style={styles.driverRatingRow}>
-              <Ionicons name="star" size={13} color={COLORS.warning} />
-              <Text style={styles.driverRating}>{MOCK_DRIVER.rating}</Text>
-              <Text style={styles.driverTrips}>· {MOCK_DRIVER.trips} trips</Text>
+        {driverInfo && (
+          <View style={styles.driverCard}>
+            <View style={styles.driverAvatar}>
+              <Text style={styles.driverAvatarText}>{driverInfo.initials}</Text>
             </View>
+            <View style={styles.driverInfo}>
+              <Text style={styles.driverName}>{driverInfo.name}</Text>
+              <Text style={styles.driverVehicle}>{driverInfo.vehicle}</Text>
+              <View style={styles.driverRatingRow}>
+                <Ionicons name="star" size={13} color={COLORS.warning} />
+                <Text style={styles.driverRating}>{driverInfo.rating}</Text>
+                <Text style={styles.driverTrips}>· {driverInfo.trips} trips</Text>
+              </View>
+            </View>
+            <TouchableOpacity style={styles.callBtn}>
+              <Ionicons name="call" size={18} color={COLORS.white} />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.callBtn}>
-            <Ionicons name="call" size={18} color={COLORS.white} />
-          </TouchableOpacity>
-        </View>
+        )}
 
         <TouchableOpacity style={styles.emergencyBtn} activeOpacity={0.85}>
           <Ionicons name="warning-outline" size={18} color={COLORS.danger} />

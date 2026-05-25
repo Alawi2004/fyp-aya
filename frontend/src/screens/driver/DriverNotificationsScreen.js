@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   RefreshControl, StatusBar, ActivityIndicator,
@@ -16,13 +16,6 @@ const TYPE_CFG = {
   warning:   { icon: 'warning-outline',        bg: COLORS.warningLight,  color: COLORS.warning,      border: COLORS.warningMid },
   info:      { icon: 'notifications-outline',  bg: COLORS.primaryLight,  color: COLORS.primary,      border: COLORS.primaryMid },
 };
-
-const MOCK_NOTIFS = [
-  { notification_id: 1, title: 'Route Delay Alert', body: 'Trip TRP-041 is delayed 15 min due to heavy traffic on Jounieh Highway.', type: 'delay',   is_read: false, created_at: new Date(Date.now() - 5 * 60000).toISOString()        },
-  { notification_id: 2, title: 'Schedule Update',   body: 'Your shift tomorrow starts at 07:00 instead of 06:30. Please adjust accordingly.', type: 'info', is_read: false, created_at: new Date(Date.now() - 30 * 60000).toISOString()       },
-  { notification_id: 3, title: 'Passenger Feedback', body: 'A passenger submitted a comment about your trip TRP-033. Rating: 4 ★', type: 'warning', is_read: true, created_at: new Date(Date.now() - 2 * 3600000).toISOString()    },
-  { notification_id: 4, title: 'Route 7B Update',   body: 'Route 7B has been updated with two new stops. Check the route planner.', type: 'info', is_read: true, created_at: new Date(Date.now() - 24 * 3600000).toISOString()         },
-];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function timeAgo(dateStr) {
@@ -76,22 +69,28 @@ export default function DriverNotificationsScreen({ navigation }) {
   const [notifs,    setNotifs]    = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [refreshing,setRefreshing]= useState(false);
+  const timerRef = useRef(null);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const userId = user?._id ?? user?.user_id ?? '2';
+      const userId = user?._id ?? user?.user_id;
+      if (!userId) { setLoading(false); return; }
       const data = await getDriverNotificationsApi(userId);
-      setNotifs(Array.isArray(data) && data.length ? data : MOCK_NOTIFS);
+      setNotifs(Array.isArray(data) ? data : []);
     } catch {
-      setNotifs(MOCK_NOTIFS);
+      setNotifs([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, [user]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    timerRef.current = setInterval(() => load(true), 30000);
+    return () => clearInterval(timerRef.current);
+  }, [load]);
 
   const handleRead = useCallback(async (id) => {
     setNotifs(prev => prev.map(n => n.notification_id === id ? { ...n, is_read: true } : n));

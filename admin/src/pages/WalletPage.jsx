@@ -4,7 +4,6 @@ import { Modal } from "../components/Modal";
 import { StatCard } from "../components/StatCard";
 import apiClient from "../api/apiClient";
 import { getWalletStatuses, freezeWallet, unfreezeWallet, getFreezeLog } from "../api/endpoints";
-import { MOCK_WALLET_STATUS, MOCK_FREEZE_LOG, MOCK_WALLET_LOW_BALANCE_ALERTS, MOCK_WALLET_SPEND_SUMMARY } from "../data/mockData";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmt     = n => `$${parseFloat(n ?? 0).toFixed(2)}`;
@@ -727,8 +726,8 @@ export default function WalletPage() {
   // Freeze management state
   const [walletStatuses, setWalletStatuses] = useState([]);
   const [freezeLog,      setFreezeLog]      = useState([]);
-  const [lowBalanceAlerts, setLowBalanceAlerts] = useState(MOCK_WALLET_LOW_BALANCE_ALERTS);
-  const [spendSummary]                         = useState(MOCK_WALLET_SPEND_SUMMARY);
+  const [lowBalanceAlerts, setLowBalanceAlerts] = useState([]);
+  const [spendSummary,     setSpendSummary]     = useState([]);
 
   // Audit log filters
   const [filterUser,  setFilterUser]  = useState("");
@@ -763,12 +762,12 @@ export default function WalletPage() {
 
     // Load freeze data
     getWalletStatuses()
-      .then(d => setWalletStatuses((d || []).length ? d : MOCK_WALLET_STATUS))
-      .catch(() => setWalletStatuses(MOCK_WALLET_STATUS));
+      .then(d => setWalletStatuses(Array.isArray(d) ? d : []))
+      .catch(() => setWalletStatuses([]));
 
     getFreezeLog()
-      .then(d => setFreezeLog((d || []).length ? d : MOCK_FREEZE_LOG))
-      .catch(() => setFreezeLog(MOCK_FREEZE_LOG));
+      .then(d => setFreezeLog(Array.isArray(d) ? d : []))
+      .catch(() => setFreezeLog([]));
   }, []);
 
   useEffect(() => { loadRecharges(); }, [loadRecharges]);

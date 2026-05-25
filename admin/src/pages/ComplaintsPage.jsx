@@ -4,8 +4,7 @@ import { Modal } from "../components/Modal";
 import { StatCard } from "../components/StatCard";
 import { StatusPill } from "../components/StatusPill";
 import { useAuth } from "../context/AuthContext";
-import { getComplaints, createComplaint, updateComplaint, addComplaintComment } from "../api/endpoints";
-import { MOCK_COMPLAINTS, MOCK_DRIVERS, MOCK_ROUTES } from "../data/mockData";
+import { getComplaints, createComplaint, updateComplaint, addComplaintComment, getDrivers, getRoutes } from "../api/endpoints";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const PRIORITIES = ["Critical", "High", "Medium", "Low"];
@@ -237,7 +236,7 @@ function ComplaintDetail({ complaint, onClose, onUpdate, onAddComment }) {
 }
 
 // ── Create complaint modal ─────────────────────────────────────────────────────
-function CreateComplaintModal({ onClose, onSave }) {
+function CreateComplaintModal({ onClose, onSave, drivers = [], routes = [] }) {
   const EMPTY = { title: "", category: "Driver Behavior", priority: "Medium", description: "", passenger: "", driver: "", route: "" };
   const [form, setForm] = useState(EMPTY);
   const set = k => v => setForm(f => ({ ...f, [k]: v }));
@@ -277,14 +276,14 @@ function CreateComplaintModal({ onClose, onSave }) {
           <label style={lbl}>Driver (optional)</label>
           <select value={form.driver} onChange={e => set("driver")(e.target.value)} style={inp}>
             <option value="">— None —</option>
-            {MOCK_DRIVERS.map(d => <option key={d.id}>{d.name}</option>)}
+            {drivers.map(d => <option key={d.driver_id ?? d.id} value={d.full_name ?? d.name}>{d.full_name ?? d.name}</option>)}
           </select>
         </div>
         <div>
           <label style={lbl}>Route (optional)</label>
           <select value={form.route} onChange={e => set("route")(e.target.value)} style={inp}>
             <option value="">— None —</option>
-            {MOCK_ROUTES.map(r => <option key={r.id}>{r.name}</option>)}
+            {routes.map(r => <option key={r.route_id ?? r.id} value={r.route_name ?? r.name}>{r.route_name ?? r.name}</option>)}
           </select>
         </div>
       </div>
@@ -306,10 +305,19 @@ export default function ComplaintsPage() {
   const [detail,       setDetail]       = useState(null);
   const [createOpen,   setCreateOpen]   = useState(false);
 
+  const [driversOpts, setDriversOpts] = useState([]);
+  const [routesOpts,  setRoutesOpts]  = useState([]);
+
   useEffect(() => {
     getComplaints()
-      .then(d => setComplaints((d || []).length ? d : MOCK_COMPLAINTS))
-      .catch(() => setComplaints(MOCK_COMPLAINTS));
+      .then(d => setComplaints(Array.isArray(d) ? d : []))
+      .catch(() => setComplaints([]));
+    getDrivers()
+      .then(d => setDriversOpts(Array.isArray(d) ? d : []))
+      .catch(() => {});
+    getRoutes()
+      .then(d => setRoutesOpts(Array.isArray(d) ? d : []))
+      .catch(() => {});
   }, []);
 
   const visible = complaints.filter(c => {
@@ -482,7 +490,7 @@ export default function ComplaintsPage() {
 
       {/* Create modal */}
       {createOpen && (
-        <CreateComplaintModal onClose={() => setCreateOpen(false)} onSave={handleCreate} />
+        <CreateComplaintModal onClose={() => setCreateOpen(false)} onSave={handleCreate} drivers={driversOpts} routes={routesOpts} />
       )}
     </div>
   );

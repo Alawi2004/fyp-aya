@@ -420,18 +420,6 @@ const ghostBtnSt   = { padding: "11px 20px", background: "#fff", border: "1.5px 
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
 
-const MOCK_PASSENGERS = [
-  { user_id:1,  full_name:"Sara Khalil",    email:"sara@example.com",   phone:"+961 71 000001", status:"active",    wallet_balance:45.50, trip_count:12, created_at:"2025-01-15" },
-  { user_id:2,  full_name:"Omar Nassar",    email:"omar@example.com",   phone:"+961 71 000002", status:"active",    wallet_balance:12.00, trip_count:8,  created_at:"2025-02-03" },
-  { user_id:3,  full_name:"Layla Haddad",   email:"layla@example.com",  phone:"+961 71 000003", status:"suspended", wallet_balance:0.00,  trip_count:3,  created_at:"2025-03-10" },
-  { user_id:4,  full_name:"Karim Jaber",    email:"karim@example.com",  phone:"+961 71 000004", status:"active",    wallet_balance:78.25, trip_count:31, created_at:"2025-01-22" },
-  { user_id:5,  full_name:"Maya Saad",      email:"maya@example.com",   phone:"+961 71 000005", status:"blocked",   wallet_balance:0.00,  trip_count:1,  created_at:"2025-04-05" },
-  { user_id:6,  full_name:"Ziad Mansour",   email:"ziad@example.com",   phone:"+961 71 000006", status:"active",    wallet_balance:22.75, trip_count:15, created_at:"2025-02-18" },
-  { user_id:7,  full_name:"Nour Ibrahim",   email:"nour@example.com",   phone:"+961 71 000007", status:"active",    wallet_balance:5.00,  trip_count:4,  created_at:"2025-03-30" },
-  { user_id:8,  full_name:"Rami Azar",      email:"rami@example.com",   phone:"+961 71 000008", status:"suspended", wallet_balance:0.00,  trip_count:7,  created_at:"2025-01-08" },
-  { user_id:9,  full_name:"Diana Khoury",   email:"diana@example.com",  phone:"+961 71 000009", status:"active",    wallet_balance:60.00, trip_count:22, created_at:"2024-12-01" },
-  { user_id:10, full_name:"Ali Haddad",     email:"ali@example.com",    phone:"+961 71 000010", status:"active",    wallet_balance:33.50, trip_count:18, created_at:"2025-01-30" },
-];
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  PassengersPage
@@ -453,8 +441,8 @@ export default function PassengersPage() {
   const load = () => {
     setLoading(true);
     apiClient.get("/users/passengers")
-      .then(data => setPassengers(Array.isArray(data) ? data : MOCK_PASSENGERS))
-      .catch(() => setPassengers(MOCK_PASSENGERS))
+      .then(data => setPassengers(Array.isArray(data) ? data : []))
+      .catch(() => setPassengers([]))
       .finally(() => setLoading(false));
   };
 

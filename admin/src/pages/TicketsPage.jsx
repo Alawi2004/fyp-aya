@@ -6,7 +6,6 @@ import { StatCard } from "../components/StatCard";
 import { StatusPill } from "../components/StatusPill";
 import { getTickets } from "../api/endpoints";
 import apiClient from "../api/apiClient";
-import { MOCK_TICKETS } from "../data/mockData";
 
 function normalizeTicket(t) {
   const dt = t.booking_time || t.created_at
@@ -44,7 +43,7 @@ export default function TicketsPage() {
   useEffect(() => {
     getTickets()
       .then((data) => setTickets((data || []).map(normalizeTicket)))
-      .catch(() => setTickets(MOCK_TICKETS));
+      .catch(() => setTickets([]));
   }, []);
 
   const routes = ["All", ...new Set(tickets.map((t) => t.route).filter(Boolean))];

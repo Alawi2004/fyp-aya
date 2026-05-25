@@ -4,7 +4,6 @@ import { DataTable } from "../components/Table";
 import { Panel } from "../components/Panel";
 import { StatCard } from "../components/StatCard";
 import { getRatings } from "../api/endpoints";
-import { MOCK_RATINGS } from "../data/mockData";
 
 function normalizeRating(r) {
   const dt = r.created_at ? new Date(r.created_at) : null;
@@ -72,7 +71,7 @@ export default function RatingsPage() {
   useEffect(() => {
     getRatings()
       .then((data) => setRatings((data || []).map(normalizeRating)))
-      .catch(() => setRatings(MOCK_RATINGS));
+      .catch(() => setRatings([]));
   }, []);
   const [driverFilter, setDriverFilter] = useState("All");
   const [search, setSearch] = useState("");

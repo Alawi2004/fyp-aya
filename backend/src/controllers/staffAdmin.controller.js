@@ -2,7 +2,9 @@ import { poolPromise, sql } from "../db/db.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/staff/accounts                   ← ADMIN ONLY
-// Lists all non-passenger, non-driver system accounts (staff roles).
+// Returns shape the admin StaffPage expects:
+//   id, name, email, location, status ("Active"|"Disabled"), today_count,
+//   today_total, daily_limit, tx_limit, flagged
 // ─────────────────────────────────────────────────────────────────────────────
 export const getStaffAccounts = async (req, res) => {
   try {
@@ -16,18 +18,58 @@ export const getStaffAccounts = async (req, res) => {
         u.role,
         u.status,
         u.created_at,
-        COUNT(DISTINCT st.top_up_id)            AS total_topups,
-        ISNULL(SUM(st.amount), 0)               AS total_amount,
-        MAX(st.created_at)                       AS last_activity
+
+        -- Today's top-up count
+        COUNT(DISTINCT CASE
+          WHEN CAST(st.created_at AS DATE) = CAST(GETUTCDATE() AS DATE)
+          THEN st.top_up_id END)                                    AS today_count,
+
+        -- Today's total amount
+        ISNULL(SUM(CASE
+          WHEN CAST(st.created_at AS DATE) = CAST(GETUTCDATE() AS DATE)
+          THEN st.amount END), 0)                                   AS today_total,
+
+        -- All-time totals
+        COUNT(DISTINCT st.top_up_id)                               AS total_topups,
+        ISNULL(SUM(st.amount), 0)                                  AS total_amount,
+        MAX(st.created_at)                                         AS last_activity,
+
+        -- Flagged transactions (large amount >= 500 or rapid repeat)
+        COUNT(DISTINCT CASE WHEN st.amount >= 500 THEN st.top_up_id END) AS flagged,
+
+        -- Most common recharge location as the "station"
+        (SELECT TOP 1 recharge_location
+         FROM staff_top_ups
+         WHERE processed_by_staff_id = u.user_id
+           AND recharge_location IS NOT NULL
+         GROUP BY recharge_location
+         ORDER BY COUNT(*) DESC)                                   AS location
       FROM users u
       LEFT JOIN staff_top_ups st ON st.processed_by_staff_id = u.user_id
       WHERE u.role NOT IN ('passenger', 'driver')
-      GROUP BY
-        u.user_id, u.full_name, u.email, u.phone,
-        u.role, u.status, u.created_at
+      GROUP BY u.user_id, u.full_name, u.email, u.phone, u.role, u.status, u.created_at
       ORDER BY u.full_name
     `);
-    res.json(result.recordset);
+
+    const records = result.recordset.map(r => ({
+      id:          r.user_id,
+      name:        r.full_name,
+      email:       r.email,
+      phone:       r.phone,
+      role:        r.role,
+      location:    r.location || "Main Station",
+      status:      r.status === "active" ? "Active" : "Disabled",
+      today_count: r.today_count,
+      today_total: parseFloat(r.today_total) || 0,
+      total_topups: r.total_topups,
+      total_amount: parseFloat(r.total_amount) || 0,
+      last_activity: r.last_activity,
+      daily_limit: 5000,
+      tx_limit:    500,
+      flagged:     r.flagged,
+    }));
+
+    res.json(records);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch staff accounts" });
@@ -36,44 +78,44 @@ export const getStaffAccounts = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PUT /api/staff/accounts/:id               ← ADMIN ONLY
-// Updates a staff account's status and/or role.
-// Body: { status?, role?, full_name?, phone? }
 // ─────────────────────────────────────────────────────────────────────────────
 export const updateStaffAccount = async (req, res) => {
   const userId = parseInt(req.params.id, 10);
   const { status, role, full_name, phone } = req.body;
 
   if (!status && !role && !full_name && !phone) {
-    return res.status(400).json({ error: "Provide at least one field to update (status, role, full_name, phone)" });
+    return res.status(400).json({ error: "Provide at least one field to update" });
   }
 
-  const VALID_ROLES   = ["admin", "staff", "ops_staff", "finance_officer", "transport_manager", "it_admin", "auditor", "super_admin"];
+  const VALID_ROLES    = ["admin", "staff", "ops_staff", "finance_officer", "transport_manager", "it_admin", "auditor", "super_admin"];
   const VALID_STATUSES = ["active", "inactive", "suspended"];
 
-  if (role   && !VALID_ROLES.includes(role))     return res.status(400).json({ error: `Invalid role. Must be one of: ${VALID_ROLES.join(", ")}` });
-  if (status && !VALID_STATUSES.includes(status)) return res.status(400).json({ error: `Invalid status. Must be one of: ${VALID_STATUSES.join(", ")}` });
+  // Accept frontend's "Active"/"Disabled" casing too
+  const normalizedStatus = status?.toLowerCase() === "active"   ? "active"
+                         : status?.toLowerCase() === "disabled" ? "inactive"
+                         : status;
+
+  if (role            && !VALID_ROLES.includes(role))                  return res.status(400).json({ error: `Invalid role` });
+  if (normalizedStatus && !VALID_STATUSES.includes(normalizedStatus)) return res.status(400).json({ error: `Invalid status` });
 
   try {
     const pool = await poolPromise;
-
     const existing = await pool.request()
       .input("id", sql.Int, userId)
       .query("SELECT user_id, role FROM users WHERE user_id = @id");
 
-    if (!existing.recordset[0]) return res.status(404).json({ error: "User not found" });
-    if (existing.recordset[0].role === "passenger") return res.status(400).json({ error: "Cannot modify passenger accounts from this endpoint" });
+    if (!existing.recordset[0])               return res.status(404).json({ error: "User not found" });
+    if (existing.recordset[0].role === "passenger") return res.status(400).json({ error: "Cannot modify passenger accounts" });
 
-    const sets  = [];
-    const req2  = pool.request().input("id", sql.Int, userId);
+    const sets = [];
+    const r2   = pool.request().input("id", sql.Int, userId);
+    if (full_name)        { r2.input("fn", sql.NVarChar(200), full_name);         sets.push("full_name = @fn"); }
+    if (phone)            { r2.input("ph", sql.NVarChar(50),  phone);             sets.push("phone = @ph"); }
+    if (role)             { r2.input("ro", sql.NVarChar(50),  role);              sets.push("role = @ro"); }
+    if (normalizedStatus) { r2.input("st", sql.NVarChar(50),  normalizedStatus);  sets.push("status = @st"); }
 
-    if (full_name) { req2.input("full_name", sql.NVarChar(200), full_name); sets.push("full_name = @full_name"); }
-    if (phone)     { req2.input("phone",     sql.NVarChar(50),  phone);     sets.push("phone = @phone"); }
-    if (role)      { req2.input("role",      sql.NVarChar(50),  role);      sets.push("role = @role"); }
-    if (status)    { req2.input("status",    sql.NVarChar(50),  status);    sets.push("status = @status"); }
-
-    await req2.query(`UPDATE users SET ${sets.join(", ")} WHERE user_id = @id`);
-
-    res.json({ message: "Staff account updated successfully" });
+    await r2.query(`UPDATE users SET ${sets.join(", ")} WHERE user_id = @id`);
+    res.json({ message: "Staff account updated" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to update staff account" });
@@ -82,8 +124,8 @@ export const updateStaffAccount = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/staff/wallet/all-history         ← ADMIN ONLY
-// Full view of every top-up processed by any staff member.
-// Supports: ?from=YYYY-MM-DD&to=YYYY-MM-DD&staff_id=X&user_id=Y
+// Returns shape StaffPage expects:
+//   id, time, staff, passenger, amount, method, location, flags (array)
 // ─────────────────────────────────────────────────────────────────────────────
 export const getAllStaffTransactions = async (req, res) => {
   try {
@@ -101,20 +143,23 @@ export const getAllStaffTransactions = async (req, res) => {
       SELECT
         st.top_up_id,
         st.amount,
-        st.balance_before,
-        st.balance_after,
         st.payment_method,
         st.recharge_location,
-        st.transaction_reference,
-        st.notes,
         st.status,
         st.created_at,
-        s.user_id     AS staff_id,
-        s.full_name   AS staff_name,
-        s.email       AS staff_email,
-        u.user_id     AS passenger_id,
-        u.full_name   AS passenger_name,
-        u.email       AS passenger_email
+        s.user_id   AS staff_id,
+        s.full_name AS staff_name,
+        u.user_id   AS passenger_id,
+        u.full_name AS passenger_name,
+
+        -- Suspicious flags
+        CASE WHEN st.amount >= 500 THEN 1 ELSE 0 END             AS flag_large,
+        (SELECT COUNT(*)
+         FROM staff_top_ups st2
+         WHERE st2.processed_by_staff_id = st.processed_by_staff_id
+           AND st2.user_id = st.user_id
+           AND ABS(DATEDIFF(MINUTE, st2.created_at, st.created_at)) <= 30
+        )                                                         AS repeat_count
       FROM staff_top_ups st
       JOIN users s ON s.user_id = st.processed_by_staff_id
       JOIN users u ON u.user_id = st.user_id
@@ -122,7 +167,25 @@ export const getAllStaffTransactions = async (req, res) => {
       ORDER BY st.created_at DESC
     `);
 
-    res.json(result.recordset);
+    const rows = result.recordset.map(r => {
+      const flags = [];
+      if (r.flag_large)        flags.push("large_amount");
+      if (r.repeat_count >= 3) flags.push("rapid_sequence");
+      if (r.repeat_count >= 2) flags.push("repeat_user");
+      return {
+        id:        `TX-${String(r.top_up_id).padStart(4, "0")}`,
+        staff_id:  r.staff_id,
+        staff:     r.staff_name,
+        passenger: r.passenger_name,
+        amount:    parseFloat(r.amount),
+        method:    r.payment_method || "Cash",
+        location:  r.recharge_location || "—",
+        time:      r.created_at,
+        flags,
+      };
+    });
+
+    res.json(rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch staff transaction history" });
@@ -131,98 +194,60 @@ export const getAllStaffTransactions = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/staff/wallet/suspicious          ← ADMIN ONLY
-// Returns top-ups flagged for:
-//   • amount ≥ 1000 (unusually large)
-//   • ≥ 3 top-ups by the same staff to the same passenger within 1 hour
-//   • processed outside business hours (before 07:00 or after 22:00 UTC)
 // ─────────────────────────────────────────────────────────────────────────────
 export const getSuspiciousTransactions = async (req, res) => {
   try {
     const pool = await poolPromise;
     const result = await pool.request().query(`
-      WITH flagged AS (
-        -- Flag 1: large single top-up
-        SELECT
-          st.top_up_id,
-          'Large Amount'  AS flag_reason,
-          st.amount,
-          st.created_at,
-          st.processed_by_staff_id,
-          st.user_id,
-          st.payment_method,
-          st.recharge_location,
-          st.transaction_reference,
-          st.balance_before,
-          st.balance_after
-        FROM staff_top_ups st
-        WHERE st.amount >= 1000
-
-        UNION
-
-        -- Flag 2: out-of-hours (before 07:00 or after 22:00 UTC)
-        SELECT
-          st.top_up_id,
-          'Out of Hours'  AS flag_reason,
-          st.amount,
-          st.created_at,
-          st.processed_by_staff_id,
-          st.user_id,
-          st.payment_method,
-          st.recharge_location,
-          st.transaction_reference,
-          st.balance_before,
-          st.balance_after
-        FROM staff_top_ups st
-        WHERE DATEPART(HOUR, st.created_at) < 7
-           OR DATEPART(HOUR, st.created_at) >= 22
-
-        UNION
-
-        -- Flag 3: rapid repeat (same staff → same passenger, ≥ 3 times within 60 min)
-        SELECT
-          st.top_up_id,
-          'Rapid Repeat'  AS flag_reason,
-          st.amount,
-          st.created_at,
-          st.processed_by_staff_id,
-          st.user_id,
-          st.payment_method,
-          st.recharge_location,
-          st.transaction_reference,
-          st.balance_before,
-          st.balance_after
-        FROM staff_top_ups st
-        WHERE (
-          SELECT COUNT(*)
-          FROM staff_top_ups st2
-          WHERE st2.processed_by_staff_id = st.processed_by_staff_id
-            AND st2.user_id = st.user_id
-            AND ABS(DATEDIFF(MINUTE, st2.created_at, st.created_at)) <= 60
-        ) >= 3
-      )
-      SELECT DISTINCT
-        f.top_up_id,
-        STRING_AGG(f.flag_reason, ', ') OVER (PARTITION BY f.top_up_id) AS flags,
-        f.amount,
-        f.balance_before,
-        f.balance_after,
-        f.payment_method,
-        f.recharge_location,
-        f.transaction_reference,
-        f.created_at,
+      SELECT
+        st.top_up_id,
+        st.amount,
+        st.payment_method,
+        st.recharge_location,
+        st.created_at,
         s.user_id   AS staff_id,
         s.full_name AS staff_name,
-        s.email     AS staff_email,
         u.user_id   AS passenger_id,
         u.full_name AS passenger_name,
-        u.email     AS passenger_email
-      FROM flagged f
-      JOIN users s ON s.user_id = f.processed_by_staff_id
-      JOIN users u ON u.user_id = f.user_id
-      ORDER BY f.created_at DESC
+        CASE WHEN st.amount >= 500 THEN 1 ELSE 0 END AS flag_large,
+        (SELECT COUNT(*)
+         FROM staff_top_ups st2
+         WHERE st2.processed_by_staff_id = st.processed_by_staff_id
+           AND st2.user_id = st.user_id
+           AND ABS(DATEDIFF(MINUTE, st2.created_at, st.created_at)) <= 30
+        ) AS repeat_count
+      FROM staff_top_ups st
+      JOIN users s ON s.user_id = st.processed_by_staff_id
+      JOIN users u ON u.user_id = st.user_id
+      WHERE st.amount >= 500
+         OR (SELECT COUNT(*)
+             FROM staff_top_ups st2
+             WHERE st2.processed_by_staff_id = st.processed_by_staff_id
+               AND st2.user_id = st.user_id
+               AND ABS(DATEDIFF(MINUTE, st2.created_at, st.created_at)) <= 30
+            ) >= 2
+      ORDER BY st.created_at DESC
     `);
 
-    res.json(result.recordset);
+    const rows = result.recordset.map(r => {
+      const flags = [];
+      if (r.flag_large)        flags.push("large_amount");
+      if (r.repeat_count >= 3) flags.push("rapid_sequence");
+      if (r.repeat_count >= 2) flags.push("repeat_user");
+      return {
+        id:        `TX-${String(r.top_up_id).padStart(4, "0")}`,
+        staff_id:  r.staff_id,
+        staff:     r.staff_name,
+        passenger: r.passenger_name,
+        amount:    parseFloat(r.amount),
+        method:    r.payment_method || "Cash",
+        location:  r.recharge_location || "—",
+        time:      r.created_at,
+        flags,
+      };
+    });
+
+    res.json(rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch suspicious transactions" });
@@ -231,10 +256,9 @@ export const getSuspiciousTransactions = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/staff/reconciliation             ← ADMIN ONLY
-// Returns per-staff reconciliation records for a given date.
-// Query: ?date=YYYY-MM-DD (defaults to today)
-// Aggregates expected amounts from staff_top_ups and joins with
-// staff_reconciliation records for declared actual amounts.
+// Returns shape StaffPage expects:
+//   id, date, staff, station, expected, reported, discrepancy, status,
+//   cash_txns, total_txns
 // ─────────────────────────────────────────────────────────────────────────────
 export const getReconciliation = async (req, res) => {
   try {
@@ -245,33 +269,50 @@ export const getReconciliation = async (req, res) => {
       .input("date", sql.Date, date)
       .query(`
         SELECT
-          u.user_id                               AS staff_id,
-          u.full_name                             AS staff_name,
-          u.email                                 AS staff_email,
-          COUNT(st.top_up_id)                     AS transaction_count,
-          ISNULL(SUM(st.amount), 0)               AS expected_amount,
+          u.user_id                                             AS staff_id,
+          u.full_name                                          AS staff_name,
+          COUNT(st.top_up_id)                                  AS total_txns,
+          COUNT(CASE WHEN LOWER(ISNULL(st.payment_method,'')) = 'cash' THEN 1 END) AS cash_txns,
+          ISNULL(SUM(CASE WHEN LOWER(ISNULL(st.payment_method,'')) = 'cash' THEN st.amount END), 0) AS expected_amount,
           r.reconciliation_id,
           r.actual_amount,
           r.discrepancy,
           r.status,
           r.notes,
-          r.reviewed_at,
-          rv.full_name                            AS reviewed_by
+          (SELECT TOP 1 recharge_location
+           FROM staff_top_ups
+           WHERE processed_by_staff_id = u.user_id
+             AND CAST(created_at AS DATE) = @date
+             AND recharge_location IS NOT NULL
+           GROUP BY recharge_location
+           ORDER BY COUNT(*) DESC)                            AS station
         FROM staff_top_ups st
         JOIN  users u  ON u.user_id = st.processed_by_staff_id
         LEFT JOIN staff_reconciliation r
           ON r.staff_id = u.user_id
          AND r.reconciliation_date = @date
-        LEFT JOIN users rv ON rv.user_id = r.reviewed_by
         WHERE CAST(st.created_at AS DATE) = @date
-        GROUP BY
-          u.user_id, u.full_name, u.email,
+        GROUP BY u.user_id, u.full_name,
           r.reconciliation_id, r.actual_amount, r.discrepancy,
-          r.status, r.notes, r.reviewed_at, rv.full_name
+          r.status, r.notes
         ORDER BY u.full_name
       `);
 
-    res.json(result.recordset);
+    const rows = result.recordset.map(r => ({
+      id:          r.reconciliation_id ?? r.staff_id,
+      date,
+      staff:       r.staff_name,
+      station:     r.station || "Main Station",
+      expected:    parseFloat(r.expected_amount) || 0,
+      reported:    r.actual_amount !== null ? parseFloat(r.actual_amount) : null,
+      discrepancy: r.discrepancy !== null ? parseFloat(r.discrepancy) : null,
+      status:      r.status || "pending",
+      notes:       r.notes || null,
+      cash_txns:   r.cash_txns,
+      total_txns:  r.total_txns,
+    }));
+
+    res.json(rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch reconciliation records" });
@@ -280,15 +321,13 @@ export const getReconciliation = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PUT /api/staff/reconciliation/:id         ← ADMIN ONLY
-// Records the actual declared amount and marks reconciliation status.
-// Body: { actual_amount, status, notes? }
 // ─────────────────────────────────────────────────────────────────────────────
 export const updateReconciliation = async (req, res) => {
-  const id = parseInt(req.params.id, 10);
+  const id      = parseInt(req.params.id, 10);
   const adminId = req.user.user_id;
   const { actual_amount, status, notes } = req.body;
 
-  const VALID_STATUSES = ["pending", "matched", "discrepancy", "approved"];
+  const VALID_STATUSES = ["pending", "matched", "discrepancy", "approved", "shortage", "excess"];
   if (status && !VALID_STATUSES.includes(status)) {
     return res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(", ")}` });
   }
@@ -302,21 +341,20 @@ export const updateReconciliation = async (req, res) => {
 
     if (!existing.recordset[0]) return res.status(404).json({ error: "Reconciliation record not found" });
 
-    const sets  = ["reviewed_by = @adminId", "reviewed_at = GETUTCDATE()"];
-    const req2  = pool.request()
+    const sets = ["reviewed_by = @adminId", "reviewed_at = GETUTCDATE()"];
+    const r2   = pool.request()
       .input("id",      sql.Int, id)
       .input("adminId", sql.Int, adminId);
 
     if (actual_amount !== undefined) {
-      req2.input("actual", sql.Decimal(10, 2), parseFloat(actual_amount));
-      sets.push("actual_amount = @actual", "discrepancy = actual_amount - expected_amount");
+      r2.input("actual", sql.Decimal(10, 2), parseFloat(actual_amount));
+      sets.push("actual_amount = @actual", "discrepancy = @actual - expected_amount");
     }
-    if (status) { req2.input("status", sql.NVarChar(50), status); sets.push("status = @status"); }
-    if (notes !== undefined) { req2.input("notes", sql.NVarChar(500), notes || null); sets.push("notes = @notes"); }
+    if (status) { r2.input("status", sql.NVarChar(50), status); sets.push("status = @status"); }
+    if (notes !== undefined) { r2.input("notes", sql.NVarChar(500), notes || null); sets.push("notes = @notes"); }
 
-    await req2.query(`UPDATE staff_reconciliation SET ${sets.join(", ")} WHERE reconciliation_id = @id`);
-
-    res.json({ message: "Reconciliation updated successfully" });
+    await r2.query(`UPDATE staff_reconciliation SET ${sets.join(", ")} WHERE reconciliation_id = @id`);
+    res.json({ message: "Reconciliation updated" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to update reconciliation" });

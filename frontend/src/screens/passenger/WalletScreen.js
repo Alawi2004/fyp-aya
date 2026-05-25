@@ -12,15 +12,6 @@ import { getWalletApi, getWalletTransactionsApi, getTopUpLocationsApi } from '..
 import { useApp } from '../../context/AppContext';
 import { COLORS } from '../../constants/colors';
 
-// Mock stations for frontend-only mode (Beirut coordinates)
-const MOCK_LOCATIONS = [
-  { location_id: 1, name: 'Hamra Main Office',   address: 'Hamra Street',      city: 'Beirut',    hours: 'Mon–Sat 8am–8pm', phone: '+961 1 740 000', latitude: 33.8938, longitude: 35.4824 },
-  { location_id: 2, name: 'Dora Station Kiosk',  address: 'Dora Highway',      city: 'Beirut',    hours: 'Daily 7am–10pm',  phone: '+961 1 260 000', latitude: 33.9117, longitude: 35.5583 },
-  { location_id: 3, name: 'Zouk Mosbeh Branch',  address: 'Zouk Main Road',    city: 'Keserwan', hours: 'Mon–Fri 9am–6pm', phone: '+961 9 215 000', latitude: 33.9736, longitude: 35.6266 },
-  { location_id: 4, name: 'Jdeideh Center',      address: 'Jdeideh Ring Road', city: 'Beirut',    hours: 'Daily 8am–9pm',   phone: '+961 1 880 000', latitude: 33.8975, longitude: 35.5608 },
-  { location_id: 5, name: 'Achrafieh Branch',    address: 'Sassine Square',    city: 'Beirut',    hours: 'Mon–Sat 9am–7pm', phone: '+961 1 200 000', latitude: 33.8837, longitude: 35.5123 },
-];
-
 const MAP_REGION = {
   latitude: 33.8938,
   longitude: 35.5200,
@@ -73,7 +64,7 @@ const WalletScreen = () => {
       if (txRes.status === 'fulfilled') setTransactions(txRes.value.data ?? []);
 
       const apiLocations = locRes.status === 'fulfilled' ? (locRes.value.data ?? []) : [];
-      setLocations(apiLocations.length > 0 ? apiLocations : MOCK_LOCATIONS);
+      setLocations(apiLocations);
     } finally {
       setLoading(false);
       setRefreshing(false);

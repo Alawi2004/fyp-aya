@@ -11,10 +11,7 @@ import {
   createRecurringSchedule, updateRecurringSchedule, deleteRecurringSchedule,
   getTripConflicts, getTripDelays, getTripStopArrivals,
 } from "../api/endpoints";
-import {
-  MOCK_TRIPS, MOCK_TIMETABLE_TRIPS, MOCK_RECURRING_SCHEDULES,
-  MOCK_ROUTES, MOCK_DRIVERS, MOCK_VEHICLES,
-} from "../data/mockData";
+import { getRoutes, getDrivers, getVehicles } from "../api/endpoints";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const STATUSES     = ["Scheduled", "Ongoing", "Completed", "Delayed", "Cancelled"];
@@ -130,16 +127,16 @@ function TabNav({ tabs, active, onChange }) {
 }
 
 // ── Create / Edit Trip Modal (with conflict check + recurring) ────────────────
-function TripModal({ trip, allTrips, onClose, onSave }) {
+function TripModal({ trip, allTrips, onClose, onSave, routeOpts = [], driverOpts = [], vehicleOpts = [] }) {
   const isEdit = Boolean(trip);
   const EMPTY  = { route: "", driver: "", vehicle: "", date: TODAY, time: "", status: "Scheduled", recurrence: "none", days: [] };
 
-  const [form,       setForm]       = useState(isEdit ? { ...trip, recurrence: "none", days: [] } : EMPTY);
-  const [warnings,   setWarnings]   = useState([]);
+  const [form,     setForm]     = useState(isEdit ? { ...trip, recurrence: "none", days: [] } : EMPTY);
+  const [warnings, setWarnings] = useState([]);
 
-  const routeNames   = MOCK_ROUTES.map(r => r.name);
-  const driverNames  = MOCK_DRIVERS.map(d => d.name);
-  const vehiclePlates = [...new Set(MOCK_VEHICLES.filter(v => v.status === "Active").map(v => v.plate))];
+  const routeNames    = routeOpts.map(r => r.route_name ?? r.name).filter(Boolean);
+  const driverNames   = driverOpts.map(d => d.full_name ?? d.name).filter(Boolean);
+  const vehiclePlates = vehicleOpts.map(v => v.plate_number ?? v.plate).filter(Boolean);
 
   const set = k => v => setForm(f => ({ ...f, [k]: v }));
 
@@ -349,12 +346,14 @@ const SLOTS      = (GRID_END - GRID_START) / 30;  // 34 slots
 const ROW_H      = 54;
 const LABEL_W    = 130;
 
-function TimetableTab({ timetableTrips }) {
+function TimetableTab({ timetableTrips, routeOpts = [] }) {
   const [date,       setDate]       = useState(TODAY);
   const [routeFilter,setRouteFilter]= useState("All");
   const [tooltip,    setTooltip]    = useState(null);
 
-  const routes = MOCK_ROUTES.map(r => r.name);
+  const routes = routeOpts.length > 0
+    ? routeOpts.map(r => r.route_name ?? r.name)
+    : [...new Set(timetableTrips.map(t => t.route).filter(Boolean))];
 
   const dayTrips = timetableTrips.filter(t => t.date === date &&
     (routeFilter === "All" || t.route === routeFilter));
@@ -429,7 +428,7 @@ function TimetableTab({ timetableTrips }) {
               {/* Route rows */}
               {visibleRoutes.map((route, ri) => {
                 const routeTrips = dayTrips.filter(t => t.route === route);
-                const routeInfo  = MOCK_ROUTES.find(r => r.name === route);
+                const routeInfo  = routeOpts.find(r => (r.route_name ?? r.name) === route);
                 return (
                   <div key={route} style={{
                     display: "flex", alignItems: "center",
@@ -539,14 +538,14 @@ const RECURRENCE_BADGE = {
   custom:   { label: "Custom",   bg: "#FFFBEB", color: "#D97706" },
 };
 
-function RecurringTab({ recurring, onAdd, onEdit, onDelete, onToggle }) {
+function RecurringTab({ recurring, onAdd, onEdit, onDelete, onToggle, routeOpts = [], driverOpts = [], vehicleOpts = [] }) {
   const [modal, setModal] = useState(false);
   const [editRec, setEditRec] = useState(null);
   const [form, setForm] = useState({ route: "", driver: "", vehicle: "", time: "", recurrence: "daily", days: [], status: "Active" });
 
-  const routeNames    = MOCK_ROUTES.map(r => r.name);
-  const driverNames   = MOCK_DRIVERS.map(d => d.name);
-  const vehiclePlates = MOCK_VEHICLES.filter(v => v.status === "Active").map(v => v.plate);
+  const routeNames    = routeOpts.map(r => r.route_name ?? r.name).filter(Boolean);
+  const driverNames   = driverOpts.map(d => d.full_name ?? d.name).filter(Boolean);
+  const vehiclePlates = vehicleOpts.map(v => v.plate_number ?? v.plate).filter(Boolean);
 
   function openAdd()   { setEditRec(null); setForm({ route: "", driver: "", vehicle: "", time: "", recurrence: "daily", days: [], status: "Active" }); setModal(true); }
   function openEdit(r) { setEditRec(r); setForm({ route: r.route, driver: r.driver, vehicle: r.vehicle, time: r.time, recurrence: r.recurrence, days: r.days ?? [], status: r.status }); setModal(true); }
@@ -806,13 +805,6 @@ const DELAY_REASON_COLORS = {
   "Other":              { bg: "#F8FAFC", color: "#64748B", border: "#E2E8F0" },
 };
 
-const MOCK_TRIP_DELAYS = [
-  { delay_id: 1, trip_id: 41, trip_ref: "TRP-041", route: "Route 12A", driver: "Karim Moussa",   vehicle: "BUS-01", reason: "Traffic",            delay_minutes: 15, notes: "Heavy traffic near downtown intersection",          reported_at: "2026-05-15T08:22:00", affected_passengers: 24 },
-  { delay_id: 2, trip_id: 38, trip_ref: "TRP-038", route: "Route 7B",  driver: "Sara Khoury",    vehicle: "BUS-07", reason: "Road Block",          delay_minutes: 30, notes: "Police checkpoint at Jounieh highway",              reported_at: "2026-05-15T09:45:00", affected_passengers: 18 },
-  { delay_id: 3, trip_id: 29, trip_ref: "TRP-029", route: "Route 3C",  driver: "Joe Pharaon",    vehicle: "BUS-09", reason: "Mechanical",          delay_minutes: 45, notes: "Engine warning light — waiting for inspection",     reported_at: "2026-05-15T10:10:00", affected_passengers: 30 },
-  { delay_id: 4, trip_id: 33, trip_ref: "TRP-033", route: "Route 5D",  driver: "Maya Salameh",   vehicle: "BUS-02", reason: "Passenger Incident",  delay_minutes: 10, notes: "Medical situation onboard, waiting for paramedics", reported_at: "2026-05-14T14:30:00", affected_passengers: 11 },
-  { delay_id: 5, trip_id: 45, trip_ref: "TRP-045", route: "Route 9E",  driver: "Lara Abi Nader", vehicle: "BUS-05", reason: "Traffic",             delay_minutes: 20, notes: null,                                               reported_at: "2026-05-14T16:55:00", affected_passengers: 22 },
-];
 
 function DelaysTab({ delays, loading, error, onRetry }) {
   const [reasonFilter, setReasonFilter] = useState("All");
@@ -1137,6 +1129,9 @@ export default function TripsPage() {
   const [recurring,       setRecurring]       = useState([]);
   const [serverConflicts, setServerConflicts] = useState(null); // null = not yet loaded
   const [tripModal,       setTripModal]       = useState(null); // null = closed, false = new, trip obj = edit
+  const [routeOpts,       setRouteOpts]       = useState([]);
+  const [driverOpts,      setDriverOpts]      = useState([]);
+  const [vehicleOpts,     setVehicleOpts]     = useState([]);
   const [delays,          setDelays]          = useState([]);
   const [delaysLoading,   setDelaysLoading]   = useState(true);
   const [delaysError,     setDelaysError]     = useState(null);
@@ -1151,8 +1146,8 @@ export default function TripsPage() {
         setTrips((rows || []).map(normalizeTrip));
       })
       .catch(err => {
-        setTrips(MOCK_TRIPS);
-        setTripsError(err?.message ?? "Could not reach server — showing demo data");
+        setTrips([]);
+        setTripsError(err?.message ?? "Could not reach server");
       })
       .finally(() => setTripsLoading(false));
   }, []);
@@ -1160,23 +1155,31 @@ export default function TripsPage() {
   useEffect(() => {
     loadTrips();
 
+    getRoutes().then(d => setRouteOpts(Array.isArray(d) ? d : [])).catch(() => {});
+    getDrivers().then(d => setDriverOpts(Array.isArray(d?.data ?? d) ? (d?.data ?? d) : [])).catch(() => {});
+    getVehicles().then(d => setVehicleOpts(Array.isArray(d?.data ?? d) ? (d?.data ?? d) : [])).catch(() => {});
+
     getTimetableTrips(TODAY)
-      .then(d => setTimetableTrips((d || []).length ? d : MOCK_TIMETABLE_TRIPS))
-      .catch(() => setTimetableTrips(MOCK_TIMETABLE_TRIPS));
+      .then(d => setTimetableTrips(Array.isArray(d) ? d : []))
+      .catch(() => setTimetableTrips([]));
 
     getRecurringSchedules()
-      .then(d => setRecurring((d || []).length ? d : MOCK_RECURRING_SCHEDULES))
-      .catch(() => setRecurring(MOCK_RECURRING_SCHEDULES));
+      .then(d => setRecurring(Array.isArray(d) ? d : []))
+      .catch(() => setRecurring([]));
 
     getTripConflicts()
       .then(d => setServerConflicts(Array.isArray(d) ? d : null))
       .catch(() => setServerConflicts(null));
 
     getTripDelays()
-      .then(d => setDelays(Array.isArray(d) ? d : MOCK_TRIP_DELAYS))
-      .catch(() => setDelays(MOCK_TRIP_DELAYS))
+      .then(d => setDelays(Array.isArray(d) ? d : []))
+      .catch(() => setDelays([]))
       .finally(() => setDelaysLoading(false));
-  }, []);
+
+    // Auto-refresh trip status every 30s so driver start/complete updates appear
+    const statusPoll = setInterval(loadTrips, 30000);
+    return () => clearInterval(statusPoll);
+  }, [loadTrips]);
 
   // All trips for conflict checking (list + timetable for today)
   const allTrips = useMemo(() => {
@@ -1267,7 +1270,7 @@ export default function TripsPage() {
           ? <PageError message={tripsError} onRetry={loadTrips} />
           : <TripsListTab trips={trips} allTrips={allTrips} onAdd={() => setTripModal(false)} onEdit={t => setTripModal(t)} onDetail={t => setDetailTrip(t)} />
       )}
-      {tab === "timetable" && <TimetableTab  timetableTrips={timetableTrips} />}
+      {tab === "timetable" && <TimetableTab timetableTrips={timetableTrips} routeOpts={routeOpts} />}
       {tab === "recurring" && (
         <RecurringTab
           recurring={recurring}
@@ -1275,6 +1278,9 @@ export default function TripsPage() {
           onEdit={r  => setRecurring(prev => prev.map(p => p.id === r.id ? r : p))}
           onDelete={id => setRecurring(prev => prev.filter(r => r.id !== id))}
           onToggle={id => setRecurring(prev => prev.map(r => r.id === id ? { ...r, status: r.status === "Active" ? "Paused" : "Active" } : r))}
+          routeOpts={routeOpts}
+          driverOpts={driverOpts}
+          vehicleOpts={vehicleOpts}
         />
       )}
       {tab === "conflicts" && <ConflictsTab conflicts={conflicts} onResolve={handleResolve} />}
@@ -1287,7 +1293,7 @@ export default function TripsPage() {
             setDelaysLoading(true);
             setDelaysError(null);
             getTripDelays()
-              .then(d => setDelays(Array.isArray(d) ? d : MOCK_TRIP_DELAYS))
+              .then(d => setDelays(Array.isArray(d) ? d : []))
               .catch(err => setDelaysError(err?.message ?? "Could not load delay reports"))
               .finally(() => setDelaysLoading(false));
           }}
@@ -1310,6 +1316,9 @@ export default function TripsPage() {
           allTrips={allTrips}
           onClose={() => setTripModal(null)}
           onSave={handleSaveTrip}
+          routeOpts={routeOpts}
+          driverOpts={driverOpts}
+          vehicleOpts={vehicleOpts}
         />
       )}
     </div>
