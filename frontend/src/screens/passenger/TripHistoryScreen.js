@@ -193,7 +193,7 @@ const TripHistoryScreen = ({ navigation }) => {
           <View style={styles.actions}>
             <TouchableOpacity
               style={styles.actionBtnBlue}
-              onPress={() => navigation.navigate('HomeStack', { screen: 'BusTracking', params: { busId: item.bus?._id || 'bus1', busName: item.bus?.name } })}
+              onPress={() => navigation.navigate('HomeStack', { screen: 'BusTracking', params: { tripId: item.bus?._id, busName: item.bus?.name } })}
             >
               <Ionicons name="navigate-outline" size={14} color={COLORS.primary} />
               <Text style={styles.actionTextBlue}>Track Bus</Text>

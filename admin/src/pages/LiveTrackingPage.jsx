@@ -1,6 +1,6 @@
 // pages/LiveTrackingPage.jsx
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { getTripGpsLogs, getGpsHeatmap, getLiveGps } from '../api/endpoints';
+import { getTripGpsLogs, getGpsHeatmap, getLiveGps, getTrips } from '../api/endpoints';
 
 // ── WebSocket GPS stream (admin "subscribe_all") ──────────────────────────────
 const WS_URL = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api')
@@ -344,6 +344,27 @@ function trafficMeta(bus, date = new Date()) {
 
 function enrichBus(bus, date = new Date()) {
   return { ...bus, seatInfo: seatMeta(bus), trafficInfo: trafficMeta(bus, date) };
+}
+
+// Map a real DB trip row → the bus shape used by this page
+const _STATUS_MAP = { ongoing:'Ongoing', active:'Ongoing', boarding:'Ongoing', delayed:'Delayed', scheduled:'Scheduled' };
+function tripToBus(t) {
+  return {
+    id:           'TRP-' + String(t.trip_id).padStart(3, '0'),
+    route:        t.route_name  || 'Unknown Route',
+    routeLabel:   t.start_location && t.end_location ? `${t.start_location} → ${t.end_location}` : t.route_name || '',
+    driver:       t.driver_name || 'Unassigned',
+    vehicle:      t.plate_number || t.vehicle_model || '',
+    status:       _STATUS_MAP[(t.status || '').toLowerCase()] || 'Scheduled',
+    seats:        `0/${t.capacity || 40}`,
+    passengerCount: 0,
+    capacity:     t.capacity || 40,
+    speed:        0,
+    lat:          33.8938,
+    lng:          35.5018,
+    eta:          '—',
+    _dlat: 0, _dlng: 0,
+  };
 }
 
 // ─── GPS Signal Loss ─────────────────────────────────────────────────────────
@@ -727,25 +748,15 @@ export default function LiveTrackingPage() {
   const [buses,       setBuses]       = useState(() => INITIAL_BUSES.map((bus) => enrichBus(bus)));
   const [selected,    setSelected]    = useState(INITIAL_BUSES[0].id);
   const [filter,      setFilter]      = useState('All');
-  const [geofencedIds,  setGeofencedIds]  = useState(() => new Set(['TRP-047']));  // TRP-047 demo breach
-  const [geoAlerts,     setGeoAlerts]     = useState([
-    { busId: 'TRP-047', vehicle: 'BUS-07', route: 'Route 3C', driver: 'Sara Khoury', distM: 820, detectedAt: new Date().toISOString(), dismissed: false, demo: true },
-  ]);
+  const [geofencedIds,  setGeofencedIds]  = useState(() => new Set());
+  const [geoAlerts,     setGeoAlerts]     = useState([]);
   const [showGeoAlerts,  setShowGeoAlerts] = useState(true);
 
-  // GPS signal loss — TRP-038 pre-seeded as demo: it's Delayed and never gets
-  // position updates from the simulation tick (only Ongoing buses are updated)
-  const lastSeenRef = useRef(
-    Object.fromEntries(INITIAL_BUSES.map((b) => [
-      b.id,
-      b.id === 'TRP-038' ? Date.now() - 40_000 : Date.now(), // TRP-038 already stale
-    ]))
-  );
-  const [signalLostIds,   setSignalLostIds]   = useState(() => new Set(['TRP-038']));
-  const [signalAlerts,    setSignalAlerts]     = useState([
-    { busId: 'TRP-038', vehicle: 'BUS-05', route: 'Route 7B', driver: 'Lara Abi Nader', lastSeen: new Date(Date.now() - 40_000).toISOString(), dismissed: false, demo: true },
-  ]);
+  const lastSeenRef = useRef({});
+  const [signalLostIds,   setSignalLostIds]   = useState(() => new Set());
+  const [signalAlerts,    setSignalAlerts]     = useState([]);
   const [showSignalAlerts, setShowSignalAlerts] = useState(true);
+  const busesRef = useRef(INITIAL_BUSES);
 
   const [showPlayback,    setShowPlayback]    = useState(false);
   const [showHeatmap,     setShowHeatmap]     = useState(false);
@@ -756,16 +767,49 @@ export default function LiveTrackingPage() {
   const [serverGeoAlerts, setServerGeoAlerts] = useState([]);
   const tickRef = useRef(0);
 
+  // Keep busesRef in sync so the signal-loss check sees the latest bus list
+  useEffect(() => { busesRef.current = buses; }, [buses]);
+
+  // Load real active trips from the backend on mount
+  useEffect(() => {
+    getTrips()
+      .then(res => {
+        const rows = Array.isArray(res?.data?.data) ? res.data.data
+                   : Array.isArray(res?.data)        ? res.data
+                   : [];
+        const activeSet = new Set(['ongoing','active','boarding','delayed','scheduled']);
+        const active = rows.filter(t => activeSet.has((t.status || '').toLowerCase()));
+        if (active.length === 0) return; // keep INITIAL_BUSES as fallback
+        const realBuses = active.map(t => enrichBus(tripToBus(t)));
+        setBuses(realBuses);
+        setSelected(realBuses[0].id);
+        // Prime lastSeen so no false signal-loss alerts on first load
+        active.forEach(t => {
+          lastSeenRef.current['TRP-' + String(t.trip_id).padStart(3, '0')] = Date.now();
+        });
+      })
+      .catch(() => {}); // keep INITIAL_BUSES on error
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── WebSocket GPS stream ──────────────────────────────────────────────────
   useAdminGpsStream((msg) => {
     if (msg.type === 'connected')    { setWsConnected(true); return; }
 
     if (msg.type === 'gps_update' && msg.trip_ref) {
       lastSeenRef.current[msg.trip_ref] = Date.now();
-      setBuses((prev) => prev.map((bus) => {
-        if (bus.id !== msg.trip_ref) return bus;
-        return enrichBus({ ...bus, lat: msg.lat, lng: msg.lng });
-      }));
+      setBuses((prev) => {
+        const exists = prev.some(b => b.id === msg.trip_ref);
+        if (exists) {
+          return prev.map(b => b.id !== msg.trip_ref ? b : enrichBus({ ...b, lat: msg.lat, lng: msg.lng }));
+        }
+        // New bus arriving via WebSocket — add it
+        return [...prev, enrichBus({
+          id: msg.trip_ref, route: msg.route || 'Unknown Route', routeLabel: msg.route || '',
+          driver: msg.driver || 'Unknown', vehicle: msg.vehicle_id || '',
+          status: 'Ongoing', seats: '?/?', passengerCount: 0, capacity: 40, speed: 0,
+          lat: msg.lat, lng: msg.lng, eta: '—', _dlat: 0, _dlng: 0,
+        })];
+      });
     }
 
     if (msg.type === 'geofence_breach') {
@@ -820,13 +864,10 @@ export default function LiveTrackingPage() {
       }
     });
 
-    // Keep TRP-047 in demo breach regardless
-    breached.add('TRP-047');
-
     setGeofencedIds(breached);
     setGeoAlerts((prev) => {
       const existingIds = new Set(prev.filter((a) => !a.dismissed).map((a) => a.busId));
-      const fresh = newAlerts.filter((a) => !existingIds.has(a.busId) && a.busId !== 'TRP-047');
+      const fresh = newAlerts.filter((a) => !existingIds.has(a.busId));
       return [...prev.filter((a) => a.dismissed || breached.has(a.busId)), ...fresh];
     });
   }, []);
@@ -840,16 +881,31 @@ export default function LiveTrackingPage() {
         if (Array.isArray(data) && data.length > 0) {
           const liveMap = {};
           data.forEach((d) => { liveMap[d.trip_ref] = d; });
-          setBuses((prev) =>
-            prev.map((bus) => {
+          setBuses((prev) => {
+            const updatedIds = new Set();
+            const updated = prev.map((bus) => {
               const live = liveMap[bus.id];
               if (live) {
                 lastSeenRef.current[bus.id] = Date.now();
+                updatedIds.add(bus.id);
                 return enrichBus({ ...bus, lat: live.lat, lng: live.lng });
               }
               return bus;
-            })
-          );
+            });
+            // Add buses that arrived from GPS but aren't in the list yet
+            data.forEach(live => {
+              if (!updatedIds.has(live.trip_ref)) {
+                lastSeenRef.current[live.trip_ref] = Date.now();
+                updated.push(enrichBus({
+                  id: live.trip_ref, route: live.route || 'Unknown Route', routeLabel: live.route || '',
+                  driver: live.driver || 'Unknown', vehicle: live.vehicle || '',
+                  status: 'Ongoing', seats: '?/?', passengerCount: 0, capacity: 40, speed: 0,
+                  lat: live.lat, lng: live.lng, eta: '—', _dlat: 0, _dlng: 0,
+                }));
+              }
+            });
+            return updated;
+          });
         }
       } catch { /* keep current positions on API error */ }
 
@@ -863,10 +919,10 @@ export default function LiveTrackingPage() {
         const now  = Date.now();
         const lost = new Set();
         const newAlerts = [];
-        INITIAL_BUSES.forEach((b) => {
+        busesRef.current.forEach((b) => {
           if (b.status === 'Scheduled') return;
           const lastSeen = lastSeenRef.current[b.id] ?? 0;
-          if (now - lastSeen > SIGNAL_LOSS_MS) {
+          if (lastSeen > 0 && now - lastSeen > SIGNAL_LOSS_MS) {
             lost.add(b.id);
             newAlerts.push({
               busId: b.id, vehicle: b.vehicle, route: b.route, driver: b.driver,

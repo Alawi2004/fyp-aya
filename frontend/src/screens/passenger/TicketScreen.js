@@ -387,7 +387,7 @@ const TicketScreen = ({ route, navigation }) => {
         <View style={styles.actions}>
           <Button
             title="Track My Bus"
-            onPress={() => navigation.navigate('BusTracking', { busId: booking.bus?._id || 'bus1', busName: booking.bus?.name })}
+            onPress={() => navigation.navigate('BusTracking', { tripId: booking.bus?._id, busName: booking.bus?.name })}
             icon={<Ionicons name="navigate-outline" size={18} color={COLORS.white} />}
             size="lg"
           />

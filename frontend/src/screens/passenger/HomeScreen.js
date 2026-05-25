@@ -108,7 +108,7 @@ const HomeScreen = ({ navigation }) => {
         <TouchableOpacity
           style={styles.activeRideCard}
           onPress={() => navigation.navigate('BusTracking', {
-            busId: activeBooking.bus?._id || 'bus1',
+            tripId: activeBooking.bus?._id,
             busName: activeBooking.bus?.name,
           })}
           activeOpacity={0.9}

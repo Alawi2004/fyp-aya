@@ -139,10 +139,17 @@ function _cleanup(ws) {
 export function broadcastGpsUpdate(payload) {
   const msg = JSON.stringify({ type: "gps_update", ...payload });
   const vid = String(payload.vehicle_id ?? payload.plate_number ?? "");
+  const tid = payload.trip_id != null ? String(payload.trip_id) : null;
 
-  // Vehicle-specific subscribers
+  // Plate-number subscribers (admin map screen)
   const subs = _byVehicle.get(vid);
   if (subs) for (const ws of subs) _sendRaw(ws, msg);
+
+  // Trip-ID subscribers (passenger tracking screen)
+  if (tid && tid !== vid) {
+    const tripSubs = _byVehicle.get(tid);
+    if (tripSubs) for (const ws of tripSubs) _sendRaw(ws, msg);
+  }
 
   // Admin "all" subscribers
   for (const ws of _adminSubs) _sendRaw(ws, msg);
