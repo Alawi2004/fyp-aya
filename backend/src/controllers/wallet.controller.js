@@ -76,8 +76,7 @@ export const getTopUpLocations = async (req, res) => {
     res.json(result.recordset);
   } catch (err) {
     console.error(err);
-    // Return hardcoded fallback if table not yet created
-    res.json(FALLBACK_LOCATIONS);
+    res.status(500).json({ error: "Failed to fetch top-up locations" });
   }
 };
 
@@ -548,44 +547,3 @@ export const getFreezeLog = async (req, res) => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Fallback locations shown if DB table doesn't exist yet
-// ─────────────────────────────────────────────────────────────────────────────
-const FALLBACK_LOCATIONS = [
-  {
-    location_id: 1,
-    name:    "Central Bus Station — Main Office",
-    address: "1 Station Road",
-    city:    "City Center",
-    phone:   "+1 555-0100",
-    hours:   "Mon–Fri 7:00 AM – 8:00 PM, Sat–Sun 8:00 AM – 6:00 PM",
-    is_active: true,
-  },
-  {
-    location_id: 2,
-    name:    "North Terminal Customer Service",
-    address: "45 North Ave",
-    city:    "North District",
-    phone:   "+1 555-0101",
-    hours:   "Daily 6:00 AM – 10:00 PM",
-    is_active: true,
-  },
-  {
-    location_id: 3,
-    name:    "Airport Transit Hub Kiosk",
-    address: "Terminal 2, Departures Level",
-    city:    "Airport",
-    phone:   "+1 555-0102",
-    hours:   "Daily 5:00 AM – 11:00 PM",
-    is_active: true,
-  },
-  {
-    location_id: 4,
-    name:    "Mall Junction Agent Counter",
-    address: "Ground Floor, Grand Mall",
-    city:    "South District",
-    phone:   "+1 555-0103",
-    hours:   "Mon–Sun 10:00 AM – 9:00 PM",
-    is_active: true,
-  },
-];

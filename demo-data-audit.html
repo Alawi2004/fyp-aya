@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Demo Data Audit — fyp-aya Backend</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 32px;
+      line-height: 1.6;
+    }
+    h1 { font-size: 24px; font-weight: 700; color: #f8fafc; margin-bottom: 4px; }
+    .subtitle { font-size: 13px; color: #64748b; margin-bottom: 32px; }
+    .summary-bar {
+      display: flex; gap: 16px; margin-bottom: 32px; flex-wrap: wrap;
+    }
+    .stat {
+      background: #1e293b; border: 1px solid #334155;
+      border-radius: 10px; padding: 14px 22px; flex: 1; min-width: 160px;
+    }
+    .stat-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .06em; }
+    .stat-value { font-size: 28px; font-weight: 700; color: #f8fafc; }
+    .stat-value.red { color: #f87171; }
+    .stat-value.yellow { color: #fbbf24; }
+    .stat-value.green { color: #34d399; }
+
+    .section-title {
+      font-size: 12px; font-weight: 600; letter-spacing: .08em;
+      text-transform: uppercase; color: #64748b;
+      margin-bottom: 12px; margin-top: 32px;
+    }
+
+    .card {
+      background: #1e293b; border: 1px solid #334155;
+      border-radius: 12px; margin-bottom: 16px; overflow: hidden;
+    }
+    .card-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 20px; border-bottom: 1px solid #334155;
+    }
+    .badge {
+      font-size: 11px; font-weight: 700; letter-spacing: .04em;
+      padding: 3px 9px; border-radius: 6px; text-transform: uppercase;
+    }
+    .badge-high   { background: #7f1d1d; color: #fca5a5; }
+    .badge-medium { background: #78350f; color: #fde68a; }
+    .badge-low    { background: #1e3a5f; color: #93c5fd; }
+    .badge-method { background: #1e293b; border: 1px solid #475569; color: #94a3b8; }
+
+    .card-header h2 { font-size: 15px; font-weight: 600; color: #f1f5f9; flex: 1; }
+    .card-body { padding: 16px 20px; display: grid; gap: 12px; }
+
+    .meta-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+    .meta-item { display: flex; flex-direction: column; gap: 2px; min-width: 180px; }
+    .meta-key { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #475569; }
+    .meta-val { font-size: 13px; color: #cbd5e1; }
+    .meta-val code {
+      font-family: "JetBrains Mono", "Fira Code", monospace;
+      font-size: 12px; background: #0f172a;
+      padding: 2px 6px; border-radius: 4px; color: #7dd3fc;
+    }
+
+    .description { font-size: 13px; color: #94a3b8; }
+
+    .fix-box {
+      background: #0f172a; border: 1px solid #1d4ed8;
+      border-radius: 8px; padding: 12px 14px;
+    }
+    .fix-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; color: #3b82f6; margin-bottom: 6px;
+    }
+    .fix-steps { font-size: 12px; color: #93c5fd; padding-left: 16px; }
+    .fix-steps li { margin-bottom: 4px; }
+
+    .status-done { color: #34d399; }
+    .status-pending { color: #f87171; }
+
+    .tag-list { display: flex; gap: 6px; flex-wrap: wrap; }
+    .tag {
+      font-size: 11px; padding: 2px 8px; border-radius: 5px;
+      background: #0f172a; border: 1px solid #334155; color: #94a3b8;
+    }
+
+    footer {
+      margin-top: 48px; padding-top: 16px; border-top: 1px solid #1e293b;
+      font-size: 12px; color: #334155;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Demo Data Audit</h1>
+<p class="subtitle">Generated 2026-05-25 &nbsp;·&nbsp; Project: fyp-aya backend &nbsp;·&nbsp; Scanned: <code style="color:#7dd3fc;font-size:11px">backend/src/**/*.js</code></p>
+
+<div class="summary-bar">
+  <div class="stat">
+    <div class="stat-label">Total Issues Found</div>
+    <div class="stat-value red">3</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">High Priority</div>
+    <div class="stat-value red">1</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Medium Priority</div>
+    <div class="stat-value yellow">1</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Low Priority</div>
+    <div class="stat-value" style="color:#93c5fd">1</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Endpoints Using Real DB</div>
+    <div class="stat-value green">30+</div>
+  </div>
+</div>
+
+<!-- ── ISSUE 1 ────────────────────────────────────────────────────────────── -->
+<p class="section-title">High Priority</p>
+
+<div class="card">
+  <div class="card-header">
+    <span class="badge badge-high">High</span>
+    <span class="badge badge-method">GET</span>
+    <h2>/api/wallet/locations</h2>
+  </div>
+  <div class="card-body">
+    <div class="meta-row">
+      <div class="meta-item">
+        <span class="meta-key">Controller</span>
+        <span class="meta-val"><code>controllers/wallet.controller.js</code></span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-key">Function</span>
+        <span class="meta-val"><code>getTopUpLocations()</code></span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-key">Demo Data Lines</span>
+        <span class="meta-val"><code>554 – 591</code></span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-key">Trigger</span>
+        <span class="meta-val">Catch block — any DB error (incl. missing table)</span>
+      </div>
+    </div>
+
+    <div class="description">
+      When the DB query on <code>top_up_locations</code> fails (table doesn't exist yet or connection error), the catch block silently returns 4 hardcoded fake locations instead of an error. The fake data includes placeholder names ("Central Bus Station — Main Office", "Airport Transit Hub Kiosk"), US-format phone numbers (<code>+1 555-01xx</code>), and generic addresses. Passengers can see this data and assume these are real locations.
+    </div>
+
+    <div class="tag-list">
+      <span class="tag">passenger-facing</span>
+      <span class="tag">silent fallback</span>
+      <span class="tag">fake phone numbers</span>
+      <span class="tag">table may not exist</span>
+    </div>
+
+    <div class="fix-box">
+      <div class="fix-label">Fix Steps</div>
+      <ol class="fix-steps">
+        <li>Create the <code>top_up_locations</code> table in <code>db/featureSetup.js</code> (or a migration) and seed real locations.</li>
+        <li>In the catch block, replace <code>res.json(FALLBACK_LOCATIONS)</code> with <code>res.status(500).json({ error: "Failed to fetch locations" })</code>.</li>
+        <li>Delete the <code>FALLBACK_LOCATIONS</code> constant (lines 554–591).</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- ── ISSUE 2 ────────────────────────────────────────────────────────────── -->
+<p class="section-title">Medium Priority</p>
+
+<div class="card">
+  <div class="card-header">
+    <span class="badge badge-medium">Medium</span>
+    <span class="badge badge-method">EMAIL</span>
+    <h2>Scheduled Report Emails — Driver Performance, Vehicle Utilization, Revenue</h2>
+  </div>
+  <div class="card-body">
+    <div class="meta-row">
+      <div class="meta-item">
+        <span class="meta-key">File</span>
+        <span class="meta-val"><code>services/email.service.js</code></span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-key">Function</span>
+        <span class="meta-val"><code>buildReportHtml()</code></span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-key">Demo Data Lines</span>
+        <span class="meta-val"><code>40 – 66</code></span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-key">Trigger</span>
+        <span class="meta-val">Every scheduled report email that is sent</span>
+      </div>
+    </div>
+
+    <div class="description">
+      The <code>buildReportHtml()</code> function contains a hardcoded <code>sampleRows</code> object with fake table rows for three report types. These fake rows are embedded in every scheduled report email sent to admins:<br><br>
+      &bull; <strong>driver-performance</strong>: Fake drivers "Karim Moussa", "Maya Salameh", "Fadi Gemayel", "Lara Abi Nader" with invented trip counts, ratings, and scores.<br>
+      &bull; <strong>vehicle-utilization</strong>: Fake buses BUS-01, BUS-03, BUS-06, BUS-08 with invented hours and distances.<br>
+      &bull; <strong>revenue</strong>: Fake routes "Route 12A", "Route 7B", "Route 3C" with invented USD amounts.<br><br>
+      Recipients receive these as if they are real operational statistics.
+    </div>
+
+    <div class="tag-list">
+      <span class="tag">email-sent-to-admins</span>
+      <span class="tag">fake driver names</span>
+      <span class="tag">fake revenue figures</span>
+      <span class="tag">3 report types affected</span>
+    </div>
+
+    <div class="fix-box">
+      <div class="fix-label">Fix Steps</div>
+      <ol class="fix-steps">
+        <li>Accept a <code>rows</code> and <code>columns</code> parameter in <code>buildReportHtml(reportType, reportName, rows, columns)</code>.</li>
+        <li>In <code>controllers/scheduledReports.controller.js</code>, query the DB for the report data before calling <code>buildReportHtml</code>, and pass the real rows.</li>
+        <li>Remove the <code>sampleRows</code> and <code>headers</code> objects from <code>email.service.js</code> entirely.</li>
+        <li>Handle the case where the DB returns no rows (show "No data available for this period" in the email).</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- ── ISSUE 3 ────────────────────────────────────────────────────────────── -->
+<p class="section-title">Low Priority</p>
+
+<div class="card">
+  <div class="card-header">
+    <span class="badge badge-low">Low</span>
+    <span class="badge badge-method">MIDDLEWARE</span>
+    <h2>Permission Matrix — Hardcoded Role Fallback</h2>
+  </div>
+  <div class="card-body">
+    <div class="meta-row">
+      <div class="meta-item">
+        <span class="meta-key">File</span>
+        <span class="meta-val"><code>db/permissionCache.js</code></span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-key">Export</span>
+        <span class="meta-val"><code>HARDCODED_MATRIX</code></span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-key">Lines</span>
+        <span class="meta-val"><code>7 – 94</code></span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-key">Trigger</span>
+        <span class="meta-val">DB returns 0 rows <em>or</em> DB connection fails</span>
+      </div>
+    </div>
+
+    <div class="description">
+      <code>HARDCODED_MATRIX</code> is a full role-permission map (9 roles) used as a fallback when the <code>role_permissions</code> table is empty or unreachable. While intentional as a safety net, it creates a risk: if the DB permissions table is accidentally cleared or never seeded, the app silently continues with static permissions that may not match the intended production configuration. The matrix is currently used by all route-level permission checks via the <code>permissions.middleware.js</code>.
+    </div>
+
+    <div class="tag-list">
+      <span class="tag">security-relevant</span>
+      <span class="tag">silent fallback</span>
+      <span class="tag">affects all authenticated routes</span>
+      <span class="tag">intentional but risky</span>
+    </div>
+
+    <div class="fix-box">
+      <div class="fix-label">Fix Steps</div>
+      <ol class="fix-steps">
+        <li>Add a startup health-check that logs a loud warning (or blocks startup) if the DB returns 0 rows for <code>role_permissions</code>.</li>
+        <li>Consider replacing the silent fallback with a hard 503 response when the DB permission load fails in production (<code>NODE_ENV === 'production'</code>).</li>
+        <li>Ensure <code>featureSetup.js</code> seeds the <code>role_permissions</code> table so the fallback is never triggered in a healthy deployment.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- ── CLEAN ENDPOINTS NOTE ─────────────────────────────────────────────── -->
+<p class="section-title">Confirmed Clean (real DB queries)</p>
+<div class="card">
+  <div class="card-body">
+    <div class="description">
+      All other controllers were inspected and confirmed to query the database:
+    </div>
+    <div class="tag-list" style="margin-top:8px">
+      <span class="tag">GET /api/wallet</span>
+      <span class="tag">GET /api/wallet/transactions</span>
+      <span class="tag">POST /api/wallet/topup</span>
+      <span class="tag">GET /api/dashboard/stats</span>
+      <span class="tag">GET /api/dashboard/overview</span>
+      <span class="tag">GET /api/trips</span>
+      <span class="tag">GET /api/drivers</span>
+      <span class="tag">GET /api/vehicles</span>
+      <span class="tag">GET /api/routes</span>
+      <span class="tag">GET /api/stops</span>
+      <span class="tag">GET /api/users</span>
+      <span class="tag">GET /api/buses</span>
+      <span class="tag">GET /api/analytics/*</span>
+      <span class="tag">GET /api/gps/*</span>
+      <span class="tag">GET /api/eta/*</span>
+      <span class="tag">GET /api/ratings/*</span>
+      <span class="tag">GET /api/tickets/*</span>
+      <span class="tag">GET /api/complaints/*</span>
+      <span class="tag">GET /api/notifications/*</span>
+      <span class="tag">GET /api/nfc/*</span>
+      <span class="tag">GET /api/audit-log</span>
+      <span class="tag">GET /api/reports/*</span>
+      <span class="tag">GET /api/stop-amenities/*</span>
+      <span class="tag">GET /api/ml/*</span>
+      <span class="tag">Auth endpoints</span>
+      <span class="tag">Staff shift endpoints</span>
+      <span class="tag">Staff wallet endpoints</span>
+      <span class="tag">Multi-trip endpoints</span>
+    </div>
+  </div>
+</div>
+
+<footer>
+  fyp-aya backend · demo-data-audit.html · Generated 2026-05-25
+</footer>
+
+</body>
+</html>

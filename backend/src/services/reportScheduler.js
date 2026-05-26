@@ -1,5 +1,6 @@
 import { poolPromise, sql } from "../db/db.js";
 import { sendScheduledReport } from "./email.service.js";
+import { fetchReportData } from "../controllers/scheduledReports.controller.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Restart-safe report scheduler
@@ -55,7 +56,8 @@ async function checkAndSend() {
     for (const report of result.recordset) {
       try {
         const recipients = JSON.parse(report.recipients);
-        await sendScheduledReport(recipients, report.report_type, report.report_name);
+        const { rows, cols } = await fetchReportData(pool, report.report_type);
+        await sendScheduledReport(recipients, report.report_type, report.report_name, rows, cols);
 
         const nextSend = calcNextSend(report.frequency, report.day_of_week, report.hour_of_day);
 

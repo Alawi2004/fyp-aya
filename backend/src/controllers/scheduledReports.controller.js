@@ -103,6 +103,75 @@ export const deleteSchedule = async (req, res) => {
   }
 };
 
+export async function fetchReportData(pool, reportType) {
+  try {
+    if (reportType === "driver-performance") {
+      const r = await pool.request().query(`
+        SELECT TOP 10
+          ROW_NUMBER() OVER (ORDER BY COALESCE(AVG(CAST(rt.rating AS FLOAT)), 0) DESC) AS [Rank],
+          u.full_name                                                         AS [Driver],
+          COUNT(DISTINCT t.trip_id)                                           AS [Trips],
+          COUNT(DISTINCT c.complaint_id)                                      AS [Complaints],
+          CAST(ROUND(COALESCE(AVG(CAST(rt.rating AS FLOAT)), 0), 1) AS NVARCHAR(10)) AS [Rating]
+        FROM drivers d
+        JOIN  users u  ON u.user_id   = d.user_id
+        LEFT JOIN trips t  ON t.driver_id  = d.driver_id AND t.status = 'completed'
+        LEFT JOIN ratings rt ON rt.trip_id = t.trip_id
+        LEFT JOIN complaints c ON c.trip_id = t.trip_id
+        WHERE d.is_deleted = 0
+        GROUP BY d.driver_id, u.full_name
+        ORDER BY [Rating] DESC
+      `);
+      return {
+        cols: ["Rank", "Driver", "Trips", "Complaints", "Rating"],
+        rows: r.recordset.map(row => [row.Rank, row.Driver, row.Trips, row.Complaints, row.Rating]),
+      };
+    }
+
+    if (reportType === "vehicle-utilization") {
+      const r = await pool.request().query(`
+        SELECT TOP 10
+          v.plate_number                              AS [Vehicle],
+          ISNULL(v.vehicle_type, 'Standard')          AS [Type],
+          COUNT(t.trip_id)                            AS [Trips],
+          v.status                                    AS [Status]
+        FROM vehicles v
+        LEFT JOIN trips t ON t.vehicle_id = v.vehicle_id AND t.status = 'completed'
+        WHERE v.status != 'deleted'
+        GROUP BY v.vehicle_id, v.plate_number, v.vehicle_type, v.status
+        ORDER BY [Trips] DESC
+      `);
+      return {
+        cols: ["Vehicle", "Type", "Trips", "Status"],
+        rows: r.recordset.map(row => [row.Vehicle, row.Type, row.Trips, row.Status]),
+      };
+    }
+
+    if (reportType === "revenue") {
+      const r = await pool.request().query(`
+        SELECT TOP 10
+          ro.route_name                     AS [Route],
+          COUNT(DISTINCT t.trip_id)         AS [Trips],
+          COUNT(DISTINCT tk.ticket_id)      AS [Tickets Sold]
+        FROM routes ro
+        LEFT JOIN trips t  ON t.route_id  = ro.route_id AND t.status = 'completed'
+        LEFT JOIN tickets tk ON tk.trip_id = t.trip_id
+        WHERE ro.is_deleted = 0
+        GROUP BY ro.route_id, ro.route_name
+        ORDER BY [Tickets Sold] DESC
+      `);
+      return {
+        cols: ["Route", "Trips", "Tickets Sold"],
+        rows: r.recordset.map(row => [row.Route, row.Trips, row["Tickets Sold"]]),
+      };
+    }
+
+    return { cols: [], rows: [] };
+  } catch {
+    return { cols: [], rows: [] };
+  }
+}
+
 export const sendNow = async (req, res) => {
   try {
     const pool = await poolPromise;
@@ -111,7 +180,8 @@ export const sendNow = async (req, res) => {
     if (!sched) return res.status(404).json({ error: "Schedule not found" });
 
     const recipients = JSON.parse(sched.recipients);
-    await sendScheduledReport(recipients, sched.report_type, sched.report_name);
+    const { rows, cols } = await fetchReportData(pool, sched.report_type);
+    await sendScheduledReport(recipients, sched.report_type, sched.report_name, rows, cols);
 
     await pool.request()
       .input("id", sql.Int, req.params.id)
