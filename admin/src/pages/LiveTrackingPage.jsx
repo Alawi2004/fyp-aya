@@ -1173,16 +1173,36 @@ export default function LiveTrackingPage() {
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12,
                       overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '10px 16px 8px', borderBottom: '1px solid #F1F5F9' }}>
-            {/* Row 1 — title + heatmap toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', flex: 1 }}>
+            {/* Row 1 — title + bus dropdown + heatmap toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', flexShrink: 0 }}>
                 GPS map — Lebanon
                 {showHeatmap && <span style={{ fontSize: 11, fontWeight: 500, color: '#DC2626', marginLeft: 8 }}>· Heatmap active</span>}
               </span>
+
+              {/* Bus selector dropdown */}
+              <select
+                value={selected || ''}
+                onChange={(e) => setSelected(e.target.value || buses[0]?.id)}
+                style={{
+                  flex: 1, minWidth: 0, maxWidth: 280,
+                  padding: '5px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                  border: '1.5px solid #E2E8F0', background: '#F8FAFC', color: '#0F172A',
+                  cursor: 'pointer', outline: 'none',
+                  appearance: 'auto',
+                }}
+              >
+                {buses.map((bus) => (
+                  <option key={bus.id} value={bus.id}>
+                    {bus.id} — {bus.route} ({bus.status})
+                  </option>
+                ))}
+              </select>
+
               <button
                 onClick={() => setShowHeatmap((h) => !h)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
+                  display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
                   padding: '5px 13px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
                   border: `1.5px solid ${showHeatmap ? '#FCA5A5' : '#E2E8F0'}`,
                   background: showHeatmap ? '#FEF2F2' : '#F8FAFC',

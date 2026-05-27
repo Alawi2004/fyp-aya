@@ -26,7 +26,10 @@ export const requirePermission = (module, action) => (req, res, next) => {
     let matrix;
     try {
       matrix = await getMatrix();
-    } catch {
+    } catch (err) {
+      if (process.env.NODE_ENV === "production") {
+        return res.status(503).json({ error: "Permission service unavailable" });
+      }
       matrix = HARDCODED_MATRIX;
     }
 

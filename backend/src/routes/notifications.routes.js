@@ -5,8 +5,12 @@ import {
   createNotification,
   getUserNotifications,
 } from "../controllers/notifications.controller.js";
+import { requireAuth } from "../middleware/auth.middleware.js";
+import { requirePermission } from "../middleware/permissions.middleware.js";
 
 const router = express.Router();
+
+router.use(requireAuth);
 
 /**
  * @swagger
@@ -52,7 +56,7 @@ const router = express.Router();
  *         description: Notification created
  */
 router.get("/", getAllNotifications);
-router.post("/", createNotification);
+router.post("/", requirePermission("notifications", "create"), createNotification);
 
 /**
  * @swagger

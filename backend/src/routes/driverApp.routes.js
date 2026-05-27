@@ -14,8 +14,11 @@ import {
   reportDelay,
   scanNfc,
 } from "../controllers/driverApp.controller.js";
+import { requireRole } from "../middleware/permissions.middleware.js";
 
 const router = express.Router();
+
+router.use(requireRole("driver"));
 
 /**
  * @swagger

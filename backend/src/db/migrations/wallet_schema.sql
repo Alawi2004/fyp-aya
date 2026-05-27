@@ -37,10 +37,12 @@ BEGIN
 
   -- Seed with initial locations
   INSERT INTO top_up_locations (name, address, city, phone, hours) VALUES
-    ('Central Bus Station — Main Office', '1 Station Road',              'City Center',   '+1 555-0100', 'Mon–Fri 7:00 AM – 8:00 PM, Sat–Sun 8:00 AM – 6:00 PM'),
-    ('North Terminal Customer Service',   '45 North Ave',                'North District','+1 555-0101', 'Daily 6:00 AM – 10:00 PM'),
-    ('Airport Transit Hub Kiosk',         'Terminal 2, Departures Level','Airport',       '+1 555-0102', 'Daily 5:00 AM – 11:00 PM'),
-    ('Mall Junction Agent Counter',       'Ground Floor, Grand Mall',    'South District','+1 555-0103', 'Mon–Sun 10:00 AM – 9:00 PM');
+    ('Riad El Solh Transit Hub',      '5 Riad El Solh Square',          'Beirut',         '+961 1 201010', 'Mon-Fri 06:00-20:00, Sat-Sun 08:00-18:00'),
+    ('Hamra Customer Service Centre', '12 Hamra Main Street',            'Beirut',         '+961 1 202020', 'Daily 07:00-21:00'),
+    ('Dora Terminal Office',          'Dora Bus Terminal, Ground Floor', 'Dora',           '+961 1 203030', 'Daily 06:00-22:00'),
+    ('Jounieh Service Point',         '3 Jounieh Waterfront Road',       'Jounieh',        '+961 9 204040', 'Mon-Fri 08:00-18:00'),
+    ('Antelias Agent Counter',        'Antelias Center, Shop 5',         'Antelias',       '+961 4 205050', 'Mon-Sat 09:00-19:00'),
+    ('Airport Transit Kiosk',         'Terminal 1, Arrivals Hall',       'Beirut Airport', '+961 1 206060', 'Daily 05:00-23:00');
 END;
 
 -- ── wallet_recharges ──────────────────────────────────────────

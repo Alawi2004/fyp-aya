@@ -10,7 +10,6 @@ export const getRatings = async (req, res) => {
         r.trip_id,
         r.rating,
         r.comment,
-        r.created_at,
         u.full_name,
         ro.route_name,
         du.full_name AS driver_name
@@ -20,7 +19,7 @@ export const getRatings = async (req, res) => {
       LEFT JOIN routes  ro ON ro.route_id = t.route_id
       LEFT JOIN drivers d  ON d.driver_id = t.driver_id
       LEFT JOIN users   du ON du.user_id  = d.user_id
-      ORDER BY r.created_at DESC
+      ORDER BY r.rating_id DESC
     `);
     res.json(result.recordset);
   } catch (err) {
@@ -65,7 +64,7 @@ export const getTripRatings = async (req, res) => {
         FROM ratings r
         LEFT JOIN users u ON u.user_id = r.user_id
         WHERE r.trip_id = @trip_id
-        ORDER BY r.created_at DESC
+        ORDER BY r.rating_id DESC
       `);
     res.json(result.recordset);
   } catch (err) {
@@ -88,7 +87,6 @@ export const getDriverRatings = async (req, res) => {
           r.trip_id,
           r.rating,
           r.comment,
-          r.created_at,
           u.full_name  AS passenger_name,
           ro.route_name
         FROM ratings r
@@ -96,7 +94,7 @@ export const getDriverRatings = async (req, res) => {
         JOIN routes  ro ON ro.route_id = t.route_id
         LEFT JOIN users u ON u.user_id = r.user_id
         WHERE t.driver_id = @driver_id
-        ORDER BY r.created_at DESC
+        ORDER BY r.rating_id DESC
       `);
 
     const rows = result.recordset;

@@ -17,6 +17,7 @@ import {
   getTripStopArrivals,
 } from "../controllers/trips.controller.js";
 import { getTripEtaPredictions } from "../controllers/eta.controller.js";
+import { requirePermission } from "../middleware/permissions.middleware.js";
 
 const router = express.Router();
 
@@ -62,7 +63,7 @@ const router = express.Router();
  *       201:
  *         description: Trip created
  */
-router.post("/", createTrip);
+router.post("/", requirePermission("trips", "create"), createTrip);
 router.get("/", getTrips);
 
 /**
@@ -87,9 +88,9 @@ router.get("/vehicle-type/:type", getTripsByVehicleType);
 router.get("/conflicts",  getTripConflicts);
 router.get("/timetable",  getTimetableTrips);
 router.get("/recurring",  getRecurringSchedules);
-router.post("/recurring", createRecurringSchedule);
-router.put("/recurring/:id",    updateRecurringSchedule);
-router.delete("/recurring/:id", deleteRecurringSchedule);
+router.post("/recurring", requirePermission("trips", "create"), createRecurringSchedule);
+router.put("/recurring/:id",    requirePermission("trips", "edit"), updateRecurringSchedule);
+router.delete("/recurring/:id", requirePermission("trips", "delete"), deleteRecurringSchedule);
 
 /**
  * @swagger
@@ -182,7 +183,7 @@ router.get("/delays",      getTripDelays);
 router.get("/checklists",  getTripChecklists);
 router.get("/:id/arrivals", getTripStopArrivals);
 router.get("/:id", getTripById);
-router.put("/:id/status", updateTripStatus);
-router.put("/:id", updateTripStatus);
+router.put("/:id/status", requirePermission("trips", "edit"), updateTripStatus);
+router.put("/:id",        requirePermission("trips", "edit"), updateTripStatus);
 
 export default router;
