@@ -482,6 +482,12 @@ BEGIN
   ALTER TABLE users ADD fcm_token NVARCHAR(300) NULL;
 END;
 
+-- Passenger date of birth (replaces category-based discount model)
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='users' AND COLUMN_NAME='birth_date')
+BEGIN
+  ALTER TABLE users ADD birth_date DATE NULL;
+END;
+
 -- Server-side geofence breach events
 IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='geofence_events')
 BEGIN

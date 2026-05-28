@@ -17,14 +17,6 @@ const ROLE_STYLE = {
   Staff:     { bg: "#F0FDF4", color: "#059669" },
 };
 
-const CAT_STYLE = {
-  Regular:          { bg: "#F0FDF4", color: "#059669" },
-  Student:          { bg: "#EFF6FF", color: "#2563EB" },
-  "Senior Citizen": { bg: "#FFFBEB", color: "#D97706" },
-  Staff:            { bg: "#F5F3FF", color: "#7C3AED" },
-};
-
-const CATEGORIES = ["Regular", "Student", "Senior Citizen", "Staff"];
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -104,7 +96,7 @@ function normalizeUser(u) {
     trips:      u.trips ?? 0,
     status:     u.status ?? "Active",
     nationalId: u.national_id ?? null,
-    category:   u.category ?? "Regular",
+    birthDate:  u.birth_date ?? null,
     photo:      u.photo ?? null,
   };
 }
@@ -168,7 +160,6 @@ function PassengerProfile({ user, onClose, onEdit }) {
   const trips     = seedTrips(user.id);
   const completed = trips.filter(t => t.status === "Completed").length;
   const rs        = ROLE_STYLE.Passenger;
-  const cs        = CAT_STYLE[user.category] ?? CAT_STYLE.Regular;
   const initials  = user.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
   const walletBal = `OMR ${(((String(user.id).charCodeAt(0) * 3) % 50) + 5).toFixed(2)}`;
   const phone     = user.phone || "+968 9" + String(user.id * 7 % 9000000 + 1000000);
@@ -188,7 +179,6 @@ function PassengerProfile({ user, onClose, onEdit }) {
             <div style={{ fontSize: 12, color: "#64748B", marginBottom: 6 }}>{user.email}</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
               <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: rs.bg, color: rs.color }}>Passenger</span>
-              <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: cs.bg, color: cs.color }}>{user.category ?? "Regular"}</span>
               <StatusPill status={user.status} />
             </div>
           </div>
@@ -200,7 +190,7 @@ function PassengerProfile({ user, onClose, onEdit }) {
         <SectionLabel>Identity &amp; Contact</SectionLabel>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <InfoTile label="National ID"     value={nationalId} />
-          <InfoTile label="Category"        value={user.category ?? "Regular"} />
+          <InfoTile label="Date of Birth"   value={user.birthDate ?? "—"} />
           <InfoTile label="Wallet Balance"  value={walletBal} accent="#059669" />
           <InfoTile label="Phone"           value={phone} />
           <InfoTile label="Joined"          value={user.joined || "—"} />
@@ -587,9 +577,9 @@ function UserProfile({ user, onClose, onEdit }) {
 
 // ── Export helpers ────────────────────────────────────────────────────────────
 function exportCSV(rows, label) {
-  const headers = ["Name", "Email", "Role", "Category", "National ID", "Joined", "Trips", "Status"];
+  const headers = ["Name", "Email", "Role", "Date of Birth", "National ID", "Joined", "Trips", "Status"];
   const body = rows.map(u => [
-    u.name, u.email, u.role, u.category ?? "Regular",
+    u.name, u.email, u.role, u.birthDate ?? "—",
     u.nationalId ?? ("IC-" + String(u.id).padStart(6, "0") + "X"),
     u.joined, u.trips, u.status,
   ].map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","));
@@ -606,7 +596,7 @@ function exportCSV(rows, label) {
 function exportPDF(rows, label) {
   const tr = rows.map(u => `<tr>
     <td>${u.name}</td><td>${u.email}</td><td>${u.role}</td>
-    <td>${u.category ?? "Regular"}</td><td>${u.joined}</td>
+    <td>${u.birthDate ?? "—"}</td><td>${u.joined}</td>
     <td>${u.trips}</td><td>${u.status}</td></tr>`).join("");
   const html = `<!DOCTYPE html><html><head><title>${label}</title><style>
     body{font-family:Arial,sans-serif;font-size:11px;margin:24px;color:#111}
@@ -620,7 +610,7 @@ function exportPDF(rows, label) {
     <h2>${label} — Yalla Transit Admin</h2>
     <p>Exported ${new Date().toLocaleString()} · ${rows.length} records</p>
     <table><thead><tr>
-      <th>Name</th><th>Email</th><th>Role</th><th>Category</th>
+      <th>Name</th><th>Email</th><th>Role</th><th>Date of Birth</th>
       <th>Joined</th><th>Trips</th><th>Status</th>
     </tr></thead><tbody>${tr}</tbody></table>
     <p style="margin-top:18px;color:#94a3b8;font-size:10px">Yalla Transit · Confidential</p>
@@ -700,19 +690,12 @@ function heatColor(val, max) {
 }
 
 // ── Passenger Activity tab ────────────────────────────────────────────────────
-const CAT_COLORS = {
-  Regular:         "#2563EB",
-  Student:         "#7C3AED",
-  "Senior Citizen":"#D97706",
-  Staff:           "#059669",
-};
 const HMAP_DAYS  = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const HMAP_HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 const HEATMAP_MIN_RECORDS = 100; // minimum ticket records needed to show the grid
 
 function ActivityTab({ users }) {
-  const [catFilter,      setCatFilter]      = useState("All");
   const [heatmapData,    setHeatmapData]    = useState(null);  // null = loading
   const [peakHours,      setPeakHours]      = useState([]);
   const [heatmapTotal,   setHeatmapTotal]   = useState(null);  // null=loading, 0=error, N=count
@@ -740,50 +723,27 @@ function ActivityTab({ users }) {
       .finally(() => setHeatmapLoading(false));
   }, []);
 
-  // Category breakdown from actual passenger list
   const passengers = users.filter(u => u.role === "Passenger");
-  const catCounts  = {
-    Regular:          passengers.filter(u => (u.category ?? "Regular") === "Regular").length,
-    Student:          passengers.filter(u => u.category === "Student").length,
-    "Senior Citizen": passengers.filter(u => u.category === "Senior Citizen").length,
-    Staff:            passengers.filter(u => u.category === "Staff").length,
-  };
-  const totalPass = passengers.length || 1;
-  const scale     = catFilter === "All" ? 1 : Math.max(0.05, (catCounts[catFilter] ?? 0) / totalPass);
 
   const hasData  = !heatmapLoading && heatmapData !== null && heatmapTotal >= HEATMAP_MIN_RECORDS;
 
-  // Scale heatmap + peak hours by selected category proportion (only used when hasData)
-  const heatData = hasData ? heatmapData.map(row => row.map(v => Math.round(v * scale))) : [];
+  const heatData = hasData ? heatmapData : [];
   const maxHeat  = hasData ? Math.max(...heatData.flat(), 1) : 1;
 
-  const peakData = peakHours.map(h => ({ ...h, count: Math.round(h.count * scale) }));
+  const peakData = peakHours;
   const maxPeak  = Math.max(...peakData.map(h => h.count), 1);
   const top3     = [...peakData].sort((a, b) => b.count - a.count).slice(0, 3).map(h => h.hour);
-
-  const catMaxRoute = 1;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-      {/* Category filter + summary */}
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        {["All", ...Object.keys(CAT_COLORS)].map(c => (
-          <button key={c} onClick={() => setCatFilter(c)} style={{
-            padding: "6px 14px", borderRadius: 20, fontSize: 12, cursor: "pointer",
-            border: catFilter === c ? "none" : "1px solid #E2E8F0",
-            background: catFilter === c ? (CAT_COLORS[c] ?? "#2563EB") : "#fff",
-            color:      catFilter === c ? "#fff" : "#555",
-            fontWeight: catFilter === c ? 700 : 400,
-          }}>{c}</button>
-        ))}
-        <span style={{ fontSize: 11, color: "#94A3B8", marginLeft: 4 }}>
-          {catFilter === "All" ? `${passengers.length} total passengers` : `${catCounts[catFilter] ?? 0} ${catFilter} passengers`}
-        </span>
+      {/* Passenger summary */}
+      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>{passengers.length} total passengers</span>
       </div>
 
       {/* Heatmap */}
-      <Panel title={`Activity Heatmap — Trips by Hour & Day${catFilter !== "All" ? ` (${catFilter})` : ""}${hasData ? ` · ${heatmapTotal.toLocaleString()} records` : ""}`}>
+      <Panel title={`Activity Heatmap — Trips by Hour & Day${hasData ? ` · ${heatmapTotal.toLocaleString()} records` : ""}`}>
         {heatmapLoading ? (
           /* Loading state */
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, padding: "40px 0", color: "#94A3B8" }}>
@@ -874,7 +834,7 @@ function ActivityTab({ users }) {
                   <div style={{ flex: 1, height: 18, background: "#F1F5F9", borderRadius: 4, overflow: "hidden" }}>
                     <div style={{
                       width: `${pct}%`, height: "100%", borderRadius: 4,
-                      background: isTop ? (CAT_COLORS[catFilter] ?? "#2563EB") : "#BFDBFE",
+                      background: isTop ? "#2563EB" : "#BFDBFE",
                       transition: "width .4s ease",
                     }} />
                   </div>
@@ -889,82 +849,26 @@ function ActivityTab({ users }) {
         </Panel>
 
         {/* Route popularity by category */}
-        <Panel title={`Route Popularity${catFilter !== "All" ? ` — ${catFilter}` : " by Category"}`}>
+        <Panel title="Route Popularity">
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {[].map(route => {
-              const total = catFilter === "All"
-                ? Object.entries(route).filter(([k]) => k !== "route").reduce((s, [, v]) => s + v, 0)
-                : (route[catFilter] ?? 0);
-
+              const total = Object.entries(route)
+                .filter(([k]) => k !== "route")
+                .reduce((s, [, v]) => s + v, 0);
               return (
                 <div key={route.route}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
                     <span style={{ fontSize: 12, fontWeight: 600, color: "#0F172A" }}>{route.route}</span>
                     <span style={{ fontSize: 11, color: "#64748B" }}>{total} trips</span>
                   </div>
-
-                  {catFilter === "All" ? (
-                    /* Stacked bar */
-                    <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden", background: "#F1F5F9" }}>
-                      {Object.entries(CAT_COLORS).map(([cat, color]) => {
-                        const v = route[cat] ?? 0;
-                        const w = catMaxRoute > 0 ? (v / catMaxRoute) * 100 : 0;
-                        return w > 0 ? (
-                          <div key={cat} title={`${cat}: ${v}`} style={{ width: `${w}%`, height: "100%", background: color, flexShrink: 0 }} />
-                        ) : null;
-                      })}
-                    </div>
-                  ) : (
-                    /* Single category bar */
-                    <div style={{ height: 12, background: "#F1F5F9", borderRadius: 6, overflow: "hidden" }}>
-                      <div style={{
-                        width: `${catMaxRoute > 0 ? (total / catMaxRoute) * 100 : 0}%`,
-                        height: "100%", borderRadius: 6,
-                        background: CAT_COLORS[catFilter],
-                        transition: "width .4s ease",
-                      }} />
-                    </div>
-                  )}
-
-                  {/* Category breakdown legend (All only) */}
-                  {catFilter === "All" && (
-                    <div style={{ display: "flex", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
-                      {Object.entries(CAT_COLORS).map(([cat, color]) => (
-                        <div key={cat} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                          <div style={{ width: 8, height: 8, borderRadius: 2, background: color }} />
-                          <span style={{ fontSize: 9, color: "#64748B" }}>{cat.replace("Senior Citizen", "Senior")}: {route[cat] ?? 0}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <div style={{ height: 12, background: "#F1F5F9", borderRadius: 6, overflow: "hidden" }}>
+                    <div style={{ width: "100%", height: "100%", borderRadius: 6, background: "#2563EB" }} />
+                  </div>
                 </div>
               );
             })}
           </div>
         </Panel>
-      </div>
-
-      {/* Category summary cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-        {Object.entries(CAT_COLORS).map(([cat, color]) => {
-          const count = catCounts[cat] ?? 0;
-          const pct   = totalPass > 0 ? Math.round((count / totalPass) * 100) : 0;
-          const totalTrips = 0;
-          return (
-            <div key={cat} style={{ background: "#fff", border: "1px solid #F1F5F9", borderRadius: 14, padding: "16px 18px", boxShadow: "0 1px 3px rgba(0,0,0,.05)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                <div style={{ width: 10, height: 10, borderRadius: "50%", background: color }} />
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#0F172A" }}>{cat}</span>
-              </div>
-              <div style={{ fontSize: 26, fontWeight: 800, color, lineHeight: 1, marginBottom: 4 }}>{count}</div>
-              <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 8 }}>{pct}% of passengers</div>
-              <div style={{ height: 5, background: "#F1F5F9", borderRadius: 3, overflow: "hidden" }}>
-                <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 3 }} />
-              </div>
-              <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 6 }}>{totalTrips} trips recorded</div>
-            </div>
-          );
-        })}
       </div>
     </div>
   );
@@ -1044,7 +948,7 @@ export default function UsersPage() {
       setUsers(prev => [...prev, {
         id: created?.data?.user_id ?? Date.now(),
         ...form, joined: new Date().toISOString().split("T")[0],
-        trips: 0, nationalId: null, category: "Regular", phone: null, photo: null,
+        trips: 0, nationalId: null, birthDate: null, phone: null, photo: null,
       }]);
     }
     setModalOpen(false);
@@ -1087,11 +991,8 @@ export default function UsersPage() {
       },
     },
     {
-      key: "category", label: "Category",
-      render: v => {
-        const s = CAT_STYLE[v] || { bg: "#F1F5F9", color: "#64748B" };
-        return <span style={{ background: s.bg, color: s.color, fontSize: 10, fontWeight: 600, padding: "3px 9px", borderRadius: 20 }}>{v ?? "Regular"}</span>;
-      },
+      key: "birthDate", label: "Date of Birth",
+      render: v => <span style={{ fontSize: 12, color: "#334155" }}>{v ?? "—"}</span>,
     },
     {
       key: "nationalId", label: "National ID",
@@ -1195,9 +1096,8 @@ export default function UsersPage() {
             </div>
           ))}
           {[
-            { label: "Role",     key: "role",     options: ROLES },
-            { label: "Category", key: "category", options: CATEGORIES },
-            { label: "Status",   key: "status",   options: ["Active", "Inactive"] },
+            { label: "Role",   key: "role",   options: ROLES },
+            { label: "Status", key: "status", options: ["Active", "Inactive"] },
           ].map(f => (
             <div key={f.key} style={{ marginBottom: 14 }}>
               <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 }}>{f.label}</label>

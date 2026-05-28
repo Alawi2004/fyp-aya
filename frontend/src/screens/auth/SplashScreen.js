@@ -26,7 +26,7 @@ const SplashScreen = ({ navigation }) => {
         <Ionicons name="bus" size={64} color={COLORS.white} />
       </Animated.View>
       <Animated.View style={{ opacity }}>
-        <Text style={styles.title}>BusApp</Text>
+        <Text style={styles.title}>Yalla Transit</Text>
         <Text style={styles.subtitle}>Smart Bus Booking & Tracking</Text>
       </Animated.View>
     </View>

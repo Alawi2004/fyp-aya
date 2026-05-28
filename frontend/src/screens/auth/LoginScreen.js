@@ -12,11 +12,12 @@ import { useAuth } from '../../context/AuthContext';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { COLORS } from '../../constants/colors';
+import { sendOtpApi } from '../../api/authApi';
 
 const LoginScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const {
-    login, loginWithPhone, biometricLogin,
+    verifyCredentials, login, biometricLogin,
     isBiometricEnabled, setBiometricEnabled,
     getBiometricPreferredType, setBiometricPreferredType,
   } = useAuth();
@@ -24,11 +25,7 @@ const LoginScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
-  // Passenger fields
-  const [phone, setPhone] = useState('');
-  const [pin, setPin] = useState('');
-
-  // Driver fields
+  // Shared fields (both passenger and driver now use email + password)
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -68,15 +65,7 @@ const LoginScreen = ({ navigation }) => {
     } catch (_) {}
   };
 
-  const validatePassenger = () => {
-    const e = {};
-    if (!phone || phone.replace(/\D/g, '').length < 8) e.phone = 'Enter a valid phone number';
-    if (!pin || pin.length < 4) e.pin = 'PIN must be at least 4 digits';
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const validateDriver = () => {
+  const validateForm = () => {
     const e = {};
     if (!email) e.email = 'Email is required';
     else if (!/\S+@\S+\.\S+/.test(email)) e.email = 'Invalid email address';
@@ -132,15 +121,24 @@ const LoginScreen = ({ navigation }) => {
   };
 
   const handleLogin = async () => {
-    if (isPassenger ? !validatePassenger() : !validateDriver()) return;
+    if (!validateForm()) return;
     setLoading(true);
     try {
       if (isPassenger) {
-        await loginWithPhone(phone, pin, 'passenger');
+        // Verify credentials first, then send OTP, then go to OTP screen
+        const authData = await verifyCredentials(email, password, 'passenger');
+        const otpRes = await sendOtpApi(email, 'login_verify');
+        const devCode = otpRes.data?.dev_code ?? null;
+        navigation.navigate('OtpVerify', {
+          email,
+          purpose: 'login_verify',
+          devCode,
+          authData,
+        });
       } else {
         await login(email, password, 'driver');
+        await offerBiometricSetup();
       }
-      await offerBiometricSetup();
     } catch (err) {
       Alert.alert('Login Failed', err.response?.data?.message || 'Check your credentials and try again.');
     } finally {
@@ -151,7 +149,7 @@ const LoginScreen = ({ navigation }) => {
   const handleBiometricLogin = async () => {
     if (!LocalAuthentication) return;
     const label     = biometricType === 'face' ? 'Face ID' : biometricType === 'fingerprint' ? 'Fingerprint' : 'Biometrics';
-    const credLabel = isPassenger ? 'PIN' : 'password';
+    const credLabel = 'password';
     setLoading(true);
     try {
       // 1. Prompt biometric hardware
@@ -192,14 +190,6 @@ const LoginScreen = ({ navigation }) => {
     }
   };
 
-  const handleForgotPin = () => {
-    if (!phone || phone.replace(/\D/g, '').length < 8) {
-      Alert.alert('Enter Phone First', 'Please enter your phone number so we can send an OTP.');
-      return;
-    }
-    navigation.navigate('OtpVerify', { phone, purpose: 'reset_pin' });
-  };
-
   const biometricIcon = biometricType === 'face' ? 'scan-outline' : 'finger-print-outline';
   const biometricLabel = biometricType === 'face' ? 'Face ID' : biometricType === 'fingerprint' ? 'Fingerprint' : 'Biometrics';
 
@@ -217,7 +207,7 @@ const LoginScreen = ({ navigation }) => {
             <View style={styles.logoCircle}>
               <Ionicons name="bus" size={44} color={COLORS.primary} />
             </View>
-            <Text style={styles.appName}>BusApp</Text>
+            <Text style={styles.appName}>Yalla Transit</Text>
             <Text style={styles.appTagline}>Smart Bus Booking & Tracking</Text>
           </View>
 
@@ -254,128 +244,75 @@ const LoginScreen = ({ navigation }) => {
               })}
             </View>
 
-            {/* Passenger: phone + PIN + biometric */}
-            {isPassenger ? (
-              <>
-                {/* Biometric button (shown only when enabled and hardware available) */}
-                {biometricAvailable && biometricEnabled && (
-                  <View style={styles.biometricWrap}>
-                    <TouchableOpacity
-                      style={styles.biometricBtn}
-                      onPress={handleBiometricLogin}
-                      activeOpacity={0.8}
-                    >
-                      <View style={styles.biometricIconWrap}>
-                        <Ionicons name={biometricIcon} size={28} color={COLORS.primary} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.biometricLabel}>Sign in with {biometricLabel}</Text>
-                        <Text style={styles.biometricSub}>Touch to authenticate</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
-                    </TouchableOpacity>
-                    {supportsBothTypes && (
-                      <TouchableOpacity style={styles.switchTypeBtn} onPress={handleSwitchBiometricType}>
-                        <Ionicons
-                          name={biometricType === 'face' ? 'finger-print-outline' : 'scan-outline'}
-                          size={13}
-                          color={COLORS.primary}
-                        />
-                        <Text style={styles.switchTypeText}>
-                          Use {biometricType === 'face' ? 'Fingerprint' : 'Face ID'} instead
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                )}
-
-                <Input
-                  label="Phone Number"
-                  value={phone}
-                  onChangeText={setPhone}
-                  placeholder="+974 5555 1234"
-                  keyboardType="phone-pad"
-                  error={errors.phone}
-                  icon={<Ionicons name="call-outline" size={18} color={COLORS.textMuted} />}
-                />
-                <Input
-                  label="PIN"
-                  value={pin}
-                  onChangeText={(v) => setPin(v.replace(/[^0-9]/g, '').slice(0, 6))}
-                  placeholder="Enter your PIN"
-                  keyboardType="number-pad"
-                  secureTextEntry
-                  error={errors.pin}
-                  icon={<Ionicons name="keypad-outline" size={18} color={COLORS.textMuted} />}
-                />
-                <TouchableOpacity onPress={handleForgotPin} style={styles.forgotWrap}>
-                  <Text style={[styles.forgotText, { color: COLORS.primary }]}>Forgot PIN?</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              /* Driver: email + password + biometric */
-              <>
-                {biometricAvailable && biometricEnabled && (
-                  <View style={styles.biometricWrap}>
-                    <TouchableOpacity
-                      style={[styles.biometricBtn, { borderColor: COLORS.warningMid, backgroundColor: COLORS.warningLight }]}
-                      onPress={handleBiometricLogin}
-                      activeOpacity={0.8}
-                    >
-                      <View style={styles.biometricIconWrap}>
-                        <Ionicons name={biometricIcon} size={28} color={COLORS.driverPrimary} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.biometricLabel, { color: COLORS.driverPrimary }]}>
-                          Sign in with {biometricLabel}
-                        </Text>
-                        <Text style={styles.biometricSub}>Touch to authenticate</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
-                    </TouchableOpacity>
-                    {supportsBothTypes && (
-                      <TouchableOpacity style={styles.switchTypeBtn} onPress={handleSwitchBiometricType}>
-                        <Ionicons
-                          name={biometricType === 'face' ? 'finger-print-outline' : 'scan-outline'}
-                          size={13}
-                          color={COLORS.driverPrimary}
-                        />
-                        <Text style={[styles.switchTypeText, { color: COLORS.driverPrimary }]}>
-                          Use {biometricType === 'face' ? 'Fingerprint' : 'Face ID'} instead
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                )}
-
-                <Input
-                  label="Email Address"
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="your@email.com"
-                  keyboardType="email-address"
-                  error={errors.email}
-                  icon={<Ionicons name="mail-outline" size={18} color={COLORS.textMuted} />}
-                />
-                <Input
-                  label="Password"
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Enter your password"
-                  secureTextEntry
-                  error={errors.password}
-                  icon={<Ionicons name="lock-closed-outline" size={18} color={COLORS.textMuted} />}
-                />
+            {/* Biometric button (shown only when enabled and hardware available) */}
+            {biometricAvailable && biometricEnabled && (
+              <View style={styles.biometricWrap}>
                 <TouchableOpacity
-                  onPress={() => navigation.navigate('ForgotPassword')}
-                  style={styles.forgotWrap}
+                  style={[
+                    styles.biometricBtn,
+                    !isPassenger && { borderColor: COLORS.warningMid, backgroundColor: COLORS.warningLight },
+                  ]}
+                  onPress={handleBiometricLogin}
+                  activeOpacity={0.8}
                 >
-                  <Text style={[styles.forgotText, { color: COLORS.driverPrimary }]}>
-                    Forgot Password?
-                  </Text>
+                  <View style={styles.biometricIconWrap}>
+                    <Ionicons
+                      name={biometricIcon}
+                      size={28}
+                      color={isPassenger ? COLORS.primary : COLORS.driverPrimary}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.biometricLabel, !isPassenger && { color: COLORS.driverPrimary }]}>
+                      Sign in with {biometricLabel}
+                    </Text>
+                    <Text style={styles.biometricSub}>Touch to authenticate</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
                 </TouchableOpacity>
-              </>
+                {supportsBothTypes && (
+                  <TouchableOpacity style={styles.switchTypeBtn} onPress={handleSwitchBiometricType}>
+                    <Ionicons
+                      name={biometricType === 'face' ? 'finger-print-outline' : 'scan-outline'}
+                      size={13}
+                      color={isPassenger ? COLORS.primary : COLORS.driverPrimary}
+                    />
+                    <Text style={[styles.switchTypeText, !isPassenger && { color: COLORS.driverPrimary }]}>
+                      Use {biometricType === 'face' ? 'Fingerprint' : 'Face ID'} instead
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
+
+            {/* Email + password (shared for both passenger and driver) */}
+            <Input
+              label="Email Address"
+              value={email}
+              onChangeText={setEmail}
+              placeholder="your@email.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              error={errors.email}
+              icon={<Ionicons name="mail-outline" size={18} color={COLORS.textMuted} />}
+            />
+            <Input
+              label="Password"
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Enter your password"
+              secureTextEntry
+              error={errors.password}
+              icon={<Ionicons name="lock-closed-outline" size={18} color={COLORS.textMuted} />}
+            />
+            <TouchableOpacity
+              onPress={() => navigation.navigate('ForgotPassword')}
+              style={styles.forgotWrap}
+            >
+              <Text style={[styles.forgotText, { color: isPassenger ? COLORS.primary : COLORS.driverPrimary }]}>
+                Forgot Password?
+              </Text>
+            </TouchableOpacity>
 
             <Button
               title={`Sign In as ${isPassenger ? 'Passenger' : 'Driver'}`}

@@ -1,120 +1,102 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  KeyboardAvoidingView, Platform, StatusBar,
+  KeyboardAvoidingView, Platform, StatusBar, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import { COLORS } from '../../constants/colors';
+import { sendOtpApi } from '../../api/authApi';
 
-const CATEGORIES = [
-  {
-    key: 'regular',
-    label: 'Regular',
-    icon: 'person-outline',
-    color: COLORS.primary,
-    bg: COLORS.primaryLight,
-    discount: 'Full fare',
-  },
-  {
-    key: 'student',
-    label: 'Student',
-    icon: 'school-outline',
-    color: '#7C3AED',
-    bg: '#F5F3FF',
-    discount: '30% off',
-  },
-  {
-    key: 'senior',
-    label: 'Senior (60+)',
-    icon: 'walk-outline',
-    color: COLORS.secondary,
-    bg: COLORS.secondaryLight,
-    discount: '50% off',
-  },
-  {
-    key: 'employee',
-    label: 'Employee',
-    icon: 'briefcase-outline',
-    color: COLORS.warning,
-    bg: COLORS.warningLight,
-    discount: '25% off',
-  },
-  {
-    key: 'school_child',
-    label: 'School Child',
-    icon: 'bus-outline',
-    color: '#EA580C',
-    bg: '#FFF7ED',
-    discount: '50% off',
-  },
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-const CategoryCard = ({ item, selected, onPress }) => (
-  <TouchableOpacity
-    style={[
-      styles.catCard,
-      selected && { borderColor: item.color, backgroundColor: item.bg },
-    ]}
-    onPress={onPress}
-    activeOpacity={0.75}
-  >
-    <View style={[styles.catIconWrap, { backgroundColor: selected ? item.color : COLORS.surfaceAlt }]}>
-      <Ionicons name={item.icon} size={18} color={selected ? COLORS.white : COLORS.textMuted} />
-    </View>
-    <Text style={[styles.catLabel, selected && { color: item.color }]}>{item.label}</Text>
-    <Text style={[styles.catDiscount, selected && { color: item.color }]}>{item.discount}</Text>
-    {selected && (
-      <View style={[styles.catCheck, { backgroundColor: item.color }]}>
-        <Ionicons name="checkmark" size={10} color={COLORS.white} />
-      </View>
-    )}
-  </TouchableOpacity>
-);
+const currentYear = new Date().getFullYear();
+const YEARS = Array.from({ length: 100 }, (_, i) => String(currentYear - i));
 
 const PassengerRegisterScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const [form, setForm] = useState({ name: '', phone: '', pin: '', confirmPin: '' });
-  const [category, setCategory] = useState('regular');
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    password: '',
+    confirmPassword: '',
+    birthDay: '',
+    birthMonth: '',
+    birthYear: '',
+  });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [showYearPicker, setShowYearPicker] = useState(false);
 
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
   const validate = () => {
     const e = {};
     if (!form.name.trim()) e.name = 'Full name is required';
+
+    if (!form.email || !/\S+@\S+\.\S+/.test(form.email))
+      e.email = 'Enter a valid email address';
+
     if (!form.phone || form.phone.replace(/\D/g, '').length < 8)
       e.phone = 'Enter a valid phone number';
-    if (!form.pin || form.pin.length < 4) e.pin = 'PIN must be 4–6 digits';
-    if (!/^\d+$/.test(form.pin)) e.pin = 'PIN must contain only numbers';
-    if (form.pin !== form.confirmPin) e.confirmPin = 'PINs do not match';
+
+    if (!form.password || form.password.length < 8)
+      e.password = 'Password must be at least 8 characters';
+    else if (!/[A-Z]/.test(form.password))
+      e.password = 'Password must contain at least one uppercase letter';
+    else if (!/[0-9]/.test(form.password))
+      e.password = 'Password must contain at least one digit';
+    else if (!/[^A-Za-z0-9]/.test(form.password))
+      e.password = 'Password must contain at least one special character';
+
+    if (!form.confirmPassword) e.confirmPassword = 'Please confirm your password';
+    else if (form.password !== form.confirmPassword) e.confirmPassword = 'Passwords do not match';
+
+    if (!form.birthDay || isNaN(Number(form.birthDay)) || Number(form.birthDay) < 1 || Number(form.birthDay) > 31)
+      e.birthDay = 'Enter a valid day (1–31)';
+    if (!form.birthMonth) e.birthMonth = 'Select a month';
+    if (!form.birthYear) e.birthYear = 'Select a year';
+
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
     if (!validate()) return;
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const monthIndex = MONTHS.indexOf(form.birthMonth) + 1;
+      const birthDate = `${form.birthYear}-${String(monthIndex).padStart(2, '0')}-${String(form.birthDay).padStart(2, '0')}`;
+
+      const res = await sendOtpApi(form.email, 'register');
+      const devCode = res.data?.dev_code ?? null; // pre-fill in dev mode
+
       navigation.navigate('OtpVerify', {
-        phone: form.phone,
+        email: form.email,
         purpose: 'register',
+        devCode,
         userData: {
           name: form.name,
+          email: form.email,
           phone: form.phone,
-          pin: form.pin,
-          category,
+          password: form.password,
+          birth_date: birthDate,
           role: 'passenger',
         },
       });
-    }, 400);
+    } catch (err) {
+      Alert.alert('Error', err.response?.data?.error || 'Could not send verification code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
-
-  const selectedCat = CATEGORIES.find((c) => c.key === category);
 
   return (
     <View style={styles.root}>
@@ -142,14 +124,14 @@ const PassengerRegisterScreen = ({ navigation }) => {
               <Ionicons name="person-add-outline" size={36} color={COLORS.primary} />
             </View>
             <Text style={styles.heroTitle}>Create Account</Text>
-            <Text style={styles.heroSub}>Join BusApp as a Passenger</Text>
+            <Text style={styles.heroSub}>Join Yalla Transit as a Passenger</Text>
           </View>
 
           {/* Form sheet */}
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>Your Details</Text>
             <Text style={styles.sheetSubtitle}>
-              We'll send an OTP to verify your phone number
+              We'll send a verification code to your email
             </Text>
 
             <Input
@@ -160,6 +142,18 @@ const PassengerRegisterScreen = ({ navigation }) => {
               error={errors.name}
               icon={<Ionicons name="person-outline" size={18} color={COLORS.textMuted} />}
             />
+
+            <Input
+              label="Email Address"
+              value={form.email}
+              onChangeText={(v) => set('email', v)}
+              placeholder="your@email.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              error={errors.email}
+              icon={<Ionicons name="mail-outline" size={18} color={COLORS.textMuted} />}
+            />
+
             <Input
               label="Phone Number"
               value={form.phone}
@@ -170,68 +164,120 @@ const PassengerRegisterScreen = ({ navigation }) => {
               icon={<Ionicons name="call-outline" size={18} color={COLORS.textMuted} />}
             />
 
-            {/* Passenger Category */}
-            <View style={styles.catSection}>
-              <Text style={styles.catSectionLabel}>Passenger Category</Text>
-              <Text style={styles.catSectionSub}>
-                Your category determines your fare discount. You'll need a valid ID to claim it.
-              </Text>
-              <View style={styles.catGrid}>
-                {CATEGORIES.map((item) => (
-                  <CategoryCard
-                    key={item.key}
-                    item={item}
-                    selected={category === item.key}
-                    onPress={() => setCategory(item.key)}
-                  />
-                ))}
-              </View>
-              {selectedCat && (
-                <View style={[styles.discountBanner, { backgroundColor: selectedCat.bg }]}>
-                  <Ionicons name="pricetag-outline" size={14} color={selectedCat.color} />
-                  <Text style={[styles.discountText, { color: selectedCat.color }]}>
-                    {selectedCat.label} passengers receive{' '}
-                    <Text style={{ fontWeight: '800' }}>{selectedCat.discount}</Text>{' '}
-                    on all rides.
-                  </Text>
-                </View>
-              )}
-            </View>
+            <Input
+              label="Password"
+              value={form.password}
+              onChangeText={(v) => set('password', v)}
+              placeholder="Min 8 chars, uppercase, number, symbol"
+              secureTextEntry
+              error={errors.password}
+              icon={<Ionicons name="lock-closed-outline" size={18} color={COLORS.textMuted} />}
+            />
 
             <Input
-              label="Set PIN (4–6 digits)"
-              value={form.pin}
-              onChangeText={(v) => set('pin', v.replace(/[^0-9]/g, '').slice(0, 6))}
-              placeholder="Choose a numeric PIN"
-              keyboardType="number-pad"
+              label="Confirm Password"
+              value={form.confirmPassword}
+              onChangeText={(v) => set('confirmPassword', v)}
+              placeholder="Repeat your password"
               secureTextEntry
-              error={errors.pin}
-              icon={<Ionicons name="keypad-outline" size={18} color={COLORS.textMuted} />}
-            />
-            <Input
-              label="Confirm PIN"
-              value={form.confirmPin}
-              onChangeText={(v) => set('confirmPin', v.replace(/[^0-9]/g, '').slice(0, 6))}
-              placeholder="Repeat your PIN"
-              keyboardType="number-pad"
-              secureTextEntry
-              error={errors.confirmPin}
+              error={errors.confirmPassword}
               icon={<Ionicons name="shield-checkmark-outline" size={18} color={COLORS.textMuted} />}
             />
 
-            <View style={styles.pinNote}>
-              <Ionicons name="information-circle-outline" size={15} color={COLORS.primary} />
-              <Text style={styles.pinNoteText}>
-                Your PIN is used instead of a password for fast daily login.
-              </Text>
+            {/* Birthday section */}
+            <Text style={styles.sectionLabel}>Date of Birth</Text>
+
+            <View style={styles.birthdayRow}>
+              {/* Day */}
+              <View style={[styles.birthdayField, { flex: 1 }]}>
+                <Input
+                  label="Day"
+                  value={form.birthDay}
+                  onChangeText={(v) => set('birthDay', v.replace(/[^0-9]/g, '').slice(0, 2))}
+                  placeholder="DD"
+                  keyboardType="number-pad"
+                  error={errors.birthDay}
+                  icon={null}
+                />
+              </View>
+
+              {/* Month */}
+              <View style={[styles.birthdayField, { flex: 2 }]}>
+                <Text style={styles.fieldLabel}>Month</Text>
+                <TouchableOpacity
+                  style={[styles.pickerBtn, errors.birthMonth && styles.pickerBtnError]}
+                  onPress={() => { setShowMonthPicker(true); setShowYearPicker(false); }}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.pickerBtnText, !form.birthMonth && styles.pickerBtnPlaceholder]}>
+                    {form.birthMonth || 'Month'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={15} color={COLORS.textMuted} />
+                </TouchableOpacity>
+                {errors.birthMonth ? <Text style={styles.errorText}>{errors.birthMonth}</Text> : null}
+              </View>
+
+              {/* Year */}
+              <View style={[styles.birthdayField, { flex: 1.5 }]}>
+                <Text style={styles.fieldLabel}>Year</Text>
+                <TouchableOpacity
+                  style={[styles.pickerBtn, errors.birthYear && styles.pickerBtnError]}
+                  onPress={() => { setShowYearPicker(true); setShowMonthPicker(false); }}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.pickerBtnText, !form.birthYear && styles.pickerBtnPlaceholder]}>
+                    {form.birthYear || 'Year'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={15} color={COLORS.textMuted} />
+                </TouchableOpacity>
+                {errors.birthYear ? <Text style={styles.errorText}>{errors.birthYear}</Text> : null}
+              </View>
             </View>
+
+            {/* Month picker dropdown */}
+            {showMonthPicker && (
+              <View style={styles.dropdownList}>
+                <ScrollView nestedScrollEnabled style={{ maxHeight: 200 }}>
+                  {MONTHS.map((m) => (
+                    <TouchableOpacity
+                      key={m}
+                      style={[styles.dropdownItem, form.birthMonth === m && styles.dropdownItemActive]}
+                      onPress={() => { set('birthMonth', m); setShowMonthPicker(false); }}
+                    >
+                      <Text style={[styles.dropdownItemText, form.birthMonth === m && styles.dropdownItemTextActive]}>
+                        {m}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Year picker dropdown */}
+            {showYearPicker && (
+              <View style={styles.dropdownList}>
+                <ScrollView nestedScrollEnabled style={{ maxHeight: 200 }}>
+                  {YEARS.map((y) => (
+                    <TouchableOpacity
+                      key={y}
+                      style={[styles.dropdownItem, form.birthYear === y && styles.dropdownItemActive]}
+                      onPress={() => { set('birthYear', y); setShowYearPicker(false); }}
+                    >
+                      <Text style={[styles.dropdownItemText, form.birthYear === y && styles.dropdownItemTextActive]}>
+                        {y}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
 
             <Button
               title="Send Verification Code"
               onPress={handleSendOtp}
               loading={loading}
               size="lg"
-              style={{ marginTop: 16 }}
+              style={{ marginTop: 20 }}
             />
 
             <View style={styles.loginRow}>
@@ -293,87 +339,67 @@ const styles = StyleSheet.create({
   sheetTitle: { fontSize: 22, fontWeight: '800', color: COLORS.textPrimary, marginBottom: 4 },
   sheetSubtitle: { fontSize: 14, color: COLORS.textSecondary, marginBottom: 24, lineHeight: 20 },
 
-  /* Category */
-  catSection: { marginBottom: 20 },
-  catSectionLabel: {
+  sectionLabel: {
     fontSize: 13,
     fontWeight: '700',
     color: COLORS.textPrimary,
-    marginBottom: 4,
-  },
-  catSectionSub: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginBottom: 14,
-    lineHeight: 18,
-  },
-  catGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 12,
-  },
-  catCard: {
-    width: '30%',
-    flexGrow: 1,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.background,
-    padding: 12,
-    alignItems: 'center',
-    gap: 6,
-    position: 'relative',
-  },
-  catIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  catLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    textAlign: 'center',
-  },
-  catDiscount: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.textMuted,
-    textAlign: 'center',
-  },
-  catCheck: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  discountBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderRadius: 10,
-    padding: 10,
-  },
-  discountText: { flex: 1, fontSize: 12, lineHeight: 18 },
-
-  /* PIN */
-  pinNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: 10,
-    padding: 12,
+    marginBottom: 10,
     marginTop: 4,
   },
-  pinNoteText: { flex: 1, fontSize: 12, color: COLORS.primary, lineHeight: 18 },
+
+  birthdayRow: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
+  birthdayField: {},
+
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginBottom: 6,
+  },
+  pickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 13,
+    backgroundColor: COLORS.background,
+    minHeight: 48,
+  },
+  pickerBtnError: { borderColor: COLORS.error ?? '#EF4444' },
+  pickerBtnText: { fontSize: 14, color: COLORS.textPrimary, flex: 1 },
+  pickerBtnPlaceholder: { color: COLORS.textMuted },
+
+  dropdownList: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  dropdownItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.background,
+  },
+  dropdownItemActive: { backgroundColor: COLORS.primaryLight },
+  dropdownItemText: { fontSize: 14, color: COLORS.textPrimary },
+  dropdownItemTextActive: { color: COLORS.primary, fontWeight: '700' },
+
+  errorText: { fontSize: 12, color: COLORS.error ?? '#EF4444', marginTop: 4 },
 
   loginRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 22 },
   loginText: { fontSize: 14, color: COLORS.textSecondary },

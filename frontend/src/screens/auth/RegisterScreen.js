@@ -71,7 +71,7 @@ const RegisterScreen = ({ navigation }) => {
               <Ionicons name="bus" size={36} color={COLORS.primary} />
             </View>
             <Text style={styles.appName}>Create Account</Text>
-            <Text style={styles.appTagline}>Join BusApp today</Text>
+            <Text style={styles.appTagline}>Join Yalla Transit today</Text>
           </View>
 
           {/* ── Form Sheet ── */}

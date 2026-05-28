@@ -72,6 +72,31 @@ export async function sendScheduledReport(recipients, reportType, reportName, ro
   });
 }
 
+export async function sendOTPEmail(toEmail, code) {
+  const transporter = getTransporter();
+  await transporter.sendMail({
+    from: `"Yalla Transit" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
+    to: toEmail,
+    subject: `${code} — Your Yalla Transit verification code`,
+    text: `Your verification code is: ${code}\n\nThis code expires in 10 minutes. Do not share it with anyone.`,
+    html: `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:auto;background:#fff;border-radius:14px;overflow:hidden;border:1px solid #E2E8F0">
+        <div style="background:linear-gradient(135deg,#1E3A8A,#2563EB);padding:28px 32px;text-align:center">
+          <div style="font-size:13px;color:rgba(255,255,255,.7);margin-bottom:6px">Yalla Transit</div>
+          <div style="font-size:22px;font-weight:700;color:#fff">Email Verification</div>
+        </div>
+        <div style="padding:32px;text-align:center">
+          <p style="color:#475569;font-size:15px;margin:0 0 24px">Use the code below to verify your account. It expires in <strong>10 minutes</strong>.</p>
+          <div style="display:inline-block;background:#F1F5F9;border-radius:12px;padding:18px 36px;margin-bottom:24px">
+            <span style="font-size:40px;font-weight:800;letter-spacing:8px;color:#1E3A8A;font-family:monospace">${code}</span>
+          </div>
+          <p style="color:#94A3B8;font-size:13px;margin:0">If you did not request this, you can safely ignore this email.</p>
+        </div>
+      </div>
+    `,
+  });
+}
+
 export async function sendPasswordResetEmail(toEmail, resetUrl) {
   const transporter = getTransporter();
   await transporter.sendMail({

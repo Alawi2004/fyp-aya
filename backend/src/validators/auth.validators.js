@@ -33,6 +33,14 @@ export const registerSchema = z.object({
     .or(z.literal(""))        // allow empty string — treated as absent
     .transform(v => v || undefined),
 
+  birth_date: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "birth_date must be in YYYY-MM-DD format")
+    .optional()
+    .or(z.literal(""))
+    .transform(v => v || undefined),
+
   // Passengers self-register; staff/admin are created by admins only.
   // z.literal ensures any value other than "passenger" is rejected outright.
   role: z.literal("passenger").default("passenger"),
@@ -67,4 +75,14 @@ export const resetPasswordSchema = z.object({
 
 export const disable2faSchema = z.object({
   totp_code: z.string().length(6, "TOTP code must be 6 digits").regex(/^\d+$/, "TOTP code must be numeric"),
+});
+
+export const sendOtpSchema = z.object({
+  email:   z.string().trim().email("Invalid email").toLowerCase(),
+  purpose: z.enum(["register", "login_verify"]).optional(),
+});
+
+export const verifyOtpSchema = z.object({
+  email: z.string().trim().email("Invalid email").toLowerCase(),
+  code:  z.string().length(6, "Code must be 6 digits").regex(/^\d+$/, "Code must be numeric"),
 });

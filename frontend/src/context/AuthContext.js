@@ -70,7 +70,7 @@ export const AuthProvider = ({ children }) => {
     return res.data; // { user, access_token }
   };
 
-  // ── login (driver — email + password) ────────────────────────────────────
+  // ── login (email + password for any role) ────────────────────────────────
   const login = async (email, password, userRole) => {
     if (FRONTEND_ONLY) {
       const mockUser = userRole === 'driver' ? MOCK_DRIVER : MOCK_PASSENGER;
@@ -83,7 +83,25 @@ export const AuthProvider = ({ children }) => {
     return userData;
   };
 
-  // ── loginWithPhone (passenger — email + password or phone lookup) ─────────
+  // ── verifyCredentials — checks credentials without saving session ─────────
+  // Used for the login-OTP flow: verify creds first, navigate to OTP, then finalizeLogin
+  const verifyCredentials = async (email, password, userRole) => {
+    if (FRONTEND_ONLY) {
+      const mockUser = userRole === 'driver' ? MOCK_DRIVER : MOCK_PASSENGER;
+      return { userData: mockUser, accessToken: 'mock-token', userRole };
+    }
+    const { user: rawUser, access_token } = await _apiLogin(email, password);
+    const userData = normaliseUser(rawUser);
+    return { userData, accessToken: access_token, userRole: rawUser.role ?? userRole };
+  };
+
+  // ── finalizeLogin — saves session after OTP verification ─────────────────
+  const finalizeLogin = async (userRole, userData, accessToken) => {
+    await _saveSession(userRole, userData, accessToken);
+    return userData;
+  };
+
+  // ── loginWithPhone — kept for backwards compatibility ─────────────────────
   const loginWithPhone = async (phone, pin, userRole, extraData = {}) => {
     if (FRONTEND_ONLY) {
       const mockUser = {
@@ -96,8 +114,6 @@ export const AuthProvider = ({ children }) => {
       await _saveSession(userRole, mockUser, 'mock-token');
       return mockUser;
     }
-    // Real backend: treat phone as email fallback; PIN as password
-    // Passengers registered with email — try phone-based lookup first, fall back to email
     const { user: rawUser, access_token } = await _apiLogin(phone, pin);
     const userData = normaliseUser(rawUser);
     await _saveSession(rawUser.role ?? userRole, userData, access_token);
@@ -159,9 +175,17 @@ export const AuthProvider = ({ children }) => {
   const register = async (data, userRole) => {
     if (!FRONTEND_ONLY) {
       await axios.post(`${BASE_URL}/auth/register`, {
-        full_name: data.name, email: data.email,
-        password: data.password, phone: data.phone ?? null,
+        full_name: data.name,
+        email: data.email,
+        password: data.password,
+        phone: data.phone ?? null,
+        birth_date: data.birth_date ?? null,
       }, { timeout: 15000 });
+      // After registration, log in to get tokens
+      const { user: rawUser, access_token } = await _apiLogin(data.email, data.password);
+      const userData = normaliseUser(rawUser);
+      await _saveSession(rawUser.role ?? userRole ?? 'passenger', userData, access_token);
+      return userData;
     }
     const mockUser = normaliseUser({
       user_id: Date.now(), full_name: data.name,
@@ -182,7 +206,7 @@ export const AuthProvider = ({ children }) => {
   return (
     <AuthContext.Provider value={{
       user, token, role, loading,
-      login, loginWithPhone, biometricLogin,
+      login, loginWithPhone, verifyCredentials, finalizeLogin, biometricLogin,
       setBiometricEnabled, isBiometricEnabled,
       getBiometricPreferredType, setBiometricPreferredType,
       register, logout, setUser,

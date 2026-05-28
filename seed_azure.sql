@@ -137,7 +137,6 @@ WHEN MATCHED THEN UPDATE SET
 
 -- ─────────────────────────────────────────────────────────────
 -- 4. USERS
--- category CHECK: 'regular'|'student'|'senior'|'employee'|'school_child'
 -- Passwords (bcrypt 10 rounds):
 --   Admin@123  = $2b$10$eG/v0ScZnqUGry5mcjsvqO7lP2OyZNaA.jL6yPW6M2ltE7a.N/pbe
 --   Staff@123  = $2b$10$6kSHNZeRNaNTNQUXAIEbpOGzIpoWMrNtSljKvfvEt/4QCVO0qC5Ye
@@ -148,44 +147,43 @@ PRINT '4. users';
 MERGE users AS t
 USING (VALUES
   -- Admin / management (Admin@123)
-  ('Super Admin',      'superadmin@yallatransit.lb', '$2b$10$eG/v0ScZnqUGry5mcjsvqO7lP2OyZNaA.jL6yPW6M2ltE7a.N/pbe', '+961 1 100001', 'super_admin',       'employee'),
-  ('Admin User',       'admin@yallatransit.lb',      '$2b$10$eG/v0ScZnqUGry5mcjsvqO7lP2OyZNaA.jL6yPW6M2ltE7a.N/pbe', '+961 1 100002', 'admin',             'employee'),
-  ('Karim Saad',       'karim.saad@yallatransit.lb', '$2b$10$eG/v0ScZnqUGry5mcjsvqO7lP2OyZNaA.jL6yPW6M2ltE7a.N/pbe', '+961 1 100003', 'transport_manager', 'employee'),
-  ('Lara Haddad',      'lara.haddad@yallatransit.lb','$2b$10$eG/v0ScZnqUGry5mcjsvqO7lP2OyZNaA.jL6yPW6M2ltE7a.N/pbe', '+961 1 100004', 'finance_officer',   'employee'),
-  ('Nour Khalil',      'nour.khalil@yallatransit.lb','$2b$10$eG/v0ScZnqUGry5mcjsvqO7lP2OyZNaA.jL6yPW6M2ltE7a.N/pbe', '+961 1 100005', 'ops_staff',         'employee'),
-  ('Samer Azar',       'samer.azar@yallatransit.lb', '$2b$10$eG/v0ScZnqUGry5mcjsvqO7lP2OyZNaA.jL6yPW6M2ltE7a.N/pbe', '+961 1 100006', 'auditor',           'employee'),
-  ('Dina Nassar',      'dina.nassar@yallatransit.lb','$2b$10$eG/v0ScZnqUGry5mcjsvqO7lP2OyZNaA.jL6yPW6M2ltE7a.N/pbe', '+961 1 100007', 'it_admin',          'employee'),
+  ('Super Admin',      'superadmin@yallatransit.lb', '$2b$10$eG/v0ScZnqUGry5mcjsvqO7lP2OyZNaA.jL6yPW6M2ltE7a.N/pbe', '+961 1 100001', 'super_admin'),
+  ('Admin User',       'admin@yallatransit.lb',      '$2b$10$eG/v0ScZnqUGry5mcjsvqO7lP2OyZNaA.jL6yPW6M2ltE7a.N/pbe', '+961 1 100002', 'admin'),
+  ('Karim Saad',       'karim.saad@yallatransit.lb', '$2b$10$eG/v0ScZnqUGry5mcjsvqO7lP2OyZNaA.jL6yPW6M2ltE7a.N/pbe', '+961 1 100003', 'transport_manager'),
+  ('Lara Haddad',      'lara.haddad@yallatransit.lb','$2b$10$eG/v0ScZnqUGry5mcjsvqO7lP2OyZNaA.jL6yPW6M2ltE7a.N/pbe', '+961 1 100004', 'finance_officer'),
+  ('Nour Khalil',      'nour.khalil@yallatransit.lb','$2b$10$eG/v0ScZnqUGry5mcjsvqO7lP2OyZNaA.jL6yPW6M2ltE7a.N/pbe', '+961 1 100005', 'ops_staff'),
+  ('Samer Azar',       'samer.azar@yallatransit.lb', '$2b$10$eG/v0ScZnqUGry5mcjsvqO7lP2OyZNaA.jL6yPW6M2ltE7a.N/pbe', '+961 1 100006', 'auditor'),
+  ('Dina Nassar',      'dina.nassar@yallatransit.lb','$2b$10$eG/v0ScZnqUGry5mcjsvqO7lP2OyZNaA.jL6yPW6M2ltE7a.N/pbe', '+961 1 100007', 'it_admin'),
   -- Counter staff (Staff@123)
-  ('Rami Saleh',       'rami.saleh@yallatransit.lb', '$2b$10$6kSHNZeRNaNTNQUXAIEbpOGzIpoWMrNtSljKvfvEt/4QCVO0qC5Ye', '+961 1 200001', 'staff',             'employee'),
-  ('Maya Frem',        'maya.frem@yallatransit.lb',  '$2b$10$6kSHNZeRNaNTNQUXAIEbpOGzIpoWMrNtSljKvfvEt/4QCVO0qC5Ye', '+961 1 200002', 'staff',             'employee'),
+  ('Rami Saleh',       'rami.saleh@yallatransit.lb', '$2b$10$6kSHNZeRNaNTNQUXAIEbpOGzIpoWMrNtSljKvfvEt/4QCVO0qC5Ye', '+961 1 200001', 'staff'),
+  ('Maya Frem',        'maya.frem@yallatransit.lb',  '$2b$10$6kSHNZeRNaNTNQUXAIEbpOGzIpoWMrNtSljKvfvEt/4QCVO0qC5Ye', '+961 1 200002', 'staff'),
   -- Drivers (Driver@123)
-  ('Ahmad Khalil',     'ahmad.khalil@yallatransit.lb','$2b$10$Ioud0mU6hYQNDANn94R1DeO21jqBX7IiuAWJNezUU2rFyv0i1FUR2','+961 3 300001', 'driver',            'employee'),
-  ('Fadi Mansour',     'fadi.mansour@yallatransit.lb','$2b$10$Ioud0mU6hYQNDANn94R1DeO21jqBX7IiuAWJNezUU2rFyv0i1FUR2','+961 3 300002', 'driver',            'employee'),
-  ('Omar Nassar',      'omar.nassar@yallatransit.lb', '$2b$10$Ioud0mU6hYQNDANn94R1DeO21jqBX7IiuAWJNezUU2rFyv0i1FUR2','+961 3 300003', 'driver',            'employee'),
-  ('Walid Haddad',     'walid.haddad@yallatransit.lb','$2b$10$Ioud0mU6hYQNDANn94R1DeO21jqBX7IiuAWJNezUU2rFyv0i1FUR2','+961 3 300004', 'driver',            'employee'),
-  ('Hassan Rizk',      'hassan.rizk@yallatransit.lb', '$2b$10$Ioud0mU6hYQNDANn94R1DeO21jqBX7IiuAWJNezUU2rFyv0i1FUR2','+961 3 300005', 'driver',            'employee'),
+  ('Ahmad Khalil',     'ahmad.khalil@yallatransit.lb','$2b$10$Ioud0mU6hYQNDANn94R1DeO21jqBX7IiuAWJNezUU2rFyv0i1FUR2','+961 3 300001', 'driver'),
+  ('Fadi Mansour',     'fadi.mansour@yallatransit.lb','$2b$10$Ioud0mU6hYQNDANn94R1DeO21jqBX7IiuAWJNezUU2rFyv0i1FUR2','+961 3 300002', 'driver'),
+  ('Omar Nassar',      'omar.nassar@yallatransit.lb', '$2b$10$Ioud0mU6hYQNDANn94R1DeO21jqBX7IiuAWJNezUU2rFyv0i1FUR2','+961 3 300003', 'driver'),
+  ('Walid Haddad',     'walid.haddad@yallatransit.lb','$2b$10$Ioud0mU6hYQNDANn94R1DeO21jqBX7IiuAWJNezUU2rFyv0i1FUR2','+961 3 300004', 'driver'),
+  ('Hassan Rizk',      'hassan.rizk@yallatransit.lb', '$2b$10$Ioud0mU6hYQNDANn94R1DeO21jqBX7IiuAWJNezUU2rFyv0i1FUR2','+961 3 300005', 'driver'),
   -- Passengers (Pass@1234)
-  ('Sara Mousa',       'sara.mousa@gmail.com',         '$2b$10$1dRCfXAgao7ec271oOV8w.vbx3ig78/XMFBxv.adN9N30x81qdkRS', '+961 70 400001', 'passenger', 'regular'),
-  ('Ali Hassan',       'ali.hassan@gmail.com',          '$2b$10$1dRCfXAgao7ec271oOV8w.vbx3ig78/XMFBxv.adN9N30x81qdkRS', '+961 70 400002', 'passenger', 'student'),
-  ('Hana Gergi',       'hana.gergi@gmail.com',          '$2b$10$1dRCfXAgao7ec271oOV8w.vbx3ig78/XMFBxv.adN9N30x81qdkRS', '+961 70 400003', 'passenger', 'senior'),
-  ('Jad Khoury',       'jad.khoury@gmail.com',          '$2b$10$1dRCfXAgao7ec271oOV8w.vbx3ig78/XMFBxv.adN9N30x81qdkRS', '+961 70 400004', 'passenger', 'employee'),
-  ('Nadia Bou',        'nadia.bou@gmail.com',           '$2b$10$1dRCfXAgao7ec271oOV8w.vbx3ig78/XMFBxv.adN9N30x81qdkRS', '+961 70 400005', 'passenger', 'school_child'),
-  ('Tony Abi',         'tony.abi@gmail.com',            '$2b$10$1dRCfXAgao7ec271oOV8w.vbx3ig78/XMFBxv.adN9N30x81qdkRS', '+961 70 400006', 'passenger', 'regular'),
-  ('Rana Zein',        'rana.zein@gmail.com',           '$2b$10$1dRCfXAgao7ec271oOV8w.vbx3ig78/XMFBxv.adN9N30x81qdkRS', '+961 70 400007', 'passenger', 'student'),
-  ('George Nader',     'george.nader@gmail.com',        '$2b$10$1dRCfXAgao7ec271oOV8w.vbx3ig78/XMFBxv.adN9N30x81qdkRS', '+961 70 400008', 'passenger', 'regular'),
-  ('Lina Tawk',        'lina.tawk@gmail.com',           '$2b$10$1dRCfXAgao7ec271oOV8w.vbx3ig78/XMFBxv.adN9N30x81qdkRS', '+961 70 400009', 'passenger', 'employee'),
-  ('Kamal Srour',      'kamal.srour@gmail.com',         '$2b$10$1dRCfXAgao7ec271oOV8w.vbx3ig78/XMFBxv.adN9N30x81qdkRS', '+961 70 400010', 'passenger', 'senior')
-) AS s(full_name, email, password_hash, phone, role, category)
+  ('Sara Mousa',       'sara.mousa@gmail.com',         '$2b$10$1dRCfXAgao7ec271oOV8w.vbx3ig78/XMFBxv.adN9N30x81qdkRS', '+961 70 400001', 'passenger'),
+  ('Ali Hassan',       'ali.hassan@gmail.com',          '$2b$10$1dRCfXAgao7ec271oOV8w.vbx3ig78/XMFBxv.adN9N30x81qdkRS', '+961 70 400002', 'passenger'),
+  ('Hana Gergi',       'hana.gergi@gmail.com',          '$2b$10$1dRCfXAgao7ec271oOV8w.vbx3ig78/XMFBxv.adN9N30x81qdkRS', '+961 70 400003', 'passenger'),
+  ('Jad Khoury',       'jad.khoury@gmail.com',          '$2b$10$1dRCfXAgao7ec271oOV8w.vbx3ig78/XMFBxv.adN9N30x81qdkRS', '+961 70 400004', 'passenger'),
+  ('Nadia Bou',        'nadia.bou@gmail.com',           '$2b$10$1dRCfXAgao7ec271oOV8w.vbx3ig78/XMFBxv.adN9N30x81qdkRS', '+961 70 400005', 'passenger'),
+  ('Tony Abi',         'tony.abi@gmail.com',            '$2b$10$1dRCfXAgao7ec271oOV8w.vbx3ig78/XMFBxv.adN9N30x81qdkRS', '+961 70 400006', 'passenger'),
+  ('Rana Zein',        'rana.zein@gmail.com',           '$2b$10$1dRCfXAgao7ec271oOV8w.vbx3ig78/XMFBxv.adN9N30x81qdkRS', '+961 70 400007', 'passenger'),
+  ('George Nader',     'george.nader@gmail.com',        '$2b$10$1dRCfXAgao7ec271oOV8w.vbx3ig78/XMFBxv.adN9N30x81qdkRS', '+961 70 400008', 'passenger'),
+  ('Lina Tawk',        'lina.tawk@gmail.com',           '$2b$10$1dRCfXAgao7ec271oOV8w.vbx3ig78/XMFBxv.adN9N30x81qdkRS', '+961 70 400009', 'passenger'),
+  ('Kamal Srour',      'kamal.srour@gmail.com',         '$2b$10$1dRCfXAgao7ec271oOV8w.vbx3ig78/XMFBxv.adN9N30x81qdkRS', '+961 70 400010', 'passenger')
+) AS s(full_name, email, password_hash, phone, role)
 ON  t.email = s.email
 WHEN NOT MATCHED THEN
-  INSERT (full_name, email, password_hash, phone, role, category, status)
-  VALUES (s.full_name, s.email, s.password_hash, s.phone, s.role, s.category, 'active')
+  INSERT (full_name, email, password_hash, phone, role, status)
+  VALUES (s.full_name, s.email, s.password_hash, s.phone, s.role, 'active')
 WHEN MATCHED THEN UPDATE SET
   t.full_name     = s.full_name,
   t.password_hash = s.password_hash,
   t.phone         = s.phone,
   t.role          = s.role,
-  t.category      = s.category,
   t.status        = 'active';
 
 -- ─────────────────────────────────────────────────────────────

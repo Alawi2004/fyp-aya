@@ -6,25 +6,30 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
+import { verifyOtpApi, sendOtpApi } from '../../api/authApi';
 import { COLORS } from '../../constants/colors';
 
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 60;
-const MOCK_OTP = '123456';
 
 const OtpVerifyScreen = ({ navigation, route }) => {
-  const { phone, purpose, userData } = route.params ?? {};
+  const { email, purpose, userData, authData, devCode } = route.params ?? {};
   const insets = useSafeAreaInsets();
-  const { loginWithPhone } = useAuth();
+  const { register, finalizeLogin } = useAuth();
 
   const [digits, setDigits] = useState(Array(OTP_LENGTH).fill(''));
   const [timer, setTimer] = useState(RESEND_SECONDS);
   const [loading, setLoading] = useState(false);
   const inputs = useRef([]);
 
+  // Auto-fill code in dev mode
   useEffect(() => {
+    if (devCode && String(devCode).length === OTP_LENGTH) {
+      const filled = String(devCode).split('');
+      setDigits(filled);
+    }
     inputs.current[0]?.focus();
-  }, []);
+  }, [devCode]);
 
   useEffect(() => {
     if (timer === 0) return;
@@ -57,31 +62,46 @@ const OtpVerifyScreen = ({ navigation, route }) => {
       return;
     }
     setLoading(true);
-    setTimeout(async () => {
-      setLoading(false);
-      if (code !== MOCK_OTP) {
-        Alert.alert('Invalid Code', 'Incorrect OTP. Use 123456 for testing.');
-        return;
-      }
+    try {
+      // Verify OTP against backend
+      await verifyOtpApi(email, code);
+
       if (purpose === 'register' && userData) {
-        await loginWithPhone(userData.phone, userData.pin, 'passenger', userData);
-      } else if (purpose === 'reset_pin') {
-        Alert.alert('PIN Reset', 'Your PIN has been reset. Please log in with your new PIN.');
-        navigation.replace('Login');
+        await register(userData, 'passenger');
+      } else if (purpose === 'login_verify' && authData) {
+        await finalizeLogin(authData.userRole, authData.userData, authData.accessToken);
       }
-    }, 900);
+    } catch (err) {
+      const msg = err.response?.data?.error || err.message || 'Verification failed. Please try again.';
+      Alert.alert('Invalid Code', msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const resend = () => {
+  const resend = async () => {
     setTimer(RESEND_SECONDS);
     setDigits(Array(OTP_LENGTH).fill(''));
     inputs.current[0]?.focus();
-    Alert.alert('Code Sent', `A new OTP has been sent to ${phone}.`);
+    try {
+      const res = await sendOtpApi(email, purpose);
+      const newDevCode = res.data?.dev_code;
+      if (newDevCode) {
+        setDigits(String(newDevCode).split(''));
+        Alert.alert('Code Sent', `A new code has been sent to ${maskedEmail}.\n\n(Dev: ${newDevCode})`);
+      } else {
+        Alert.alert('Code Sent', `A new verification code has been sent to ${maskedEmail}.`);
+      }
+    } catch {
+      Alert.alert('Error', 'Could not resend code. Please try again.');
+    }
   };
 
-  const maskedPhone = phone
-    ? phone.replace(/(\+?\d{1,4})\d+(\d{4})$/, '$1 ••••• $2')
-    : '•••••••••';
+  const maskedEmail = email
+    ? email.replace(/(.{2})(.*)(@.*)/, (_, a, b, c) => a + '*'.repeat(Math.max(b.length, 4)) + c)
+    : '••••••••';
+
+  const headingText = purpose === 'login_verify' ? 'Verify Your Login' : 'Verify Your Account';
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -96,13 +116,13 @@ const OtpVerifyScreen = ({ navigation, route }) => {
 
         <View style={styles.content}>
           <View style={styles.iconCircle}>
-            <Ionicons name="chatbubble-ellipses-outline" size={36} color={COLORS.primary} />
+            <Ionicons name="mail-outline" size={36} color={COLORS.primary} />
           </View>
 
-          <Text style={styles.heading}>Verify Your Number</Text>
+          <Text style={styles.heading}>{headingText}</Text>
           <Text style={styles.subtext}>
             We sent a 6-digit code to{'\n'}
-            <Text style={styles.phone}>{maskedPhone}</Text>
+            <Text style={styles.emailHighlight}>{maskedEmail}</Text>
           </Text>
 
           {/* OTP boxes */}
@@ -145,12 +165,14 @@ const OtpVerifyScreen = ({ navigation, route }) => {
             )}
           </View>
 
-          <View style={styles.testBadge}>
-            <Ionicons name="information-circle-outline" size={14} color={COLORS.textMuted} />
-            <Text style={styles.testText}>
-              Test mode — use code <Text style={{ fontWeight: '700' }}>123456</Text>
-            </Text>
-          </View>
+          {devCode ? (
+            <View style={styles.devBadge}>
+              <Ionicons name="code-outline" size={14} color="#7C3AED" />
+              <Text style={styles.devText}>
+                Dev mode — code auto-filled: <Text style={{ fontWeight: '700' }}>{devCode}</Text>
+              </Text>
+            </View>
+          ) : null}
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -202,7 +224,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginBottom: 36,
   },
-  phone: { fontWeight: '700', color: COLORS.textPrimary },
+  emailHighlight: { fontWeight: '700', color: COLORS.textPrimary },
 
   otpRow: {
     flexDirection: 'row',
@@ -242,20 +264,20 @@ const styles = StyleSheet.create({
   },
   verifyBtnText: { fontSize: 16, fontWeight: '700', color: COLORS.white },
 
-  resendRow: { marginBottom: 24 },
+  resendRow: { marginBottom: 20 },
   timerText: { fontSize: 14, color: COLORS.textSecondary },
   resendLink: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
 
-  testBadge: {
+  devBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#F5F3FF',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
-  testText: { fontSize: 12, color: COLORS.textMuted },
+  devText: { fontSize: 12, color: '#7C3AED' },
 });
 
 export default OtpVerifyScreen;

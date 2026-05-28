@@ -5,7 +5,7 @@ import speakeasy from "speakeasy";
 import qrcode from "qrcode";
 import { poolPromise, sql } from "../db/db.js";
 import { ensureAuthTables } from "../db/featureSetup.js";
-import { sendPasswordResetEmail } from "../services/email.service.js";
+import { sendPasswordResetEmail, sendOTPEmail } from "../services/email.service.js";
 import { isForce2FA } from "../db/settingsCache.js";
 
 const ACCESS_TOKEN_TTL     = "15m";
@@ -253,18 +253,20 @@ async function enforceSessionLimit(pool, userId, currentHash) {
 export const register = async (req, res) => {
   try {
     // Never trust the client's role field — always register as passenger.
-    // The registerSchema validator also enforces this, but we hardcode here
-    // as an independent defence against any future middleware misconfiguration.
-    const { full_name, email, password, phone } = req.body;
+    const { full_name, email, password, phone, birth_date } = req.body;
     const hashed = await bcrypt.hash(password, 10);
     const pool = await poolPromise;
 
     await pool.request()
-      .input("full_name", sql.VarChar, full_name)
-      .input("email",     sql.VarChar, email)
-      .input("password",  sql.VarChar, hashed)
-      .input("phone",     sql.VarChar, phone ?? null)
-      .query("INSERT INTO users(full_name,email,password_hash,phone,role) VALUES(@full_name,@email,@password,@phone,'passenger')");
+      .input("full_name",  sql.VarChar,   full_name)
+      .input("email",      sql.VarChar,   email)
+      .input("password",   sql.VarChar,   hashed)
+      .input("phone",      sql.VarChar,   phone ?? null)
+      .input("birth_date", sql.Date,      birth_date ? new Date(birth_date) : null)
+      .query(`
+        INSERT INTO users(full_name,email,password_hash,phone,birth_date,role)
+        VALUES(@full_name,@email,@password,@phone,@birth_date,'passenger')
+      `);
 
     res.status(201).json({ message: "User registered" });
   } catch (err) {
@@ -800,6 +802,54 @@ export const logout = async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "Logout failed" });
   }
+};
+
+// ── OTP (email verification for passenger registration & login) ───────────────
+
+const _otpStore = new Map(); // email → { code, expiresAt, purpose }
+
+export const sendOtp = async (req, res) => {
+  const { email, purpose } = req.body;
+  if (!email) return res.status(400).json({ error: "Email required" });
+
+  const code      = String(Math.floor(100000 + Math.random() * 900000));
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+
+  _otpStore.set(email.toLowerCase(), { code, expiresAt, purpose });
+
+  // Attempt real email if SMTP is configured
+  if (process.env.SMTP_HOST && process.env.SMTP_USER) {
+    try {
+      await sendOTPEmail(email, code);
+      console.log(`[otp] sent to ${email}`);
+    } catch (err) {
+      console.error("[otp] email send failed:", err.message);
+    }
+  } else {
+    console.log(`[otp] dev mode — code for ${email}: ${code}`);
+  }
+
+  const isDev = process.env.NODE_ENV !== "production";
+  return res.json({
+    message: "Verification code sent",
+    ...(isDev && { dev_code: code }), // expose in dev so the app can pre-fill
+  });
+};
+
+export const verifyOtp = async (req, res) => {
+  const { email, code } = req.body;
+  if (!email || !code) return res.status(400).json({ error: "Email and code required" });
+
+  const stored = _otpStore.get(email.toLowerCase());
+  if (!stored)                          return res.status(400).json({ error: "No code found — request a new one" });
+  if (new Date() > stored.expiresAt) {
+    _otpStore.delete(email.toLowerCase());
+    return res.status(400).json({ error: "Code expired — request a new one" });
+  }
+  if (stored.code !== String(code).trim()) return res.status(400).json({ error: "Invalid code" });
+
+  _otpStore.delete(email.toLowerCase()); // single use
+  return res.json({ valid: true });
 };
 
 // PUT /api/auth/push-token — store Expo push token for the authenticated user

@@ -16,7 +16,7 @@ const SLIDES = [
     icon: 'bus',
     bgColor: '#EFF6FF',
     iconColor: COLORS.primary,
-    title: 'Welcome to BusApp',
+    title: 'Welcome to Yalla Transit',
     subtitle:
       'Your smart companion for bus travel.\nTrack buses in real-time and never miss your ride.',
   },
