@@ -230,7 +230,9 @@ const TicketScreen = ({ route, navigation }) => {
           {/* Details grid */}
           <View style={styles.detailsGrid}>
             {[
-              { label: 'SEAT',   value: booking.seatId,              highlight: false },
+              { label: booking.seats?.length > 1 ? 'SEATS' : 'SEAT',
+                value: booking.seats?.length > 1 ? booking.seats.join(', ') : booking.seatId,
+                highlight: false },
               { label: 'FARE',   value: `$${booking.price}`,         highlight: true  },
               { label: 'DATE',   value: formatDateTime(booking.date), highlight: false },
               { label: 'STATUS', value: 'Confirmed', highlight: true, green: true },

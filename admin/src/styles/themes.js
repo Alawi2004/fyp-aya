@@ -23,7 +23,7 @@ export const COLORS = {
   infoBg:      "#EFF6FF",
 };
 
-// Trip / ticket status → visual style
+// Trip / ticket / user status → visual style
 export const STATUS = {
   Active:    { bg: "#ECFDF5", color: "#059669", dot: "#10B981" },
   Ongoing:   { bg: "#ECFDF5", color: "#059669", dot: "#10B981" },
@@ -33,6 +33,8 @@ export const STATUS = {
   Cancelled: { bg: "#FEF2F2", color: "#B91C1C", dot: "#EF4444" },
   Inactive:  { bg: "#F1F5F9", color: "#64748B", dot: "#94A3B8" },
   Offline:   { bg: "#FEF2F2", color: "#B91C1C", dot: "#EF4444" },
+  Suspended: { bg: "#FFFBEB", color: "#D97706", dot: "#F59E0B" },
+  Blocked:   { bg: "#FEF2F2", color: "#B91C1C", dot: "#EF4444" },
 };
 
 // Alert severity → visual style

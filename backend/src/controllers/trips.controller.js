@@ -1,21 +1,28 @@
 import { poolPromise, sql } from "../db/db.js";
 
 export const createTrip = async (req, res) => {
-  const pool = await poolPromise;
-  const { vehicle_id, driver_id, route_id, start_time, status } = req.body;
+  try {
+    const pool = await poolPromise;
+    const { vehicle_id, driver_id, route_id, start_time, status } = req.body;
 
-  await pool
-    .request()
-    .input("vehicle_id", sql.Int, vehicle_id)
-    .input("driver_id", sql.Int, driver_id)
-    .input("route_id", sql.Int, route_id)
-    .input("start_time", sql.DateTime, start_time)
-    .input("status", sql.VarChar, status).query(`
-      INSERT INTO trips(vehicle_id,driver_id,route_id,start_time,status)
-      VALUES(@vehicle_id,@driver_id,@route_id,@start_time,@status)
-    `);
+    const result = await pool
+      .request()
+      .input("vehicle_id", sql.Int,      vehicle_id)
+      .input("driver_id",  sql.Int,      driver_id)
+      .input("route_id",   sql.Int,      route_id)
+      .input("start_time", sql.DateTime, start_time)
+      .input("status",     sql.VarChar,  status || "scheduled")
+      .query(`
+        INSERT INTO trips(vehicle_id,driver_id,route_id,start_time,status)
+        OUTPUT INSERTED.trip_id
+        VALUES(@vehicle_id,@driver_id,@route_id,@start_time,@status)
+      `);
 
-  res.status(201).json({ message: "Trip created" });
+    res.status(201).json({ trip_id: result.recordset[0].trip_id, message: "Trip created" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to create trip" });
+  }
 };
 
 export const getTrips = async (req, res) => {
@@ -52,8 +59,10 @@ export const getTrips = async (req, res) => {
     const { r: dr } = build();
     const dataRes  = await dr.query(`
       SELECT
-        t.trip_id, t.status, t.start_time, t.end_time,
+        t.trip_id, t.route_id, t.driver_id, t.vehicle_id,
+        t.status, t.start_time, t.end_time,
         r.route_name, r.start_location, r.end_location,
+        d.driver_id AS drv_id,
         du.full_name AS driver_name,
         v.plate_number, v.model AS vehicle_model, v.capacity
       ${JOINS}
@@ -82,14 +91,45 @@ export const getTripById = async (req, res) => {
 };
 
 export const updateTripStatus = async (req, res) => {
-  const pool = await poolPromise;
-  await pool
-    .request()
-    .input("id", sql.Int, req.params.id)
-    .input("status", sql.VarChar, req.body.status)
-    .query("UPDATE trips SET status=@status WHERE trip_id=@id");
+  try {
+    const pool = await poolPromise;
+    await pool
+      .request()
+      .input("id",     sql.Int,     req.params.id)
+      .input("status", sql.VarChar, req.body.status)
+      .query("UPDATE trips SET status=@status WHERE trip_id=@id");
+    res.json({ message: "Trip updated" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to update trip status" });
+  }
+};
 
-  res.json({ message: "Trip updated" });
+export const updateTrip = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const { route_id, driver_id, vehicle_id, start_time, status } = req.body;
+    await pool.request()
+      .input("id",         sql.Int,      req.params.id)
+      .input("route_id",   sql.Int,      route_id   ?? null)
+      .input("driver_id",  sql.Int,      driver_id  ?? null)
+      .input("vehicle_id", sql.Int,      vehicle_id ?? null)
+      .input("start_time", sql.DateTime, start_time ?? null)
+      .input("status",     sql.VarChar,  status     ?? null)
+      .query(`
+        UPDATE trips SET
+          route_id   = COALESCE(@route_id,   route_id),
+          driver_id  = COALESCE(@driver_id,  driver_id),
+          vehicle_id = COALESCE(@vehicle_id, vehicle_id),
+          start_time = COALESCE(@start_time, start_time),
+          status     = COALESCE(@status,     status)
+        WHERE trip_id = @id
+      `);
+    res.json({ message: "Trip updated" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to update trip" });
+  }
 };
 
 export const getTripsByVehicleType = async (req, res) => {

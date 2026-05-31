@@ -11,17 +11,17 @@ const STATUS_CONFIG = {
 };
 
 const TYPE_ICON = {
-  bus:     'bus',
-  van:     'car',
-  taxi:    'car-sport',
-  shuttle: 'train',
+  bus:    'bus',
+  van:    'car',
+  taxi:   'car-sport',
+  tuktuk: 'bicycle',
 };
 
 const TYPE_LABEL = {
-  bus:     'Bus',
-  van:     'Van',
-  taxi:    'Taxi',
-  shuttle: 'Shuttle',
+  bus:    'Bus',
+  van:    'Van',
+  taxi:   'Taxi',
+  tuktuk: 'Tuktuk',
 };
 
 const BusCard = ({ bus, onPress }) => {

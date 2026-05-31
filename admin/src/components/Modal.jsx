@@ -1,4 +1,4 @@
-export function Modal({ title, onClose, onSave, children }) {
+export function Modal({ title, onClose, onSave, saving, children }) {
   return (
     // backdrop
     <div
@@ -22,18 +22,21 @@ export function Modal({ title, onClose, onSave, children }) {
           borderRadius: 16,
           width: "100%",
           maxWidth: 480,
+          maxHeight: "90vh",
+          display: "flex",
+          flexDirection: "column",
           boxShadow: "0 20px 60px rgba(0,0,0,.18), 0 4px 16px rgba(0,0,0,.08)",
-          overflow: "hidden",
           animation: "fadeInUp .2s ease both",
         }}
       >
-        {/* header */}
+        {/* header — fixed */}
         <div
           style={{
             padding: "16px 20px",
             borderBottom: "1px solid #F1F5F9",
             display: "flex",
             alignItems: "center",
+            flexShrink: 0,
           }}
         >
           <span
@@ -64,10 +67,10 @@ export function Modal({ title, onClose, onSave, children }) {
           </button>
         </div>
 
-        {/* body */}
-        <div style={{ padding: "20px" }}>{children}</div>
+        {/* body — scrollable */}
+        <div style={{ padding: "20px", overflowY: "auto", flex: 1 }}>{children}</div>
 
-        {/* footer */}
+        {/* footer — fixed */}
         {onSave && (
           <div
             style={{
@@ -77,6 +80,7 @@ export function Modal({ title, onClose, onSave, children }) {
               justifyContent: "flex-end",
               gap: 10,
               background: "#F8FAFC",
+              flexShrink: 0,
             }}
           >
             <button
@@ -99,6 +103,7 @@ export function Modal({ title, onClose, onSave, children }) {
             </button>
             <button
               onClick={onSave}
+              disabled={saving}
               className="btn-primary"
               style={{
                 padding: "8px 18px",
@@ -108,10 +113,11 @@ export function Modal({ title, onClose, onSave, children }) {
                 color: "#fff",
                 fontSize: 13,
                 fontWeight: 600,
-                cursor: "pointer",
+                cursor: saving ? "not-allowed" : "pointer",
+                opacity: saving ? 0.7 : 1,
               }}
             >
-              Save
+              {saving ? "Saving…" : "Save"}
             </button>
           </div>
         )}

@@ -140,7 +140,7 @@ const LoginScreen = ({ navigation }) => {
         await offerBiometricSetup();
       }
     } catch (err) {
-      Alert.alert('Login Failed', err.response?.data?.message || 'Check your credentials and try again.');
+      Alert.alert('Login Failed', err.response?.data?.error || err.response?.data?.message || 'Check your credentials and try again.');
     } finally {
       setLoading(false);
     }

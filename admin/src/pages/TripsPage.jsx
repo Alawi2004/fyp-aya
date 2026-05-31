@@ -6,7 +6,7 @@ import { Modal } from "../components/Modal";
 import { StatusPill } from "../components/StatusPill";
 import { StatCard } from "../components/StatCard";
 import {
-  getTrips, createTrip, updateTripStatus,
+  getTrips, createTrip, updateTripStatus, updateTrip,
   getTimetableTrips, getRecurringSchedules,
   createRecurringSchedule, updateRecurringSchedule, deleteRecurringSchedule,
   getTripConflicts, getTripDelays, getTripStopArrivals,
@@ -48,14 +48,17 @@ const TODAY = "2026-05-06";
 function normalizeTrip(t) {
   const dt = t.start_time ? new Date(t.start_time) : null;
   return {
-    id:      t.trip_id ?? t.id,
-    route:   t.route_name ?? t.route ?? "",
-    driver:  t.driver_name ?? t.driver ?? "",
-    vehicle: t.plate_number ?? t.vehicle ?? "",
-    seats:   t.seats ?? `0/${t.capacity ?? 30}`,
-    date:    dt ? dt.toISOString().split("T")[0] : (t.date ?? ""),
-    time:    dt ? dt.toTimeString().slice(0, 5) : (t.time ?? ""),
-    status:  t.status ? t.status.charAt(0).toUpperCase() + t.status.slice(1) : "Scheduled",
+    id:         t.trip_id  ?? t.id,
+    route_id:   t.route_id   ?? null,
+    driver_id:  t.driver_id  ?? t.drv_id ?? null,
+    vehicle_id: t.vehicle_id ?? null,
+    route:      t.route_name   ?? t.route   ?? "",
+    driver:     t.driver_name  ?? t.driver  ?? "",
+    vehicle:    t.plate_number ?? t.vehicle ?? "",
+    seats:      t.seats ?? `0/${t.capacity ?? 30}`,
+    date:       dt ? dt.toISOString().split("T")[0] : (t.date ?? ""),
+    time:       dt ? dt.toTimeString().slice(0, 5)  : (t.time ?? ""),
+    status:     t.status ? t.status.charAt(0).toUpperCase() + t.status.slice(1) : "Scheduled",
   };
 }
 
@@ -129,14 +132,12 @@ function TabNav({ tabs, active, onChange }) {
 // ── Create / Edit Trip Modal (with conflict check + recurring) ────────────────
 function TripModal({ trip, allTrips, onClose, onSave, routeOpts = [], driverOpts = [], vehicleOpts = [] }) {
   const isEdit = Boolean(trip);
-  const EMPTY  = { route: "", driver: "", vehicle: "", date: TODAY, time: "", status: "Scheduled", recurrence: "none", days: [] };
+  const EMPTY  = { route: "", route_id: null, driver: "", driver_id: null, vehicle: "", vehicle_id: null, date: new Date().toISOString().split("T")[0], time: "", status: "Scheduled", recurrence: "none", days: [] };
 
-  const [form,     setForm]     = useState(isEdit ? { ...trip, recurrence: "none", days: [] } : EMPTY);
+  const [form,     setForm]     = useState(isEdit ? { ...trip, route_id: trip.route_id ?? null, driver_id: trip.driver_id ?? null, vehicle_id: trip.vehicle_id ?? null, recurrence: "none", days: [] } : EMPTY);
   const [warnings, setWarnings] = useState([]);
-
-  const routeNames    = routeOpts.map(r => r.route_name ?? r.name).filter(Boolean);
-  const driverNames   = driverOpts.map(d => d.full_name ?? d.name).filter(Boolean);
-  const vehiclePlates = vehicleOpts.map(v => v.plate_number ?? v.plate).filter(Boolean);
+  const [saving,   setSaving]   = useState(false);
+  const [error,    setError]    = useState(null);
 
   const set = k => v => setForm(f => ({ ...f, [k]: v }));
 
@@ -151,23 +152,28 @@ function TripModal({ trip, allTrips, onClose, onSave, routeOpts = [], driverOpts
     }));
   }
 
-  function handleSave() {
-    if (!form.date || !form.time || !form.route) return;
-    onSave(form);
+  async function handleSave() {
+    setError(null);
+    if (!form.date || !form.time)  { setError("Date and time are required."); return; }
+    if (!form.route_id)            { setError("Please select a route."); return; }
+    if (!form.driver_id)           { setError("Please select a driver."); return; }
+    if (!form.vehicle_id)          { setError("Please select a vehicle."); return; }
+    setSaving(true);
+    const err = await onSave(form);
+    setSaving(false);
+    if (err) { setError(err); return; }
     onClose();
   }
 
-  const field = (label, key, type = "text", placeholder = "") => (
-    <div style={{ marginBottom: 13 }}>
-      <label style={lbl}>{label}</label>
-      <input type={type} placeholder={placeholder} value={form[key]}
-        onChange={e => set(key)(e.target.value)}
-        style={inp} />
-    </div>
-  );
-
   return (
     <Modal title={isEdit ? "Edit Trip" : "Create New Trip"} onClose={onClose} onSave={handleSave}>
+      {/* Error banner */}
+      {error && (
+        <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>
+          {error}
+        </div>
+      )}
+
       {/* Conflict warnings */}
       {warnings.length > 0 && (
         <div style={{ padding: "10px 14px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 9, marginBottom: 14 }}>
@@ -185,28 +191,58 @@ function TripModal({ trip, allTrips, onClose, onSave, routeOpts = [], driverOpts
 
       {/* Route select */}
       <div style={{ marginBottom: 13 }}>
-        <label style={lbl}>Route</label>
-        <select value={form.route} onChange={e => set("route")(e.target.value)} style={inp}>
+        <label style={lbl}>Route *</label>
+        <select
+          value={form.route_id ?? ""}
+          onChange={e => {
+            const id  = e.target.value ? Number(e.target.value) : null;
+            const obj = routeOpts.find(r => r.route_id === id);
+            setForm(f => ({ ...f, route_id: id, route: obj?.route_name ?? obj?.name ?? "" }));
+          }}
+          style={inp}
+        >
           <option value="">— Select route —</option>
-          {routeNames.map(r => <option key={r}>{r}</option>)}
+          {routeOpts.map(r => (
+            <option key={r.route_id} value={r.route_id}>{r.route_name ?? r.name}</option>
+          ))}
         </select>
       </div>
 
       {/* Driver select */}
       <div style={{ marginBottom: 13 }}>
         <label style={lbl}>Driver</label>
-        <select value={form.driver} onChange={e => set("driver")(e.target.value)} style={inp}>
+        <select
+          value={form.driver_id ?? ""}
+          onChange={e => {
+            const id  = e.target.value ? Number(e.target.value) : null;
+            const obj = driverOpts.find(d => d.driver_id === id);
+            setForm(f => ({ ...f, driver_id: id, driver: obj?.full_name ?? obj?.name ?? "" }));
+          }}
+          style={inp}
+        >
           <option value="">— Select driver —</option>
-          {driverNames.map(d => <option key={d}>{d}</option>)}
+          {driverOpts.map(d => (
+            <option key={d.driver_id} value={d.driver_id}>{d.full_name ?? d.name}</option>
+          ))}
         </select>
       </div>
 
       {/* Vehicle select */}
       <div style={{ marginBottom: 13 }}>
         <label style={lbl}>Vehicle</label>
-        <select value={form.vehicle} onChange={e => set("vehicle")(e.target.value)} style={inp}>
+        <select
+          value={form.vehicle_id ?? ""}
+          onChange={e => {
+            const id  = e.target.value ? Number(e.target.value) : null;
+            const obj = vehicleOpts.find(v => v.vehicle_id === id);
+            setForm(f => ({ ...f, vehicle_id: id, vehicle: obj?.plate_number ?? obj?.plate ?? "" }));
+          }}
+          style={inp}
+        >
           <option value="">— Select vehicle —</option>
-          {vehiclePlates.map(v => <option key={v}>{v}</option>)}
+          {vehicleOpts.map(v => (
+            <option key={v.vehicle_id} value={v.vehicle_id}>{v.plate_number ?? v.plate}</option>
+          ))}
         </select>
       </div>
 
@@ -1200,22 +1236,40 @@ export default function TripsPage() {
     completed: trips.filter(t => t.status === "Completed").length,
   };
 
-  function handleSaveTrip(form) {
+  async function handleSaveTrip(form) {
     const isEdit = tripModal && tripModal !== false;
     if (isEdit) {
-      updateTripStatus(tripModal.id, form.status.toLowerCase()).catch(() => {});
-      setTrips(prev => prev.map(t => t.id === tripModal.id ? { ...t, ...form } : t));
-      setTimetableTrips(prev => prev.map(t => t.id === tripModal.id ? { ...t, ...form } : t));
+      try {
+        await updateTrip(tripModal.id, {
+          route_id:   form.route_id   ?? null,
+          driver_id:  form.driver_id  ?? null,
+          vehicle_id: form.vehicle_id ?? null,
+          start_time: `${form.date}T${form.time}:00`,
+          status:     form.status.toLowerCase(),
+        });
+        loadTrips();
+        return null;
+      } catch (err) {
+        return err?.message ?? "Failed to update trip.";
+      }
     } else {
-      createTrip({ start_time: `${form.date}T${form.time}:00`, status: form.status.toLowerCase() }).catch(() => {});
-      const newTrip = { id: `TRP-${String(Date.now()).slice(-4)}`, ...form, seats: "0/30" };
-      setTrips(prev => [newTrip, ...prev]);
-      if (form.date === TODAY) setTimetableTrips(prev => [newTrip, ...prev]);
-      // Create recurring schedule if needed
-      if (form.recurrence !== "none") {
-        const nr = { id: Date.now(), route: form.route, driver: form.driver, vehicle: form.vehicle, time: form.time, recurrence: form.recurrence, days: form.days, status: "Active", active_from: form.date, next_run: form.date };
-        setRecurring(prev => [nr, ...prev]);
-        createRecurringSchedule(nr).catch(() => {});
+      try {
+        await createTrip({
+          route_id:   form.route_id   ?? null,
+          driver_id:  form.driver_id  ?? null,
+          vehicle_id: form.vehicle_id ?? null,
+          start_time: `${form.date}T${form.time}:00`,
+          status:     form.status.toLowerCase(),
+        });
+        loadTrips();
+        if (form.recurrence !== "none") {
+          const nr = { id: Date.now(), route: form.route, driver: form.driver, vehicle: form.vehicle, time: form.time, recurrence: form.recurrence, days: form.days, status: "Active", active_from: form.date, next_run: form.date };
+          setRecurring(prev => [nr, ...prev]);
+          createRecurringSchedule(nr).catch(() => {});
+        }
+        return null;
+      } catch (err) {
+        return err?.message ?? "Failed to create trip.";
       }
     }
   }

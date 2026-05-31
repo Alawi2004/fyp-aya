@@ -10,7 +10,7 @@ import {
 } from "../controllers/auth.controller.js";
 import { validate } from "../middleware/validate.middleware.js";
 import { requireAuth, requireAdminOnly } from "../middleware/auth.middleware.js";
-import { authLimiter, refreshLimiter, registerLimiter } from "../middleware/rateLimiter.middleware.js";
+import { authLimiter, refreshLimiter, registerLimiter, otpLimiter } from "../middleware/rateLimiter.middleware.js";
 import {
   registerSchema, loginSchema, refreshSchema,
   verify2faSchema, confirm2faSchema,
@@ -22,8 +22,8 @@ const router = express.Router();
 
 // ── Public auth ──────────────────────────────────────────────────────────────
 
-router.post("/send-otp",    authLimiter, validate(sendOtpSchema),   sendOtp);
-router.post("/verify-otp",  authLimiter, validate(verifyOtpSchema), verifyOtp);
+router.post("/send-otp",    otpLimiter, validate(sendOtpSchema),   sendOtp);
+router.post("/verify-otp",  otpLimiter, validate(verifyOtpSchema), verifyOtp);
 router.post("/register", registerLimiter, validate(registerSchema), register);
 router.post("/login",    authLimiter, validate(loginSchema),    login);
 router.post("/verify-2fa", authLimiter, validate(verify2faSchema), verify2fa);

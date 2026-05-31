@@ -40,13 +40,17 @@ const TripHistoryScreen = ({ navigation }) => {
     if (exporting) return;
     setExporting(true);
     try {
-      const rows = filtered.map((b, i) => `
+      const rows = filtered.map((b, i) => {
+        const isTaxi = b.type === 'taxi';
+        const seatCell = isTaxi ? 'Taxi' : b.seats?.length > 1 ? `${b.seats.length} Seats` : (b.seatId || '—');
+        const priceCell = isTaxi ? '—' : `$${parseFloat(b.price || 0).toFixed(2)}`;
+        return `
         <tr style="background:${i % 2 === 0 ? '#F8FAFC' : '#FFFFFF'}">
           <td>${b.bus?.name || '—'}</td>
           <td>${b.bus?.origin || '—'} → ${b.bus?.destination || '—'}</td>
           <td>${formatDateTime(b.date)}</td>
-          <td>${b.seatId || '—'}</td>
-          <td style="color:#2563EB;font-weight:700">$${parseFloat(b.price || 0).toFixed(2)}</td>
+          <td>${seatCell}</td>
+          <td style="color:#2563EB;font-weight:700">${priceCell}</td>
           <td>
             <span style="padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700;
               background:${b.status === 'completed' ? '#DCFCE7' : b.status === 'upcoming' ? '#DBEAFE' : '#FEE2E2'};
@@ -54,10 +58,11 @@ const TripHistoryScreen = ({ navigation }) => {
               ${b.status.charAt(0).toUpperCase() + b.status.slice(1)}
             </span>
           </td>
-        </tr>`).join('');
+        </tr>`;
+      }).join('');
 
       const total = filtered
-        .filter(b => b.status !== 'cancelled')
+        .filter(b => b.status !== 'cancelled' && b.type !== 'taxi')
         .reduce((s, b) => s + parseFloat(b.price || 0), 0);
 
       const html = `<!DOCTYPE html>
@@ -115,9 +120,16 @@ const TripHistoryScreen = ({ navigation }) => {
   }, [filtered, filter, user, exporting]);
 
   const handleCancel = (booking) => {
+    const isTaxi = booking.type === 'taxi';
+    const subject = isTaxi
+      ? `taxi from ${booking.bus?.origin} to ${booking.bus?.destination}`
+      : `seat ${booking.seatId} on ${booking.bus?.name}`;
+    const refundLine = !isTaxi && booking.price > 0
+      ? `\n\n$${booking.price?.toFixed(2)} will be refunded.`
+      : '';
     Alert.alert(
       'Cancel Booking',
-      `Cancel seat ${booking.seatId} on ${booking.bus?.name}?\n\n$${booking.price?.toFixed(2)} will be refunded.`,
+      `Cancel ${subject}?${refundLine}`,
       [
         { text: 'Keep Booking', style: 'cancel' },
         {
@@ -125,7 +137,11 @@ const TripHistoryScreen = ({ navigation }) => {
           style: 'destructive',
           onPress: () => {
             cancelBooking(booking._id);
-            Alert.alert('Cancelled', `$${booking.price?.toFixed(2)} refunded to your wallet.`);
+            if (!isTaxi && booking.price > 0) {
+              Alert.alert('Cancelled', `$${booking.price?.toFixed(2)} refunded to your wallet.`);
+            } else {
+              Alert.alert('Cancelled', 'Reservation has been cancelled.');
+            }
           },
         },
       ]
@@ -134,12 +150,23 @@ const TripHistoryScreen = ({ navigation }) => {
 
   const renderItem = ({ item }) => {
     const st = STATUS_CONFIG[item.status] || STATUS_CONFIG.upcoming;
+    const isTaxi = item.type === 'taxi';
+    const iconName = isTaxi ? 'car-sport' : 'bus';
+    const iconColor = isTaxi ? COLORS.warning : COLORS.primary;
+    const iconBg = isTaxi ? COLORS.warningLight : COLORS.primaryLight;
+
+    const seatLabel = isTaxi
+      ? 'Taxi'
+      : item.seats?.length > 1
+        ? `${item.seats.length} Seats`
+        : `Seat ${item.seatId || item.seats?.[0] || '—'}`;
+
     return (
       <View style={styles.card}>
         {/* Header */}
         <View style={styles.cardHeader}>
-          <View style={styles.busIconWrap}>
-            <Ionicons name="bus" size={18} color={COLORS.primary} />
+          <View style={[styles.busIconWrap, { backgroundColor: iconBg }]}>
+            <Ionicons name={iconName} size={18} color={iconColor} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.busName}>{item.bus?.name}</Text>
@@ -173,14 +200,26 @@ const TripHistoryScreen = ({ navigation }) => {
         {/* Pills */}
         <View style={styles.pillRow}>
           <View style={styles.pill}>
-            <Ionicons name="ticket-outline" size={12} color={COLORS.primary} />
-            <Text style={styles.pillText}>Seat {item.seatId}</Text>
+            <Ionicons
+              name={isTaxi ? 'car-sport-outline' : 'ticket-outline'}
+              size={12}
+              color={isTaxi ? COLORS.warning : COLORS.primary}
+            />
+            <Text style={[styles.pillText, isTaxi && { color: COLORS.warning }]}>{seatLabel}</Text>
           </View>
-          <View style={styles.pill}>
-            <Ionicons name="cash-outline" size={12} color={COLORS.primary} />
-            <Text style={styles.pillText}>${item.price?.toFixed(2)}</Text>
-          </View>
-          {item.bus?.duration && (
+          {!isTaxi && (
+            <View style={styles.pill}>
+              <Ionicons name="cash-outline" size={12} color={COLORS.primary} />
+              <Text style={styles.pillText}>${item.price?.toFixed(2)}</Text>
+            </View>
+          )}
+          {isTaxi && item.scheduledFor && item.scheduledFor !== 'Now' && (
+            <View style={styles.pill}>
+              <Ionicons name="time-outline" size={12} color={COLORS.primary} />
+              <Text style={styles.pillText}>{item.scheduledFor}</Text>
+            </View>
+          )}
+          {!isTaxi && item.bus?.duration && (
             <View style={styles.pill}>
               <Ionicons name="time-outline" size={12} color={COLORS.primary} />
               <Text style={styles.pillText}>{item.bus.duration}</Text>
@@ -191,13 +230,15 @@ const TripHistoryScreen = ({ navigation }) => {
         {/* Actions */}
         {item.status === 'upcoming' && (
           <View style={styles.actions}>
-            <TouchableOpacity
-              style={styles.actionBtnBlue}
-              onPress={() => navigation.navigate('HomeStack', { screen: 'BusTracking', params: { tripId: item.bus?._id, busName: item.bus?.name } })}
-            >
-              <Ionicons name="navigate-outline" size={14} color={COLORS.primary} />
-              <Text style={styles.actionTextBlue}>Track Bus</Text>
-            </TouchableOpacity>
+            {!isTaxi && (
+              <TouchableOpacity
+                style={styles.actionBtnBlue}
+                onPress={() => navigation.navigate('HomeStack', { screen: 'BusTracking', params: { tripId: item.bus?._id, busName: item.bus?.name } })}
+              >
+                <Ionicons name="navigate-outline" size={14} color={COLORS.primary} />
+                <Text style={styles.actionTextBlue}>Track Bus</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={styles.actionBtnRed} onPress={() => handleCancel(item)}>
               <Ionicons name="close-circle-outline" size={14} color={COLORS.danger} />
               <Text style={styles.actionTextRed}>Cancel</Text>
@@ -227,7 +268,11 @@ const TripHistoryScreen = ({ navigation }) => {
         {item.status === 'cancelled' && (
           <View style={styles.refundRow}>
             <Ionicons name="checkmark-circle" size={14} color={COLORS.secondary} />
-            <Text style={styles.refundText}>${item.price?.toFixed(2)} refunded to wallet</Text>
+            <Text style={styles.refundText}>
+              {!isTaxi && item.price > 0
+                ? `$${item.price?.toFixed(2)} refunded to wallet`
+                : 'Reservation cancelled'}
+            </Text>
           </View>
         )}
       </View>

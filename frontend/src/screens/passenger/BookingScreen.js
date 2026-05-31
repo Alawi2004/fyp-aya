@@ -13,23 +13,25 @@ import { COLORS } from '../../constants/colors';
 const BookingScreen = ({ route, navigation }) => {
   const { bus } = route.params;
   const { walletBalance, updateBalance, addBooking } = useApp();
-  const [selectedSeat, setSelectedSeat] = useState(null);
+  const [selectedSeats, setSelectedSeats] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const price              = parseFloat(bus.price);
-  const insufficientBalance = walletBalance < price;
-  const shortfall           = Math.max(0, price - walletBalance).toFixed(2);
+  const unitPrice           = parseFloat(bus.price);
+  const totalPrice          = selectedSeats.length * unitPrice;
+  const price               = unitPrice; // kept for display in route card
+  const insufficientBalance = selectedSeats.length > 0 && walletBalance < totalPrice;
+  const shortfall           = Math.max(0, totalPrice - walletBalance).toFixed(2);
   const availableSeats      = bus.totalSeats - bus.bookedSeats;
 
   const handleConfirm = async () => {
-    if (!selectedSeat) {
-      Alert.alert('No Seat Selected', 'Please choose a seat to continue.');
+    if (selectedSeats.length === 0) {
+      Alert.alert('No Seat Selected', 'Please choose at least one seat to continue.');
       return;
     }
     if (insufficientBalance) {
       Alert.alert(
         'Insufficient Balance',
-        `You need $${bus.price} but only have $${walletBalance.toFixed(2)} in your wallet.`,
+        `You need $${totalPrice.toFixed(2)} for ${selectedSeats.length} seat(s) but only have $${walletBalance.toFixed(2)} in your wallet.`,
         [
           { text: 'Top Up Wallet', onPress: () => navigation.navigate('Wallet') },
           { text: 'Cancel', style: 'cancel' },
@@ -37,9 +39,10 @@ const BookingScreen = ({ route, navigation }) => {
       );
       return;
     }
+    const seatLabel = selectedSeats.length === 1 ? `seat ${selectedSeats[0]}` : `${selectedSeats.length} seats (${selectedSeats.join(', ')})`;
     Alert.alert(
       'Confirm Booking',
-      `Book seat ${selectedSeat} on ${bus.name} for $${bus.price}?`,
+      `Book ${seatLabel} on ${bus.name} for $${totalPrice.toFixed(2)}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -49,12 +52,15 @@ const BookingScreen = ({ route, navigation }) => {
             try {
               const newBooking = {
                 _id: Date.now().toString(),
-                bus, seatId: selectedSeat,
-                price, date: new Date().toISOString(),
+                bus,
+                seatId: selectedSeats[0],
+                seats: selectedSeats,
+                price: totalPrice,
+                date: new Date().toISOString(),
                 status: 'upcoming',
               };
               addBooking(newBooking);
-              updateBalance(walletBalance - price);
+              updateBalance(walletBalance - totalPrice);
               navigation.replace('Ticket', { booking: newBooking });
             } catch {
               Alert.alert('Error', 'Something went wrong. Please try again.');
@@ -122,8 +128,8 @@ const BookingScreen = ({ route, navigation }) => {
           {/* Price + Balance row */}
           <View style={styles.priceRow}>
             <View style={styles.priceItem}>
-              <Text style={styles.priceLabel}>Ticket Price</Text>
-              <Text style={styles.priceValue}>${bus.price}</Text>
+              <Text style={styles.priceLabel}>Price / Seat</Text>
+              <Text style={styles.priceValue}>${unitPrice.toFixed(2)}</Text>
             </View>
             <View style={styles.priceDivider} />
             <View style={styles.priceItem}>
@@ -144,14 +150,14 @@ const BookingScreen = ({ route, navigation }) => {
                   <Text style={styles.warningText}>
                     You need{' '}
                     <Text style={{ fontWeight: '800' }}>${shortfall} more</Text>
-                    {' '}to book this trip.
+                    {' '}to book {selectedSeats.length} seat(s).
                   </Text>
                 </View>
               </View>
               <View style={styles.warningRow}>
                 <View style={styles.warningAmt}>
-                  <Text style={styles.warningAmtLabel}>Ticket price</Text>
-                  <Text style={styles.warningAmtVal}>${price.toFixed(2)}</Text>
+                  <Text style={styles.warningAmtLabel}>Total ({selectedSeats.length}×)</Text>
+                  <Text style={styles.warningAmtVal}>${totalPrice.toFixed(2)}</Text>
                 </View>
                 <Ionicons name="remove-outline" size={14} color={COLORS.textMuted} />
                 <View style={styles.warningAmt}>
@@ -209,7 +215,8 @@ const BookingScreen = ({ route, navigation }) => {
           <SeatPicker
             totalSeats={bus.totalSeats}
             bookedSeats={Array.from({ length: bus.bookedSeats }, (_, i) => `A${i + 1}`)}
-            onSelect={setSelectedSeat}
+            onSelect={setSelectedSeats}
+            multiSelect
           />
         </Card>
 
@@ -219,19 +226,23 @@ const BookingScreen = ({ route, navigation }) => {
       {/* Bottom Bar */}
       <View style={styles.bottomBar}>
         <View style={styles.bottomInfo}>
-          <Text style={styles.bottomLabel}>Seat</Text>
-          <Text style={styles.bottomValue}>{selectedSeat || '—'}</Text>
+          <Text style={styles.bottomLabel}>Seats</Text>
+          <Text style={styles.bottomValue}>
+            {selectedSeats.length === 0 ? '—' : selectedSeats.length === 1 ? selectedSeats[0] : `${selectedSeats.length}×`}
+          </Text>
         </View>
         <View style={styles.bottomDivider} />
         <View style={styles.bottomInfo}>
           <Text style={styles.bottomLabel}>Total</Text>
-          <Text style={[styles.bottomValue, { color: COLORS.primary }]}>${bus.price}</Text>
+          <Text style={[styles.bottomValue, { color: COLORS.primary }]}>
+            ${selectedSeats.length > 0 ? totalPrice.toFixed(2) : unitPrice.toFixed(2)}
+          </Text>
         </View>
         <Button
           title="Book Now"
           onPress={handleConfirm}
           loading={loading}
-          disabled={!selectedSeat || insufficientBalance}
+          disabled={selectedSeats.length === 0 || insufficientBalance}
           style={styles.bookBtn}
           size="lg"
           icon={<Ionicons name="checkmark-circle-outline" size={18} color={COLORS.white} />}

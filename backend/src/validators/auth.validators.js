@@ -37,6 +37,7 @@ export const registerSchema = z.object({
     .string()
     .trim()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "birth_date must be in YYYY-MM-DD format")
+    .refine(v => new Date(v) <= new Date(), "Date of birth cannot be in the future")
     .optional()
     .or(z.literal(""))
     .transform(v => v || undefined),

@@ -3,28 +3,38 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-nati
 import { COLORS } from '../../constants/colors';
 import { THEME } from '../../constants/theme';
 
-const SeatPicker = ({ totalSeats = 40, bookedSeats = [], onSelect }) => {
-  const [selected, setSelected] = useState(null);
+const SeatPicker = ({ totalSeats = 40, bookedSeats = [], onSelect, multiSelect = false }) => {
+  const [selected, setSelected] = useState(multiSelect ? [] : null);
   const rows = Math.ceil(totalSeats / 4);
 
   const handleSeat = (seatId) => {
     if (bookedSeats.includes(seatId)) return;
-    const newSeat = selected === seatId ? null : seatId;
-    setSelected(newSeat);
-    onSelect(newSeat);
+    if (multiSelect) {
+      const next = selected.includes(seatId)
+        ? selected.filter(s => s !== seatId)
+        : [...selected, seatId];
+      setSelected(next);
+      onSelect(next);
+    } else {
+      const next = selected === seatId ? null : seatId;
+      setSelected(next);
+      onSelect(next);
+    }
   };
 
   const getSeatStatus = (id) => {
-    if (id === selected) return 'selected';
+    if (multiSelect ? selected.includes(id) : id === selected) return 'selected';
     if (bookedSeats.includes(id)) return 'booked';
     return 'available';
   };
 
   const seatStyles = {
-    available: { bg: COLORS.seatAvailable, border: COLORS.success, text: COLORS.success },
-    booked:    { bg: COLORS.seatBooked, border: COLORS.danger, text: COLORS.danger },
-    selected:  { bg: COLORS.seatSelected, border: COLORS.primaryDark, text: COLORS.white },
+    available: { bg: COLORS.seatAvailable, border: COLORS.success,     text: COLORS.success     },
+    booked:    { bg: COLORS.seatBooked,    border: COLORS.danger,      text: COLORS.danger      },
+    selected:  { bg: COLORS.seatSelected,  border: COLORS.primaryDark, text: COLORS.white       },
   };
+
+  const hasSelection = multiSelect ? selected.length > 0 : !!selected;
 
   return (
     <View style={styles.container}>
@@ -71,9 +81,14 @@ const SeatPicker = ({ totalSeats = 40, bookedSeats = [], onSelect }) => {
         </View>
       </ScrollView>
 
-      {selected && (
+      {hasSelection && (
         <View style={styles.selectedInfo}>
-          <Text style={styles.selectedText}>Selected: <Text style={styles.selectedSeat}>{selected}</Text></Text>
+          <Text style={styles.selectedText}>
+            Selected:{' '}
+            <Text style={styles.selectedSeat}>
+              {multiSelect ? selected.join(', ') : selected}
+            </Text>
+          </Text>
         </View>
       )}
     </View>

@@ -1,6 +1,8 @@
 import express from "express";
 import {
   getAllUsers,
+  createUser,
+  deleteUser,
   getUserProfile,
   updateUserProfile,
   getUserTickets,
@@ -48,7 +50,8 @@ router.delete("/me",                    requireAuth, deleteMyAccount);
 
 // ── Admin / permission-gated routes ──────────────────────────────────────────
 
-router.get("/", requirePermission("users", "view"), getAllUsers);
+router.get("/",  requirePermission("users", "view"),   getAllUsers);
+router.post("/", requirePermission("users", "create"), createUser);
 
 /**
  * @swagger
@@ -96,8 +99,9 @@ router.get("/", requirePermission("users", "view"), getAllUsers);
  *       200:
  *         description: Updated successfully
  */
-router.get("/:id",  requirePermission("users", "view"),   getUserProfile);
-router.put("/:id",  requirePermission("users", "edit"),   updateUserProfile);
+router.get("/:id",    requirePermission("users", "view"),   getUserProfile);
+router.put("/:id",    requirePermission("users", "edit"),   updateUserProfile);
+router.delete("/:id", requirePermission("users", "delete"), deleteUser);
 
 /**
  * @swagger

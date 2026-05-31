@@ -1,5 +1,125 @@
+import bcrypt from "bcrypt";
 import { poolPromise, sql } from "../db/db.js";
 import { ensureAuthTables } from "../db/featureSetup.js";
+
+// ── POST /api/users — admin creates a user with any role ─────────────────────
+const VALID_ROLES = ["passenger", "driver", "admin", "staff"];
+
+function validateBirthDate(birth_date) {
+  if (!birth_date) return null;
+  const d = new Date(birth_date);
+  if (isNaN(d.getTime())) return "Invalid date of birth";
+  if (d > new Date()) return "Date of birth cannot be in the future";
+  return null;
+}
+
+export const createUser = async (req, res) => {
+  const { full_name, email, password, role, phone, birth_date } = req.body;
+  if (!full_name || !email) {
+    return res.status(400).json({ error: "full_name and email are required" });
+  }
+  if (!password) {
+    return res.status(400).json({ error: "password is required" });
+  }
+  if (role && !VALID_ROLES.includes(role.toLowerCase())) {
+    return res.status(400).json({ error: `role must be one of: ${VALID_ROLES.join(", ")}` });
+  }
+  const dobError = validateBirthDate(birth_date);
+  if (dobError) return res.status(400).json({ error: dobError });
+
+  const userRole = VALID_ROLES.includes(role?.toLowerCase()) ? role.toLowerCase() : "passenger";
+  try {
+    const hashed = await bcrypt.hash(password, 10);
+    const pool   = await poolPromise;
+    const result = await pool.request()
+      .input("full_name",  sql.NVarChar(100), full_name)
+      .input("email",      sql.NVarChar(120), email.toLowerCase().trim())
+      .input("password",   sql.NVarChar(200), hashed)
+      .input("role",       sql.NVarChar(20),  userRole)
+      .input("phone",      sql.NVarChar(30),  phone ?? null)
+      .input("birth_date", sql.Date,          birth_date ? new Date(birth_date) : null)
+      .query(`
+        INSERT INTO users(full_name, email, password_hash, role, phone, birth_date)
+        OUTPUT INSERTED.user_id, INSERTED.full_name, INSERTED.email, INSERTED.role,
+               INSERTED.status, INSERTED.created_at, INSERTED.birth_date
+        VALUES (@full_name, @email, @password, @role, @phone, @birth_date)
+      `);
+    res.status(201).json(result.recordset[0]);
+  } catch (err) {
+    if (err.number === 2627 || err.number === 2601) {
+      return res.status(409).json({ error: "Email already in use" });
+    }
+    console.error(err);
+    res.status(500).json({ error: "Failed to create user" });
+  }
+};
+
+// ── DELETE /api/users/:id — admin hard-deletes a user ───────────────────────
+// Queries sys.foreign_keys at runtime to find every dependent table,
+// so the cleanup stays correct as the schema evolves.
+export const deleteUser = async (req, res) => {
+  const pool = await poolPromise;
+  const uid  = Number(req.params.id);
+  if (!uid) return res.status(400).json({ error: "Invalid user id" });
+
+  try {
+    // Step 1 — break the transitive FK chain: drivers → trips
+    // trips.driver_id references drivers, not users directly.
+    // Nullify trips.driver_id before we delete the drivers row.
+    await pool.request().input("uid", sql.Int, uid).query(`
+      IF OBJECT_ID('drivers','U') IS NOT NULL AND OBJECT_ID('trips','U') IS NOT NULL
+      BEGIN
+        DECLARE @drid INT = (SELECT TOP 1 driver_id FROM drivers WHERE user_id = @uid);
+        IF @drid IS NOT NULL
+          UPDATE trips SET driver_id = NULL WHERE driver_id = @drid;
+      END
+    `);
+
+    // Step 2 — discover every non-CASCADE FK that directly points to users
+    const fkRows = await pool.request().query(`
+      SELECT DISTINCT
+        OBJECT_NAME(fk.parent_object_id)                       AS tbl,
+        COL_NAME(fkc.parent_object_id, fkc.parent_column_id)  AS col,
+        c.is_nullable
+      FROM sys.foreign_keys         fk
+      JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
+      JOIN sys.columns               c ON c.object_id  = fkc.parent_object_id
+                                      AND c.column_id  = fkc.parent_column_id
+      WHERE OBJECT_NAME(fk.referenced_object_id) = 'users'
+        AND fk.delete_referential_action = 0
+    `);
+
+    // Step 3 — run cleanup + final delete inside one transaction
+    const tx = pool.transaction();
+    await tx.begin();
+
+    for (const { tbl, col, is_nullable } of fkRows.recordset) {
+      const stmt = is_nullable
+        ? `UPDATE [${tbl}] SET [${col}] = NULL WHERE [${col}] = @uid`
+        : `DELETE FROM [${tbl}] WHERE [${col}] = @uid`;
+      await tx.request().input("uid", sql.Int, uid).query(stmt);
+    }
+
+    // otp_codes references email not user_id — handle separately
+    await tx.request().input("uid", sql.Int, uid).query(`
+      IF OBJECT_ID('otp_codes','U') IS NOT NULL
+        DELETE FROM otp_codes
+        WHERE email = (SELECT TOP 1 email FROM users WHERE user_id = @uid)
+    `);
+
+    const del = await tx.request().input("uid", sql.Int, uid)
+      .query("DELETE FROM users WHERE user_id = @uid");
+
+    await tx.commit();
+
+    if (del.rowsAffected[0] === 0) return res.status(404).json({ error: "User not found" });
+    res.json({ message: "User deleted" });
+  } catch (err) {
+    try { await tx.rollback(); } catch {}
+    console.error("[deleteUser]", err.message);
+    res.status(500).json({ error: "Delete failed: " + err.message });
+  }
+};
 
 export const getAllUsers = async (req, res) => {
   try {
@@ -13,21 +133,26 @@ export const getAllUsers = async (req, res) => {
       const r = pool.request()
         .input("limit",  sql.Int, limit)
         .input("offset", sql.Int, offset);
-      let where = "WHERE 1=1";
-      if (search) { r.input("search", sql.NVarChar(200), `%${search}%`); where += " AND (full_name LIKE @search OR email LIKE @search OR phone LIKE @search)"; }
-      if (role)   { r.input("role",   sql.NVarChar(50),  role);          where += " AND role = @role"; }
-      if (status) { r.input("status", sql.NVarChar(50),  status);        where += " AND status = @status"; }
+      let where = "WHERE u.status != 'deleted'";
+      if (search) { r.input("search", sql.NVarChar(200), `%${search}%`); where += " AND (u.full_name LIKE @search OR u.email LIKE @search OR u.phone LIKE @search)"; }
+      if (role)   { r.input("role",   sql.NVarChar(50),  role);          where += " AND u.role = @role"; }
+      if (status) { r.input("status", sql.NVarChar(50),  status);        where += " AND u.status = @status"; }
       return { r, where };
     };
 
     const { r: cr, where } = build();
-    const countRes = await cr.query(`SELECT COUNT(*) AS total FROM users ${where}`);
+    const countRes = await cr.query(`SELECT COUNT(*) AS total FROM users u ${where}`);
 
     const { r: dr } = build();
     const dataRes  = await dr.query(`
-      SELECT user_id,full_name,email,phone,role,status,category,created_at
-      FROM users ${where}
-      ORDER BY created_at DESC
+      SELECT
+        u.user_id, u.full_name, u.email, u.phone,
+        u.role, u.status, u.created_at, u.birth_date,
+        ISNULL((SELECT COUNT(*) FROM tickets t WHERE t.user_id = u.user_id), 0) AS trips,
+        ISNULL((SELECT w.balance FROM wallets w WHERE w.user_id = u.user_id), 0) AS wallet_balance
+      FROM users u
+      ${where}
+      ORDER BY u.created_at DESC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `);
 
@@ -42,7 +167,7 @@ export const getUserProfile = async (req, res) => {
     const pool   = await poolPromise;
     const result = await pool.request()
       .input("id", sql.Int, req.params.id)
-      .query("SELECT user_id,full_name,email,phone,role,status,created_at FROM users WHERE user_id=@id");
+      .query("SELECT user_id,full_name,email,phone,role,status,birth_date,created_at FROM users WHERE user_id=@id");
     if (!result.recordset[0]) return res.status(404).json({ error: "User not found" });
     res.json(result.recordset[0]);
   } catch (err) {
@@ -53,13 +178,37 @@ export const getUserProfile = async (req, res) => {
 
 export const updateUserProfile = async (req, res) => {
   try {
-    const { full_name, phone } = req.body;
+    const { full_name, phone, role, status, birth_date } = req.body;
+
+    if (role && !["passenger", "driver", "admin", "staff"].includes(role.toLowerCase())) {
+      return res.status(400).json({ error: `role must be one of: passenger, driver, admin, staff` });
+    }
+    const dobError = validateBirthDate(birth_date);
+    if (dobError) return res.status(400).json({ error: dobError });
+
     const pool = await poolPromise;
-    await pool.request()
-      .input("id",        sql.Int,     req.params.id)
-      .input("full_name", sql.VarChar, full_name)
-      .input("phone",     sql.VarChar, phone)
-      .query("UPDATE users SET full_name=@full_name, phone=@phone WHERE user_id=@id");
+
+    const validRoles    = ["passenger", "driver", "admin", "staff"];
+    const validStatuses = ["active", "inactive", "suspended", "blocked"];
+
+    const r = pool.request()
+      .input("id",        sql.Int,          req.params.id)
+      .input("full_name", sql.NVarChar(100), full_name ?? null)
+      .input("phone",     sql.NVarChar(30),  phone ?? null)
+      .input("birth_date", sql.Date,         birth_date ? new Date(birth_date) : null);
+
+    let sets = "full_name=@full_name, phone=@phone, birth_date=@birth_date";
+
+    if (role && validRoles.includes(role.toLowerCase())) {
+      r.input("role", sql.NVarChar(20), role.toLowerCase());
+      sets += ", role=@role";
+    }
+    if (status && validStatuses.includes(status.toLowerCase())) {
+      r.input("status", sql.NVarChar(20), status.toLowerCase());
+      sets += ", status=@status";
+    }
+
+    await r.query(`UPDATE users SET ${sets} WHERE user_id=@id`);
     res.json({ message: "Profile updated" });
   } catch (err) {
     console.error(err);
@@ -92,7 +241,8 @@ export const getPassengers = async (req, res) => {
 
     const result = await pool.request().query(`
       SELECT
-        u.user_id, u.full_name, u.email, u.phone, u.status, u.category, u.created_at,
+        u.user_id, u.full_name, u.email, u.phone, u.status,
+        u.birth_date, u.created_at,
         ISNULL(w.balance, 0) AS wallet_balance,
         (SELECT COUNT(*) FROM tickets t WHERE t.user_id = u.user_id) AS trip_count,
         sl.last_action, sl.last_reason, sl.last_acted_at
@@ -260,7 +410,6 @@ export const getSuspensionLogs = async (req, res) => {
 // Favourite Routes  (self-service, authenticated passenger)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// GET /api/users/me/favorites
 export const getFavorites = async (req, res) => {
   try {
     const pool   = await poolPromise;
@@ -287,7 +436,6 @@ export const getFavorites = async (req, res) => {
   }
 };
 
-// POST /api/users/me/favorites  — body: { route_id, nickname? }
 export const addFavorite = async (req, res) => {
   try {
     const { route_id, nickname } = req.body;
@@ -295,7 +443,6 @@ export const addFavorite = async (req, res) => {
 
     const pool = await poolPromise;
 
-    // Verify route exists
     const routeCheck = await pool.request()
       .input("rid", sql.Int, Number(route_id))
       .query("SELECT route_id FROM routes WHERE route_id = @rid");
@@ -313,7 +460,7 @@ export const addFavorite = async (req, res) => {
 
     res.status(201).json(ins.recordset[0]);
   } catch (err) {
-    if (err.number === 2627 || err.number === 2601) {   // UNIQUE violation
+    if (err.number === 2627 || err.number === 2601) {
       return res.status(409).json({ error: "Route is already in favorites." });
     }
     console.error(err);
@@ -321,7 +468,6 @@ export const addFavorite = async (req, res) => {
   }
 };
 
-// DELETE /api/users/me/favorites/:routeId
 export const removeFavorite = async (req, res) => {
   try {
     const pool   = await poolPromise;
@@ -342,12 +488,6 @@ export const removeFavorite = async (req, res) => {
   }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Account Deletion  (self-service, authenticated user)
-// DELETE /api/users/me
-// Sets status='deleted', revokes all sessions, freezes wallet,
-// cancels confirmed tickets.  Irreversible without admin intervention.
-// ─────────────────────────────────────────────────────────────────────────────
 export const deleteMyAccount = async (req, res) => {
   const pool   = await poolPromise;
   const userId = req.user.user_id;
@@ -356,32 +496,21 @@ export const deleteMyAccount = async (req, res) => {
   try {
     await tx.begin();
 
-    // 1. Soft-delete: mark user as deleted
     await tx.request()
       .input("uid", sql.Int, userId)
-      .query(`
-        UPDATE users
-        SET status = 'deleted', deleted_at = GETUTCDATE()
-        WHERE user_id = @uid
-      `);
+      .query(`UPDATE users SET status = 'deleted', deleted_at = GETUTCDATE() WHERE user_id = @uid`);
 
-    // 2. Revoke all active sessions (force logout everywhere)
     await tx.request()
       .input("uid", sql.Int, userId)
       .query(`DELETE FROM user_sessions WHERE user_id = @uid`);
 
-    // 3. Freeze wallet to prevent any transactions
     await tx.request()
       .input("uid", sql.Int, userId)
       .query(`UPDATE wallets SET is_frozen = 1 WHERE user_id = @uid`);
 
-    // 4. Cancel confirmed tickets (pending bookings)
     await tx.request()
       .input("uid", sql.Int, userId)
-      .query(`
-        UPDATE tickets SET status = 'cancelled'
-        WHERE user_id = @uid AND status = 'confirmed'
-      `);
+      .query(`UPDATE tickets SET status = 'cancelled' WHERE user_id = @uid AND status = 'confirmed'`);
 
     await tx.commit();
     res.json({ message: "Account deletion scheduled. You have been signed out of all devices." });

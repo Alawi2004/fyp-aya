@@ -4,6 +4,7 @@ import {
   getTrips,
   getTripById,
   updateTripStatus,
+  updateTrip,
   getTripsByVehicleType,
   getPassengerLoad,
   getTripConflicts,
@@ -184,6 +185,6 @@ router.get("/checklists",  getTripChecklists);
 router.get("/:id/arrivals", getTripStopArrivals);
 router.get("/:id", getTripById);
 router.put("/:id/status", requirePermission("trips", "edit"), updateTripStatus);
-router.put("/:id",        requirePermission("trips", "edit"), updateTripStatus);
+router.put("/:id",        requirePermission("trips", "edit"), updateTrip);
 
 export default router;

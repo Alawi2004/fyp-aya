@@ -774,7 +774,7 @@ export const refresh = async (req, res) => {
 
     const access_token = issueAccessToken({ user_id: record.user_id, role: record.role });
     setCookies(res, access_token, new_refresh_token);
-    res.json({ ok: true });
+    res.json({ ok: true, access_token });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Token refresh failed" });
@@ -806,50 +806,81 @@ export const logout = async (req, res) => {
 
 // ── OTP (email verification for passenger registration & login) ───────────────
 
-const _otpStore = new Map(); // email → { code, expiresAt, purpose }
-
 export const sendOtp = async (req, res) => {
   const { email, purpose } = req.body;
   if (!email) return res.status(400).json({ error: "Email required" });
 
-  const code      = String(Math.floor(100000 + Math.random() * 900000));
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+  try {
+    const code      = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
 
-  _otpStore.set(email.toLowerCase(), { code, expiresAt, purpose });
+    const pool = await poolPromise;
+    await ensureAuthTables(pool);
 
-  // Attempt real email if SMTP is configured
-  if (process.env.SMTP_HOST && process.env.SMTP_USER) {
-    try {
-      await sendOTPEmail(email, code);
-      console.log(`[otp] sent to ${email}`);
-    } catch (err) {
-      console.error("[otp] email send failed:", err.message);
+    // Replace any existing OTP for this email then insert the fresh one
+    await pool.request()
+      .input("email", sql.NVarChar(120), email)
+      .query("DELETE FROM otp_codes WHERE email = @email");
+
+    await pool.request()
+      .input("email",      sql.NVarChar(120), email)
+      .input("code",       sql.NVarChar(6),   code)
+      .input("purpose",    sql.NVarChar(30),  purpose ?? null)
+      .input("expires_at", sql.DateTime2,     expiresAt)
+      .query("INSERT INTO otp_codes(email, code, purpose, expires_at) VALUES(@email, @code, @purpose, @expires_at)");
+
+    // Fire-and-forget — don't block the HTTP response waiting on SMTP
+    if (process.env.SMTP_HOST && process.env.SMTP_USER) {
+      sendOTPEmail(email, code)
+        .then(() => console.log(`[otp] sent to ${email}`))
+        .catch(err => console.error("[otp] email send failed:", err.message));
+    } else {
+      console.log(`[otp] dev mode — code for ${email}: ${code}`);
     }
-  } else {
-    console.log(`[otp] dev mode — code for ${email}: ${code}`);
-  }
 
-  const isDev = process.env.NODE_ENV !== "production";
-  return res.json({
-    message: "Verification code sent",
-    ...(isDev && { dev_code: code }), // expose in dev so the app can pre-fill
-  });
+    return res.json({ message: "Verification code sent" });
+  } catch (err) {
+    console.error("[otp] sendOtp error:", err.message);
+    return res.status(500).json({ error: "Could not send verification code. Please try again." });
+  }
 };
 
 export const verifyOtp = async (req, res) => {
   const { email, code } = req.body;
   if (!email || !code) return res.status(400).json({ error: "Email and code required" });
 
-  const stored = _otpStore.get(email.toLowerCase());
-  if (!stored)                          return res.status(400).json({ error: "No code found — request a new one" });
-  if (new Date() > stored.expiresAt) {
-    _otpStore.delete(email.toLowerCase());
-    return res.status(400).json({ error: "Code expired — request a new one" });
-  }
-  if (stored.code !== String(code).trim()) return res.status(400).json({ error: "Invalid code" });
+  try {
+    const pool = await poolPromise;
+    await ensureAuthTables(pool);
 
-  _otpStore.delete(email.toLowerCase()); // single use
-  return res.json({ valid: true });
+    const result = await pool.request()
+      .input("email", sql.NVarChar(120), email)
+      .query("SELECT TOP 1 otp_id, code, expires_at FROM otp_codes WHERE email = @email ORDER BY created_at DESC");
+
+    const stored = result.recordset[0];
+    if (!stored) return res.status(400).json({ error: "No code found — request a new one" });
+
+    if (new Date() > new Date(stored.expires_at)) {
+      await pool.request()
+        .input("otp_id", sql.Int, stored.otp_id)
+        .query("DELETE FROM otp_codes WHERE otp_id = @otp_id");
+      return res.status(400).json({ error: "Code expired — request a new one" });
+    }
+
+    if (stored.code !== String(code).trim()) {
+      return res.status(400).json({ error: "Invalid code" });
+    }
+
+    // Single-use: delete after successful match
+    await pool.request()
+      .input("otp_id", sql.Int, stored.otp_id)
+      .query("DELETE FROM otp_codes WHERE otp_id = @otp_id");
+
+    return res.json({ valid: true });
+  } catch (err) {
+    console.error("[otp] verifyOtp error:", err.message);
+    return res.status(500).json({ error: "Verification failed. Please try again." });
+  }
 };
 
 // PUT /api/auth/push-token — store Expo push token for the authenticated user

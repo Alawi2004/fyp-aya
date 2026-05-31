@@ -22,14 +22,9 @@ const OtpVerifyScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(false);
   const inputs = useRef([]);
 
-  // Auto-fill code in dev mode
   useEffect(() => {
-    if (devCode && String(devCode).length === OTP_LENGTH) {
-      const filled = String(devCode).split('');
-      setDigits(filled);
-    }
     inputs.current[0]?.focus();
-  }, [devCode]);
+  }, []);
 
   useEffect(() => {
     if (timer === 0) return;
@@ -62,18 +57,38 @@ const OtpVerifyScreen = ({ navigation, route }) => {
       return;
     }
     setLoading(true);
-    try {
-      // Verify OTP against backend
-      await verifyOtpApi(email, code);
 
+    // Step 1 — verify the OTP code itself
+    try {
+      await verifyOtpApi(email, code);
+    } catch (err) {
+      const msg = err.response?.data?.error || err.message || 'Verification failed.';
+      const isExpiredOrMissing = msg.toLowerCase().includes('no code') || msg.toLowerCase().includes('expired');
+      const isTooMany = msg.toLowerCase().includes('too many');
+      Alert.alert(
+        isExpiredOrMissing ? 'Code Expired' : isTooMany ? 'Too Many Attempts' : 'Invalid Code',
+        isExpiredOrMissing
+          ? 'This code has expired. Tap "Resend Code" to get a new one.'
+          : isTooMany
+            ? 'You have made too many attempts. Please wait a few minutes and request a new code.'
+            : 'The code you entered is incorrect. Please check your email and try again.',
+      );
+      setLoading(false);
+      return;
+    }
+
+    // Step 2 — OTP is valid; complete registration or login
+    try {
       if (purpose === 'register' && userData) {
         await register(userData, 'passenger');
       } else if (purpose === 'login_verify' && authData) {
         await finalizeLogin(authData.userRole, authData.userData, authData.accessToken);
       }
     } catch (err) {
-      const msg = err.response?.data?.error || err.message || 'Verification failed. Please try again.';
-      Alert.alert('Invalid Code', msg);
+      const details = err.response?.data?.details;
+      const firstDetail = details ? Object.values(details)[0]?.[0] : null;
+      const msg = firstDetail || err.response?.data?.error || err.message || 'Something went wrong. Please try again.';
+      Alert.alert('Error', msg);
     } finally {
       setLoading(false);
     }
@@ -84,14 +99,8 @@ const OtpVerifyScreen = ({ navigation, route }) => {
     setDigits(Array(OTP_LENGTH).fill(''));
     inputs.current[0]?.focus();
     try {
-      const res = await sendOtpApi(email, purpose);
-      const newDevCode = res.data?.dev_code;
-      if (newDevCode) {
-        setDigits(String(newDevCode).split(''));
-        Alert.alert('Code Sent', `A new code has been sent to ${maskedEmail}.\n\n(Dev: ${newDevCode})`);
-      } else {
-        Alert.alert('Code Sent', `A new verification code has been sent to ${maskedEmail}.`);
-      }
+      await sendOtpApi(email, purpose);
+      Alert.alert('Code Sent', `A new verification code has been sent to ${maskedEmail}.`);
     } catch {
       Alert.alert('Error', 'Could not resend code. Please try again.');
     }
@@ -165,14 +174,6 @@ const OtpVerifyScreen = ({ navigation, route }) => {
             )}
           </View>
 
-          {devCode ? (
-            <View style={styles.devBadge}>
-              <Ionicons name="code-outline" size={14} color="#7C3AED" />
-              <Text style={styles.devText}>
-                Dev mode — code auto-filled: <Text style={{ fontWeight: '700' }}>{devCode}</Text>
-              </Text>
-            </View>
-          ) : null}
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -268,16 +269,6 @@ const styles = StyleSheet.create({
   timerText: { fontSize: 14, color: COLORS.textSecondary },
   resendLink: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
 
-  devBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#F5F3FF',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  devText: { fontSize: 12, color: '#7C3AED' },
 });
 
 export default OtpVerifyScreen;

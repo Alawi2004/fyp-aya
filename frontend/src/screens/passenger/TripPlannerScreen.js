@@ -636,6 +636,22 @@ const TripPlannerScreen = ({ navigation, route }) => {
                 </ScrollView>
               </View>
             ) : null}
+
+            {/* ── Book Now ── */}
+            <TouchableOpacity
+              style={styles.bookNowBtn}
+              onPress={() => navigation.navigate('TaxiReservation', {
+                fromStop,
+                toStop,
+                tripSummary: displayTrip
+                  ? `${displayTrip.total_duration_min} min · ${money(displayTrip.total_price)}`
+                  : undefined,
+              })}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="car-sport" size={18} color={COLORS.white} />
+              <Text style={styles.bookNowText}>Book Now</Text>
+            </TouchableOpacity>
           </>
         ) : null}
 
@@ -988,6 +1004,28 @@ const styles = StyleSheet.create({
   altScroll: {
     gap: 10,
     paddingBottom: 2,
+  },
+
+  /* Book Now */
+  bookNowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: COLORS.warning ?? '#D97706',
+    borderRadius: 14,
+    paddingVertical: 15,
+    shadowColor: COLORS.warning ?? '#D97706',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  bookNowText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.white,
+    letterSpacing: 0.2,
   },
 
   /* Empty state */

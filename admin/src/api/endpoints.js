@@ -9,6 +9,7 @@ export const getTrips              = ()         => apiClient.get('/trips');
 export const getTripById           = (id)       => apiClient.get(`/trips/${id}`);
 export const createTrip            = (data)     => apiClient.post('/trips', data);
 export const updateTripStatus      = (id, status) => apiClient.put(`/trips/${id}/status`, { status });
+export const updateTrip            = (id, data)   => apiClient.put(`/trips/${id}`, data);
 export const getTripsByVehicleType = (type)     => apiClient.get(`/trips/vehicle/${type}`);
 export const getPassengerLoad      = (id)       => apiClient.get(`/trips/${id}/load`);
 export const getTripGpsLogs        = (id, date) => apiClient.get(`/gps/trip/${id}${date ? `?date=${date}` : ''}`);
@@ -85,10 +86,13 @@ export const createRating = (data) => apiClient.post('/ratings', data);
 
 
 // Users
-export const getUsers = () => apiClient.get('/users');
-export const getUserById = (id) => apiClient.get(`/users/${id}`);
-export const getUserTickets = (id) => apiClient.get(`/users/${id}/tickets`);
-export const getUserNotifications = (id) => apiClient.get(`/users/${id}/notifications`);
+export const getUsers        = ()         => apiClient.get('/users');
+export const getUserById     = (id)       => apiClient.get(`/users/${id}`);
+export const createUser      = (data)     => apiClient.post('/users', data);
+export const updateUser      = (id, data) => apiClient.put(`/users/${id}`, data);
+export const deleteUserApi   = (id)       => apiClient.delete(`/users/${id}`);
+export const getUserTickets        = (id) => apiClient.get(`/users/${id}/tickets`);
+export const getUserNotifications  = (id) => apiClient.get(`/users/${id}/notifications`);
 
 // Passengers
 export const getPassengers       = ()           => apiClient.get('/users/passengers/list');

@@ -44,8 +44,11 @@ const PassengerRegisterScreen = ({ navigation }) => {
     if (!form.email || !/\S+@\S+\.\S+/.test(form.email))
       e.email = 'Enter a valid email address';
 
-    if (!form.phone || form.phone.replace(/\D/g, '').length < 8)
-      e.phone = 'Enter a valid phone number';
+    if (form.phone) {
+      const normalized = form.phone.replace(/\s/g, '');
+      if (!/^\+[1-9]\d{7,14}$/.test(normalized))
+        e.phone = 'Use international format, e.g. +97450001234';
+    }
 
     if (!form.password || form.password.length < 8)
       e.password = 'Password must be at least 8 characters';
@@ -63,6 +66,12 @@ const PassengerRegisterScreen = ({ navigation }) => {
       e.birthDay = 'Enter a valid day (1–31)';
     if (!form.birthMonth) e.birthMonth = 'Select a month';
     if (!form.birthYear) e.birthYear = 'Select a year';
+
+    if (!e.birthDay && !e.birthMonth && !e.birthYear && form.birthDay && form.birthMonth && form.birthYear) {
+      const monthIndex = MONTHS.indexOf(form.birthMonth) + 1;
+      const dob = new Date(`${form.birthYear}-${String(monthIndex).padStart(2, '0')}-${String(form.birthDay).padStart(2, '0')}`);
+      if (dob > new Date()) e.birthDay = 'Date of birth cannot be in the future';
+    }
 
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -85,7 +94,7 @@ const PassengerRegisterScreen = ({ navigation }) => {
         userData: {
           name: form.name,
           email: form.email,
-          phone: form.phone,
+          phone: form.phone ? form.phone.replace(/\s/g, '') : '',
           password: form.password,
           birth_date: birthDate,
           role: 'passenger',

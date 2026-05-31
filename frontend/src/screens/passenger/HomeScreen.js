@@ -15,11 +15,11 @@ import { getBusesApi } from '../../api/busApi';
 import { COLORS } from '../../constants/colors';
 
 const VEHICLE_TYPES = [
-  { key: 'all',     label: 'All',     icon: 'apps-outline'       },
-  { key: 'bus',     label: 'Bus',     icon: 'bus-outline'        },
-  { key: 'van',     label: 'Van',     icon: 'car-outline'        },
-  { key: 'taxi',    label: 'Taxi',    icon: 'car-sport-outline'  },
-  { key: 'shuttle', label: 'Shuttle', icon: 'train-outline'      },
+  { key: 'all',    label: 'All',    icon: 'apps-outline'      },
+  { key: 'bus',    label: 'Bus',    icon: 'bus-outline'       },
+  { key: 'van',    label: 'Van',    icon: 'car-outline'       },
+  { key: 'taxi',   label: 'Taxi',   icon: 'car-sport-outline' },
+  { key: 'tuktuk', label: 'Tuktuk', icon: 'bicycle-outline'   },
 ];
 
 const STATUS_FILTERS = ['All', 'Active', 'Boarding', 'Delayed'];
@@ -249,6 +249,22 @@ const HomeScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
+        {/* Reserve Taxi banner */}
+        <TouchableOpacity
+          style={styles.taxiCard}
+          onPress={() => navigation.navigate('TaxiReservation')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.taxiIconWrap}>
+            <Ionicons name="car-sport" size={22} color={COLORS.warning} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.taxiTitle}>Reserve a Taxi</Text>
+            <Text style={styles.taxiSub}>Book now or schedule for later · set recurring rides</Text>
+          </View>
+          <Ionicons name="arrow-forward" size={16} color={COLORS.warning} />
+        </TouchableOpacity>
+
         {/* Vehicle type pills */}
         <ScrollView
           horizontal
@@ -450,6 +466,46 @@ const styles = StyleSheet.create({
     marginBottom: 1,
   },
   quickActionSub: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontWeight: '500',
+  },
+
+  /* Reserve Taxi banner */
+  taxiCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: COLORS.white,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    marginHorizontal: 20,
+    marginBottom: 10,
+    borderWidth: 1.5,
+    borderColor: COLORS.warningMid ?? '#FCD34D',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  taxiIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: COLORS.warningLight ?? '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  taxiTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.warning ?? '#D97706',
+    marginBottom: 1,
+  },
+  taxiSub: {
     fontSize: 11,
     color: COLORS.textMuted,
     fontWeight: '500',

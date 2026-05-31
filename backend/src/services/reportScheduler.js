@@ -55,7 +55,13 @@ async function checkAndSend() {
 
     for (const report of result.recordset) {
       try {
-        const recipients = JSON.parse(report.recipients);
+        // recipients may be a JSON array or a plain comma-separated email string
+        let recipients;
+        try {
+          recipients = JSON.parse(report.recipients);
+        } catch {
+          recipients = report.recipients.split(",").map(s => s.trim()).filter(Boolean);
+        }
         const { rows, cols } = await fetchReportData(pool, report.report_type);
         await sendScheduledReport(recipients, report.report_type, report.report_name, rows, cols);
 

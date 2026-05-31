@@ -431,6 +431,19 @@ BEGIN
   CREATE INDEX IX_password_reset_user ON password_reset_tokens(user_id, created_at DESC);
 END;
 
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='otp_codes')
+BEGIN
+  CREATE TABLE otp_codes (
+    otp_id     INT           NOT NULL IDENTITY(1,1) PRIMARY KEY,
+    email      NVARCHAR(120) NOT NULL,
+    code       NVARCHAR(6)   NOT NULL,
+    purpose    NVARCHAR(30)  NULL,
+    expires_at DATETIME2     NOT NULL,
+    created_at DATETIME2     NOT NULL DEFAULT GETUTCDATE()
+  );
+  CREATE INDEX IX_otp_codes_email ON otp_codes(email, expires_at DESC);
+END;
+
 IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='login_lockouts')
 BEGIN
   CREATE TABLE login_lockouts (
@@ -566,6 +579,20 @@ BEGIN
   );
   CREATE INDEX IX_wallet_adjustments_user  ON wallet_adjustments(user_id,  created_at DESC);
   CREATE INDEX IX_wallet_adjustments_admin ON wallet_adjustments(admin_id, created_at DESC);
+END;
+
+-- Driver-reported issues / emergency alerts
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='issues')
+BEGIN
+  CREATE TABLE issues (
+    issue_id    INT            NOT NULL IDENTITY(1,1) PRIMARY KEY,
+    driver_id   INT            NOT NULL REFERENCES drivers(driver_id),
+    trip_id     INT            NULL     REFERENCES trips(trip_id),
+    description NVARCHAR(1000) NOT NULL,
+    created_at  DATETIME2      NOT NULL DEFAULT GETUTCDATE()
+  );
+  CREATE INDEX IX_issues_driver ON issues(driver_id, created_at DESC);
+  CREATE INDEX IX_issues_trip   ON issues(trip_id);
 END;
 `;
 

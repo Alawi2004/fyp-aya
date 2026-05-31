@@ -5,8 +5,7 @@ import { DataTable } from "../components/Table";
 import { Modal } from "../components/Modal";
 import { StatusPill } from "../components/StatusPill";
 import { StatCard } from "../components/StatCard";
-import { getUsers, getPassengerHeatmap } from "../api/endpoints";
-import apiClient from "../api/apiClient";
+import { getUsers, createUser, updateUser, deleteUserApi, getPassengerHeatmap, getDriverSchedules, updateDriverSchedule, getDrivers, getDriverPerformance, adminAdjustWallet } from "../api/endpoints";
 
 const ROLES = ["Passenger", "Driver", "Admin", "Staff"];
 
@@ -21,11 +20,11 @@ const ROLE_STYLE = {
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const SHIFT_CONFIG = {
-  morning:   { label: "Morning",   color: "#2563EB", bg: "#EFF6FF" },
-  afternoon: { label: "Afternoon", color: "#D97706", bg: "#FFFBEB" },
-  night:     { label: "Night",     color: "#7C3AED", bg: "#F5F3FF" },
-  off:       { label: "Off",       color: "#94A3B8", bg: "#F8FAFC" },
-  vacation:  { label: "Vacation",  color: "#10B981", bg: "#ECFDF5" },
+  morning:   { label: "Morning",   time: "6:00–14:00",  color: "#2563EB", bg: "#EFF6FF" },
+  afternoon: { label: "Afternoon", time: "14:00–22:00", color: "#D97706", bg: "#FFFBEB" },
+  night:     { label: "Night",     time: "22:00–6:00",  color: "#7C3AED", bg: "#F5F3FF" },
+  off:       { label: "Day Off",   time: "",             color: "#94A3B8", bg: "#F8FAFC" },
+  vacation:  { label: "Vacation",  time: "",             color: "#10B981", bg: "#ECFDF5" },
 };
 
 const ROUTES_LIST = [
@@ -83,21 +82,24 @@ function calcScore(d) {
   return Math.round(onTime + rating + noComplaints);
 }
 
-const EMPTY_FORM = { name: "", email: "", role: "Passenger", status: "Active" };
+const EMPTY_FORM = { name: "", email: "", password: "", birthDate: "", role: "Passenger", status: "Active" };
+
+function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : ""; }
 
 function normalizeUser(u) {
   return {
-    id:         u.user_id ?? u.id,
-    name:       u.full_name ?? u.name ?? "",
-    email:      u.email ?? "",
-    phone:      u.phone ?? null,
-    role:       u.role ?? "Passenger",
-    joined:     u.created_at ? u.created_at.slice(0, 10) : (u.joined ?? ""),
-    trips:      u.trips ?? 0,
-    status:     u.status ?? "Active",
-    nationalId: u.national_id ?? null,
-    birthDate:  u.birth_date ?? null,
-    photo:      u.photo ?? null,
+    id:            u.user_id ?? u.id,
+    name:          u.full_name ?? u.name ?? "",
+    email:         u.email ?? "",
+    phone:         u.phone ?? null,
+    role:          cap(u.role) || "Passenger",
+    joined:        u.created_at ? u.created_at.slice(0, 10) : (u.joined ?? ""),
+    trips:         u.trips ?? 0,
+    status:        cap(u.status) || "Active",
+    nationalId:    u.national_id ?? null,
+    birthDate:     u.birth_date ?? null,
+    photo:         u.photo ?? null,
+    walletBalance: u.wallet_balance ?? null,
   };
 }
 
@@ -119,12 +121,13 @@ function ProfileDrawer({ onClose, children }) {
   );
 }
 
-function DrawerHeader({ title, accent, onClose, onEdit, children }) {
+function DrawerHeader({ title, accent, onClose, onEdit, extra, children }) {
   return (
     <div style={{ padding: "24px 24px 20px", borderBottom: "1px solid #F1F5F9", flexShrink: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <span style={{ fontSize: 15, fontWeight: 800, color: "#0F172A" }}>{title}</span>
         <div style={{ display: "flex", gap: 8 }}>
+          {extra}
           {onEdit && (
             <button onClick={onEdit} style={{ background: accent?.bg ?? "#EFF6FF", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", color: accent?.color ?? "#2563EB", fontSize: 12, fontWeight: 600 }}>
               Edit
@@ -155,19 +158,92 @@ function SectionLabel({ children }) {
   );
 }
 
+// ── Wallet Adjust Modal (inline, used in PassengerProfile) ───────────────────
+function WalletAdjustModal({ user, onClose }) {
+  const [type,   setType]   = useState("credit");
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [notes,  setNotes]  = useState("");
+  const [busy,   setBusy]   = useState(false);
+  const [err,    setErr]    = useState(null);
+  const [ok,     setOk]     = useState(null);
+
+  const fld = { width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" };
+
+  const submit = async () => {
+    const parsed = parseFloat(amount);
+    if (!amount || isNaN(parsed) || parsed <= 0) { setErr("Enter a valid positive amount."); return; }
+    if (!reason) { setErr("Reason is required."); return; }
+    setBusy(true); setErr(null);
+    try {
+      await adminAdjustWallet({ user_id: user.id, type, amount: parsed, reason, notes: notes || undefined });
+      setOk(`OMR ${parsed.toFixed(2)} ${type}ed successfully`);
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+
+  return (
+    <Modal title={`Wallet — ${user.name}`} onClose={onClose} onSave={ok ? undefined : submit} saving={busy}>
+      {ok ? (
+        <div style={{ textAlign: "center", padding: "20px 0" }}>
+          <div style={{ fontSize: 32, color: "#059669", marginBottom: 8 }}>✓</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#059669" }}>{ok}</div>
+          <button onClick={onClose} style={{ marginTop: 16, padding: "8px 20px", borderRadius: 8, border: "none", background: "#059669", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Done</button>
+        </div>
+      ) : (<>
+        {user.walletBalance != null && (
+          <p style={{ fontSize: 13, color: "#64748B", marginBottom: 16 }}>Current balance: <strong style={{ color: "#0F172A" }}>OMR {parseFloat(user.walletBalance).toFixed(2)}</strong></p>
+        )}
+        <div style={{ display: "flex", gap: 4, background: "#F1F5F9", borderRadius: 10, padding: 4, marginBottom: 16 }}>
+          {["credit", "debit"].map(t => (
+            <button key={t} onClick={() => setType(t)} style={{ flex: 1, padding: "7px", borderRadius: 8, border: "none", background: type === t ? "#fff" : "transparent", color: type === t ? (t === "credit" ? "#059669" : "#DC2626") : "#64748B", fontWeight: type === t ? 700 : 500, fontSize: 13, cursor: "pointer" }}>
+              {t === "credit" ? "+ Credit" : "- Debit"}
+            </button>
+          ))}
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 }}>Amount (OMR) *</label>
+          <input type="number" min="0.01" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" style={fld} />
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 }}>Reason *</label>
+          <input type="text" value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. Refund for delayed trip" style={fld} />
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 }}>Notes (optional)</label>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} style={{ ...fld, resize: "vertical", fontFamily: "inherit" }} />
+        </div>
+        {err && <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginTop: 8, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>{err}</div>}
+      </>)}
+    </Modal>
+  );
+}
+
 // ── Passenger Profile ────────────────────────────────────────────────────────
 function PassengerProfile({ user, onClose, onEdit }) {
-  const trips     = seedTrips(user.id);
-  const completed = trips.filter(t => t.status === "Completed").length;
-  const rs        = ROLE_STYLE.Passenger;
-  const initials  = user.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-  const walletBal = `OMR ${(((String(user.id).charCodeAt(0) * 3) % 50) + 5).toFixed(2)}`;
-  const phone     = user.phone || "+968 9" + String(user.id * 7 % 9000000 + 1000000);
+  const [tickets,      setTickets]      = useState(null);
+  const [walletOpen,   setWalletOpen]   = useState(false);
+
+  useEffect(() => {
+    import("../api/endpoints").then(({ getUserTickets }) =>
+      getUserTickets(user.id)
+        .then(data => setTickets(Array.isArray(data) ? data : []))
+        .catch(() => setTickets([]))
+    );
+  }, [user.id]);
+
+  const completed  = (tickets || []).filter(t => ["completed","confirmed"].includes(t.status?.toLowerCase())).length;
+  const rs         = ROLE_STYLE.Passenger;
+  const initials   = user.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+  const walletBal  = user.walletBalance != null ? `OMR ${parseFloat(user.walletBalance).toFixed(2)}` : "—";
+  const phone      = user.phone || "—";
   const nationalId = user.nationalId || "IC-" + String(user.id).padStart(6, "0") + "X";
 
   return (
     <ProfileDrawer onClose={onClose}>
-      <DrawerHeader title="Passenger Profile" accent={rs} onClose={onClose} onEdit={onEdit}>
+      {walletOpen && <WalletAdjustModal user={user} onClose={() => setWalletOpen(false)} />}
+      <DrawerHeader title="Passenger Profile" accent={rs} onClose={onClose} onEdit={onEdit}
+        extra={<button onClick={() => setWalletOpen(true)} style={{ background: "#ECFDF5", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: "#059669", fontSize: 12, fontWeight: 600 }}>Wallet</button>}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <div style={{ width: 64, height: 64, borderRadius: "50%", flexShrink: 0, background: rs.bg, border: `3px solid ${rs.color}30`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: rs.color }}>
             {user.photo
@@ -194,7 +270,7 @@ function PassengerProfile({ user, onClose, onEdit }) {
           <InfoTile label="Wallet Balance"  value={walletBal} accent="#059669" />
           <InfoTile label="Phone"           value={phone} />
           <InfoTile label="Joined"          value={user.joined || "—"} />
-          <InfoTile label="Total Trips"     value={user.trips ?? completed} />
+          <InfoTile label="Total Trips"     value={tickets === null ? "…" : (user.trips ?? tickets.length)} />
         </div>
       </div>
 
@@ -202,23 +278,33 @@ function PassengerProfile({ user, onClose, onEdit }) {
       <div style={{ padding: "20px 24px", flex: 1 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <SectionLabel>Trip History</SectionLabel>
-          <span style={{ fontSize: 11, color: "#64748B", marginTop: -14 }}>{completed} completed · {trips.length - completed} cancelled</span>
+          {tickets && <span style={{ fontSize: 11, color: "#64748B", marginTop: -14 }}>{completed} completed · {tickets.length - completed} other</span>}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {trips.map(t => (
-            <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 12, background: "#F8FAFC", border: "1px solid #F1F5F9", borderRadius: 10, padding: "10px 14px" }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "#0F172A", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.route}</div>
-                <div style={{ fontSize: 11, color: "#94A3B8" }}>{t.date} · {t.id}</div>
+          {tickets === null ? (
+            <div style={{ textAlign: "center", color: "#94A3B8", fontSize: 13, padding: "16px 0" }}>Loading…</div>
+          ) : tickets.length === 0 ? (
+            <div style={{ textAlign: "center", color: "#bbb", fontSize: 13, padding: "16px 0" }}>No trips found</div>
+          ) : tickets.slice(0, 10).map((t, i) => {
+            const statusLow = t.status?.toLowerCase() ?? "";
+            const isOk = ["completed", "confirmed"].includes(statusLow);
+            return (
+              <div key={t.ticket_id ?? i} style={{ display: "flex", alignItems: "center", gap: 12, background: "#F8FAFC", border: "1px solid #F1F5F9", borderRadius: 10, padding: "10px 14px" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#0F172A", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {t.route_name ?? (t.trip_id ? `Trip #${t.trip_id}` : `Ticket #${t.ticket_id}`)}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#94A3B8" }}>{t.created_at ? new Date(t.created_at).toLocaleDateString("en-GB") : "—"}</div>
+                </div>
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  {t.fare != null && <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", marginBottom: 2 }}>OMR {parseFloat(t.fare).toFixed(2)}</div>}
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6, background: isOk ? "#F0FDF4" : "#FEF2F2", color: isOk ? "#059669" : "#DC2626" }}>
+                    {t.status}
+                  </span>
+                </div>
               </div>
-              <div style={{ textAlign: "right", flexShrink: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", marginBottom: 2 }}>{t.fare}</div>
-                <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6, background: t.status === "Completed" ? "#F0FDF4" : "#FEF2F2", color: t.status === "Completed" ? "#059669" : "#DC2626" }}>
-                  {t.status}
-                </span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </ProfileDrawer>
@@ -227,14 +313,66 @@ function PassengerProfile({ user, onClose, onEdit }) {
 
 // ── Driver Profile (from Users list) ────────────────────────────────────────
 function DriverUserProfile({ user, onClose, onEdit }) {
-  const rs       = ROLE_STYLE.Driver;
+  const rs      = ROLE_STYLE.Driver;
   const initials = user.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 
-  const perf       = { trips_week: 0, on_time_pct: 85, complaints: 0, avg_rating: null, idle_hours: 3.0 };
-  const schedule    = null;
+  const [schedule,    setSchedule]    = useState(null);
+  const [driverInfo,  setDriverInfo]  = useState(null);   // { license_number, driver_id, … }
+  const [perf,        setPerf]        = useState(null);   // { trips_week, on_time_pct, … }
+  const [editDay,     setEditDay]     = useState(null);
+  const [pickedShift, setPickedShift] = useState("off");
+  const [schedSaving, setSchedSaving] = useState(false);
+  const [schedError,  setSchedError]  = useState(null);
+
+  useEffect(() => {
+    Promise.all([
+      getDriverSchedules().catch(() => []),
+      getDrivers().catch(() => ({ data: [] })),
+      getDriverPerformance().catch(() => []),
+    ]).then(([schedList, driversResp, perfList]) => {
+      const drivers = driversResp?.data ?? driversResp ?? [];
+      const sched   = (schedList || []).find(s => s.user_id === user.id);
+      const info    = (drivers    || []).find(d => d.user_id === user.id);
+      const p       = (perfList   || []).find(d => d.user_id === user.id);
+      if (sched) setSchedule(sched);
+      if (info)  setDriverInfo(info);
+      if (p)     setPerf(p);
+    });
+  }, [user.id]);
+
+  function openDayPicker(day) {
+    setPickedShift(schedule?.[day.toLowerCase()] || "off");
+    setEditDay(day);
+    setSchedError(null);
+  }
+
+  async function saveDayShift() {
+    if (!editDay) return;
+    const driverId = schedule?.driver_id ?? driverInfo?.driver_id;
+    if (!driverId) { setSchedError("Driver record not found"); return; }
+    setSchedSaving(true);
+    setSchedError(null);
+    const base    = schedule ?? {};
+    const dayKey  = editDay.toLowerCase();
+    const updated = { ...base, [dayKey]: pickedShift };
+    const payload = Object.fromEntries(
+      DAYS.map(d => [d, updated[d.toLowerCase()] || "off"])
+    );
+    try {
+      await updateDriverSchedule(driverId, payload);
+      setSchedule({ ...updated, driver_id: driverId, user_id: user.id });
+      setEditDay(null);
+    } catch (err) {
+      setSchedError(err?.message ?? "Failed to save");
+    } finally {
+      setSchedSaving(false);
+    }
+  }
+
+  const perfData    = perf ?? { trips_week: 0, on_time_pct: 0, complaints: 0, avg_rating: null, idle_hours: 0 };
   const recentTrips = [];
   const ratings     = [];
-  const score       = calcScore(perf);
+  const score       = calcScore(perfData);
   const scoreColor  = score >= 85 ? "#10B981" : score >= 70 ? "#F59E0B" : "#EF4444";
 
   return (
@@ -250,7 +388,7 @@ function DriverUserProfile({ user, onClose, onEdit }) {
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
               <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: rs.bg, color: rs.color }}>Driver</span>
               <StatusPill status={user.status} />
-              {driverData.rating && <span style={{ color: "#f9a825", fontWeight: 700, fontSize: 12 }}>★ {driverData.rating}</span>}
+              {perfData.avg_rating && <span style={{ color: "#f9a825", fontWeight: 700, fontSize: 12 }}>★ {perfData.avg_rating}</span>}
             </div>
           </div>
         </div>
@@ -260,12 +398,12 @@ function DriverUserProfile({ user, onClose, onEdit }) {
       <div style={{ padding: "20px 24px", borderBottom: "1px solid #F1F5F9" }}>
         <SectionLabel>Identity &amp; Contact</SectionLabel>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <InfoTile label="License No."  value={driverData.license ?? "—"} />
-          <InfoTile label="Phone"        value={driverData.phone ?? user.phone ?? "—"} />
-          <InfoTile label="Joined"       value={user.joined || "—"} />
+          <InfoTile label="License No."  value={driverInfo?.license_number ?? "—"} />
+          <InfoTile label="Phone"        value={user.phone ?? "—"} />
           <InfoTile label="Status"       value={user.status} />
-          <InfoTile label="Total Trips"  value={user.trips ?? 0} />
+          <InfoTile label="Trips Today"  value={perfData.trips_week ?? 0} />
           <InfoTile label="Perf. Score"  value={`${score} / 100`} accent={scoreColor} />
+          <InfoTile label="Avg Rating"   value={perfData.avg_rating ? `★ ${perfData.avg_rating}` : "—"} />
         </div>
       </div>
 
@@ -274,10 +412,10 @@ function DriverUserProfile({ user, onClose, onEdit }) {
         <SectionLabel>This Week&apos;s Performance</SectionLabel>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 14 }}>
           {[
-            { label: "Trips",      value: perf.trips_week,        color: "#2563EB" },
-            { label: "On-Time",    value: `${perf.on_time_pct}%`, color: perf.on_time_pct >= 90 ? "#10B981" : perf.on_time_pct >= 75 ? "#F59E0B" : "#EF4444" },
-            { label: "Complaints", value: perf.complaints,         color: perf.complaints === 0 ? "#10B981" : "#EF4444" },
-            { label: "Idle",       value: `${perf.idle_hours}h`,  color: perf.idle_hours > 4 ? "#EF4444" : "#64748B" },
+            { label: "Trips",      value: perfData.trips_week,        color: "#2563EB" },
+            { label: "On-Time",    value: `${perfData.on_time_pct ?? 0}%`, color: (perfData.on_time_pct ?? 0) >= 90 ? "#10B981" : (perfData.on_time_pct ?? 0) >= 75 ? "#F59E0B" : "#EF4444" },
+            { label: "Complaints", value: perfData.complaints,         color: perfData.complaints === 0 ? "#10B981" : "#EF4444" },
+            { label: "Idle",       value: `${perfData.idle_hours}h`,  color: perfData.idle_hours > 4 ? "#EF4444" : "#64748B" },
           ].map(({ label, value, color }) => (
             <div key={label} style={{ background: "#F8FAFC", borderRadius: 10, padding: "12px 8px", textAlign: "center", border: "1px solid #F1F5F9" }}>
               <div style={{ fontSize: 18, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
@@ -294,24 +432,38 @@ function DriverUserProfile({ user, onClose, onEdit }) {
         </div>
       </div>
 
-      {/* Weekly Schedule */}
-      {schedule && (
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid #F1F5F9" }}>
+      {/* Weekly Schedule — editable */}
+      <div style={{ padding: "20px 24px", borderBottom: "1px solid #F1F5F9" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <SectionLabel>This Week&apos;s Schedule</SectionLabel>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {DAYS.map(day => {
-              const shift = schedule[day] || "off";
-              const cfg   = SHIFT_CONFIG[shift] || SHIFT_CONFIG.off;
-              return (
-                <div key={day} style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 4, fontWeight: 600 }}>{day}</div>
-                  <div style={{ padding: "5px 8px", borderRadius: 7, background: cfg.bg, border: `1px solid ${cfg.color}30`, fontSize: 10, fontWeight: 700, color: cfg.color, whiteSpace: "nowrap" }}>{cfg.label}</div>
-                </div>
-              );
-            })}
-          </div>
+          <span style={{ fontSize: 10, color: "#94A3B8" }}>Click a day to change</span>
         </div>
-      )}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {DAYS.map(day => {
+            const key   = day.toLowerCase();
+            const shift = schedule?.[key] || "off";
+            const cfg   = SHIFT_CONFIG[shift] || SHIFT_CONFIG.off;
+            return (
+              <div key={day} style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 4, fontWeight: 600 }}>{day}</div>
+                <button
+                  onClick={() => openDayPicker(day)}
+                  style={{
+                    padding: "6px 10px", borderRadius: 7, cursor: "pointer",
+                    background: cfg.bg, border: `1px solid ${cfg.color}44`,
+                    fontSize: 10, fontWeight: 700, color: cfg.color, whiteSpace: "nowrap",
+                    transition: "filter .15s",
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.filter = "brightness(0.93)"}
+                  onMouseLeave={e => e.currentTarget.style.filter = "none"}
+                >
+                  {cfg.label}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Ratings */}
       {ratings.length > 0 && (
@@ -356,6 +508,50 @@ function DriverUserProfile({ user, onClose, onEdit }) {
           }
         </div>
       </div>
+
+      {/* Day shift picker modal */}
+      {editDay && (
+        <Modal
+          title={`${user.name} — ${editDay}`}
+          onClose={() => { setEditDay(null); setSchedError(null); }}
+          onSave={saveDayShift}
+          saving={schedSaving}
+        >
+          {schedError && (
+            <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>
+              {schedError}
+            </div>
+          )}
+          <p style={{ fontSize: 13, color: "#475569", marginBottom: 14, marginTop: 0 }}>
+            Select shift for <strong>{editDay}</strong>:
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {Object.entries(SHIFT_CONFIG).map(([key, cfg]) => (
+              <label
+                key={key}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "10px 14px", borderRadius: 10, cursor: "pointer",
+                  border: `2px solid ${pickedShift === key ? cfg.color : "#E2E8F0"}`,
+                  background: pickedShift === key ? cfg.bg : "#fff",
+                  transition: "all .15s",
+                }}
+              >
+                <input
+                  type="radio" name="userDriverShift" value={key}
+                  checked={pickedShift === key}
+                  onChange={() => setPickedShift(key)}
+                  style={{ accentColor: cfg.color }}
+                />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: cfg.color }}>{cfg.label}</div>
+                  {cfg.time && <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>{cfg.time}</div>}
+                </div>
+              </label>
+            ))}
+          </div>
+        </Modal>
+      )}
     </ProfileDrawer>
   );
 }
@@ -903,8 +1099,10 @@ export default function UsersPage() {
   const [modalOpen,    setModalOpen]    = useState(false);
   const [editTarget,   setEditTarget]   = useState(null);
   const [form,         setForm]         = useState(EMPTY_FORM);
-  const [deleteId,     setDeleteId]     = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [profile,      setProfile]      = useState(null);
+  const [isSaving,     setIsSaving]     = useState(false);
+  const [isDeleting,   setIsDeleting]   = useState(false);
 
   const loadUsers = useCallback(() => {
     setUsersLoading(true);
@@ -929,35 +1127,80 @@ export default function UsersPage() {
         && (roleFilter === "All" || u.role === roleFilter);
   });
 
-  function openAdd() { setEditTarget(null); setForm(EMPTY_FORM); setModalOpen(true); }
-  function openEdit(u) {
-    setEditTarget(u.id);
-    setForm({ name: u.name, email: u.email, role: u.role, status: u.status });
+  const [saveError,   setSaveError]   = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
+
+  function openAdd() {
+    setEditTarget(null);
+    setForm(EMPTY_FORM);
+    setSaveError(null);
     setModalOpen(true);
   }
 
+  function openEdit(u) {
+    setEditTarget(u.id);
+    setForm({
+      name:      u.name,
+      email:     u.email,
+      phone:     u.phone ?? "",
+      birthDate: u.birthDate ?? "",
+      role:      u.role,
+      status:    u.status,
+    });
+    setSaveError(null);
+    setModalOpen(true);
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+
   async function handleSave() {
     if (!form.name || !form.email) return;
-    if (editTarget) {
-      await apiClient.put(`/users/${editTarget}`, { full_name: form.name, phone: "" }).catch(() => {});
-      setUsers(prev => prev.map(u => u.id === editTarget ? { ...u, ...form } : u));
-    } else {
-      const created = await apiClient.post("/auth/register", {
-        full_name: form.name, email: form.email, password: "changeme123", role: form.role,
-      }).catch(() => null);
-      setUsers(prev => [...prev, {
-        id: created?.data?.user_id ?? Date.now(),
-        ...form, joined: new Date().toISOString().split("T")[0],
-        trips: 0, nationalId: null, birthDate: null, phone: null, photo: null,
-      }]);
+    if (!editTarget && !form.password) { setSaveError("Password is required."); return; }
+    if (form.birthDate && form.birthDate > today) { setSaveError("Date of birth cannot be in the future."); return; }
+    setSaveError(null);
+    setIsSaving(true);
+    try {
+      if (editTarget) {
+        await updateUser(editTarget, {
+          full_name:  form.name,
+          phone:      form.phone || null,
+          role:       form.role,
+          status:     form.status,
+          birth_date: form.birthDate || null,
+        });
+      } else {
+        await createUser({
+          full_name:  form.name,
+          email:      form.email,
+          password:   form.password,
+          role:       form.role,
+          birth_date: form.birthDate || null,
+        });
+        setSearch("");
+        setRoleFilter("All");
+      }
+      setModalOpen(false);
+      loadUsers();
+    } catch (err) {
+      setSaveError(err?.message ?? "Save failed");
+    } finally {
+      setIsSaving(false);
     }
-    setModalOpen(false);
   }
 
   async function handleDelete() {
-    await apiClient.delete(`/users/${deleteId}`).catch(() => {});
-    setUsers(prev => prev.filter(u => u.id !== deleteId));
-    setDeleteId(null);
+    if (!deleteTarget) return;
+    setDeleteError(null);
+    setIsDeleting(true);
+    try {
+      await deleteUserApi(deleteTarget.id);
+      setDeleteTarget(null);
+      loadUsers();
+    } catch (err) {
+      setDeleteError(err?.message ?? "Delete failed");
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   const counts = {
@@ -1011,11 +1254,14 @@ export default function UsersPage() {
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={e => { e.stopPropagation(); setProfile(row); }} style={{ fontSize: 11, color: "#7C3AED", background: "#F5F3FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Profile</button>
           <button onClick={e => { e.stopPropagation(); openEdit(row); }} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Edit</button>
-          <button onClick={e => { e.stopPropagation(); setDeleteId(row.id); }} style={{ fontSize: 11, color: "#B91C1C", background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Delete</button>
+          <button onClick={e => { e.stopPropagation(); setDeleteTarget(row); setDeleteError(null); }} style={{ fontSize: 11, color: "#B91C1C", background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Delete</button>
         </div>
       ),
     },
   ];
+
+  const fldLbl = { fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 };
+  const fldInp = { width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -1083,26 +1329,52 @@ export default function UsersPage() {
 
       {/* Edit / Add modal */}
       {modalOpen && (
-        <Modal title={editTarget ? "Edit user" : "Add new user"} onClose={() => setModalOpen(false)} onSave={handleSave}>
-          {[
-            { label: "Full name", key: "name",  type: "text",  placeholder: "e.g. Ali Hassan" },
-            { label: "Email",     key: "email", type: "email", placeholder: "user@mail.com" },
-          ].map(f => (
-            <div key={f.key} style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 }}>{f.label}</label>
-              <input type={f.type} placeholder={f.placeholder} value={form[f.key]}
-                onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
-                style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+        <Modal title={editTarget ? "Edit user" : "Add new user"} onClose={() => { setModalOpen(false); setIsSaving(false); }} onSave={handleSave} saving={isSaving}>
+          {saveError && (
+            <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>
+              {saveError}
             </div>
-          ))}
+          )}
+          {/* Name */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={fldLbl}>Full name *</label>
+            <input type="text" placeholder="e.g. Ali Hassan" value={form.name ?? ""}
+              onChange={e => setForm(p => ({ ...p, name: e.target.value }))} style={fldInp} />
+          </div>
+          {/* Email — read-only when editing */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={fldLbl}>Email *</label>
+            <input type="email" placeholder="user@mail.com" value={form.email ?? ""}
+              disabled={!!editTarget}
+              onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+              style={{ ...fldInp, background: editTarget ? "#F8FAFC" : "#fff" }} />
+          </div>
+          {/* Password — only shown when adding */}
+          {!editTarget && (
+            <div style={{ marginBottom: 14 }}>
+              <label style={fldLbl}>Password *</label>
+              <input type="password" placeholder="Min 8 chars, 1 upper, 1 digit, 1 symbol"
+                value={form.password ?? ""}
+                onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+                style={fldInp} />
+            </div>
+          )}
+          {/* Birthday — optional */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={fldLbl}>Date of Birth <span style={{ fontWeight: 400, color: "#94A3B8" }}>(optional)</span></label>
+            <input type="date" value={form.birthDate ?? ""} max={today}
+              onChange={e => setForm(p => ({ ...p, birthDate: e.target.value }))}
+              style={fldInp} />
+          </div>
+          {/* Role + Status */}
           {[
             { label: "Role",   key: "role",   options: ROLES },
             { label: "Status", key: "status", options: ["Active", "Inactive"] },
           ].map(f => (
             <div key={f.key} style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 }}>{f.label}</label>
+              <label style={fldLbl}>{f.label}</label>
               <select value={form[f.key] ?? f.options[0]} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
-                style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13 }}>
+                style={{ ...fldInp, cursor: "pointer" }}>
                 {f.options.map(o => <option key={o}>{o}</option>)}
               </select>
             </div>
@@ -1111,12 +1383,34 @@ export default function UsersPage() {
       )}
 
       {/* Delete confirm */}
-      {deleteId && (
-        <Modal title="Delete user" onClose={() => setDeleteId(null)}>
-          <p style={{ fontSize: 14, color: "#333", marginBottom: 20 }}>Are you sure you want to delete this user? This cannot be undone.</p>
+      {deleteTarget && (
+        <Modal title="Delete user" onClose={() => { setDeleteTarget(null); setDeleteError(null); setIsDeleting(false); }}>
+          {deleteError && (
+            <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>
+              {deleteError}
+            </div>
+          )}
+          <p style={{ fontSize: 14, color: "#333", marginBottom: 8 }}>
+            Permanently delete <strong>{deleteTarget.name}</strong>?
+          </p>
+          <p style={{ fontSize: 12, color: "#64748B", marginBottom: 20 }}>
+            {deleteTarget.email} · {deleteTarget.role} — this cannot be undone.
+          </p>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-            <button onClick={() => setDeleteId(null)} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #ddd", background: "#fff", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-            <button onClick={handleDelete} style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#EF4444", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Delete</button>
+            <button
+              onClick={() => { setDeleteTarget(null); setDeleteError(null); }}
+              disabled={isDeleting}
+              style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #ddd", background: "#fff", fontSize: 13, cursor: "pointer" }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={isDeleting}
+              style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#EF4444", color: "#fff", fontSize: 13, fontWeight: 600, cursor: isDeleting ? "not-allowed" : "pointer", opacity: isDeleting ? 0.7 : 1 }}
+            >
+              {isDeleting ? "Deleting…" : "Delete"}
+            </button>
           </div>
         </Modal>
       )}
