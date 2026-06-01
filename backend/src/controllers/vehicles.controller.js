@@ -33,7 +33,7 @@ export const getVehicles = async (req, res) => {
       const r = pool.request()
         .input("limit",  sql.Int, limit)
         .input("offset", sql.Int, offset);
-      let where = "WHERE status != 'deleted'";
+      let where = "WHERE 1=1";
       if (search) { r.input("search", sql.NVarChar(200), `%${search}%`); where += " AND (plate_number LIKE @search OR model LIKE @search)"; }
       if (status) { r.input("status", sql.NVarChar(50),  status);        where += " AND status = @status"; }
       if (type)   { r.input("type",   sql.NVarChar(50),  type);          where += " AND vehicle_type = @type"; }
@@ -57,15 +57,40 @@ export const getVehicles = async (req, res) => {
 };
 
 export const deleteVehicle = async (req, res) => {
+  const vid = Number(req.params.id);
+  if (!vid) return res.status(400).json({ error: "Invalid vehicle id" });
+
   try {
-    const pool   = await poolPromise;
-    const result = await pool.request()
-      .input("id", sql.Int, req.params.id)
-      .query("UPDATE vehicles SET status = 'deleted' WHERE vehicle_id = @id AND status != 'deleted'");
-    if (result.rowsAffected[0] === 0) return res.status(404).json({ error: "Vehicle not found" });
-    res.json({ message: "Vehicle soft-deleted" });
+    const pool = await poolPromise;
+
+    // Nullify FK references so the hard delete can proceed
+    // trips.vehicle_id → nullable
+    await pool.request().input("vid", sql.Int, vid).query(`
+      IF OBJECT_ID('trips','U') IS NOT NULL
+        UPDATE trips SET vehicle_id = NULL WHERE vehicle_id = @vid
+    `);
+    // vehicle_docs references plate, not vehicle_id — delete matching docs row
+    await pool.request().input("vid", sql.Int, vid).query(`
+      IF OBJECT_ID('vehicle_docs','U') IS NOT NULL
+        DELETE FROM vehicle_docs
+        WHERE plate = (SELECT TOP 1 plate_number FROM vehicles WHERE vehicle_id = @vid)
+    `);
+    // maintenance and fuel records reference vehicle_id directly — delete them
+    await pool.request().input("vid", sql.Int, vid).query(`
+      IF OBJECT_ID('vehicle_maintenance_records','U') IS NOT NULL
+        DELETE FROM vehicle_maintenance_records WHERE vehicle_id = @vid;
+      IF OBJECT_ID('vehicle_fuel_records','U') IS NOT NULL
+        DELETE FROM vehicle_fuel_records WHERE vehicle_id = @vid;
+    `);
+
+    const del = await pool.request().input("vid", sql.Int, vid)
+      .query("DELETE FROM vehicles WHERE vehicle_id = @vid");
+
+    if (del.rowsAffected[0] === 0) return res.status(404).json({ error: "Vehicle not found" });
+    res.json({ message: "Vehicle deleted" });
   } catch (err) {
-    res.status(500).json({ error: "Failed to delete vehicle" });
+    console.error("[deleteVehicle]", err.message);
+    res.status(500).json({ error: "Delete failed: " + err.message });
   }
 };
 

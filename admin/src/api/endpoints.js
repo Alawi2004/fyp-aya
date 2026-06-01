@@ -36,6 +36,7 @@ export const addFuelRecord           = (data)     => apiClient.post('/vehicles/f
 export const getVehicleFuelLog       = (id)       => apiClient.get(`/vehicles/${id}/fuel`);
 export const getVehiclePhotos        = (id)       => apiClient.get(`/vehicles/${id}/photos`);
 export const uploadVehiclePhoto      = (id, formData) => apiClient.post(`/vehicles/${id}/photos`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+export const deleteVehicle           = (id)            => apiClient.delete(`/vehicles/${id}`);
 export const deleteVehiclePhotoApi   = (id, filename) => apiClient.delete(`/vehicles/${id}/photos/${filename}`);
 
 // Drivers
@@ -52,6 +53,7 @@ export const getRoutes = () => apiClient.get('/routes');
 export const getRouteById = (id) => apiClient.get(`/routes/${id}`);
 export const createRoute = (data) => apiClient.post('/routes', data);
 export const updateRoute = (id, data) => apiClient.put(`/routes/${id}`, data);
+export const deleteRoute = (id) => apiClient.delete(`/routes/${id}`);
 
 // Stops
 export const getStops           = ()              => apiClient.get('/stops');

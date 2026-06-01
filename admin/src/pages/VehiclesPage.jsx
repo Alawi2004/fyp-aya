@@ -4,7 +4,7 @@ import { DataTable } from "../components/Table";
 import { Modal } from "../components/Modal";
 import { StatCard } from "../components/StatCard";
 import {
-  getVehicles, createVehicle, updateVehicle,
+  getVehicles, createVehicle, updateVehicle, deleteVehicle,
   getVehicleDocs, updateVehicleDocs,
   getMaintenanceLog, addMaintenanceRecord,
   getFuelLog, addFuelRecord,
@@ -15,7 +15,7 @@ import { PageLoading, PageError, PageEmpty } from "../components/DataStates";
 // ── Constants ─────────────────────────────────────────────────────────────────
 const TODAY            = new Date("2026-05-10");
 const VEHICLE_STATUSES = ["Active", "Maintenance", "Inactive"];
-const VEHICLE_TYPES    = ["Bus", "Minibus", "Van", "Taxi"];
+const VEHICLE_TYPES    = ["Bus", "Minibus", "Van", "Taxi", "Tuktuk"];
 const SERVICE_TYPES    = ["Oil Change", "Tire Rotation", "Brake Check", "Engine Service", "Full Inspection", "AC Service", "Body Work", "Other"];
 const AVAILABLE_DRIVERS = ["Karim Moussa","Lara Abi Nader","Joe Pharaon","Maya Salameh","Rami Khoury","Sara Khoury","Fadi Gemayel","Hassan Nasser","Nadia Haddad","Ziad Mansour"];
 
@@ -25,31 +25,105 @@ const STATUS_STYLE = {
   Inactive:    { bg: "#F1F5F9", color: "#64748B", dot: "#94A3B8" },
 };
 
-const TYPE_ICON = { Bus: "🚌", Minibus: "🚐", Van: "🚐", Taxi: "🚕", Sedan: "🚗" };
+// SVG icons for each vehicle type
+function VehicleIcon({ type, size = 20, color = "currentColor" }) {
+  const s = { fill: "none", stroke: color, strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round" };
+  const icons = {
+    Bus: (
+      <svg width={size} height={size} viewBox="0 0 24 24" {...s}>
+        <rect x="2" y="5" width="20" height="14" rx="2"/>
+        <line x1="2" y1="11" x2="22" y2="11"/>
+        <line x1="8" y1="5" x2="8" y2="11"/>
+        <line x1="16" y1="5" x2="16" y2="11"/>
+        <circle cx="6.5" cy="20" r="1.5"/>
+        <circle cx="17.5" cy="20" r="1.5"/>
+        <line x1="5" y1="19" x2="2" y2="19"/>
+        <line x1="19" y1="19" x2="22" y2="19"/>
+      </svg>
+    ),
+    Minibus: (
+      <svg width={size} height={size} viewBox="0 0 24 24" {...s}>
+        <path d="M2 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9H2z"/>
+        <line x1="2" y1="12" x2="20" y2="12"/>
+        <line x1="8" y1="6" x2="8" y2="12"/>
+        <line x1="14" y1="6" x2="14" y2="12"/>
+        <circle cx="6" cy="19" r="1.5"/>
+        <circle cx="16" cy="19" r="1.5"/>
+        <line x1="20" y1="17" x2="22" y2="17"/>
+      </svg>
+    ),
+    Van: (
+      <svg width={size} height={size} viewBox="0 0 24 24" {...s}>
+        <path d="M3 6a2 2 0 0 1 2-2h10l4 5v8H3z"/>
+        <line x1="3" y1="12" x2="19" y2="12"/>
+        <line x1="13" y1="4" x2="13" y2="12"/>
+        <circle cx="6.5" cy="19" r="1.5"/>
+        <circle cx="15.5" cy="19" r="1.5"/>
+        <line x1="19" y1="17" x2="21" y2="17"/>
+      </svg>
+    ),
+    Taxi: (
+      <svg width={size} height={size} viewBox="0 0 24 24" {...s}>
+        <path d="M5 11l2-5h10l2 5"/>
+        <path d="M2 11h20v7a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/>
+        <circle cx="6.5" cy="19" r="1.5"/>
+        <circle cx="17.5" cy="19" r="1.5"/>
+        <rect x="9" y="7" width="6" height="2" rx="1"/>
+        <line x1="2" y1="14" x2="22" y2="14"/>
+      </svg>
+    ),
+    Sedan: (
+      <svg width={size} height={size} viewBox="0 0 24 24" {...s}>
+        <path d="M4 13l2.5-5h11L20 13"/>
+        <path d="M2 13h20v5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/>
+        <circle cx="6.5" cy="19" r="1.5"/>
+        <circle cx="17.5" cy="19" r="1.5"/>
+        <line x1="2" y1="16" x2="22" y2="16"/>
+      </svg>
+    ),
+    Tuktuk: (
+      <svg width={size} height={size} viewBox="0 0 24 24" {...s}>
+        <path d="M4 12l1.5-5H16l2 5"/>
+        <path d="M2 12h18v5H2z"/>
+        <circle cx="6" cy="19" r="1.5"/>
+        <circle cx="15" cy="19" r="1.5"/>
+        <path d="M20 17v-3l2 1"/>
+        <circle cx="21" cy="18.5" r="1.5"/>
+        <line x1="2" y1="15" x2="20" y2="15"/>
+      </svg>
+    ),
+  };
+  return icons[type] ?? icons.Bus;
+}
 const TYPE_STYLE = {
   Bus:     { bg: "#EFF6FF", color: "#1E40AF" },
   Minibus: { bg: "#F5F3FF", color: "#7C3AED" },
   Van:     { bg: "#ECFDF5", color: "#059669" },
   Taxi:    { bg: "#FFFBEB", color: "#D97706" },
   Sedan:   { bg: "#FEF2F2", color: "#DC2626" },
+  Tuktuk:  { bg: "#FFF7ED", color: "#C2410C" },
 };
 
 const PHOTO_SLOTS = [
-  { key: "exterior", label: "Exterior", icon: "📸", hint: "Front/side view" },
-  { key: "interior", label: "Interior", icon: "💺", hint: "Passenger area"  },
-  { key: "plate",    label: "Plate",    icon: "🔢", hint: "License plate"   },
+  { key: "exterior", label: "Exterior", hint: "Front/side view" },
+  { key: "interior", label: "Interior", hint: "Passenger area"  },
+  { key: "plate",    label: "Plate",    hint: "License plate"   },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+function capFirst(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : ""; }
+
 function normalizeVehicle(v) {
+  const rawType   = v.vehicle_type ?? v.type ?? "bus";
+  const rawStatus = v.status ?? "Active";
   return {
     id:          v.vehicle_id ?? v.id,
     plate:       v.plate_number ?? v.plate ?? "",
-    type:        v.type ?? (v.vehicle_type === "bus" ? "Bus" : "Bus"),
+    type:        capFirst(rawType),    // "bus" → "Bus", "tuktuk" → "Tuktuk"
     model:       v.model ?? "",
     year:        v.year ?? "",
     capacity:    v.capacity ?? 0,
-    status:      v.status ?? "Active",
+    status:      capFirst(rawStatus),  // "active" → "Active"
     driver:      v.driver ?? "—",
     lastService: v.last_service ?? v.lastService ?? "—",
     km:          v.km ?? 0,
@@ -61,7 +135,7 @@ function TypeBadge({ type }) {
   const s = TYPE_STYLE[type] || TYPE_STYLE.Bus;
   return (
     <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: s.bg, color: s.color, whiteSpace: "nowrap" }}>
-      {TYPE_ICON[type] ?? "🚌"} {type}
+      {type}
     </span>
   );
 }
@@ -124,8 +198,7 @@ function VehicleProfile({ vehicle, docs, mlog, fuelLog, photos, onClose, onEdit,
   const doc     = docs.find(d => d.plate === vehicle.plate) ?? {};
   const history = [...mlog].filter(r => r.plate === vehicle.plate).sort((a, b) => new Date(b.date) - new Date(a.date));
   const fuelHistory = [...fuelLog].filter(r => r.plate === vehicle.plate).sort((a, b) => new Date(b.date) - new Date(a.date));
-  const ts      = TYPE_STYLE[vehicle.type] || TYPE_STYLE.Bus;
-  const icon    = TYPE_ICON[vehicle.type] ?? "🚌";
+  const ts = TYPE_STYLE[vehicle.type] || TYPE_STYLE.Bus;
 
   const docItems = [
     { label: "Registration",   expiry: doc.reg_expiry  },
@@ -190,9 +263,9 @@ function VehicleProfile({ vehicle, docs, mlog, fuelLog, photos, onClose, onEdit,
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <div style={{ width: 72, height: 72, borderRadius: 18, flexShrink: 0, background: "#fff", border: `2px solid ${ts.color}30`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1, boxShadow: `0 4px 14px ${ts.color}18` }}>
-              <span style={{ fontSize: 30 }}>{icon}</span>
-              <span style={{ fontSize: 8, fontWeight: 800, color: ts.color, letterSpacing: ".06em" }}>{vehicle.plate}</span>
+            <div style={{ width: 72, height: 72, borderRadius: 18, flexShrink: 0, background: ts.bg, border: `2px solid ${ts.color}30`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, boxShadow: `0 4px 14px ${ts.color}18` }}>
+              <VehicleIcon type={vehicle.type} size={28} color={ts.color} />
+              <span style={{ fontSize: 8, fontWeight: 700, color: ts.color + "99", letterSpacing: ".06em" }}>{vehicle.plate}</span>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 22, fontWeight: 900, color: "#0F172A", letterSpacing: "-.4px", marginBottom: 4 }}>{vehicle.plate}</div>
@@ -215,7 +288,7 @@ function VehicleProfile({ vehicle, docs, mlog, fuelLog, photos, onClose, onEdit,
           <SectionLabel>Vehicle Details</SectionLabel>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
             {[
-              { label: "Type",         value: `${icon} ${vehicle.type}` },
+              { label: "Type",         value: vehicle.type },
               { label: "Capacity",     value: `${vehicle.capacity} seats` },
               { label: "Year",         value: vehicle.year        },
               { label: "Odometer",     value: vehicle.km ? `${vehicle.km.toLocaleString()} km` : "—" },
@@ -227,7 +300,7 @@ function VehicleProfile({ vehicle, docs, mlog, fuelLog, photos, onClose, onEdit,
           </div>
           {nextService && (
             <div style={{ marginTop: 10, padding: "9px 14px", borderRadius: 9, background: expiryBadge(nextService)?.bg ?? "#F8FAFC", border: `1px solid ${expiryBadge(nextService)?.border ?? "#E2E8F0"}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#0F172A" }}>🔧 Next scheduled service</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#0F172A" }}>Next scheduled service</span>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <span style={{ fontSize: 12, color: "#64748B" }}>{fmtDate(nextService)}</span>
                 {expiryBadge(nextService) && <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6, background: "rgba(255,255,255,.7)", color: expiryBadge(nextService).color }}>{expiryBadge(nextService).label}</span>}
@@ -252,9 +325,6 @@ function VehicleProfile({ vehicle, docs, mlog, fuelLog, photos, onClose, onEdit,
               return (
                 <div key={label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: badge?.bg ?? "#F8FAFC", border: `1.5px solid ${badge?.border ?? "#E2E8F0"}`, borderRadius: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 16 }}>
-                      {label === "Registration" ? "📋" : label === "Insurance" ? "🛡️" : "🔍"}
-                    </span>
                     <span style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>{label}</span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -340,7 +410,9 @@ function VehicleProfile({ vehicle, docs, mlog, fuelLog, photos, onClose, onEdit,
                 const nb = r.next_service ? expiryBadge(r.next_service) : null;
                 return (
                   <div key={r.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "11px 14px", background: "#F8FAFC", border: "1px solid #F1F5F9", borderRadius: 10, flexShrink: 0 }}>
-                    <div style={{ width: 34, height: 34, borderRadius: 9, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>🔧</div>
+                    <div style={{ width: 34, height: 34, borderRadius: 9, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                    </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
                         <span style={{ fontSize: 12, fontWeight: 700, color: "#0F172A" }}>{r.type}</span>
@@ -400,8 +472,8 @@ function VehicleProfile({ vehicle, docs, mlog, fuelLog, photos, onClose, onEdit,
               const photoUrl = photos[key];
               return (
                 <div key={slot.key}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 6, display: "flex", alignItems: "center", gap: 4 }}>
-                    {slot.icon} {slot.label}
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 6 }}>
+                    {slot.label}
                   </div>
                   {/* Photo box */}
                   <div style={{ width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", border: `2px dashed ${photoUrl ? "#2563EB" : "#E2E8F0"}`, background: photoUrl ? "#000" : "#F8FAFC", position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -409,7 +481,7 @@ function VehicleProfile({ vehicle, docs, mlog, fuelLog, photos, onClose, onEdit,
                       <img src={photoUrl} alt={slot.label} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                     ) : (
                       <div style={{ textAlign: "center", color: "#CBD5E1", fontSize: 11 }}>
-                        <div style={{ fontSize: 28, marginBottom: 4 }}>{slot.icon}</div>
+                        <div style={{ fontSize: 28, marginBottom: 4 }}>—</div>
                         <div>No photo</div>
                       </div>
                     )}
@@ -485,17 +557,17 @@ function FleetTab({ vehicles, docs, onEdit, onDelete, onViewProfile }) {
       key: "plate", label: "Vehicle",
       render: (v, row) => (
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: (TYPE_STYLE[row.type] || TYPE_STYLE.Bus).bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>
-            {TYPE_ICON[row.type] ?? "🚌"}
+          <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: (TYPE_STYLE[row.type] || TYPE_STYLE.Bus).bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <VehicleIcon type={row.type} size={18} color={(TYPE_STYLE[row.type] || TYPE_STYLE.Bus).color} />
           </div>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontWeight: 700, color: "#2563EB", fontSize: 13 }}>{v}</span>
+              <span style={{ fontWeight: 700, color: (TYPE_STYLE[row.type] || TYPE_STYLE.Bus).color, fontSize: 13 }}>{v}</span>
               {alertMap[v] && (
                 <span title={`${alertMap[v]} document(s) expiring soon`} style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 5, background: "#FEF2F2", color: "#DC2626" }}>⚠ {alertMap[v]}</span>
               )}
             </div>
-            <div style={{ fontSize: 11, color: "#64748B" }}>{row.model} · {row.year}</div>
+            <div style={{ fontSize: 11, color: (TYPE_STYLE[row.type] || TYPE_STYLE.Bus).color + "99" }}>{row.model} · {row.year}</div>
           </div>
         </div>
       ),
@@ -511,7 +583,7 @@ function FleetTab({ vehicles, docs, onEdit, onDelete, onViewProfile }) {
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={e => { e.stopPropagation(); onViewProfile(row); }} style={{ fontSize: 11, color: "#7C3AED", background: "#F5F3FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Profile</button>
           <button onClick={e => { e.stopPropagation(); onEdit(row); }}        style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Edit</button>
-          <button onClick={e => { e.stopPropagation(); onDelete(row.id); }}   style={{ fontSize: 11, color: "#B91C1C", background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Delete</button>
+          <button onClick={e => { e.stopPropagation(); onDelete(row); }}   style={{ fontSize: 11, color: "#B91C1C", background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Delete</button>
         </div>
       ),
     },
@@ -545,7 +617,7 @@ function FleetTab({ vehicles, docs, onEdit, onDelete, onViewProfile }) {
               color:      typeFilter === t ? (ts?.color ?? "#2563EB") : "#64748B",
               fontWeight: typeFilter === t ? 700 : 400,
             }}>
-              {t === "All" ? "All Types" : `${TYPE_ICON[t]} ${t}`}
+              {t === "All" ? "All Types" : t}
             </button>
           );
         })}
@@ -637,7 +709,9 @@ function ExpiryAlertsTab({ docs, onUpdateDocs }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {needsAttention.map(d => (
               <div key={d.plate} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", background: "#F8FAFC", border: "1px solid #F1F5F9", borderRadius: 12 }}>
-                <div style={{ fontSize: 26 }}>🚌</div>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 800, color: "#0F172A", marginBottom: 8 }}>{d.plate}</div>
                   <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -1070,7 +1144,9 @@ function PhotosTab({ vehicles, photos, onPhotoUpload, onPhotoRemove }) {
             const v = vehicles.find(x => x.plate === selectedPlate);
             return v ? (
               <div style={{ padding: "12px 18px", background: "#EFF6FF", borderRadius: 10, border: "1px solid #BFDBFE", display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ fontSize: 24 }}>🚌</span>
+                <div style={{ width: 36, height: 36, borderRadius: 9, background: (TYPE_STYLE[v?.type] || TYPE_STYLE.Bus).bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <VehicleIcon type={v?.type} size={18} color={(TYPE_STYLE[v?.type] || TYPE_STYLE.Bus).color} />
+                </div>
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: "#1E40AF" }}>{v.plate} — {v.model} ({v.year})</div>
                   <div style={{ fontSize: 12, color: "#3B82F6" }}>Capacity: {v.capacity} seats · Driver: {v.driver}</div>
@@ -1087,7 +1163,7 @@ function PhotosTab({ vehicles, photos, onPhotoUpload, onPhotoRemove }) {
               return (
                 <div key={slot.key} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 6 }}>
-                    <span>{slot.icon}</span> {slot.label}
+                    {slot.label}
                     <span style={{ fontSize: 11, color: "#94A3B8", fontWeight: 400 }}>— {slot.hint}</span>
                   </div>
 
@@ -1103,7 +1179,7 @@ function PhotosTab({ vehicles, photos, onPhotoUpload, onPhotoRemove }) {
                         style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                     ) : (
                       <div style={{ textAlign: "center", color: "#CBD5E1" }}>
-                        <div style={{ fontSize: 36, marginBottom: 8 }}>{slot.icon}</div>
+                        <div style={{ fontSize: 36, marginBottom: 8 }}>—</div>
                         <div style={{ fontSize: 12, fontWeight: 600 }}>No photo</div>
                         <div style={{ fontSize: 11 }}>Click Upload below</div>
                       </div>
@@ -1186,7 +1262,11 @@ export default function VehiclesPage() {
   const [modalOpen,     setModalOpen]     = useState(false);
   const [editTarget,    setEditTarget]    = useState(null);
   const [form,          setForm]          = useState(EMPTY_FORM);
-  const [deleteId,      setDeleteId]      = useState(null);
+  const [saveError,     setSaveError]     = useState(null);
+  const [isSaving,      setIsSaving]      = useState(false);
+  const [deleteTarget,  setDeleteTarget]  = useState(null);
+  const [deleteError,   setDeleteError]   = useState(null);
+  const [isDeleting,    setIsDeleting]    = useState(false);
   const [profile,       setProfile]       = useState(null);
 
   // Load persisted photos for all vehicles on mount
@@ -1249,8 +1329,8 @@ export default function VehiclesPage() {
     [d.reg_expiry, d.ins_expiry, d.road_expiry].some(x => x && daysUntil(x) <= 14)
   ).length;
 
-  function openAdd()   { setEditTarget(null); setForm(EMPTY_FORM); setModalOpen(true); }
-  function openEdit(v) { setEditTarget(v.id); setForm({ plate: v.plate, type: v.type ?? "Bus", model: v.model, year: v.year, capacity: v.capacity, status: v.status, driver: v.driver }); setModalOpen(true); }
+  function openAdd()   { setEditTarget(null); setForm(EMPTY_FORM); setSaveError(null); setModalOpen(true); }
+  function openEdit(v) { setEditTarget(v.id); setForm({ plate: v.plate, type: v.type ?? "Bus", model: v.model, year: v.year, capacity: v.capacity, status: v.status, driver: v.driver }); setSaveError(null); setModalOpen(true); }
 
   async function handlePhotoUpload(key, file) {
     // key = "{vehicleId}-{slot}"
@@ -1292,18 +1372,45 @@ export default function VehiclesPage() {
   }
 
   async function handleSave() {
-    if (!form.plate || !form.model) return;
-    if (editTarget) {
-      await updateVehicle(editTarget, { plate_number: form.plate, model: form.model, vehicle_type: form.type?.toLowerCase(), capacity: Number(form.capacity), status: form.status }).catch(() => {});
-      setVehicles(prev => prev.map(v => v.id === editTarget ? { ...v, ...form } : v));
-    } else {
-      await createVehicle({ plate_number: form.plate, model: form.model, vehicle_type: form.type?.toLowerCase(), capacity: Number(form.capacity), status: form.status }).catch(() => {});
-      setVehicles(prev => [...prev, { id: Date.now(), ...form, lastService: "—", km: 0 }]);
+    if (!form.plate || !form.model) { setSaveError("Plate and model are required."); return; }
+    setSaveError(null);
+    setIsSaving(true);
+    try {
+      const payload = {
+        plate_number:  form.plate,
+        model:         form.model,
+        vehicle_type:  form.type?.toLowerCase(),
+        capacity:      Number(form.capacity),
+        status:        form.status,
+      };
+      if (editTarget) {
+        await updateVehicle(editTarget, payload);
+      } else {
+        await createVehicle(payload);
+      }
+      setModalOpen(false);
+      loadVehicles();
+    } catch (err) {
+      setSaveError(err?.message ?? "Save failed");
+    } finally {
+      setIsSaving(false);
     }
-    setModalOpen(false);
   }
 
-  function handleDelete() { setVehicles(prev => prev.filter(v => v.id !== deleteId)); setDeleteId(null); }
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteVehicle(deleteTarget.id);
+      setDeleteTarget(null);
+      loadVehicles();
+    } catch (err) {
+      setDeleteError(err?.message ?? "Delete failed");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   function handleUpdateDocs(plate, patch) {
     setDocs(prev => prev.map(d => d.plate === plate ? { ...d, ...patch } : d));
@@ -1318,6 +1425,7 @@ export default function VehiclesPage() {
     minibuses:   vehicles.filter(v => v.type === "Minibus").length,
     vans:        vehicles.filter(v => v.type === "Van").length,
     taxis:       vehicles.filter(v => v.type === "Taxi").length,
+    tuktuks:     vehicles.filter(v => v.type === "Tuktuk").length,
   };
 
   const tabs = [
@@ -1363,11 +1471,12 @@ export default function VehiclesPage() {
           { type: "Minibus", count: counts.minibuses },
           { type: "Van",     count: counts.vans      },
           { type: "Taxi",    count: counts.taxis     },
+          { type: "Tuktuk",  count: counts.tuktuks  },
         ].map(({ type, count }) => {
           const ts = TYPE_STYLE[type];
           return (
             <div key={type} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", background: ts.bg, borderRadius: 20, border: `1px solid ${ts.color}22` }}>
-              <span style={{ fontSize: 16 }}>{TYPE_ICON[type]}</span>
+              <VehicleIcon type={type} size={14} color={ts.color} />
               <span style={{ fontSize: 13, fontWeight: 700, color: ts.color }}>{count} {type}{count !== 1 ? (type === "Bus" ? "es" : "s") : ""}</span>
             </div>
           );
@@ -1381,8 +1490,8 @@ export default function VehiclesPage() {
           : vehiclesError
           ? <PageError message={vehiclesError} onRetry={loadVehicles} />
           : vehicles.length === 0
-          ? <PageEmpty message="No vehicles in fleet" hint="Register your first vehicle with the + Add Vehicle button" icon="🚌" />
-          : <FleetTab vehicles={vehicles} docs={docs} onEdit={openEdit} onDelete={setDeleteId} onViewProfile={setProfile} />
+          ? <PageEmpty message="No vehicles in fleet" hint="Register your first vehicle with the + Add Vehicle button" />
+          : <FleetTab vehicles={vehicles} docs={docs} onEdit={openEdit} onDelete={v => { setDeleteTarget(v); setDeleteError(null); }} onViewProfile={setProfile} />
       )}
       {tab === "alerts"      && <ExpiryAlertsTab docs={docs} onUpdateDocs={handleUpdateDocs} />}
       {tab === "maintenance" && <MaintenanceTab  log={mlog} vehicles={vehicles} onAdd={r => setMlog(prev => [r, ...prev])} />}
@@ -1391,7 +1500,12 @@ export default function VehiclesPage() {
 
       {/* Edit / Add modal */}
       {modalOpen && (
-        <Modal title={editTarget ? "Edit vehicle" : "Add new vehicle"} onClose={() => setModalOpen(false)} onSave={handleSave}>
+        <Modal title={editTarget ? "Edit vehicle" : "Add new vehicle"} onClose={() => { setModalOpen(false); setSaveError(null); }} onSave={handleSave} saving={isSaving}>
+          {saveError && (
+            <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>
+              {saveError}
+            </div>
+          )}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
             <div>
               <label style={lbl}>Plate / ID</label>
@@ -1399,7 +1513,10 @@ export default function VehiclesPage() {
             </div>
             <div>
               <label style={lbl}>Vehicle Type</label>
-              <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))} style={inp}>
+              <select value={form.type} onChange={e => {
+                const t = e.target.value;
+                setForm(p => ({ ...p, type: t, capacity: t === "Taxi" ? 4 : t === "Tuktuk" ? 3 : p.capacity }));
+              }} style={inp}>
                 {VEHICLE_TYPES.map(t => <option key={t}>{t}</option>)}
               </select>
             </div>
@@ -1449,12 +1566,20 @@ export default function VehiclesPage() {
       )}
 
       {/* Delete confirm */}
-      {deleteId && (
-        <Modal title="Remove vehicle" onClose={() => setDeleteId(null)}>
-          <p style={{ fontSize: 14, color: "#333", marginBottom: 20 }}>Remove this vehicle from the fleet? This cannot be undone.</p>
+      {deleteTarget && (
+        <Modal title="Remove vehicle" onClose={() => { setDeleteTarget(null); setDeleteError(null); setIsDeleting(false); }}>
+          {deleteError && (
+            <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>
+              {deleteError}
+            </div>
+          )}
+          <p style={{ fontSize: 14, color: "#333", marginBottom: 6 }}>Remove <strong>{deleteTarget.plate}</strong> from the fleet?</p>
+          <p style={{ fontSize: 12, color: "#64748B", marginBottom: 20 }}>{deleteTarget.model} · {deleteTarget.type} — this cannot be undone.</p>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-            <button onClick={() => setDeleteId(null)} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #ddd", background: "#fff", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-            <button onClick={handleDelete} style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#EF4444", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Remove</button>
+            <button onClick={() => { setDeleteTarget(null); setDeleteError(null); }} disabled={isDeleting} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #E2E8F0", background: "#fff", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+            <button onClick={handleDelete} disabled={isDeleting} style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#EF4444", color: "#fff", fontSize: 13, fontWeight: 600, cursor: isDeleting ? "not-allowed" : "pointer", opacity: isDeleting ? 0.7 : 1 }}>
+              {isDeleting ? "Removing…" : "Remove"}
+            </button>
           </div>
         </Modal>
       )}

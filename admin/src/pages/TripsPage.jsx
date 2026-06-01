@@ -42,7 +42,7 @@ const STATUS_COLORS = {
   Cancelled: { bg: "#FEF2F2", color: "#DC2626", border: "#FECACA" },
 };
 
-const TODAY = "2026-05-06";
+const TODAY = new Date().toISOString().slice(0, 10);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function normalizeTrip(t) {
@@ -382,16 +382,26 @@ const SLOTS      = (GRID_END - GRID_START) / 30;  // 34 slots
 const ROW_H      = 54;
 const LABEL_W    = 130;
 
-function TimetableTab({ timetableTrips, routeOpts = [] }) {
-  const [date,       setDate]       = useState(TODAY);
-  const [routeFilter,setRouteFilter]= useState("All");
-  const [tooltip,    setTooltip]    = useState(null);
+function TimetableTab({ routeOpts = [] }) {
+  const [date,        setDate]       = useState(TODAY);
+  const [routeFilter, setRouteFilter]= useState("All");
+  const [tooltip,     setTooltip]    = useState(null);
+  const [trips,       setTrips]      = useState([]);
+  const [loading,     setLoading]    = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    getTimetableTrips(date)
+      .then(d => setTrips(Array.isArray(d) ? d : []))
+      .catch(() => setTrips([]))
+      .finally(() => setLoading(false));
+  }, [date]);
 
   const routes = routeOpts.length > 0
     ? routeOpts.map(r => r.route_name ?? r.name)
-    : [...new Set(timetableTrips.map(t => t.route).filter(Boolean))];
+    : [...new Set(trips.map(t => t.route).filter(Boolean))];
 
-  const dayTrips = timetableTrips.filter(t => t.date === date &&
+  const dayTrips = trips.filter(t =>
     (routeFilter === "All" || t.route === routeFilter));
 
   const hours = [];
@@ -439,9 +449,11 @@ function TimetableTab({ timetableTrips, routeOpts = [] }) {
       </div>
 
       <Panel title="Daily Timetable Grid" noPad>
-        {dayTrips.length === 0 ? (
+        {loading ? (
+          <div style={{ padding: "48px 0", textAlign: "center", color: "#94A3B8", fontSize: 13 }}>Loading…</div>
+        ) : dayTrips.length === 0 ? (
           <div style={{ padding: "48px 0", textAlign: "center", color: "#bbb", fontSize: 13 }}>
-            No trips scheduled for this date. Try {TODAY}.
+            No trips scheduled for {date}.
           </div>
         ) : (
           <div style={{ overflowX: "auto", overflowY: "visible" }}>
@@ -550,9 +562,9 @@ function TimetableTab({ timetableTrips, routeOpts = [] }) {
           minWidth: 180,
         }}>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>{tooltip.t.id} — {tooltip.t.route}</div>
-          <div style={{ color: "#94A3B8", marginBottom: 2 }}>🕐 {tooltip.t.time} ({ROUTE_DURATIONS[tooltip.t.route]} min)</div>
-          <div style={{ color: "#94A3B8", marginBottom: 2 }}>👤 {tooltip.t.driver}</div>
-          <div style={{ color: "#94A3B8", marginBottom: 2 }}>🚌 {tooltip.t.vehicle}</div>
+          <div style={{ color: "#94A3B8", marginBottom: 2 }}>{tooltip.t.time} · {ROUTE_DURATIONS[tooltip.t.route] ?? "—"} min</div>
+          <div style={{ color: "#94A3B8", marginBottom: 2 }}>Driver: {tooltip.t.driver ?? "—"}</div>
+          <div style={{ color: "#94A3B8", marginBottom: 2 }}>Vehicle: {tooltip.t.vehicle ?? "—"}</div>
           <div style={{ marginTop: 6 }}>
             <span style={{
               fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 6,
@@ -774,11 +786,9 @@ function ConflictsTab({ conflicts, onResolve }) {
               const bg     = isDriver ? "#FEF2F2" : "#FFFBEB";
               const border = isDriver ? "#FECACA" : "#FDE68A";
               const color  = isDriver ? "#B91C1C" : "#B45309";
-              const icon   = isDriver ? "👤" : "🚌";
               return (
                 <div key={i} style={{ padding: "14px 16px", background: bg, border: `1px solid ${border}`, borderRadius: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                    <span style={{ fontSize: 18 }}>{icon}</span>
                     <div>
                       <span style={{ fontSize: 12, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: color, color: "#fff", marginRight: 8 }}>
                         {isDriver ? "Driver Conflict" : "Vehicle Conflict"}
@@ -792,8 +802,8 @@ function ConflictsTab({ conflicts, onResolve }) {
                       <div key={0} style={{ background: "#fff", borderRadius: 9, padding: "10px 12px", border: "1px solid #F1F5F9" }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: "#2563EB", marginBottom: 3, fontFamily: "monospace" }}>{t.id}</div>
                         <div style={{ fontSize: 12, fontWeight: 600, color: "#0F172A", marginBottom: 2 }}>{t.route}</div>
-                        <div style={{ fontSize: 11, color: "#64748B" }}>🕐 {t.time} ({ROUTE_DURATIONS[t.route] ?? "?"} min)</div>
-                        <div style={{ fontSize: 11, color: "#64748B" }}>👤 {t.driver} · 🚌 {t.vehicle}</div>
+                        <div style={{ fontSize: 11, color: "#64748B" }}>{t.time} · {ROUTE_DURATIONS[t.route] ?? "?"} min</div>
+                        <div style={{ fontSize: 11, color: "#64748B" }}>{t.driver} · {t.vehicle}</div>
                         <div style={{ marginTop: 6 }}><StatusPill status={t.status} /></div>
                       </div>
                     ) : [
@@ -804,8 +814,8 @@ function ConflictsTab({ conflicts, onResolve }) {
                       <div key={1} style={{ background: "#fff", borderRadius: 9, padding: "10px 12px", border: "1px solid #F1F5F9" }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: "#2563EB", marginBottom: 3, fontFamily: "monospace" }}>{t.id}</div>
                         <div style={{ fontSize: 12, fontWeight: 600, color: "#0F172A", marginBottom: 2 }}>{t.route}</div>
-                        <div style={{ fontSize: 11, color: "#64748B" }}>🕐 {t.time} ({ROUTE_DURATIONS[t.route] ?? "?"} min)</div>
-                        <div style={{ fontSize: 11, color: "#64748B" }}>👤 {t.driver} · 🚌 {t.vehicle}</div>
+                        <div style={{ fontSize: 11, color: "#64748B" }}>{t.time} · {ROUTE_DURATIONS[t.route] ?? "?"} min</div>
+                        <div style={{ fontSize: 11, color: "#64748B" }}>{t.driver} · {t.vehicle}</div>
                         <div style={{ marginTop: 6 }}><StatusPill status={t.status} /></div>
                       </div>,
                     ])}
@@ -1033,7 +1043,9 @@ function TripDetailDrawer({ trip, onClose, onEdit }) {
 
           {/* Trip ID + status */}
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 48, height: 48, borderRadius: 12, background: "#EFF6FF", border: "2px solid #BFDBFE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>🚌</div>
+            <div style={{ width: 48, height: 48, borderRadius: 12, background: "#EFF6FF", border: "2px solid #BFDBFE", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="11" x2="22" y2="11"/><line x1="8" y1="5" x2="8" y2="11"/><line x1="16" y1="5" x2="16" y2="11"/><circle cx="6.5" cy="20" r="1.5"/><circle cx="17.5" cy="20" r="1.5"/></svg>
+            </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 16, fontWeight: 800, color: "#0F172A", fontFamily: "monospace", marginBottom: 4 }}>{trip.id}</div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -1085,7 +1097,7 @@ function TripDetailDrawer({ trip, onClose, onEdit }) {
             <div style={{ padding: "32px 0", textAlign: "center", color: "#94A3B8", fontSize: 13 }}>Loading stop data…</div>
           ) : arrivals.length === 0 ? (
             <div style={{ padding: "32px 0", textAlign: "center" }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>📍</div>
+              <div style={{ fontSize: 28, marginBottom: 8, color: "#CBD5E1" }}>—</div>
               <div style={{ fontSize: 13, color: "#94A3B8", fontWeight: 600 }}>No stop arrival data yet</div>
               <div style={{ fontSize: 11, color: "#CBD5E1", marginTop: 4 }}>Stop arrivals are recorded as the driver marks each stop.</div>
             </div>
@@ -1324,7 +1336,7 @@ export default function TripsPage() {
           ? <PageError message={tripsError} onRetry={loadTrips} />
           : <TripsListTab trips={trips} allTrips={allTrips} onAdd={() => setTripModal(false)} onEdit={t => setTripModal(t)} onDetail={t => setDetailTrip(t)} />
       )}
-      {tab === "timetable" && <TimetableTab timetableTrips={timetableTrips} routeOpts={routeOpts} />}
+      {tab === "timetable" && <TimetableTab routeOpts={routeOpts} />}
       {tab === "recurring" && (
         <RecurringTab
           recurring={recurring}

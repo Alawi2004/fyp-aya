@@ -325,15 +325,17 @@ function DriverUserProfile({ user, onClose, onEdit }) {
   const [schedError,  setSchedError]  = useState(null);
 
   useEffect(() => {
+    const uid = Number(user.id);
     Promise.all([
       getDriverSchedules().catch(() => []),
       getDrivers().catch(() => ({ data: [] })),
       getDriverPerformance().catch(() => []),
     ]).then(([schedList, driversResp, perfList]) => {
       const drivers = driversResp?.data ?? driversResp ?? [];
-      const sched   = (schedList || []).find(s => s.user_id === user.id);
-      const info    = (drivers    || []).find(d => d.user_id === user.id);
-      const p       = (perfList   || []).find(d => d.user_id === user.id);
+      // Use Number() on both sides — DB can return int while JS prop may be string
+      const sched   = (schedList || []).find(s => Number(s.user_id) === uid);
+      const info    = (drivers    || []).find(d => Number(d.user_id) === uid);
+      const p       = (perfList   || []).find(d => Number(d.user_id) === uid);
       if (sched) setSchedule(sched);
       if (info)  setDriverInfo(info);
       if (p)     setPerf(p);
@@ -349,7 +351,10 @@ function DriverUserProfile({ user, onClose, onEdit }) {
   async function saveDayShift() {
     if (!editDay) return;
     const driverId = schedule?.driver_id ?? driverInfo?.driver_id;
-    if (!driverId) { setSchedError("Driver record not found"); return; }
+    if (!driverId) {
+      setSchedError("No driver record found for this user. Add them through the Drivers page first.");
+      return;
+    }
     setSchedSaving(true);
     setSchedError(null);
     const base    = schedule ?? {};
@@ -436,8 +441,15 @@ function DriverUserProfile({ user, onClose, onEdit }) {
       <div style={{ padding: "20px 24px", borderBottom: "1px solid #F1F5F9" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <SectionLabel>This Week&apos;s Schedule</SectionLabel>
-          <span style={{ fontSize: 10, color: "#94A3B8" }}>Click a day to change</span>
+          {(schedule || driverInfo) && <span style={{ fontSize: 10, color: "#94A3B8" }}>Click a day to change</span>}
         </div>
+
+        {/* No driver record yet — user has role=Driver but no drivers table row */}
+        {!schedule && !driverInfo ? (
+          <div style={{ padding: "10px 14px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 8, fontSize: 12, color: "#92400E" }}>
+            No driver record found for this user. Add them through the <strong>Drivers page</strong> to assign a schedule.
+          </div>
+        ) : (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {DAYS.map(day => {
             const key   = day.toLowerCase();
@@ -463,6 +475,7 @@ function DriverUserProfile({ user, onClose, onEdit }) {
             );
           })}
         </div>
+        )}
       </div>
 
       {/* Ratings */}
@@ -1272,14 +1285,12 @@ export default function UsersPage() {
           <p style={{ fontSize: 12, color: "#64748B", margin: "2px 0 0" }}>Manage all registered users · click any row or Profile to view full profile</p>
         </div>
         <div style={{ flex: 1 }} />
-        {tab === "users" && (
-          <>
-            <ExportMenu users={users} roleFilter={roleFilter} />
-            <button onClick={openAdd} style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-              + Add user
-            </button>
-          </>
-        )}
+        <div style={{ display: "flex", gap: 10, alignItems: "center", visibility: tab === "users" ? "visible" : "hidden", pointerEvents: tab === "users" ? "auto" : "none" }}>
+          <ExportMenu users={users} roleFilter={roleFilter} />
+          <button onClick={openAdd} style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            + Add user
+          </button>
+        </div>
         <TabNav
           tabs={[{ id: "users", label: "Users" }, { id: "activity", label: "Passenger Activity" }]}
           active={tab}

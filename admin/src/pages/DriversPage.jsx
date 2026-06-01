@@ -392,9 +392,10 @@ function DriverProfile({ driver, onClose, onEdit }) {
   const [schedError,    setSchedError]    = useState(null);
 
   useEffect(() => {
+    const did = Number(driver.id);
     getDriverSchedules()
       .then(list => {
-        const match = (list || []).find(s => s.driver_id === driver.id);
+        const match = (list || []).find(s => Number(s.driver_id) === did);
         if (match) setSchedule(match);
       })
       .catch(() => {});
@@ -1418,14 +1419,13 @@ export default function DriversPage() {
           </p>
         </div>
         <div style={{ flex: 1 }} />
-        {tab === "Overview" && (
-          <>
-            <BusSelector selectedBusId={selectedBusId} onSelect={setSelectedBusId} />
-            <button onClick={openAdd} style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", letterSpacing: "-.1px" }}>
-              + Add driver
-            </button>
-          </>
-        )}
+        {/* Always reserve space so TabNav never shifts position */}
+        <div style={{ display: "flex", gap: 10, alignItems: "center", visibility: tab === "Overview" ? "visible" : "hidden", pointerEvents: tab === "Overview" ? "auto" : "none" }}>
+          <BusSelector selectedBusId={selectedBusId} onSelect={setSelectedBusId} />
+          <button onClick={openAdd} style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", letterSpacing: "-.1px" }}>
+            + Add driver
+          </button>
+        </div>
         <TabNav tabs={["Overview", "Performance", "Schedules", "License Alerts", "Checklists"]} active={tab} onChange={setTab} />
       </div>
 
