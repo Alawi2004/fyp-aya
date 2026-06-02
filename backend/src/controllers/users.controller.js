@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import { poolPromise, sql } from "../db/db.js";
 import { ensureAuthTables } from "../db/featureSetup.js";
+import { writeAuditLog } from "./auditLog.controller.js";
 
 // ── POST /api/users — admin creates a user with any role ─────────────────────
 const VALID_ROLES = ["passenger", "driver", "admin", "staff"];
@@ -44,7 +45,9 @@ export const createUser = async (req, res) => {
                INSERTED.status, INSERTED.created_at, INSERTED.birth_date
         VALUES (@full_name, @email, @password, @role, @phone, @birth_date)
       `);
-    res.status(201).json(result.recordset[0]);
+    const newUser = result.recordset[0];
+    writeAuditLog(pool, { actorUserId: req.user?.user_id, actorRole: req.user?.role, actionName: "user.created", entityType: "user", entityId: newUser.user_id, newValues: { email: newUser.email, role: newUser.role }, req });
+    res.status(201).json(newUser);
   } catch (err) {
     if (err.number === 2627 || err.number === 2601) {
       return res.status(409).json({ error: "Email already in use" });
@@ -113,6 +116,7 @@ export const deleteUser = async (req, res) => {
     await tx.commit();
 
     if (del.rowsAffected[0] === 0) return res.status(404).json({ error: "User not found" });
+    writeAuditLog(pool, { actorUserId: req.user?.user_id, actorRole: req.user?.role, actionName: "user.deleted", entityType: "user", entityId: uid, req });
     res.json({ message: "User deleted" });
   } catch (err) {
     try { await tx.rollback(); } catch {}
@@ -208,7 +212,9 @@ export const updateUserProfile = async (req, res) => {
       sets += ", status=@status";
     }
 
+    const pool2 = await poolPromise;
     await r.query(`UPDATE users SET ${sets} WHERE user_id=@id`);
+    writeAuditLog(pool2, { actorUserId: req.user?.user_id, actorRole: req.user?.role, actionName: "user.updated", entityType: "user", entityId: req.params.id, newValues: { full_name, role, status }, req });
     res.json({ message: "Profile updated" });
   } catch (err) {
     console.error(err);

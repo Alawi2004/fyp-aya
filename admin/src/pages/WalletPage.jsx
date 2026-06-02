@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Wallet, Plus, Filter, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
 import { Modal } from "../components/Modal";
 import { StatCard } from "../components/StatCard";
@@ -198,7 +198,9 @@ function FreezeManagementTab({ wallets, freezeLog, onFreeze, onUnfreeze }) {
       {/* Frozen wallets alert */}
       {frozen.length > 0 && (
         <div style={{ padding: "14px 18px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12, display: "flex", alignItems: "center", gap: 14 }}>
-          <span style={{ fontSize: 24 }}>🔒</span>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: "#FEF2F2", border: "1px solid #FECACA", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#B91C1C" strokeWidth="2" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
           <div>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#B91C1C" }}>
               {frozen.length} wallet{frozen.length !== 1 ? "s" : ""} currently frozen
@@ -219,7 +221,7 @@ function FreezeManagementTab({ wallets, freezeLog, onFreeze, onUnfreeze }) {
           background: frozenOnly ? "#FEF2F2" : "#F8FAFC",
           color:      frozenOnly ? "#DC2626"  : "#64748B",
         }}>
-          {frozenOnly ? "🔒 Frozen Only" : "All Wallets"}
+          {frozenOnly ? "Frozen Only" : "All Wallets"}
         </button>
         <span style={{ fontSize: 11, color: "#94A3B8" }}>{visible.length} wallets</span>
       </div>
@@ -267,7 +269,7 @@ function FreezeManagementTab({ wallets, freezeLog, onFreeze, onUnfreeze }) {
                   {/* Status */}
                   <td style={{ padding: "14px 16px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 15 }}>{frozen ? "🔒" : "✅"}</span>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: frozen ? "#DC2626" : "#059669", display: "inline-block" }} />
                       <span style={{
                         fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
                         background: frozen ? "#FEF2F2" : "#ECFDF5",
@@ -303,14 +305,14 @@ function FreezeManagementTab({ wallets, freezeLog, onFreeze, onUnfreeze }) {
                         fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 8,
                         border: "none", background: "#ECFDF5", color: "#059669", cursor: "pointer",
                       }}>
-                        🔓 Unfreeze
+                        Unfreeze
                       </button>
                     ) : (
                       <button onClick={() => setFreezeTarget(w)} style={{
                         fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 8,
                         border: "none", background: "#FEF2F2", color: "#DC2626", cursor: "pointer",
                       }}>
-                        🔒 Freeze
+                        Freeze
                       </button>
                     )}
                   </td>
@@ -342,7 +344,7 @@ function FreezeManagementTab({ wallets, freezeLog, onFreeze, onUnfreeze }) {
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 16,
               }}>
-                {entry.action === "frozen" ? "🔒" : "🔓"}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={entry.action === "frozen" ? "#DC2626" : "#059669"} strokeWidth="2.5" strokeLinecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d={entry.action === "frozen" ? "M7 11V7a5 5 0 0 1 10 0v4" : "M7 11V7a5 5 0 0 1 9.9-1"}/></svg>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 3, flexWrap: "wrap" }}>
@@ -561,7 +563,7 @@ function AlertsTab({ alerts, threshold, onNotify }) {
       {/* Alert banner */}
       {critical.length > 0 && (
         <div style={{ padding: "14px 18px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 12, display: "flex", alignItems: "center", gap: 14 }}>
-          <span style={{ fontSize: 24 }}>⚠️</span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#B91C1C" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: "#B91C1C" }}>{critical.length} passenger{critical.length !== 1 ? "s" : ""} with critically low balance</div>
             <div style={{ fontSize: 12, color: "#EF4444" }}>These passengers may not have enough balance to complete their next trip. Send alerts now.</div>
@@ -599,7 +601,7 @@ function AlertsTab({ alerts, threshold, onNotify }) {
 
       {alerts.length === 0 && (
         <div style={{ padding: "48px 0", textAlign: "center", background: "#ECFDF5", borderRadius: 12, border: "1px solid #A7F3D0" }}>
-          <div style={{ fontSize: 28, marginBottom: 8 }}>✅</div>
+          <div style={{ fontSize: 28, marginBottom: 8, color: "#059669", fontWeight: 700 }}>✓</div>
           <div style={{ fontSize: 15, fontWeight: 700, color: "#059669" }}>All wallet balances are healthy</div>
           <div style={{ fontSize: 12, color: "#6EE7B7", marginTop: 4 }}>No passengers are below the ${threshold} threshold.</div>
         </div>
@@ -610,12 +612,22 @@ function AlertsTab({ alerts, threshold, onNotify }) {
 
 // ── Spend Summary Tab ─────────────────────────────────────────────────────────
 function SummaryTab({ summary }) {
+  // Guard: summary may be empty array before data loads
+  if (!summary || Array.isArray(summary) || !summary.current || !summary.previous) {
+    return (
+      <div style={{ textAlign: "center", padding: "64px 0", color: "#94A3B8" }}>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>No spend summary data available</div>
+        <div style={{ fontSize: 12 }}>Spend data is generated from wallet recharge records. Data will appear once passengers have made recharge transactions.</div>
+      </div>
+    );
+  }
+
   const { current, previous, per_passenger } = summary;
   const totalDelta = deltaMeta(current.total, previous.total);
   const tripDelta  = deltaMeta(current.transactions, previous.transactions);
   const avgDelta   = deltaMeta(current.avg_per_trip, previous.avg_per_trip);
 
-  const maxVal = Math.max(...per_passenger.map(p => Math.max(p.current, p.previous)));
+  const maxVal = Math.max(...(per_passenger ?? []).map(p => Math.max(p.current ?? 0, p.previous ?? 0)), 1);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -668,7 +680,7 @@ function SummaryTab({ summary }) {
           Per-Passenger Breakdown — {current.label} vs {previous.label}
         </div>
         <div style={{ display: "flex", flexDirection: "column" }}>
-          {per_passenger.map((p, i) => {
+          {(per_passenger ?? []).map((p, i) => {
             const diff  = p.current - p.previous;
             const isUp  = diff > 0;
             return (
@@ -727,7 +739,8 @@ export default function WalletPage() {
   const [walletStatuses, setWalletStatuses] = useState([]);
   const [freezeLog,      setFreezeLog]      = useState([]);
   const [lowBalanceAlerts, setLowBalanceAlerts] = useState([]);
-  const [spendSummary,     setSpendSummary]     = useState([]);
+  // Spend summary — computed from recharges, no separate API call needed
+  const [allRecharges,     setAllRecharges]     = useState([]);
 
   // Audit log filters
   const [filterUser,  setFilterUser]  = useState("");
@@ -811,25 +824,82 @@ export default function WalletPage() {
     } finally { setSaving(false); }
   };
 
-  function handleFreeze(userId, reason, notes) {
-    const now = new Date().toISOString();
-    freezeWallet(userId, { reason, notes }).catch(() => {});
-    setWalletStatuses(prev => prev.map(w =>
-      w.user_id === userId ? { ...w, status: "Frozen", reason, notes, frozen_at: now, frozen_by: "Admin User" } : w
-    ));
-    const wallet = walletStatuses.find(w => w.user_id === userId);
-    setFreezeLog(prev => [{ id: Date.now(), user_id: userId, user: wallet?.name ?? "", action: "frozen", reason, by: "Admin User", at: now, notes }, ...prev]);
+  function reloadFreezeData() {
+    getWalletStatuses()
+      .then(d => setWalletStatuses(Array.isArray(d) ? d : []))
+      .catch(() => {});
+    getFreezeLog()
+      .then(d => setFreezeLog(Array.isArray(d) ? d : []))
+      .catch(() => {});
   }
 
-  function handleUnfreeze(userId, notes) {
-    const now = new Date().toISOString();
-    unfreezeWallet(userId, { notes }).catch(() => {});
-    setWalletStatuses(prev => prev.map(w =>
-      w.user_id === userId ? { ...w, status: "Active", reason: null, notes: null, frozen_at: null, frozen_by: null } : w
-    ));
-    const wallet = walletStatuses.find(w => w.user_id === userId);
-    setFreezeLog(prev => [{ id: Date.now(), user_id: userId, user: wallet?.name ?? "", action: "unfrozen", reason: "Investigation completed", by: "Admin User", at: now, notes }, ...prev]);
+  async function handleFreeze(userId, reason, notes) {
+    try {
+      await freezeWallet(userId, { reason, notes });
+      reloadFreezeData();
+    } catch (err) {
+      alert(err?.message ?? "Failed to freeze wallet");
+    }
   }
+
+  async function handleUnfreeze(userId, notes) {
+    try {
+      await unfreezeWallet(userId, { notes });
+      reloadFreezeData();
+    } catch (err) {
+      alert(err?.message ?? "Failed to unfreeze wallet");
+    }
+  }
+
+  // Load all recharges (unfiltered) when summary tab opens
+  useEffect(() => {
+    if (tab !== "summary") return;
+    apiClient.get("/wallet/recharges")
+      .then(d => setAllRecharges(Array.isArray(d) ? d : (d?.data ?? [])))
+      .catch(() => setAllRecharges([]));
+  }, [tab]);
+
+  // Compute spend summary: current month vs previous month from recharge records
+  const spendSummary = useMemo(() => {
+    const data = allRecharges.length > 0 ? allRecharges : recharges;
+    if (!data.length) return null;
+
+    const now = new Date();
+    const cy = now.getFullYear(), cm = now.getMonth();
+    const py = cm === 0 ? cy - 1 : cy, pm = cm === 0 ? 11 : cm - 1;
+
+    const label = (y, m) => new Date(y, m, 1).toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+
+    const isCurr = r => { const d = new Date(r.created_at); return d.getMonth() === cm && d.getFullYear() === cy; };
+    const isPrev = r => { const d = new Date(r.created_at); return d.getMonth() === pm && d.getFullYear() === py; };
+
+    const curr = data.filter(isCurr);
+    const prev = data.filter(isPrev);
+
+    const total = arr => arr.reduce((s, r) => s + parseFloat(r.amount || 0), 0);
+
+    const ct = total(curr), pt = total(prev);
+    const cc = curr.length,  pc = prev.length;
+
+    // Per-passenger
+    const map = {};
+    data.forEach(r => {
+      const name = r.user_name ?? "Unknown";
+      if (!map[name]) map[name] = { name, current: 0, previous: 0, trips_current: 0 };
+      if (isCurr(r)) { map[name].current += parseFloat(r.amount || 0); map[name].trips_current++; }
+      if (isPrev(r))   map[name].previous += parseFloat(r.amount || 0);
+    });
+
+    const per_passenger = Object.values(map)
+      .filter(p => p.current > 0 || p.previous > 0)
+      .sort((a, b) => b.current - a.current);
+
+    return {
+      current:  { label: label(cy, cm), total: ct, transactions: cc, avg_per_trip: cc > 0 ? ct / cc : 0 },
+      previous: { label: label(py, pm), total: pt, transactions: pc, avg_per_trip: pc > 0 ? pt / pc : 0 },
+      per_passenger,
+    };
+  }, [allRecharges, recharges]);
 
   const totalRecharged  = recharges.reduce((s, r) => s + parseFloat(r.amount ?? 0), 0);
   const frozenCount     = walletStatuses.filter(w => w.status === "Frozen").length;

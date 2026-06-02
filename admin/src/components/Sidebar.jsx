@@ -28,7 +28,6 @@ const NAV = [
   { id: "complaints",    label: "Complaints",        icon: MessageSquareWarning,   badge: null },
   { id: "issues",        label: "Issues Inbox",      icon: ClipboardList,          badge: null },
   { section: "Admin" },
-  { id: "roles",     label: "Roles & Permissions", icon: Shield,      badge: null },
   { id: "auditlog",  label: "Audit Log",           icon: ScrollText,  badge: null },
   { id: "settings",  label: "System Settings",     icon: Settings,    badge: null },
 ];

@@ -25,9 +25,9 @@ const STATUS_STYLE = {
   "Closed":      { bg: "#F8FAFC", color: "#94A3B8" },
 };
 
-const CAT_ICON = {
-  "Driver Behavior": "👤", "Route Issue": "🗺️", "Payment": "💳",
-  "App Issue": "📱", "Safety": "⚠️", "Vehicle": "🚌", "Other": "📋",
+const CAT_COLOR = {
+  "Driver Behavior": "#2563EB", "Route Issue": "#7C3AED", "Payment": "#059669",
+  "App Issue": "#D97706",      "Safety": "#DC2626",       "Vehicle": "#0891B2", "Other": "#64748B",
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -114,10 +114,10 @@ function ComplaintDetail({ complaint, onClose, onUpdate, onAddComment }) {
           </div>
           <div style={{ fontSize: 17, fontWeight: 800, color: "#0F172A", marginBottom: 8, lineHeight: 1.3 }}>{complaint.title}</div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 11, color: "#64748B" }}>
-            <span>{CAT_ICON[complaint.category]} {complaint.category}</span>
+            <span style={{ color: CAT_COLOR[complaint.category] ?? "#64748B", fontWeight: 600 }}>{complaint.category}</span>
             <span>·</span>
-            <span>🕐 {fmtDate(complaint.created_at)}</span>
-            {complaint.assigned_to && <><span>·</span><span>👤 {complaint.assigned_to}</span></>}
+            <span>{fmtDate(complaint.created_at)}</span>
+            {complaint.assigned_to && <><span>·</span><span>{complaint.assigned_to}</span></>}
           </div>
         </div>
 
@@ -190,7 +190,7 @@ function ComplaintDetail({ complaint, onClose, onUpdate, onAddComment }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
             {/* Opened event */}
             <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-              <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#F1F5F9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, flexShrink: 0 }}>📋</div>
+              <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#F1F5F9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#64748B", flexShrink: 0 }}>!</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: "#0F172A" }}>Complaint opened</div>
                 <div style={{ fontSize: 11, color: "#94A3B8" }}>{fmtDate(complaint.created_at)}</div>
@@ -443,8 +443,8 @@ export default function ComplaintsPage() {
                 {/* Priority stripe */}
                 <div style={{ width: 4, borderRadius: 4, background: PRIORITY_STYLE[c.priority]?.color ?? "#94A3B8", flexShrink: 0 }} />
 
-                {/* Icon */}
-                <div style={{ fontSize: 22, flexShrink: 0, marginTop: 2 }}>{CAT_ICON[c.category] ?? "📋"}</div>
+                {/* Category colour dot */}
+                <div style={{ width: 10, height: 10, borderRadius: "50%", background: CAT_COLOR[c.category] ?? "#94A3B8", flexShrink: 0, marginTop: 5 }} />
 
                 {/* Content */}
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -457,11 +457,11 @@ export default function ComplaintsPage() {
                   <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A", marginBottom: 5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.title}</div>
                   <div style={{ fontSize: 11, color: "#64748B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 6 }}>{c.description}</div>
                   <div style={{ display: "flex", gap: 12, fontSize: 11, color: "#94A3B8", flexWrap: "wrap" }}>
-                    <span>👤 {c.passenger}</span>
-                    {c.driver && <span>🚌 {c.driver}</span>}
-                    {c.route  && <span>🗺️ {c.route}</span>}
-                    {c.assigned_to && <span>📌 {c.assigned_to}</span>}
-                    {c.comments?.length > 0 && <span>💬 {c.comments.length} comment{c.comments.length !== 1 ? "s" : ""}</span>}
+                    <span>{c.passenger}</span>
+                    {c.driver && <span>Driver: {c.driver}</span>}
+                    {c.route  && <span>Route: {c.route}</span>}
+                    {c.assigned_to && <span>Assigned: {c.assigned_to}</span>}
+                    {c.comments?.length > 0 && <span>{c.comments.length} comment{c.comments.length !== 1 ? "s" : ""}</span>}
                   </div>
                 </div>
 

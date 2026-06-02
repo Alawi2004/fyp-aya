@@ -211,6 +211,51 @@ export const markNotificationRead = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/notifications/:id  — update title/body/type
+// ─────────────────────────────────────────────────────────────────────────────
+export const updateNotification = async (req, res) => {
+  try {
+    const { title, body, type } = req.body;
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input("id",    sql.Int,           req.params.id)
+      .input("title", sql.NVarChar(200),  title ?? null)
+      .input("body",  sql.NVarChar(2000), body  ?? null)
+      .input("type",  sql.NVarChar(20),   type  ?? null)
+      .query(`
+        UPDATE notifications SET
+          title   = COALESCE(@title, title),
+          body    = COALESCE(@body,  body),
+          type    = COALESCE(@type,  type),
+          message = COALESCE(@title, title) + ' — ' + COALESCE(@body, body)
+        WHERE notification_id = @id
+      `);
+    if (result.rowsAffected[0] === 0) return res.status(404).json({ error: "Notification not found" });
+    res.json({ message: "Notification updated" });
+  } catch (err) {
+    console.error("[updateNotification]", err.message);
+    res.status(500).json({ error: "Failed to update notification" });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE /api/notifications/:id  — permanently delete a notification
+// ─────────────────────────────────────────────────────────────────────────────
+export const deleteNotification = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input("id", sql.Int, req.params.id)
+      .query("DELETE FROM notifications WHERE notification_id = @id");
+    if (result.rowsAffected[0] === 0) return res.status(404).json({ error: "Notification not found" });
+    res.json({ message: "Notification deleted" });
+  } catch (err) {
+    console.error("[deleteNotification]", err.message);
+    res.status(500).json({ error: "Failed to delete notification" });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/notifications/user/:user_id
 // Returns personal notifications + broadcast notifications targeted at the
 // user's role group (all_users, all_passengers, all_drivers).
@@ -250,5 +295,180 @@ export const getUserNotifications = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch user notifications" });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TEMPLATE CRUD   GET / POST / PUT / DELETE  /api/notifications/templates
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const getTemplates = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT template_id AS id, name, title, body, type, target, created_at, updated_at
+      FROM notification_templates
+      ORDER BY created_at DESC
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("[getTemplates]", err.message);
+    res.status(500).json({ error: "Failed to fetch templates" });
+  }
+};
+
+export const createTemplateDb = async (req, res) => {
+  try {
+    const { name, title, body, type, target } = req.body;
+    if (!name || !title || !body) return res.status(400).json({ error: "name, title, and body are required" });
+    const pool = await poolPromise;
+    const ins = await pool.request()
+      .input("name",   sql.NVarChar(100),  name)
+      .input("title",  sql.NVarChar(200),  title)
+      .input("body",   sql.NVarChar(2000), body)
+      .input("type",   sql.NVarChar(20),   type   ?? "info")
+      .input("target", sql.NVarChar(50),   target ?? "all_users")
+      .query(`
+        INSERT INTO notification_templates (name, title, body, type, target)
+        OUTPUT INSERTED.template_id AS id, INSERTED.name, INSERTED.title,
+               INSERTED.body, INSERTED.type, INSERTED.target, INSERTED.created_at
+        VALUES (@name, @title, @body, @type, @target)
+      `);
+    res.status(201).json(ins.recordset[0]);
+  } catch (err) {
+    console.error("[createTemplate]", err.message);
+    res.status(500).json({ error: "Failed to create template" });
+  }
+};
+
+export const updateTemplateDb = async (req, res) => {
+  try {
+    const { name, title, body, type, target } = req.body;
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input("id",     sql.Int,            req.params.id)
+      .input("name",   sql.NVarChar(100),  name   ?? null)
+      .input("title",  sql.NVarChar(200),  title  ?? null)
+      .input("body",   sql.NVarChar(2000), body   ?? null)
+      .input("type",   sql.NVarChar(20),   type   ?? null)
+      .input("target", sql.NVarChar(50),   target ?? null)
+      .query(`
+        UPDATE notification_templates SET
+          name       = COALESCE(@name,   name),
+          title      = COALESCE(@title,  title),
+          body       = COALESCE(@body,   body),
+          type       = COALESCE(@type,   type),
+          target     = COALESCE(@target, target),
+          updated_at = GETUTCDATE()
+        WHERE template_id = @id
+      `);
+    if (result.rowsAffected[0] === 0) return res.status(404).json({ error: "Template not found" });
+    res.json({ message: "Template updated" });
+  } catch (err) {
+    console.error("[updateTemplate]", err.message);
+    res.status(500).json({ error: "Failed to update template" });
+  }
+};
+
+export const deleteTemplateDb = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input("id", sql.Int, req.params.id)
+      .query("DELETE FROM notification_templates WHERE template_id = @id");
+    if (result.rowsAffected[0] === 0) return res.status(404).json({ error: "Template not found" });
+    res.json({ message: "Template deleted" });
+  } catch (err) {
+    console.error("[deleteTemplate]", err.message);
+    res.status(500).json({ error: "Failed to delete template" });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCHEDULED NOTIFICATIONS
+// GET  /api/notifications/scheduled   — list all scheduled
+// POST /api/notifications/schedule    — create a scheduled notification
+// DELETE /api/notifications/scheduled/:id — cancel
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const getScheduledNotifications = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT schedule_id AS id, title, body, type, target, target_label,
+             scheduled_at, status, created_at
+      FROM scheduled_notifications
+      ORDER BY scheduled_at ASC
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("[getScheduled]", err.message);
+    res.status(500).json({ error: "Failed to fetch scheduled notifications" });
+  }
+};
+
+export const createScheduledNotification = async (req, res) => {
+  try {
+    const { title, body, type, target, target_label, scheduled_at } = req.body;
+    if (!title || !body || !scheduled_at)
+      return res.status(400).json({ error: "title, body, and scheduled_at are required" });
+
+    const pool = await poolPromise;
+    const ins = await pool.request()
+      .input("title",        sql.NVarChar(200),  title)
+      .input("body",         sql.NVarChar(2000), body)
+      .input("type",         sql.NVarChar(20),   type         ?? "info")
+      .input("target",       sql.NVarChar(50),   target       ?? "all_users")
+      .input("target_label", sql.NVarChar(200),  target_label ?? null)
+      .input("scheduled_at", sql.DateTime2,      new Date(scheduled_at))
+      .query(`
+        INSERT INTO scheduled_notifications
+          (title, body, type, target, target_label, scheduled_at, status)
+        OUTPUT INSERTED.schedule_id AS id, INSERTED.title, INSERTED.body,
+               INSERTED.type, INSERTED.target, INSERTED.target_label,
+               INSERTED.scheduled_at, INSERTED.status, INSERTED.created_at
+        VALUES (@title, @body, @type, @target, @target_label, @scheduled_at, 'pending')
+      `);
+    res.status(201).json(ins.recordset[0]);
+  } catch (err) {
+    console.error("[createScheduled]", err.message);
+    res.status(500).json({ error: "Failed to schedule notification" });
+  }
+};
+
+export const updateScheduledNotification = async (req, res) => {
+  try {
+    const { title, body, type, target, target_label, scheduled_at } = req.body;
+    const pool = await poolPromise;
+    const r = pool.request().input("id", sql.Int, req.params.id);
+    const sets = [];
+    if (title)        { r.input("title",        sql.NVarChar(200),  title);                    sets.push("title=@title"); }
+    if (body)         { r.input("body",          sql.NVarChar(2000), body);                     sets.push("body=@body"); }
+    if (type)         { r.input("type",          sql.NVarChar(20),   type);                     sets.push("type=@type"); }
+    if (target)       { r.input("target",        sql.NVarChar(50),   target);                   sets.push("target=@target"); }
+    if (target_label !== undefined) { r.input("target_label", sql.NVarChar(200), target_label); sets.push("target_label=@target_label"); }
+    if (scheduled_at) { r.input("scheduled_at",  sql.DateTime2,      new Date(scheduled_at));   sets.push("scheduled_at=@scheduled_at"); }
+    if (sets.length === 0) return res.status(400).json({ error: "No fields to update" });
+    const result = await r.query(`UPDATE scheduled_notifications SET ${sets.join(", ")} WHERE schedule_id = @id AND status = 'pending'`);
+    if (result.rowsAffected[0] === 0) return res.status(404).json({ error: "Scheduled notification not found or already sent" });
+    res.json({ message: "Scheduled notification updated" });
+  } catch (err) {
+    console.error("[updateScheduled]", err.message);
+    res.status(500).json({ error: "Failed to update scheduled notification" });
+  }
+};
+
+export const cancelScheduledNotification = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input("id", sql.Int, req.params.id)
+      .query("DELETE FROM scheduled_notifications WHERE schedule_id = @id");
+    if (result.rowsAffected[0] === 0)
+      return res.status(404).json({ error: "Scheduled notification not found" });
+    res.json({ message: "Scheduled notification cancelled" });
+  } catch (err) {
+    console.error("[cancelScheduled]", err.message);
+    res.status(500).json({ error: "Failed to cancel scheduled notification" });
   }
 };

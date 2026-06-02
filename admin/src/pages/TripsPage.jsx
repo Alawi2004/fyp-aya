@@ -579,6 +579,64 @@ function TimetableTab({ routeOpts = [] }) {
 }
 
 // ── Tab 3: Recurring schedules ────────────────────────────────────────────────
+
+const DAY_INDEX = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
+
+function nextOccurrence(r) {
+  const now  = new Date();
+  const todayDow = now.getDay(); // 0=Sun … 6=Sat
+  const todayStr = now.toISOString().slice(0, 10);
+
+  const addDays = (n) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() + n);
+    return d.toISOString().slice(0, 10);
+  };
+
+  const fmt = (iso) => {
+    const d   = new Date(iso + "T00:00:00");
+    const diff = Math.round((d - new Date(todayStr + "T00:00:00")) / 86400000);
+    if (diff === 0) return "Today";
+    if (diff === 1) return "Tomorrow";
+    if (diff < 7)  return d.toLocaleDateString("en-GB", { weekday: "long" });
+    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+  };
+
+  if (r.recurrence === "daily") {
+    return fmt(addDays(1));
+  }
+  if (r.recurrence === "weekdays") {
+    // Next Mon-Fri
+    for (let i = 1; i <= 7; i++) {
+      const d = new Date(now); d.setDate(d.getDate() + i);
+      if (d.getDay() >= 1 && d.getDay() <= 5) return fmt(d.toISOString().slice(0, 10));
+    }
+  }
+  if (r.recurrence === "weekends") {
+    for (let i = 1; i <= 7; i++) {
+      const d = new Date(now); d.setDate(d.getDate() + i);
+      if (d.getDay() === 0 || d.getDay() === 6) return fmt(d.toISOString().slice(0, 10));
+    }
+  }
+  if (r.recurrence === "custom" && r.days?.length > 0) {
+    const targets = r.days.map(d => DAY_INDEX[d]).filter(x => x !== undefined);
+    for (let i = 1; i <= 7; i++) {
+      const d = new Date(now); d.setDate(d.getDate() + i);
+      if (targets.includes(d.getDay())) return fmt(d.toISOString().slice(0, 10));
+    }
+  }
+  return r.next_run ?? "—";
+}
+
+function recurrenceLabel(r) {
+  if (r.recurrence === "daily")    return "Runs every day";
+  if (r.recurrence === "weekdays") return "Runs Mon – Fri";
+  if (r.recurrence === "weekends") return "Runs Sat & Sun";
+  if (r.recurrence === "custom" && r.days?.length > 0)
+    return `Runs every ${r.days.join(", ")}`;
+  return "Custom schedule";
+}
+
 const RECURRENCE_BADGE = {
   daily:    { label: "Daily",    bg: "#EFF6FF", color: "#2563EB" },
   weekdays: { label: "Weekdays", bg: "#F0FDF4", color: "#059669" },
@@ -587,9 +645,9 @@ const RECURRENCE_BADGE = {
 };
 
 function RecurringTab({ recurring, onAdd, onEdit, onDelete, onToggle, routeOpts = [], driverOpts = [], vehicleOpts = [] }) {
-  const [modal, setModal] = useState(false);
+  const [modal,   setModal]   = useState(false);
   const [editRec, setEditRec] = useState(null);
-  const [form, setForm] = useState({ route: "", driver: "", vehicle: "", time: "", recurrence: "daily", days: [], status: "Active" });
+  const [form,    setForm]    = useState({ route: "", driver: "", vehicle: "", time: "", recurrence: "daily", days: [], status: "Active" });
 
   const routeNames    = routeOpts.map(r => r.route_name ?? r.name).filter(Boolean);
   const driverNames   = driverOpts.map(d => d.full_name ?? d.name).filter(Boolean);
@@ -617,65 +675,78 @@ function RecurringTab({ recurring, onAdd, onEdit, onDelete, onToggle, routeOpts 
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: 13, color: "#64748B" }}>{recurring.length} schedule{recurring.length !== 1 ? "s" : ""} · each runs automatically on its defined days</span>
         <button onClick={openAdd} style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
           + New Recurring Schedule
         </button>
       </div>
 
-      <Panel title={`${recurring.length} recurring schedules`} noPad>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ background: "#FAFAFA", borderBottom: "1px solid #F1F5F9" }}>
-              {["Route", "Driver", "Vehicle", "Departs", "Recurrence", "Days", "Next Run", "Status", "Actions"].map(h => (
-                <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".05em", whiteSpace: "nowrap" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {recurring.map((r, i) => {
-              const rb = RECURRENCE_BADGE[r.recurrence] || RECURRENCE_BADGE.daily;
-              return (
-                <tr key={r.id} style={{ borderBottom: "1px solid #F8FAFC", background: i % 2 === 0 ? "#fff" : "#FAFAFA" }}>
-                  <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{r.route}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 12 }}>{r.driver}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 12, fontFamily: "monospace", color: "#2563EB", fontWeight: 600 }}>{r.vehicle}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 700, color: "#0F172A" }}>{r.time}</td>
-                  <td style={{ padding: "12px 14px" }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: rb.bg, color: rb.color }}>{rb.label}</span>
-                  </td>
-                  <td style={{ padding: "12px 14px" }}>
-                    {r.recurrence === "custom" && r.days?.length > 0
-                      ? <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-                          {r.days.map(d => <span key={d} style={{ fontSize: 9, fontWeight: 700, padding: "2px 5px", borderRadius: 5, background: "#EFF6FF", color: "#2563EB" }}>{d}</span>)}
+      {recurring.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "48px 0", color: "#94A3B8", fontSize: 13 }}>
+          No recurring schedules yet. Create one to auto-generate trips on a repeating pattern.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {recurring.map(r => {
+            const rb      = RECURRENCE_BADGE[r.recurrence] || RECURRENCE_BADGE.daily;
+            const next    = nextOccurrence(r);
+            const label   = recurrenceLabel(r);
+            const active  = r.status === "Active";
+            return (
+              <div key={r.id} style={{ background: "#fff", border: `1px solid ${active ? "#E2E8F0" : "#F1F5F9"}`, borderRadius: 12, padding: "16px 20px", opacity: active ? 1 : 0.6 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
+
+                  {/* Left: time + recurrence badge */}
+                  <div style={{ textAlign: "center", minWidth: 64 }}>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: active ? "#0F172A" : "#94A3B8", lineHeight: 1 }}>{r.time}</div>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: rb.bg, color: rb.color, marginTop: 4, display: "inline-block" }}>{rb.label}</span>
+                  </div>
+
+                  {/* Middle: route + details + next run */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: "#0F172A", marginBottom: 4 }}>{r.route}</div>
+                    <div style={{ fontSize: 12, color: "#64748B", marginBottom: 6 }}>
+                      {r.driver} · {r.vehicle}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 11, color: "#475569", fontWeight: 500 }}>{label}</span>
+                      {r.recurrence === "custom" && r.days?.length > 0 && (
+                        <div style={{ display: "flex", gap: 3 }}>
+                          {r.days.map(d => (
+                            <span key={d} style={{ fontSize: 9, fontWeight: 700, padding: "2px 5px", borderRadius: 5, background: "#EFF6FF", color: "#2563EB" }}>{d}</span>
+                          ))}
                         </div>
-                      : <span style={{ fontSize: 11, color: "#94A3B8" }}>—</span>
-                    }
-                  </td>
-                  <td style={{ padding: "12px 14px", fontSize: 11, color: "#64748B" }}>{r.next_run}</td>
-                  <td style={{ padding: "12px 14px" }}>
-                    <StatusPill status={r.status === "Active" ? "Active" : "Inactive"} />
-                  </td>
-                  <td style={{ padding: "12px 14px" }}>
+                      )}
+                      <span style={{ fontSize: 11, color: active ? "#059669" : "#94A3B8", fontWeight: 600, background: active ? "#ECFDF5" : "#F8FAFC", padding: "2px 8px", borderRadius: 6 }}>
+                        Next: {active ? next : "Paused"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Right: status + actions */}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
+                    <StatusPill status={active ? "Active" : "Inactive"} />
                     <div style={{ display: "flex", gap: 6 }}>
                       <button onClick={() => openEdit(r)} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 9px", cursor: "pointer" }}>Edit</button>
-                      <button onClick={() => { onToggle(r.id); updateRecurringSchedule(r.id, { status: r.status === "Active" ? "Paused" : "Active" }).catch(() => {}); }}
-                        style={{ fontSize: 11, color: r.status === "Active" ? "#D97706" : "#059669", background: r.status === "Active" ? "#FFFBEB" : "#ECFDF5", border: "none", borderRadius: 6, padding: "4px 9px", cursor: "pointer" }}>
-                        {r.status === "Active" ? "Pause" : "Resume"}
+                      <button
+                        onClick={() => { onToggle(r.id); updateRecurringSchedule(r.id, { status: active ? "Paused" : "Active" }).catch(() => {}); }}
+                        style={{ fontSize: 11, color: active ? "#D97706" : "#059669", background: active ? "#FFFBEB" : "#ECFDF5", border: "none", borderRadius: 6, padding: "4px 9px", cursor: "pointer" }}>
+                        {active ? "Pause" : "Resume"}
                       </button>
-                      <button onClick={() => { onDelete(r.id); deleteRecurringSchedule(r.id).catch(() => {}); }}
-                        style={{ fontSize: 11, color: "#DC2626", background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 9px", cursor: "pointer" }}>Delete</button>
+                      <button
+                        onClick={() => { onDelete(r.id); deleteRecurringSchedule(r.id).catch(() => {}); }}
+                        style={{ fontSize: 11, color: "#DC2626", background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 9px", cursor: "pointer" }}>
+                        Delete
+                      </button>
                     </div>
-                  </td>
-                </tr>
-              );
-            })}
-            {recurring.length === 0 && (
-              <tr><td colSpan={9} style={{ padding: "32px 0", textAlign: "center", color: "#bbb", fontSize: 13 }}>No recurring schedules. Click "+ New Recurring Schedule" to create one.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </Panel>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {modal && (
         <Modal title={editRec ? "Edit Recurring Schedule" : "New Recurring Schedule"} onClose={() => setModal(false)} onSave={handleSave}>
@@ -1185,6 +1256,12 @@ export default function TripsPage() {
   const [delaysError,     setDelaysError]     = useState(null);
   const [detailTrip,      setDetailTrip]      = useState(null);
 
+  const loadConflicts = useCallback(() => {
+    getTripConflicts()
+      .then(d => setServerConflicts(Array.isArray(d) ? d : null))
+      .catch(() => setServerConflicts(null));
+  }, []);
+
   const loadTrips = useCallback(() => {
     setTripsLoading(true);
     setTripsError(null);
@@ -1215,9 +1292,7 @@ export default function TripsPage() {
       .then(d => setRecurring(Array.isArray(d) ? d : []))
       .catch(() => setRecurring([]));
 
-    getTripConflicts()
-      .then(d => setServerConflicts(Array.isArray(d) ? d : null))
-      .catch(() => setServerConflicts(null));
+    loadConflicts();
 
     getTripDelays()
       .then(d => setDelays(Array.isArray(d) ? d : []))
@@ -1260,6 +1335,7 @@ export default function TripsPage() {
           status:     form.status.toLowerCase(),
         });
         loadTrips();
+        loadConflicts(); // refresh so resolved conflicts disappear
         return null;
       } catch (err) {
         return err?.message ?? "Failed to update trip.";
@@ -1286,9 +1362,12 @@ export default function TripsPage() {
     }
   }
 
-  function handleResolve(trip) {
-    setTripModal(trip);
-    setTab("trips");
+  function handleResolve(conflictTrip) {
+    // Server conflicts now include route_id/driver_id/vehicle_id directly.
+    // For client-side conflicts (timetableTrips), look up the normalized trip first.
+    const fromList = allTrips.find(t => Number(t.id) === Number(conflictTrip.id));
+    setTripModal(fromList ?? conflictTrip);
+    // Modal renders at the top level — no tab switch needed
   }
 
   const tabs = [

@@ -18,7 +18,6 @@ import TicketsPage      from "./pages/TicketsPage";
 import NotificationsPage from "./pages/NotificationPage";
 import RatingsPage      from "./pages/RatingsPage";
 import WalletPage       from "./pages/WalletPage";
-import RolesPage        from "./pages/RolesPage";
 import StaffPage        from "./pages/StaffPage";
 import ComplaintsPage   from "./pages/ComplaintsPage";
 import PassengersPage   from "./pages/PassengersPage";
@@ -69,7 +68,6 @@ function AppShell() {
     notifications: <NotificationsPage />,
     ratings:       <RatingsPage />,
     wallet:        <WalletPage />,
-    roles:         <RolesPage />,
     auditlog:      <AuditLogPage />,
     settings:      <SystemSettingsPage />,
     staff:         <StaffPage />,

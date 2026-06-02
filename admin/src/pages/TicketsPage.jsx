@@ -35,16 +35,19 @@ const TICKET_STATUS_STYLE = {
 
 
 export default function TicketsPage() {
-  const [tickets, setTickets] = useState([]);
-  const [search, setSearch] = useState("");
+  const [tickets,      setTickets]      = useState([]);
+  const [search,       setSearch]       = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
-  const [routeFilter, setRouteFilter] = useState("All");
+  const [routeFilter,  setRouteFilter]  = useState("All");
+  const [cancelError,  setCancelError]  = useState(null);
 
-  useEffect(() => {
+  const load = () => {
     getTickets()
       .then((data) => setTickets((data || []).map(normalizeTicket)))
       .catch(() => setTickets([]));
-  }, []);
+  };
+
+  useEffect(() => { load(); }, []);
 
   const routes = ["All", ...new Set(tickets.map((t) => t.route).filter(Boolean))];
   const statuses = ["All", "Confirmed", "Used", "Cancelled", "Pending"];
@@ -60,10 +63,14 @@ export default function TicketsPage() {
   });
 
   async function cancelTicket(id, rawId) {
-    await apiClient.delete(`/bookings/${rawId}`).catch(() => {});
-    setTickets((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, status: "Cancelled" } : t)),
-    );
+    setCancelError(null);
+    try {
+      await apiClient.delete(`/bookings/${rawId}`);
+      // Reload from DB so UI always reflects the real state
+      load();
+    } catch (err) {
+      setCancelError(err?.message ?? "Failed to cancel ticket");
+    }
   }
 
   const counts = {
@@ -153,6 +160,7 @@ export default function TicketsPage() {
           <button
             onClick={(e) => {
               e.stopPropagation();
+              if (!window.confirm(`Cancel ticket ${row.id} for ${row.passenger}? This cannot be undone.`)) return;
               cancelTicket(row.id, row._raw_id);
             }}
             style={{
@@ -183,6 +191,13 @@ export default function TicketsPage() {
           All bookings and reservations
         </p>
       </div>
+
+      {cancelError && (
+        <div style={{ padding: "10px 14px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, fontSize: 13, color: "#B91C1C", fontWeight: 600 }}>
+          {cancelError}
+          <button onClick={() => setCancelError(null)} style={{ marginLeft: 12, fontSize: 11, color: "#B91C1C", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Dismiss</button>
+        </div>
+      )}
 
       <div
         style={{

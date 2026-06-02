@@ -200,12 +200,14 @@ class ApiClient {
 
   async handleResponse(response) {
     if (!response.ok) {
+      // Read body once as text, then try to parse as JSON
+      const text = await response.text().catch(() => "");
       let message;
       try {
-        const data = await response.json();
+        const data = JSON.parse(text);
         message = data.error || data.message || response.statusText;
       } catch {
-        message = (await response.text()) || response.statusText;
+        message = text || response.statusText;
       }
       throw new Error(message || `Request failed (${response.status})`);
     }

@@ -3,9 +3,10 @@ import { Panel } from "../components/Panel";
 import { StatCard } from "../components/StatCard";
 import { Modal } from "../components/Modal";
 import {
-  getNotifications, markNotificationAsRead, createNotification,
+  getNotifications, createNotification,
+  updateNotificationApi, deleteNotificationApi,
   getNotificationTemplates, getScheduledNotifications,
-  scheduleNotification, cancelScheduled, createTemplate, updateTemplate, deleteTemplate,
+  scheduleNotification, updateScheduled, cancelScheduled, createTemplate, updateTemplate, deleteTemplate,
   getRoutes, getDrivers,
 } from "../api/endpoints";
 
@@ -18,11 +19,11 @@ const ALERT_STYLE = {
 };
 
 const TARGET_GROUPS = [
-  { id: "all_users",        label: "All Users",          icon: "👥", desc: "Everyone on the platform" },
-  { id: "all_passengers",   label: "All Passengers",     icon: "🧳", desc: "All registered passengers" },
-  { id: "all_drivers",      label: "All Drivers",        icon: "🚌", desc: "All active drivers" },
-  { id: "route_passengers", label: "Route Passengers",   icon: "📍", desc: "Passengers on a specific route" },
-  { id: "specific_driver",  label: "Specific Driver",    icon: "👤", desc: "One selected driver" },
+  { id: "all_users",        label: "All Users",        desc: "Everyone on the platform" },
+  { id: "all_passengers",   label: "All Passengers",   desc: "All registered passengers" },
+  { id: "all_drivers",      label: "All Drivers",      desc: "All active drivers" },
+  { id: "route_passengers", label: "Route Passengers", desc: "Passengers on a specific route" },
+  { id: "specific_driver",  label: "Specific Driver",  desc: "One selected driver" },
 ];
 
 const CHANNELS = ["Push Notification", "In-App", "SMS"];
@@ -146,11 +147,51 @@ function DeliveryBars({ delivery }) {
 }
 
 // ── Tab 1: Log & Delivery Status ──────────────────────────────────────────────
-function LogTab({ log, onMarkRead, onMarkAllRead }) {
-  const [filter, setFilter] = useState("All");
-  const [search, setSearch] = useState("");
-  const unread = log.filter(n => !n.read).length;
+function LogTab({ log, onDelete, onEdit }) {
+  const [filter,      setFilter]      = useState("All");
+  const [search,      setSearch]      = useState("");
+  const [editTarget,  setEditTarget]  = useState(null);  // notification being edited
+  const [editForm,    setEditForm]    = useState({ title: "", body: "", type: "info" });
+  const [editSaving,  setEditSaving]  = useState(false);
+  const [editError,   setEditError]   = useState(null);
+  const [deleteTarget,setDeleteTarget]= useState(null);
+  const [isDeleting,  setIsDeleting]  = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
 
+  function openEdit(n) {
+    // Guard: timestamp IDs (> 10^12) are fake local IDs, not real DB IDs
+    if (n.id > 1e12) {
+      setEditError("Cannot edit — this notification has not been saved to the database yet. Refresh the page and try again.");
+      return;
+    }
+    setEditTarget(n);
+    setEditForm({ title: n.title, body: n.body, type: n.type });
+    setEditError(null);
+  }
+
+  async function handleEditSave() {
+    if (!editForm.title || !editForm.body) { setEditError("Title and body are required."); return; }
+    setEditSaving(true); setEditError(null);
+    try {
+      await updateNotificationApi(editTarget.id, editForm);
+      onEdit(editTarget.id, editForm);
+      setEditTarget(null);
+    } catch (err) {
+      setEditError(err?.message ?? "Update failed");
+    } finally { setEditSaving(false); }
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setIsDeleting(true); setDeleteError(null);
+    try {
+      await deleteNotificationApi(deleteTarget.id);
+      onDelete(deleteTarget.id);
+      setDeleteTarget(null);
+    } catch (err) {
+      setDeleteError(err?.message ?? "Delete failed");
+    } finally { setIsDeleting(false); }
+  }
   const visible = log.filter(n => {
     const matchType   = filter === "All" || n.type === filter.toLowerCase();
     const matchSearch = !search || n.title.toLowerCase().includes(search.toLowerCase()) || n.body.toLowerCase().includes(search.toLowerCase());
@@ -159,6 +200,12 @@ function LogTab({ log, onMarkRead, onMarkAllRead }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {editError && !editTarget && (
+        <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, fontSize: 12, color: "#B91C1C", fontWeight: 600, display: "flex", justifyContent: "space-between" }}>
+          {editError}
+          <button onClick={() => setEditError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#B91C1C", fontWeight: 700 }}>✕</button>
+        </div>
+      )}
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <input
           placeholder="Search notifications..."
@@ -177,11 +224,6 @@ function LogTab({ log, onMarkRead, onMarkAllRead }) {
             }}>{f}</button>
           ))}
         </div>
-        {unread > 0 && (
-          <button onClick={onMarkAllRead} style={{ marginLeft: "auto", fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 7, padding: "5px 12px", cursor: "pointer", fontWeight: 600 }}>
-            Mark all read ({unread})
-          </button>
-        )}
       </div>
 
       <Panel title={`${visible.length} notifications`} noPad>
@@ -192,23 +234,20 @@ function LogTab({ log, onMarkRead, onMarkAllRead }) {
           const s = ALERT_STYLE[n.type] || ALERT_STYLE.info;
           const delivery = getDelivery(n);
           return (
-            <div key={n.id} onClick={() => onMarkRead(n.id)} style={{
+            <div key={n.id} style={{
               display: "flex", gap: 14, padding: "14px 18px",
               borderBottom: i < visible.length - 1 ? "1px solid #F8FAFC" : "none",
-              cursor: "pointer", opacity: n.read ? 0.65 : 1,
-              background: n.read ? "#FAFAFA" : "#fff",
-              transition: "background .12s",
+              background: "#fff",
             }}>
               {/* Type dot */}
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 4, gap: 4 }}>
+              <div style={{ paddingTop: 4 }}>
                 <span style={{ width: 9, height: 9, borderRadius: "50%", background: s.dot, flexShrink: 0, display: "inline-block" }} />
-                {!n.read && <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2563EB", display: "inline-block" }} />}
               </div>
 
               {/* Content */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-                  <span style={{ fontSize: 13, fontWeight: n.read ? 500 : 700, color: "#0F172A" }}>{n.title}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{n.title}</span>
                   <span style={{ fontSize: 10, background: s.bg, color: s.color, padding: "1px 7px", borderRadius: 8, fontWeight: 600 }}>{s.label}</span>
                 </div>
                 <div style={{ fontSize: 12, color: "#64748B", lineHeight: 1.5, marginBottom: 6 }}>{n.body}</div>
@@ -219,14 +258,57 @@ function LogTab({ log, onMarkRead, onMarkAllRead }) {
                 </div>
               </div>
 
-              {/* Delivery bars */}
-              <div style={{ flexShrink: 0 }}>
+              {/* Delivery bars + actions */}
+              <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
                 <DeliveryBars delivery={delivery} />
+                <div style={{ display: "flex", gap: 5 }}>
+                  <button onClick={() => openEdit(n)} style={{ fontSize: 10, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>Edit</button>
+                  <button onClick={() => { setDeleteTarget(n); setDeleteError(null); }} style={{ fontSize: 10, color: "#B91C1C", background: "#FEF2F2", border: "none", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>Delete</button>
+                </div>
               </div>
             </div>
           );
         })}
       </Panel>
+
+      {/* Edit modal */}
+      {editTarget && (
+        <Modal title="Edit Notification" onClose={() => { setEditTarget(null); setEditError(null); }} onSave={handleEditSave} saving={editSaving}>
+          {editError && <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>{editError}</div>}
+          <div style={{ marginBottom: 13 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 }}>Title</label>
+            <input value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+              style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+          </div>
+          <div style={{ marginBottom: 13 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 }}>Body</label>
+            <textarea value={editForm.body} onChange={e => setEditForm(f => ({ ...f, body: e.target.value }))} rows={3}
+              style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 }}>Type</label>
+            <select value={editForm.type} onChange={e => setEditForm(f => ({ ...f, type: e.target.value }))}
+              style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none" }}>
+              {["info", "success", "delay", "emergency"].map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+            </select>
+          </div>
+        </Modal>
+      )}
+
+      {/* Delete confirm */}
+      {deleteTarget && (
+        <Modal title="Delete notification" onClose={() => { setDeleteTarget(null); setDeleteError(null); }}>
+          {deleteError && <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>{deleteError}</div>}
+          <p style={{ fontSize: 14, color: "#333", marginBottom: 6 }}>Delete <strong>{deleteTarget.title}</strong>?</p>
+          <p style={{ fontSize: 12, color: "#64748B", marginBottom: 20 }}>This removes the notification from the admin log and from all user inboxes. Cannot be undone.</p>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button onClick={() => { setDeleteTarget(null); setDeleteError(null); }} disabled={isDeleting} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #E2E8F0", background: "#fff", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+            <button onClick={handleDelete} disabled={isDeleting} style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#EF4444", color: "#fff", fontSize: 13, fontWeight: 600, cursor: isDeleting ? "not-allowed" : "pointer", opacity: isDeleting ? 0.7 : 1 }}>
+              {isDeleting ? "Deleting…" : "Delete"}
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -243,30 +325,37 @@ function ComposeTab({ templates, routes, drivers, onSent, onScheduled }) {
     setForm(f => ({ ...f, title: tpl.title, body: tpl.body, type: tpl.type, target: tpl.target }));
   }
 
+  const [sendError, setSendError] = useState(null);
+
   async function handleSend() {
     if (!form.title || !form.body) return;
+    setSendError(null);
     const label = targetLabel(form.target, form.route, form.driver);
-    if (form.scheduled && form.schedDate && form.schedTime) {
-      const iso = `${form.schedDate}T${form.schedTime}:00`;
-      const newSched = { id: Date.now(), title: form.title, body: form.body, type: form.type, target: form.target, target_label: label, scheduled_at: iso, status: "pending" };
-      await scheduleNotification(newSched).catch(() => {});
-      onScheduled(newSched);
-      setSched(true);
-      setTimeout(() => setSched(false), 3000);
-    } else {
-      const res = await createNotification({
-        title:   form.title,
-        body:    form.body,
-        type:    form.type,
-        target:  form.target,
-        channel: form.channel,
-      }).catch(() => {});
-      const sentCount = res?.sent_count ?? 0;
-      onSent({ id: res?.notification_id ?? Date.now(), title: form.title, body: form.body, type: form.type, target: form.target, target_label: label, time: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }), read: false, sent_count: sentCount, read_count: 0 });
-      setSent(true);
-      setTimeout(() => setSent(false), 3000);
+    try {
+      if (form.scheduled && form.schedDate && form.schedTime) {
+        const iso = `${form.schedDate}T${form.schedTime}:00`;
+        const newSched = { id: Date.now(), title: form.title, body: form.body, type: form.type, target: form.target, target_label: label, scheduled_at: iso, status: "pending" };
+        await scheduleNotification(newSched);
+        onScheduled(newSched);
+        setSched(true);
+        setTimeout(() => setSched(false), 3000);
+      } else {
+        const res = await createNotification({
+          title:   form.title,
+          body:    form.body,
+          type:    form.type,
+          target:  form.target,
+          channel: form.channel,
+        });
+        const sentCount = res?.sent_count ?? 0;
+        onSent({ id: res?.notification_id ?? Date.now(), title: form.title, body: form.body, type: form.type, target: form.target, target_label: label, time: new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }), read: false, sent_count: sentCount, read_count: 0 });
+        setSent(true);
+        setTimeout(() => setSent(false), 3000);
+      }
+      setForm(EMPTY_FORM);
+    } catch (err) {
+      setSendError(err?.message ?? "Failed to send notification");
     }
-    setForm(EMPTY_FORM);
   }
 
   const selectedGroup = TARGET_GROUPS.find(g => g.id === form.target);
@@ -328,12 +417,17 @@ function ComposeTab({ templates, routes, drivers, onSent, onScheduled }) {
                 </div>
               </div>
             )}
+            {sendError && (
+              <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>
+                {sendError}
+              </div>
+            )}
             {/* Send button */}
             <button onClick={handleSend} style={{
               background: sent || sched ? "#10B981" : "#2563EB", color: "#fff", border: "none",
               borderRadius: 9, padding: "11px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "background .2s",
             }}>
-              {sent ? "✓ Sent!" : sched ? "✓ Scheduled!" : form.scheduled ? "Schedule Notification" : "Send Notification"}
+              {sent ? "Sent!" : sched ? "Scheduled!" : form.scheduled ? "Schedule Notification" : "Send Notification"}
             </button>
           </div>
         </Panel>
@@ -352,7 +446,6 @@ function ComposeTab({ templates, routes, drivers, onSent, onScheduled }) {
                 background: form.target === g.id ? "#EFF6FF" : "#fff",
                 transition: "all .15s",
               }}>
-                <span style={{ fontSize: 18 }}>{g.icon}</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: form.target === g.id ? 700 : 500, color: form.target === g.id ? "#1E40AF" : "#0F172A" }}>{g.label}</div>
                   <div style={{ fontSize: 11, color: "#94A3B8" }}>{g.desc}</div>
@@ -382,12 +475,15 @@ function ComposeTab({ templates, routes, drivers, onSent, onScheduled }) {
                 <label style={lbl}>Select Driver</label>
                 <select value={form.driver} onChange={e => set("driver")(e.target.value)} style={inputStyle}>
                   <option value="">— Pick a driver —</option>
-                  {drivers.map(d => (
-                    <option key={d.driver_id ?? d.user_id ?? d.id} value={d.full_name ?? d.name}>
-                      {d.full_name ?? d.name}
-                      {d.license_number ? ` · ${d.license_number}` : ''}
-                    </option>
-                  ))}
+                  {drivers.map(d => {
+                    const name = d.full_name ?? d.name ?? "";
+                    const key  = d.driver_id ?? d.user_id ?? d.id ?? name;
+                    return (
+                      <option key={key} value={name}>
+                        {name}{d.license_number ? ` · ${d.license_number}` : ""}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             )}
@@ -422,14 +518,58 @@ function ComposeTab({ templates, routes, drivers, onSent, onScheduled }) {
 }
 
 // ── Tab 3: Scheduled ──────────────────────────────────────────────────────────
-function ScheduledTab({ scheduled, onCancel }) {
+function ScheduledTab({ scheduled, onCancel, onEdit }) {
+  const [editTarget, setEditTarget] = useState(null);
+  const [editForm,   setEditForm]   = useState({ title: "", body: "", type: "info", schedDate: "", schedTime: "" });
+  const [saving,     setSaving]     = useState(false);
+  const [saveError,  setSaveError]  = useState(null);
+
   const pending = scheduled.filter(n => n.status === "pending");
   const sent    = scheduled.filter(n => n.status === "sent");
 
-  function NotifCard({ n, showCancel }) {
-    const s = ALERT_STYLE[n.type] || ALERT_STYLE.info;
+  function openEdit(n) {
+    const dt = n.scheduled_at ? new Date(n.scheduled_at) : new Date();
+    setEditTarget(n);
+    setEditForm({
+      title:     n.title ?? "",
+      body:      n.body  ?? "",
+      type:      n.type  ?? "info",
+      schedDate: dt.toISOString().slice(0, 10),
+      schedTime: dt.toISOString().slice(11, 16),
+    });
+    setSaveError(null);
+  }
+
+  async function handleEditSave() {
+    if (!editForm.title || !editForm.body || !editForm.schedDate || !editForm.schedTime) {
+      setSaveError("All fields are required."); return;
+    }
+    setSaving(true); setSaveError(null);
+    try {
+      await updateScheduled(editTarget.id, {
+        title:        editForm.title,
+        body:         editForm.body,
+        type:         editForm.type,
+        scheduled_at: `${editForm.schedDate}T${editForm.schedTime}:00`,
+      });
+      onEdit(editTarget.id, {
+        title:        editForm.title,
+        body:         editForm.body,
+        type:         editForm.type,
+        scheduled_at: `${editForm.schedDate}T${editForm.schedTime}:00`,
+      });
+      setEditTarget(null);
+    } catch (err) {
+      setSaveError(err?.message ?? "Update failed");
+    } finally { setSaving(false); }
+  }
+
+  function NotifCard({ n }) {
+    const s   = ALERT_STYLE[n.type] || ALERT_STYLE.info;
+    const isPending = n.status === "pending";
+    const fmtDate = new Date(n.scheduled_at).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
     return (
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 14, padding: "16px", background: showCancel ? "#fff" : "#FAFAFA", border: `1px solid ${showCancel ? "#E2E8F0" : "#F1F5F9"}`, borderRadius: 12 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 14, padding: "16px", background: isPending ? "#fff" : "#FAFAFA", border: `1px solid ${isPending ? "#E2E8F0" : "#F1F5F9"}`, borderRadius: 12 }}>
         <div style={{ width: 10, height: 10, borderRadius: "50%", background: s.dot, flexShrink: 0, marginTop: 4 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
@@ -437,19 +577,20 @@ function ScheduledTab({ scheduled, onCancel }) {
             <span style={{ fontSize: 10, background: s.bg, color: s.color, padding: "1px 7px", borderRadius: 8, fontWeight: 600 }}>{s.label}</span>
           </div>
           <div style={{ fontSize: 12, color: "#64748B", lineHeight: 1.5, marginBottom: 8 }}>{n.body}</div>
-          <div style={{ display: "flex", gap: 14, fontSize: 11, color: "#94A3B8" }}>
-            <span>→ {n.target_label}</span>
+          <div style={{ display: "flex", gap: 10, fontSize: 11, color: "#94A3B8" }}>
+            <span>→ {n.target_label ?? n.target}</span>
             <span>·</span>
-            <span>🕐 {new Date(n.scheduled_at).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
-            {showCancel && <span style={{ color: "#059669", fontWeight: 600 }}>⏱ {countdown(n.scheduled_at)}</span>}
+            <span>{fmtDate}</span>
+            {isPending && <span style={{ color: "#059669", fontWeight: 600 }}>{countdown(n.scheduled_at)}</span>}
           </div>
         </div>
-        {showCancel && (
-          <button onClick={() => onCancel(n.id)} style={{ fontSize: 11, color: "#DC2626", background: "#FEF2F2", border: "none", borderRadius: 7, padding: "5px 12px", cursor: "pointer", fontWeight: 600, flexShrink: 0 }}>
-            Cancel
-          </button>
-        )}
-        {!showCancel && <span style={{ fontSize: 11, color: "#10B981", fontWeight: 600, flexShrink: 0 }}>✓ Sent</span>}
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+          {isPending && <>
+            <button onClick={() => openEdit(n)} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontWeight: 600 }}>Edit</button>
+            <button onClick={() => onCancel(n.id)} style={{ fontSize: 11, color: "#DC2626", background: "#FEF2F2", border: "none", borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontWeight: 600 }}>Cancel</button>
+          </>}
+          {!isPending && <span style={{ fontSize: 11, color: "#10B981", fontWeight: 600 }}>Sent</span>}
+        </div>
       </div>
     );
   }
@@ -459,39 +600,82 @@ function ScheduledTab({ scheduled, onCancel }) {
       <Panel title={`Pending — ${pending.length} scheduled`}>
         {pending.length === 0
           ? <div style={{ padding: "24px 0", textAlign: "center", color: "#bbb", fontSize: 13 }}>No pending scheduled notifications.</div>
-          : <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>{pending.map(n => <NotifCard key={n.id} n={n} showCancel />)}</div>
+          : <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>{pending.map(n => <NotifCard key={n.id} n={n} />)}</div>
         }
       </Panel>
       <Panel title={`Sent — ${sent.length} completed`}>
         {sent.length === 0
           ? <div style={{ padding: "24px 0", textAlign: "center", color: "#bbb", fontSize: 13 }}>No sent scheduled notifications.</div>
-          : <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>{sent.map(n => <NotifCard key={n.id} n={n} showCancel={false} />)}</div>
+          : <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>{sent.map(n => <NotifCard key={n.id} n={n} />)}</div>
         }
       </Panel>
+
+      {editTarget && (
+        <Modal title="Edit Scheduled Notification" onClose={() => { setEditTarget(null); setSaveError(null); }} onSave={handleEditSave} saving={saving}>
+          {saveError && <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>{saveError}</div>}
+          <div style={{ marginBottom: 13 }}>
+            <label style={lbl}>Title</label>
+            <input value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+              style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+          </div>
+          <div style={{ marginBottom: 13 }}>
+            <label style={lbl}>Body</label>
+            <textarea value={editForm.body} onChange={e => setEditForm(f => ({ ...f, body: e.target.value }))} rows={3}
+              style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }} />
+          </div>
+          <div style={{ marginBottom: 13 }}>
+            <label style={lbl}>Type</label>
+            <select value={editForm.type} onChange={e => setEditForm(f => ({ ...f, type: e.target.value }))}
+              style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none" }}>
+              {["info", "success", "delay", "emergency"].map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+            </select>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <label style={lbl}>Date</label>
+              <input type="date" value={editForm.schedDate} onChange={e => setEditForm(f => ({ ...f, schedDate: e.target.value }))}
+                style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <div>
+              <label style={lbl}>Time</label>
+              <input type="time" value={editForm.schedTime} onChange={e => setEditForm(f => ({ ...f, schedTime: e.target.value }))}
+                style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
 
 // ── Tab 4: Templates ──────────────────────────────────────────────────────────
-function TemplatesTab({ templates, onAdd, onEdit, onDelete, onUse }) {
+function TemplatesTab({ templates, onReload, onEdit, onDelete, onUse }) {
   const [editTarget, setEditTarget] = useState(null);
-  const [form, setForm]             = useState(EMPTY_TPL);
-  const [modalOpen, setModalOpen]   = useState(false);
+  const [form,       setForm]       = useState(EMPTY_TPL);
+  const [modalOpen,  setModalOpen]  = useState(false);
+  const [saving,     setSaving]     = useState(false);
+  const [saveError,  setSaveError]  = useState(null);
 
-  function openAdd()   { setEditTarget(null); setForm(EMPTY_TPL); setModalOpen(true); }
-  function openEdit(t) { setEditTarget(t.id); setForm({ name: t.name, type: t.type, target: t.target, title: t.title, body: t.body }); setModalOpen(true); }
+  function openAdd()   { setEditTarget(null); setForm(EMPTY_TPL); setSaveError(null); setModalOpen(true); }
+  function openEdit(t) { setEditTarget(t); setForm({ name: t.name, type: t.type, target: t.target, title: t.title, body: t.body }); setSaveError(null); setModalOpen(true); }
 
-  function handleSave() {
-    if (!form.name || !form.title || !form.body) return;
-    if (editTarget) {
-      onEdit({ id: editTarget, ...form });
-      updateTemplate(editTarget, form).catch(() => {});
-    } else {
-      const newTpl = { id: Date.now(), ...form };
-      onAdd(newTpl);
-      createTemplate(form).catch(() => {});
+  async function handleSave() {
+    if (!form.name || !form.title || !form.body) { setSaveError("Name, title, and body are required."); return; }
+    setSaveError(null); setSaving(true);
+    try {
+      if (editTarget) {
+        await updateTemplate(editTarget.id, form);
+        onEdit({ ...editTarget, ...form });
+      } else {
+        await createTemplate(form);
+        onReload(); // reload to get real DB id
+      }
+      setModalOpen(false);
+    } catch (err) {
+      setSaveError(err?.message ?? "Save failed");
+    } finally {
+      setSaving(false);
     }
-    setModalOpen(false);
   }
 
   return (
@@ -513,7 +697,7 @@ function TemplatesTab({ templates, onAdd, onEdit, onDelete, onUse }) {
                   <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A", marginBottom: 5 }}>{t.name}</div>
                   <div style={{ display: "flex", gap: 6 }}>
                     <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 8, background: s.bg, color: s.color }}>{s.label}</span>
-                    <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 8, background: "#F1F5F9", color: "#64748B" }}>{tg?.icon} {tg?.label ?? t.target}</span>
+                    <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 7px", borderRadius: 8, background: "#F1F5F9", color: "#64748B" }}>{tg?.label ?? t.target}</span>
                   </div>
                 </div>
               </div>
@@ -524,7 +708,10 @@ function TemplatesTab({ templates, onAdd, onEdit, onDelete, onUse }) {
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={() => onUse(t)} style={{ flex: 1, fontSize: 11, fontWeight: 700, color: "#fff", background: "#2563EB", border: "none", borderRadius: 7, padding: "7px 0", cursor: "pointer" }}>Use</button>
                 <button onClick={() => openEdit(t)} style={{ flex: 1, fontSize: 11, fontWeight: 600, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 7, padding: "7px 0", cursor: "pointer" }}>Edit</button>
-                <button onClick={() => { onDelete(t.id); deleteTemplate(t.id).catch(() => {}); }} style={{ flex: 1, fontSize: 11, fontWeight: 600, color: "#B91C1C", background: "#FEF2F2", border: "none", borderRadius: 7, padding: "7px 0", cursor: "pointer" }}>Delete</button>
+                <button onClick={async () => {
+                  if (!window.confirm(`Delete template "${t.name}"?`)) return;
+                  try { await deleteTemplate(t.id); onDelete(t.id); } catch (err) { alert(err?.message ?? "Delete failed"); }
+                }} style={{ flex: 1, fontSize: 11, fontWeight: 600, color: "#B91C1C", background: "#FEF2F2", border: "none", borderRadius: 7, padding: "7px 0", cursor: "pointer" }}>Delete</button>
               </div>
             </div>
           );
@@ -532,7 +719,8 @@ function TemplatesTab({ templates, onAdd, onEdit, onDelete, onUse }) {
       </div>
 
       {modalOpen && (
-        <Modal title={editTarget ? "Edit Template" : "New Template"} onClose={() => setModalOpen(false)} onSave={handleSave}>
+        <Modal title={editTarget ? "Edit Template" : "New Template"} onClose={() => { setModalOpen(false); setSaveError(null); }} onSave={handleSave} saving={saving}>
+          {saveError && <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>{saveError}</div>}
           {[{ label: "Template Name", key: "name", placeholder: "e.g. Bus Delay Alert" }, { label: "Notification Title", key: "title", placeholder: "e.g. Bus Delay on {route}" }].map(f => (
             <div key={f.key} style={{ marginBottom: 14 }}>
               <label style={lbl}>{f.label}</label>
@@ -594,11 +782,10 @@ export default function NotificationsPage() {
       .catch(() => {});
 
     getDrivers()
-      .then(d => { const list = Array.isArray(d) ? d : d?.drivers ?? []; setDrivers(list); })
+      .then(d => setDrivers(Array.isArray(d) ? d : (d?.data ?? [])))
       .catch(() => {});
   }, []);
 
-  const unread    = log.filter(n => !n.read).length;
   const pending   = scheduled.filter(n => n.status === "pending").length;
   const todaySent = log.filter(n => n.time).length + 2;
 
@@ -613,24 +800,33 @@ export default function NotificationsPage() {
   const overallDelivPct = allDelivery.sent > 0 ? Math.round(allDelivery.delivered / allDelivery.sent * 100) : 0;
   const overallReadPct  = allDelivery.sent > 0 ? Math.round(allDelivery.read      / allDelivery.sent * 100) : 0;
 
-  async function markRead(id) {
-    await markNotificationAsRead(id).catch(() => {});
-    setLog(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-  }
-  async function markAllRead() {
-    await Promise.all(log.filter(n => !n.read).map(n => markNotificationAsRead(n.id).catch(() => {})));
-    setLog(prev => prev.map(n => ({ ...n, read: true })));
+  function loadLog() {
+    getNotifications()
+      .then(d => setLog(Array.isArray(d) ? d.map(normalizeNotif) : []))
+      .catch(() => {});
   }
 
   function handleSent(notif) {
-    setLog(prev => [notif, ...prev]);
+    // Reload from DB so the new notification gets its real ID
+    loadLog();
   }
-  function handleScheduled(notif) {
-    setScheduled(prev => [notif, ...prev]);
+  function loadScheduled() {
+    getScheduledNotifications()
+      .then(d => setScheduled(Array.isArray(d) ? d : []))
+      .catch(() => {});
   }
-  function handleCancelScheduled(id) {
-    cancelScheduled(id).catch(() => {});
-    setScheduled(prev => prev.filter(n => n.id !== id));
+
+  function handleScheduled() {
+    // Reload so the new schedule gets its real DB id
+    loadScheduled();
+  }
+  async function handleCancelScheduled(id) {
+    try {
+      await cancelScheduled(id);
+      setScheduled(prev => prev.filter(n => (n.id ?? n.schedule_id) !== id));
+    } catch (err) {
+      alert(err?.message ?? "Failed to cancel scheduled notification");
+    }
   }
 
   // Template CRUD
@@ -640,7 +836,7 @@ export default function NotificationsPage() {
   }
 
   const tabs = [
-    { id: "log",       label: "Log & Delivery",  badge: unread   },
+    { id: "log",       label: "Log & Delivery",  badge: 0 },
     { id: "compose",   label: "Compose",          badge: 0        },
     { id: "scheduled", label: "Scheduled",        badge: pending  },
     { id: "templates", label: "Templates",        badge: 0        },
@@ -661,22 +857,29 @@ export default function NotificationsPage() {
       </div>
 
       {/* KPI cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
-        <StatCard label="Total Sent"       value={log.length}           delta="all time"          accent="#2563EB" />
-        <StatCard label="Unread"           value={unread}               delta="pending read"       up={unread === 0} accent="#F59E0B" />
-        <StatCard label="Delivery Rate"    value={`${overallDelivPct}%`} delta="delivered / sent"  up={overallDelivPct >= 90} accent="#10B981" />
-        <StatCard label="Read Rate"        value={`${overallReadPct}%`}  delta="read / sent"       up={overallReadPct >= 60}  accent="#7C3AED" />
-        <StatCard label="Scheduled"        value={pending}               delta="queued to send"    accent="#0EA5E9" />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+        <StatCard label="Total Sent"    value={log.length}             delta="all time"           accent="#2563EB" />
+        <StatCard label="Delivery Rate" value={`${overallDelivPct}%`}  delta="delivered / sent"   up={overallDelivPct >= 90} accent="#10B981" />
+        <StatCard label="Read Rate"     value={`${overallReadPct}%`}   delta="read by passengers" up={overallReadPct >= 60}  accent="#7C3AED" />
+        <StatCard label="Scheduled"     value={pending}                delta="queued to send"     accent="#0EA5E9" />
       </div>
 
       {/* Tab content */}
-      {tab === "log"       && <LogTab       log={log}           onMarkRead={markRead}   onMarkAllRead={markAllRead} />}
+      {tab === "log"       && <LogTab
+        log={log}
+        onDelete={id => setLog(prev => prev.filter(n => n.id !== id))}
+        onEdit={(id, patch) => setLog(prev => prev.map(n => n.id === id ? { ...n, ...patch } : n))}
+      />}
       {tab === "compose"   && <ComposeTab   templates={templates} routes={routes} drivers={drivers} onSent={handleSent}  onScheduled={handleScheduled} />}
-      {tab === "scheduled" && <ScheduledTab scheduled={scheduled} onCancel={handleCancelScheduled} />}
+      {tab === "scheduled" && <ScheduledTab
+        scheduled={scheduled}
+        onCancel={handleCancelScheduled}
+        onEdit={(id, patch) => setScheduled(prev => prev.map(n => (n.id ?? n.schedule_id) === id ? { ...n, ...patch } : n))}
+      />}
       {tab === "templates" && (
         <TemplatesTab
           templates={templates}
-          onAdd={t    => setTemplates(prev => [t, ...prev])}
+          onReload={() => getNotificationTemplates().then(d => setTemplates(Array.isArray(d) ? d : [])).catch(() => {})}
           onEdit={t   => setTemplates(prev => prev.map(p => p.id === t.id ? t : p))}
           onDelete={id => setTemplates(prev => prev.filter(t => t.id !== id))}
           onUse={tpl  => { handleUseTemplate(tpl); }}

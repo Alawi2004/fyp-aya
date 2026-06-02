@@ -131,15 +131,18 @@ export const getAdjustmentHistory = (limit = 100) => apiClient.get(`/wallet/adju
 // Notifications
 export const getNotifications           = ()       => apiClient.get('/notifications');
 export const getUserNotifications_v2    = (id)     => apiClient.get(`/notifications/user/${id}`);
-export const markNotificationAsRead     = (id)     => apiClient.put(`/notifications/${id}/read`, {});
-export const createNotification         = (data)   => apiClient.post('/notifications', data);
+export const markNotificationAsRead     = (id)       => apiClient.put(`/notifications/${id}/read`, {});
+export const createNotification         = (data)     => apiClient.post('/notifications', data);
+export const updateNotificationApi      = (id, data) => apiClient.put(`/notifications/${id}`, data);
+export const deleteNotificationApi      = (id)       => apiClient.delete(`/notifications/${id}`);
 export const getNotificationTemplates   = ()       => apiClient.get('/notifications/templates');
 export const createTemplate             = (data)   => apiClient.post('/notifications/templates', data);
 export const updateTemplate             = (id, d)  => apiClient.put(`/notifications/templates/${id}`, d);
 export const deleteTemplate             = (id)     => apiClient.delete(`/notifications/templates/${id}`);
-export const getScheduledNotifications  = ()       => apiClient.get('/notifications/scheduled');
-export const scheduleNotification       = (data)   => apiClient.post('/notifications/schedule', data);
-export const cancelScheduled            = (id)     => apiClient.delete(`/notifications/scheduled/${id}`);
+export const getScheduledNotifications  = ()         => apiClient.get('/notifications/scheduled');
+export const scheduleNotification       = (data)     => apiClient.post('/notifications/schedule', data);
+export const updateScheduled            = (id, data) => apiClient.put(`/notifications/scheduled/${id}`, data);
+export const cancelScheduled            = (id)       => apiClient.delete(`/notifications/scheduled/${id}`);
 
 // Trip conflicts (server-side detection)
 export const getTripConflicts = () => apiClient.get('/trips/conflicts');

@@ -10,6 +10,7 @@ export const getRatings = async (req, res) => {
         r.trip_id,
         r.rating,
         r.comment,
+        r.created_at,
         u.full_name,
         ro.route_name,
         du.full_name AS driver_name
