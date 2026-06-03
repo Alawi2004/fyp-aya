@@ -50,19 +50,19 @@ function Textarea({ label, description, value, onChange, rows = 3, placeholder }
   );
 }
 
-function SectionCard({ title, icon, children, onSave, saving, saved }) {
+function SectionCard({ title, children, onSave, saving, saved, error }) {
   return (
     <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #E2E8F0", boxShadow: "0 1px 4px rgba(0,0,0,.05)", overflow: "hidden", marginBottom: 20 }}>
       <div style={{ padding: "16px 22px 14px", borderBottom: "1px solid #F1F5F9", display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontSize: 20 }}>{icon}</span>
         <span style={{ fontSize: 14, fontWeight: 700, color: "#0F172A", flex: 1 }}>{title}</span>
+        {error && <span style={{ fontSize: 12, color: "#DC2626", fontWeight: 600 }}>{error}</span>}
         <button onClick={onSave} disabled={saving} style={{
           padding: "7px 18px", border: "none", borderRadius: 8,
           background: saved ? "#059669" : saving ? "#93C5FD" : "#2563EB",
           color: "#fff", fontSize: 13, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer",
           transition: "background .2s",
         }}>
-          {saved ? "✓ Saved" : saving ? "Saving…" : "Save Changes"}
+          {saved ? "Saved" : saving ? "Saving…" : "Save Changes"}
         </button>
       </div>
       <div style={{ padding: "20px 22px" }}>{children}</div>
@@ -76,35 +76,29 @@ function TwoCol({ children }) {
 
 // ── Default settings (used in FRONTEND_ONLY mode) ─────────────────────────────
 
+// Keys match the actual system_settings DB keys
 const DEFAULTS = {
-  "fare.base_fare":              "1.00",
-  "fare.per_km_rate":            "0.15",
-  "fare.student_discount":       "25",
-  "fare.senior_discount":        "30",
-  "fare.staff_discount":         "100",
-  "fare.peak_surcharge":         "15",
-  "fare.night_surcharge":        "10",
-  "wallet.max_balance":          "500",
-  "wallet.min_topup":            "5",
-  "wallet.max_topup_daily":      "200",
-  "wallet.low_balance_alert":    "25",
-  "wallet.freeze_on_fraud":      "true",
-  "gps.broadcast_interval_sec":  "5",
-  "gps.accuracy_threshold_m":    "20",
-  "gps.history_retention_days":  "90",
-  "gps.geofence_radius_m":       "200",
-  "gps.offline_buffer_minutes":  "10",
+  "fare.base_amount":            "1.50",
+  "fare.per_km_rate":            "0.10",
+  "fare.student_discount":       "0.25",
+  "fare.senior_discount":        "0.30",
+  "fare.employee_discount":      "0.10",
+  "fare.school_discount":        "0.50",
+  "wallet.max_balance":          "1000.00",
+  "wallet.min_topup":            "5.00",
+  "wallet.max_topup":            "500.00",
+  "wallet.low_balance_alert":    "5.00",
+  "gps.update_interval_sec":     "10",
+  "gps.stale_threshold_sec":     "60",
+  "gps.geofence_radius_m":       "150",
   "security.max_login_attempts": "5",
-  "security.lockout_base_min":   "1",
-  "security.jwt_expiry_min":     "15",
-  "security.max_sessions":       "3",
-  "security.force_2fa_admin":    "false",
-  "security.strong_password":    "true",
-  "maintenance.enabled":         "false",
-  "maintenance.message":         "System is undergoing scheduled maintenance. Please check back shortly.",
-  "maintenance.allowed_ips":     "127.0.0.1",
-  "maintenance.scheduled_start": "",
-  "maintenance.scheduled_end":   "",
+  "security.lockout_minutes":    "15",
+  "security.jwt_access_ttl":     "900",
+  "security.jwt_refresh_ttl":    "604800",
+  "maintenance.mode":            "false",
+  "maintenance.message":         "We are upgrading the system. Back shortly.",
+  "notifications.push_enabled":  "true",
+  "notifications.sms_enabled":   "false",
 };
 
 const API_KEYS_INFO = [
@@ -122,50 +116,56 @@ const API_KEYS_INFO = [
 function useSave(s, keys) {
   const [saving, setSaving] = useState(false);
   const [saved,  setSaved]  = useState(false);
+  const [error,  setError]  = useState(null);
 
   const save = useCallback(async () => {
     setSaving(true);
+    setError(null);
     const body = {};
     keys.forEach(k => { body[k] = s[k]; });
     try {
       await apiClient.put("/settings", body);
-      setSaved(true); setTimeout(() => setSaved(false), 2500);
-    } catch { /* ignore in frontend-only mode */ setSaved(true); setTimeout(() => setSaved(false), 2500); }
-    setSaving(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      setError(err?.message ?? "Save failed");
+    } finally {
+      setSaving(false);
+    }
   }, [s, keys]);
 
-  return { save, saving, saved };
+  return { save, saving, saved, error };
 }
 
 function FareTab({ s, set }) {
-  const { save, saving, saved } = useSave(s, ["fare.base_fare","fare.per_km_rate","fare.student_discount","fare.senior_discount","fare.staff_discount","fare.peak_surcharge","fare.night_surcharge"]);
+  const keys = ["fare.base_amount","fare.per_km_rate","fare.student_discount","fare.senior_discount","fare.employee_discount","fare.school_discount"];
+  const { save, saving, saved, error } = useSave(s, keys);
   return (
-    <SectionCard title="Fare Rules" icon="💰" onSave={save} saving={saving} saved={saved}>
+    <SectionCard title="Fare Rules" onSave={save} saving={saving} saved={saved} error={error}>
       <TwoCol>
-        <Field label="Base Fare" unit="$" type="number" min="0" step="0.25" value={s["fare.base_fare"]} onChange={v => set("fare.base_fare", v)} description="Flat fare charged for every journey regardless of distance." />
-        <Field label="Per-km Rate" unit="$/km" type="number" min="0" step="0.05" value={s["fare.per_km_rate"]} onChange={v => set("fare.per_km_rate", v)} description="Variable component added on top of the base fare." />
-        <Field label="Student Discount" unit="%" type="number" min="0" max="100" value={s["fare.student_discount"]} onChange={v => set("fare.student_discount", v)} description="Applied automatically to verified student accounts." />
-        <Field label="Senior Discount" unit="%" type="number" min="0" max="100" value={s["fare.senior_discount"]} onChange={v => set("fare.senior_discount", v)} description="Applied to passengers registered as senior citizens." />
-        <Field label="Staff Discount" unit="%" type="number" min="0" max="100" value={s["fare.staff_discount"]} onChange={v => set("fare.staff_discount", v)} description="Discount for company employees (100% = free travel)." />
-        <Field label="Peak Hour Surcharge" unit="%" type="number" min="0" max="100" value={s["fare.peak_surcharge"]} onChange={v => set("fare.peak_surcharge", v)} description="Extra charge during peak hours (7–9 am and 5–7 pm)." />
+        <Field label="Base Amount" unit="OMR" type="number" min="0" step="0.25" value={s["fare.base_amount"]} onChange={v => set("fare.base_amount", v)} description="Flat fare charged for every journey regardless of distance." />
+        <Field label="Per-km Rate" unit="OMR/km" type="number" min="0" step="0.01" value={s["fare.per_km_rate"]} onChange={v => set("fare.per_km_rate", v)} description="Variable component added on top of the base fare." />
+        <Field label="Student Discount" unit="ratio 0–1" type="number" min="0" max="1" step="0.05" value={s["fare.student_discount"]} onChange={v => set("fare.student_discount", v)} description="e.g. 0.25 = 25% off for verified student accounts." />
+        <Field label="Senior Discount" unit="ratio 0–1" type="number" min="0" max="1" step="0.05" value={s["fare.senior_discount"]} onChange={v => set("fare.senior_discount", v)} description="e.g. 0.30 = 30% off for senior citizens." />
+        <Field label="Employee Discount" unit="ratio 0–1" type="number" min="0" max="1" step="0.05" value={s["fare.employee_discount"]} onChange={v => set("fare.employee_discount", v)} description="Discount for company employees." />
+        <Field label="School Discount" unit="ratio 0–1" type="number" min="0" max="1" step="0.05" value={s["fare.school_discount"]} onChange={v => set("fare.school_discount", v)} description="e.g. 0.50 = 50% off for school children." />
       </TwoCol>
-      <Field label="Night Surcharge" unit="%" type="number" min="0" max="100" value={s["fare.night_surcharge"]} onChange={v => set("fare.night_surcharge", v)} description="Extra charge for journeys departing between 10 pm and 5 am." />
 
-      {/* Fare preview */}
+      {/* Live preview */}
       <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 10, padding: "14px 18px", marginTop: 4 }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: "#1D4ED8", marginBottom: 8 }}>Sample Fare Preview — 10 km journey</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
           {[
             { label: "Standard",  disc: 0 },
-            { label: "Student",   disc: parseFloat(s["fare.student_discount"]) / 100 },
-            { label: "Senior",    disc: parseFloat(s["fare.senior_discount"])  / 100 },
+            { label: "Student",   disc: parseFloat(s["fare.student_discount"] || 0) },
+            { label: "Senior",    disc: parseFloat(s["fare.senior_discount"]  || 0) },
           ].map(({ label, disc }) => {
-            const base = parseFloat(s["fare.base_fare"] || 0) + 10 * parseFloat(s["fare.per_km_rate"] || 0);
+            const base  = parseFloat(s["fare.base_amount"] || 0) + 10 * parseFloat(s["fare.per_km_rate"] || 0);
             const final = base * (1 - disc);
             return (
               <div key={label} style={{ background: "#fff", borderRadius: 8, padding: "10px 12px", border: "1px solid #BFDBFE" }}>
                 <div style={{ fontSize: 11, color: "#64748B" }}>{label}</div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: "#1D4ED8" }}>${final.toFixed(2)}</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: "#1D4ED8" }}>OMR {final.toFixed(2)}</div>
                 {disc > 0 && <div style={{ fontSize: 10, color: "#059669" }}>{Math.round(disc*100)}% off</div>}
               </div>
             );
@@ -177,61 +177,54 @@ function FareTab({ s, set }) {
 }
 
 function WalletTab({ s, set }) {
-  const { save, saving, saved } = useSave(s, ["wallet.max_balance","wallet.min_topup","wallet.max_topup_daily","wallet.low_balance_alert","wallet.freeze_on_fraud"]);
+  const { save, saving, saved, error } = useSave(s, ["wallet.max_balance","wallet.min_topup","wallet.max_topup","wallet.low_balance_alert"]);
   return (
-    <SectionCard title="Wallet Limits" icon="👛" onSave={save} saving={saving} saved={saved}>
+    <SectionCard title="Wallet Limits" onSave={save} saving={saving} saved={saved} error={error}>
       <TwoCol>
-        <Field label="Max Wallet Balance" unit="$" type="number" min="0" step="10" value={s["wallet.max_balance"]} onChange={v => set("wallet.max_balance", v)} description="A passenger's wallet cannot exceed this balance." />
-        <Field label="Low-Balance Alert" unit="$" type="number" min="0" step="1" value={s["wallet.low_balance_alert"]} onChange={v => set("wallet.low_balance_alert", v)} description="Push notification sent when balance drops below this." />
-        <Field label="Min Top-Up Amount" unit="$" type="number" min="0" step="1" value={s["wallet.min_topup"]} onChange={v => set("wallet.min_topup", v)} description="Smallest top-up a staff agent may process." />
-        <Field label="Max Top-Up Per Day" unit="$" type="number" min="0" step="10" value={s["wallet.max_topup_daily"]} onChange={v => set("wallet.max_topup_daily", v)} description="Daily cap on top-ups per passenger account." />
+        <Field label="Max Wallet Balance" unit="OMR" type="number" min="0" step="10" value={s["wallet.max_balance"]} onChange={v => set("wallet.max_balance", v)} description="A passenger's wallet cannot exceed this balance." />
+        <Field label="Low-Balance Alert" unit="OMR" type="number" min="0" step="0.5" value={s["wallet.low_balance_alert"]} onChange={v => set("wallet.low_balance_alert", v)} description="Push notification sent when balance drops below this." />
+        <Field label="Min Top-Up Amount" unit="OMR" type="number" min="0" step="1" value={s["wallet.min_topup"]} onChange={v => set("wallet.min_topup", v)} description="Smallest top-up a staff agent may process." />
+        <Field label="Max Top-Up Amount" unit="OMR" type="number" min="0" step="10" value={s["wallet.max_topup"]} onChange={v => set("wallet.max_topup", v)} description="Maximum top-up per transaction." />
       </TwoCol>
-      <Toggle label="Auto-Freeze on Fraud Flag" description="Automatically freeze the wallet when a transaction is flagged as fraudulent." checked={s["wallet.freeze_on_fraud"] === "true"} onChange={v => set("wallet.freeze_on_fraud", String(v))} />
     </SectionCard>
   );
 }
 
 function GpsTab({ s, set }) {
-  const { save, saving, saved } = useSave(s, ["gps.broadcast_interval_sec","gps.accuracy_threshold_m","gps.history_retention_days","gps.geofence_radius_m","gps.offline_buffer_minutes"]);
+  const { save, saving, saved, error } = useSave(s, ["gps.update_interval_sec","gps.stale_threshold_sec","gps.geofence_radius_m"]);
   return (
-    <SectionCard title="GPS & Tracking" icon="📡" onSave={save} saving={saving} saved={saved}>
+    <SectionCard title="GPS & Tracking" onSave={save} saving={saving} saved={saved} error={error}>
       <TwoCol>
-        <Field label="Broadcast Interval" unit="seconds" type="number" min="1" max="60" value={s["gps.broadcast_interval_sec"]} onChange={v => set("gps.broadcast_interval_sec", v)} description="How often driver apps send location updates to the server." />
-        <Field label="Accuracy Threshold" unit="metres" type="number" min="1" max="200" value={s["gps.accuracy_threshold_m"]} onChange={v => set("gps.accuracy_threshold_m", v)} description="Readings worse than this accuracy are discarded." />
-        <Field label="Geofence Alert Radius" unit="metres" type="number" min="50" max="2000" value={s["gps.geofence_radius_m"]} onChange={v => set("gps.geofence_radius_m", v)} description="Alert when a vehicle strays further than this from its planned route." />
-        <Field label="Offline Buffer" unit="minutes" type="number" min="1" max="60" value={s["gps.offline_buffer_minutes"]} onChange={v => set("gps.offline_buffer_minutes", v)} description="Queue GPS updates for this duration before raising a signal-loss alert." />
+        <Field label="Update Interval" unit="seconds" type="number" min="1" max="60" value={s["gps.update_interval_sec"]} onChange={v => set("gps.update_interval_sec", v)} description="How often driver apps send location updates to the server." />
+        <Field label="Stale Threshold" unit="seconds" type="number" min="10" max="300" value={s["gps.stale_threshold_sec"]} onChange={v => set("gps.stale_threshold_sec", v)} description="Consider a vehicle offline if no update received within this window." />
       </TwoCol>
-      <Field label="History Retention" unit="days" type="number" min="7" max="365" value={s["gps.history_retention_days"]} onChange={v => set("gps.history_retention_days", v)} description="GPS logs older than this are automatically purged to manage storage." />
+      <Field label="Geofence Alert Radius" unit="metres" type="number" min="50" max="2000" value={s["gps.geofence_radius_m"]} onChange={v => set("gps.geofence_radius_m", v)} description="Alert when a vehicle strays further than this from its planned route." />
     </SectionCard>
   );
 }
 
 function SecurityTab({ s, set }) {
-  const { save, saving, saved } = useSave(s, ["security.max_login_attempts","security.lockout_base_min","security.jwt_expiry_min","security.max_sessions","security.force_2fa_admin","security.strong_password"]);
+  const { save, saving, saved, error } = useSave(s, ["security.max_login_attempts","security.lockout_minutes","security.jwt_access_ttl","security.jwt_refresh_ttl"]);
   return (
-    <SectionCard title="Security Policy" icon="🔒" onSave={save} saving={saving} saved={saved}>
+    <SectionCard title="Security Policy" onSave={save} saving={saving} saved={saved} error={error}>
       <TwoCol>
         <Field label="Max Login Attempts" type="number" min="1" max="20" value={s["security.max_login_attempts"]} onChange={v => set("security.max_login_attempts", v)} description="Failed logins before the account is temporarily locked." />
-        <Field label="Lockout Base Duration" unit="minutes" type="number" min="1" max="60" value={s["security.lockout_base_min"]} onChange={v => set("security.lockout_base_min", v)} description="Starting lockout duration — doubles exponentially with each repeat lockout (cap 60 min)." />
-        <Field label="Access Token Expiry" unit="minutes" type="number" min="5" max="1440" value={s["security.jwt_expiry_min"]} onChange={v => set("security.jwt_expiry_min", v)} description="JWT access tokens expire after this many minutes. Shorter = more secure." />
-        <Field label="Max Concurrent Sessions" type="number" min="1" max="10" value={s["security.max_sessions"]} onChange={v => set("security.max_sessions", v)} description="Oldest session is revoked when this limit is exceeded." />
+        <Field label="Lockout Duration" unit="minutes" type="number" min="1" max="120" value={s["security.lockout_minutes"]} onChange={v => set("security.lockout_minutes", v)} description="How long an account stays locked after too many failed attempts." />
+        <Field label="Access Token TTL" unit="seconds" type="number" min="60" max="3600" value={s["security.jwt_access_ttl"]} onChange={v => set("security.jwt_access_ttl", v)} description="JWT access tokens expire after this many seconds (default 900 = 15 min)." />
+        <Field label="Refresh Token TTL" unit="seconds" type="number" min="3600" max="2592000" value={s["security.jwt_refresh_ttl"]} onChange={v => set("security.jwt_refresh_ttl", v)} description="Refresh tokens expire after this many seconds (default 604800 = 7 days)." />
       </TwoCol>
-      <div style={{ borderTop: "1px solid #F1F5F9", paddingTop: 16, marginTop: 4 }}>
-        <Toggle label="Force 2FA for All Admins" description="Every admin account must complete TOTP verification at each login. Recommended for production." checked={s["security.force_2fa_admin"] === "true"} onChange={v => set("security.force_2fa_admin", String(v))} />
-        <Toggle label="Require Strong Passwords" description="Enforce at least 8 characters with uppercase, lowercase, a digit, and a special character." checked={s["security.strong_password"] === "true"} onChange={v => set("security.strong_password", String(v))} />
-      </div>
     </SectionCard>
   );
 }
 
 function MaintenanceTab({ s, set }) {
-  const { save, saving, saved } = useSave(s, ["maintenance.enabled","maintenance.message","maintenance.allowed_ips","maintenance.scheduled_start","maintenance.scheduled_end"]);
-  const isOn = s["maintenance.enabled"] === "true";
+  const { save, saving, saved, error } = useSave(s, ["maintenance.mode","maintenance.message","notifications.push_enabled","notifications.sms_enabled"]);
+  const isOn = s["maintenance.mode"] === "true";
   return (
     <>
       {isOn && (
         <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "14px 18px", marginBottom: 16, display: "flex", gap: 10, alignItems: "flex-start" }}>
-          <span style={{ fontSize: 20 }}>🚧</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B91C1C" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           <div>
             <div style={{ fontWeight: 700, color: "#B91C1C", fontSize: 14 }}>Maintenance mode is ACTIVE</div>
             <div style={{ fontSize: 12, color: "#DC2626", marginTop: 2 }}>All non-admin users are currently blocked. Only IPs in the allow-list can access the system.</div>
@@ -239,14 +232,13 @@ function MaintenanceTab({ s, set }) {
         </div>
       )}
 
-      <SectionCard title="Maintenance Mode" icon="🔧" onSave={save} saving={saving} saved={saved}>
-        <Toggle label="Enable Maintenance Mode" description="Blocks all passenger and driver app access. Admin portal remains accessible from allowed IPs." checked={isOn} onChange={v => set("maintenance.enabled", String(v))} />
-        <Textarea label="Maintenance Message" description="Shown to users attempting to access the system." value={s["maintenance.message"]} onChange={v => set("maintenance.message", v)} placeholder="System undergoing maintenance…" />
-        <Field label="Allowed IP Addresses" value={s["maintenance.allowed_ips"]} onChange={v => set("maintenance.allowed_ips", v)} description="Comma-separated list of IPs that bypass maintenance mode (e.g. your office IP)." placeholder="127.0.0.1, 192.168.1.1" />
-        <TwoCol>
-          <Field label="Scheduled Start" type="datetime-local" value={s["maintenance.scheduled_start"]} onChange={v => set("maintenance.scheduled_start", v)} description="Optional: auto-enable maintenance at this time." />
-          <Field label="Scheduled End" type="datetime-local" value={s["maintenance.scheduled_end"]} onChange={v => set("maintenance.scheduled_end", v)} description="Optional: auto-disable maintenance at this time." />
-        </TwoCol>
+      <SectionCard title="Maintenance & Notifications" onSave={save} saving={saving} saved={saved} error={error}>
+        <Toggle label="Enable Maintenance Mode" description="Blocks all passenger and driver app access while updates are in progress." checked={isOn} onChange={v => set("maintenance.mode", String(v))} />
+        <Textarea label="Maintenance Message" description="Shown to users attempting to access the system during maintenance." value={s["maintenance.message"]} onChange={v => set("maintenance.message", v)} placeholder="We are upgrading the system. Back shortly." />
+        <div style={{ borderTop: "1px solid #F1F5F9", paddingTop: 16, marginTop: 4 }}>
+          <Toggle label="Push Notifications Enabled" description="Enable push notifications to passenger and driver mobile apps." checked={s["notifications.push_enabled"] === "true"} onChange={v => set("notifications.push_enabled", String(v))} />
+          <Toggle label="SMS Notifications Enabled" description="Enable SMS delivery for OTP codes and alerts." checked={s["notifications.sms_enabled"] === "true"} onChange={v => set("notifications.sms_enabled", String(v))} />
+        </div>
       </SectionCard>
     </>
   );
@@ -256,13 +248,12 @@ function ApiKeysTab() {
   return (
     <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #E2E8F0", overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,.05)" }}>
       <div style={{ padding: "16px 22px 14px", borderBottom: "1px solid #F1F5F9", display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontSize: 20 }}>🔑</span>
         <span style={{ fontSize: 14, fontWeight: 700, color: "#0F172A", flex: 1 }}>API Keys & Secrets</span>
         <span style={{ fontSize: 11, color: "#94A3B8" }}>Configured via backend .env — not stored in DB</span>
       </div>
       <div style={{ padding: "20px 22px" }}>
         <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 9, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: "#92400E" }}>
-          ⚠️ API keys are managed via the backend <code style={{ background: "#FEF3C7", padding: "1px 5px", borderRadius: 4 }}>.env</code> file for security. Never expose secret keys in the database or admin UI.
+          API keys are managed via the backend <code style={{ background: "#FEF3C7", padding: "1px 5px", borderRadius: 4 }}>.env</code> file for security. Never expose secret keys in the database or admin UI.
         </div>
 
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -280,7 +271,7 @@ function ApiKeysTab() {
                 <td style={{ padding: "12px 14px" }}><code style={{ fontSize: 12, background: "#F1F5F9", padding: "2px 7px", borderRadius: 5, color: "#475569" }}>{k.env}</code></td>
                 <td style={{ padding: "12px 14px" }}>
                   <span style={{ fontWeight: 700, fontSize: 12, padding: "2px 10px", borderRadius: 20, background: k.configured ? "#ECFDF5" : "#FEF2F2", color: k.configured ? "#059669" : "#DC2626", border: `1px solid ${k.configured ? "#A7F3D0" : "#FECACA"}` }}>
-                    {k.configured ? "✓ Set" : "✗ Not set"}
+                    {k.configured ? "Set" : "Not set"}
                   </span>
                 </td>
                 <td style={{ padding: "12px 14px", fontSize: 12, color: "#64748B" }}>{k.note}</td>
@@ -307,12 +298,11 @@ function ApiKeysTab() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 const TABS = [
-  { id: "fare",        label: "💰 Fare Rules"   },
-  { id: "wallet",      label: "👛 Wallet"        },
-  { id: "gps",         label: "📡 GPS"           },
-  { id: "security",    label: "🔒 Security"      },
-  { id: "maintenance", label: "🔧 Maintenance"   },
-  { id: "apikeys",     label: "🔑 API Keys"      },
+  { id: "fare",        label: "Fare Rules"   },
+  { id: "wallet",      label: "Wallet"       },
+  { id: "gps",         label: "GPS"          },
+  { id: "security",    label: "Security"     },
+  { id: "maintenance", label: "Maintenance"  },
 ];
 
 export default function SystemSettingsPage() {
@@ -366,7 +356,6 @@ export default function SystemSettingsPage() {
           {tab === "gps"         && <GpsTab         s={s} set={set} />}
           {tab === "security"    && <SecurityTab    s={s} set={set} />}
           {tab === "maintenance" && <MaintenanceTab s={s} set={set} />}
-          {tab === "apikeys"     && <ApiKeysTab />}
         </>
       )}
     </div>
