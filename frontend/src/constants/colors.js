@@ -74,4 +74,13 @@ export const COLORS = {
   // Headers
   headerBg: '#1E3A8A',
   driverHeaderBg: '#78350F',
+
+  // Glow / overlay helpers (60-30-10 accent at opacity)
+  primaryGlow: 'rgba(37,99,235,0.12)',
+  primaryGlowStrong: 'rgba(37,99,235,0.22)',
+  secondaryGlow: 'rgba(16,185,129,0.12)',
+  warningGlow: 'rgba(245,158,11,0.12)',
+  dangerGlow: 'rgba(239,68,68,0.12)',
+  overlayLight: 'rgba(255,255,255,0.85)',
+  overlayDark: 'rgba(30,41,59,0.55)',
 };

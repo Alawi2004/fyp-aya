@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
+import { THEME } from '../../constants/theme';
 
 const STATUS_CONFIG = {
   active:    { label: 'On Time',   bg: COLORS.secondaryLight, text: COLORS.secondary, dot: COLORS.secondary },
@@ -56,10 +57,10 @@ const BusCard = ({ bus, onPress }) => {
         </View>
       </View>
 
-      {/* Route */}
+      {/* Route row */}
       <View style={styles.routeRow}>
         <View style={styles.routeStop}>
-          <View style={styles.dotGreen} />
+          <View style={styles.dotOrigin} />
           <View>
             <Text style={styles.stopLabel}>FROM</Text>
             <Text style={styles.stopName}>{bus.origin}</Text>
@@ -69,12 +70,12 @@ const BusCard = ({ bus, onPress }) => {
         <View style={styles.routeMid}>
           <View style={styles.routeLineDash} />
           <View style={styles.routeArrow}>
-            <Ionicons name="bus-outline" size={14} color={COLORS.primary} />
+            <Ionicons name="bus-outline" size={13} color={COLORS.primary} />
           </View>
           <View style={styles.routeLineDash} />
         </View>
         <View style={[styles.routeStop, { alignItems: 'flex-end' }]}>
-          <View style={[styles.dotGreen, { backgroundColor: COLORS.danger }]} />
+          <View style={[styles.dotOrigin, { backgroundColor: COLORS.danger }]} />
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={styles.stopLabel}>TO</Text>
             <Text style={styles.stopName}>{bus.destination}</Text>
@@ -104,7 +105,8 @@ const BusCard = ({ bus, onPress }) => {
           <Text style={styles.priceCurrency}>$</Text>
           <Text style={styles.priceAmount}>{bus.price}</Text>
           <View style={styles.bookNowBtn}>
-            <Ionicons name="arrow-forward" size={14} color={COLORS.white} />
+            <View style={styles.bookNowHighlight} pointerEvents="none" />
+            <Ionicons name="arrow-forward" size={13} color={COLORS.white} />
           </View>
         </View>
       </View>
@@ -120,84 +122,182 @@ const BusCard = ({ bus, onPress }) => {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.white,
-    borderRadius: 20,
+    borderRadius: THEME.borderRadius.lg,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#64748B',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
     elevation: 4,
   },
   topRow: {
-    flexDirection: 'row', alignItems: 'center',
-    marginBottom: 14, gap: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+    gap: 10,
   },
   typeTag: {
     backgroundColor: COLORS.primaryLight,
-    borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
-  typeTagText: { fontSize: 9, fontWeight: '800', color: COLORS.primary, textTransform: 'uppercase', letterSpacing: 0.3 },
+  typeTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: COLORS.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   busIconWrap: {
-    width: 46, height: 46, borderRadius: 14,
+    width: 48,
+    height: 48,
+    borderRadius: THEME.borderRadius.md,
     backgroundColor: COLORS.primaryLight,
-    alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   busInfo: { flex: 1 },
   busName: {
-    fontSize: 16, fontWeight: '800',
-    color: COLORS.textPrimary, letterSpacing: -0.2,
+    fontSize: THEME.fontSize.md,
+    fontWeight: THEME.fontWeight.extrabold,
+    color: COLORS.textPrimary,
+    letterSpacing: -0.2,
   },
   busRoute: {
-    fontSize: 12, color: COLORS.textMuted,
-    fontWeight: '500', marginTop: 2,
+    fontSize: THEME.fontSize.xs,
+    color: COLORS.textMuted,
+    fontWeight: THEME.fontWeight.medium,
+    marginTop: 2,
   },
   statusBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: THEME.borderRadius.round,
   },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusText: { fontSize: 11, fontWeight: '700' },
+  statusText: { fontSize: 11, fontWeight: THEME.fontWeight.bold },
+
   routeRow: {
-    flexDirection: 'row', alignItems: 'center', marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
   },
-  routeStop: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  dotGreen: {
-    width: 10, height: 10, borderRadius: 5,
-    backgroundColor: COLORS.secondary, marginTop: 14,
+  routeStop: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  dotOrigin: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.secondary,
+    marginTop: 14,
   },
   stopLabel: {
-    fontSize: 10, fontWeight: '700', color: COLORS.textMuted,
-    textTransform: 'uppercase', letterSpacing: 0.5,
+    fontSize: 10,
+    fontWeight: THEME.fontWeight.bold,
+    color: COLORS.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  stopName: { fontSize: 14, fontWeight: '700', color: COLORS.textPrimary, marginTop: 2 },
-  stopTime: { fontSize: 12, color: COLORS.textSecondary, fontWeight: '500', marginTop: 1 },
-  routeMid: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6 },
-  routeLineDash: { width: 16, height: 1.5, backgroundColor: COLORS.border },
+  stopName: {
+    fontSize: THEME.fontSize.sm,
+    fontWeight: THEME.fontWeight.bold,
+    color: COLORS.textPrimary,
+    marginTop: 2,
+  },
+  stopTime: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontWeight: THEME.fontWeight.medium,
+    marginTop: 1,
+  },
+  routeMid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  routeLineDash: {
+    width: 14,
+    height: 1.5,
+    backgroundColor: COLORS.border,
+  },
   routeArrow: {
-    width: 28, height: 28, borderRadius: 9,
+    width: 30,
+    height: 30,
+    borderRadius: 10,
     backgroundColor: COLORS.primaryLight,
-    alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  divider: { height: 1, backgroundColor: COLORS.border, marginBottom: 12 },
+
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.borderLight,
+    marginBottom: 12,
+  },
+
   footer: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 10,
   },
   footerMeta: { flexDirection: 'row', gap: 14 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaText: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary },
-  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  priceCurrency: { fontSize: 13, fontWeight: '700', color: COLORS.primary, marginTop: 2 },
-  priceAmount: { fontSize: 20, fontWeight: '900', color: COLORS.primary },
-  bookNowBtn: {
-    width: 28, height: 28, borderRadius: 9,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center', justifyContent: 'center', marginLeft: 6,
+  metaText: {
+    fontSize: 12,
+    fontWeight: THEME.fontWeight.semibold,
+    color: COLORS.textSecondary,
   },
+  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  priceCurrency: {
+    fontSize: 13,
+    fontWeight: THEME.fontWeight.bold,
+    color: COLORS.primary,
+    marginTop: 3,
+  },
+  priceAmount: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: COLORS.primary,
+    letterSpacing: -0.5,
+  },
+  bookNowBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+    overflow: 'hidden',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  bookNowHighlight: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 999,
+  },
+
   seatBar: {
-    height: 3, borderRadius: 999,
-    backgroundColor: COLORS.border, overflow: 'hidden',
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: COLORS.borderLight,
+    overflow: 'hidden',
   },
   seatBarFill: { height: '100%', borderRadius: 999 },
 });

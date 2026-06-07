@@ -49,21 +49,50 @@ const Input = ({
 
 const styles = StyleSheet.create({
   container: { marginBottom: THEME.spacing.md },
-  label: { fontSize: THEME.fontSize.sm, fontWeight: THEME.fontWeight.semibold, color: COLORS.textPrimary, marginBottom: 6 },
-  inputWrap: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: COLORS.background, borderRadius: THEME.borderRadius.md,
-    borderWidth: 1.5, borderColor: COLORS.border,
+  label: {
+    fontSize: THEME.fontSize.sm,
+    fontWeight: THEME.fontWeight.semibold,
+    color: COLORS.textPrimary,
+    marginBottom: 8,
   },
-  focused: { borderColor: COLORS.primary, backgroundColor: COLORS.white },
+  inputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    borderRadius: THEME.borderRadius.md,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+  },
+  focused: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.white,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    elevation: 0,
+  },
   error: { borderColor: COLORS.danger },
-  disabled: { opacity: 0.6 },
+  disabled: { opacity: 0.55 },
   iconLeft: { paddingLeft: 14 },
   iconRight: { paddingRight: 14 },
-  input: { flex: 1, height: 52, paddingHorizontal: 14, fontSize: THEME.fontSize.base, color: COLORS.textPrimary },
-  inputWithIcon: { paddingLeft: 8 },
-  multiline: { height: 100, textAlignVertical: 'top', paddingTop: 14 },
-  errorText: { fontSize: THEME.fontSize.xs, color: COLORS.danger, marginTop: 4, marginLeft: 4 },
+  input: {
+    flex: 1,
+    height: 52,
+    paddingHorizontal: 14,
+    fontSize: THEME.fontSize.base,
+    color: COLORS.textPrimary,
+    fontWeight: THEME.fontWeight.medium,
+  },
+  inputWithIcon: { paddingLeft: 10 },
+  multiline: { height: 104, textAlignVertical: 'top', paddingTop: 14 },
+  errorText: {
+    fontSize: THEME.fontSize.xs,
+    color: COLORS.danger,
+    marginTop: 4,
+    marginLeft: 4,
+    fontWeight: THEME.fontWeight.medium,
+  },
 });
 
 export default Input;

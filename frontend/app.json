@@ -45,14 +45,28 @@
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            { "scheme": "yallatransit" }
+            {
+              "scheme": "yallatransit"
+            }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
+      ],
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b3fb1f56-c476-4738-8a57-b567b6444c3f"
+      }
     }
   }
 }
