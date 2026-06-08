@@ -8,6 +8,7 @@ import {
   assignStopToZone, removeStopFromZone,
 } from "../controllers/routes.controller.js";
 import { requirePermission } from "../middleware/permissions.middleware.js";
+import { requireAuth } from "../middleware/auth.middleware.js";
 import { getMultiTripRoute } from "../controllers/multiTrip.controller.js";
 import { getTrafficForecast } from "../controllers/eta.controller.js";
 
@@ -168,7 +169,7 @@ router.post("/", createRoute);
  *         description: Updated successfully
  */
 router.get("/:id",    getRouteById);
-router.put("/:id",    updateRoute);
+router.put("/:id",    requireAuth, updateRoute);
 router.delete("/:id", requirePermission("routes", "delete"), deleteRoute);
 
 /**

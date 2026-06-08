@@ -3,7 +3,7 @@ import { PageLoading, PageError, PageEmpty } from "../components/DataStates";
 import { Panel } from "../components/Panel";
 import { Modal } from "../components/Modal";
 import { StatCard } from "../components/StatCard";
-import { getRoutes, createRoute, updateRoute, getRouteStops } from "../api/endpoints";
+import { getRoutes, createRoute, updateRoute, deleteRoute, getRouteStops } from "../api/endpoints";
 import apiClient from "../api/apiClient";
 import RouteMapEditor from "./RouteMapEditor";
 
@@ -18,7 +18,7 @@ function normalizeRoute(r) {
       : (r.origin && r.destination ? `${r.origin} → ${r.destination}` : (r.name ?? "")),
     distance: r.distance ?? "",
     duration: r.duration ?? "",
-    active:   r.active !== undefined ? r.active : (r.status === "Active" || r.status == null),
+    active:   r.is_active !== undefined ? Boolean(r.is_active) : (r.active !== undefined ? r.active : true),
     stops:    Array.isArray(r.stops) ? r.stops : [],  // mock data has stops as a count (number), not array
   };
 }
@@ -66,7 +66,7 @@ function StopsList({ route, onDelete }) {
                   background: isOpen ? "#EFF6FF" : "#fff", color: isOpen ? "#2563EB" : "#64748B", cursor: "pointer",
                 }}
               >
-                ℹ️ Info
+                Info
               </button>
               <button onClick={() => onDelete(sid)} style={{ fontSize: 10, color: "#B91C1C", background: "none", border: "none", cursor: "pointer", padding: "0 4px" }}>✕</button>
             </div>
@@ -92,8 +92,8 @@ function FareZonesPanel({ route }) {
 
   const load = () => {
     apiClient.get(`/routes/${route.id}/fare-zones`)
-      .then(data => setZones(Array.isArray(data) ? data : MOCK_ZONES(route)))
-      .catch(() => setZones(MOCK_ZONES(route)));
+      .then(data => setZones(Array.isArray(data) ? data : []))
+      .catch(() => setZones([]));
   };
 
   useEffect(() => { load(); }, [route.id]);
@@ -215,7 +215,7 @@ function FareZonesPanel({ route }) {
         <p style={{ fontSize: 12, color: "#94A3B8", padding: "8px 0" }}>Loading zones…</p>
       ) : zones.length === 0 ? (
         <div style={{ textAlign: "center", padding: "20px 0", color: "#94A3B8" }}>
-          <div style={{ fontSize: 24, marginBottom: 6 }}>💰</div>
+          <div style={{ fontSize: 24, marginBottom: 6, color: "#CBD5E1" }}>—</div>
           <p style={{ fontSize: 13 }}>No fare zones yet. Add one to define pricing.</p>
         </div>
       ) : zones.map(z => (
@@ -308,7 +308,7 @@ function OverlapWarning({ routeId }) {
       borderRadius: 8, padding: "10px 14px", marginBottom: 12,
       display: "flex", gap: 10, alignItems: "flex-start",
     }}>
-      <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
+      <span style={{ fontSize: 13, fontWeight: 700, color: "#B45309", flexShrink: 0 }}>!</span>
       <div>
         <div style={{ fontSize: 12, fontWeight: 700, color: "#B45309", marginBottom: 3 }}>
           Route Overlap Detected
@@ -333,12 +333,12 @@ function OverlapWarning({ routeId }) {
 // ── Stop amenities panel ──────────────────────────────────────────────────────
 
 const AMENITY_LIST = [
-  { key: "has_shelter",        label: "Shelter",       icon: "⛺" },
-  { key: "has_seating",        label: "Seating",       icon: "💺" },
-  { key: "has_lighting",       label: "Lighting",      icon: "💡" },
-  { key: "has_wheelchair",     label: "Wheelchair",    icon: "♿" },
-  { key: "has_ticket_machine", label: "Ticket Machine",icon: "🎫" },
-  { key: "has_wifi",           label: "WiFi",          icon: "📶" },
+  { key: "has_shelter",        label: "Shelter"        },
+  { key: "has_seating",        label: "Seating"        },
+  { key: "has_lighting",       label: "Lighting"       },
+  { key: "has_wheelchair",     label: "Wheelchair"     },
+  { key: "has_ticket_machine", label: "Ticket Machine" },
+  { key: "has_wifi",           label: "WiFi"           },
 ];
 
 function StopAmenitiesPanel({ stop }) {
@@ -394,19 +394,17 @@ function StopAmenitiesPanel({ stop }) {
           ) : (
             <>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
-                {AMENITY_LIST.map(({ key, label, icon }) => {
+                {AMENITY_LIST.map(({ key, label }) => {
                   const active = !!amenities[key];
                   return (
                     <button key={key} onClick={() => toggle(key)} style={{
-                      display: "flex", alignItems: "center", gap: 5,
                       padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600,
                       border: `1.5px solid ${active ? "#2563EB" : "#E2E8F0"}`,
                       background: active ? "#EFF6FF" : "#fff",
                       color: active ? "#2563EB" : "#64748B",
                       cursor: "pointer",
                     }}>
-                      <span>{icon}</span> {label}
-                      {active && <span style={{ marginLeft: 2, fontSize: 10 }}>✓</span>}
+                      {label}{active ? " ✓" : ""}
                     </button>
                   );
                 })}
@@ -454,23 +452,12 @@ function StopAmenitiesPanel({ stop }) {
             download={`stop-${stop.id ?? stop.stop_id}-qr.png`}
             style={{ display: "inline-block", marginTop: 6, fontSize: 11, color: "#2563EB", fontWeight: 600, textDecoration: "none" }}
           >
-            ⬇ Download QR
+            Download QR
           </a>
         </div>
       </div>
     </div>
   );
-}
-
-// ── Mock zone data ────────────────────────────────────────────────────────────
-
-function MOCK_ZONES(route) {
-  if (!route || !route.stops || route.stops.length < 2) return [];
-  const stops = route.stops;
-  return [
-    { zone_id: 1, zone_name: "Zone A", zone_color: "#2563EB", base_fare: 1.00, stops: stops.slice(0, Math.ceil(stops.length / 2)).map(s => ({ stop_id: s.id ?? s.stop_id, stop_name: s.name ?? s.stop_name })) },
-    { zone_id: 2, zone_name: "Zone B", zone_color: "#059669", base_fare: 1.50, stops: stops.slice(Math.ceil(stops.length / 2)).map(s => ({ stop_id: s.id ?? s.stop_id, stop_name: s.name ?? s.stop_name })) },
-  ];
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -482,8 +469,9 @@ export default function RoutesPage() {
   const [routesLoading, setRoutesLoading] = useState(true);
   const [routesError,   setRoutesError]   = useState(null);
   const [expanded,      setExpanded]      = useState(null);
-  const [activeTab,     setActiveTab]     = useState({}); // routeId → "stops" | "zones"
-  const [mapRoute,      setMapRoute]      = useState(null); // open map editor for this route
+  const [activeTab,     setActiveTab]     = useState({});
+  const [mapRoute,      setMapRoute]      = useState(null);
+  const [toast,         setToast]         = useState(null);
 
   const loadRoutes = useCallback(() => {
     setRoutesLoading(true);
@@ -496,31 +484,52 @@ export default function RoutesPage() {
 
   useEffect(() => { loadRoutes(); }, [loadRoutes]);
 
-  const [routeModal,  setRouteModal]  = useState(false);
-  const [stopModal,   setStopModal]   = useState(null);
-  const [editRoute,   setEditRoute]   = useState(null);
-  const [routeForm,   setRouteForm]   = useState(EMPTY_ROUTE);
-  const [stopForm,    setStopForm]    = useState(EMPTY_STOP);
-  const [deleteRoute, setDeleteRoute] = useState(null);
+  const [routeModal,   setRouteModal]   = useState(false);
+  const [stopModal,    setStopModal]    = useState(null);
+  const [editRoute,    setEditRoute]    = useState(null);
+  const [routeForm,    setRouteForm]    = useState(EMPTY_ROUTE);
+  const [routeSaveErr, setRouteSaveErr] = useState(null);
+  const [isSavingRoute,setIsSavingRoute]= useState(false);
+  const [stopForm,     setStopForm]     = useState(EMPTY_STOP);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteErr,    setDeleteErr]    = useState(null);
+  const [isDeleting,   setIsDeleting]   = useState(false);
 
-  function openAddRoute()  { setEditRoute(null); setRouteForm(EMPTY_ROUTE); setRouteModal(true); }
+  function openAddRoute()  { setEditRoute(null); setRouteForm(EMPTY_ROUTE); setRouteSaveErr(null); setRouteModal(true); }
   function openEditRoute(r) {
     setEditRoute(r.id);
     setRouteForm({ code: r.code, name: r.name, distance: r.distance, duration: r.duration, active: r.active });
+    setRouteSaveErr(null);
     setRouteModal(true);
   }
 
   async function saveRoute() {
-    if (!routeForm.code || !routeForm.name) return;
-    const [start, end] = routeForm.name.split("→").map(s => s.trim());
-    if (editRoute) {
-      await updateRoute(editRoute, { route_name: routeForm.code, start_location: start || routeForm.name, end_location: end || "" }).catch(() => {});
-      setRoutes(prev => prev.map(r => r.id === editRoute ? { ...r, ...routeForm } : r));
-    } else {
-      await createRoute({ route_name: routeForm.code, start_location: start || routeForm.name, end_location: end || "" }).catch(() => {});
-      setRoutes(prev => [...prev, { id: Date.now(), ...routeForm, stops: [] }]);
+    if (!routeForm.code || !routeForm.name) { setRouteSaveErr("Route code and name are required."); return; }
+    setRouteSaveErr(null);
+    setIsSavingRoute(true);
+    try {
+      const [start, end] = routeForm.name.split("→").map(s => s.trim());
+      if (editRoute) {
+        await updateRoute(editRoute, {
+          route_name:     routeForm.code,
+          start_location: start || routeForm.name,
+          end_location:   end   || "",
+          is_active:      routeForm.active,
+        });
+      } else {
+        await createRoute({
+          route_name:     routeForm.code,
+          start_location: start || routeForm.name,
+          end_location:   end   || "",
+        });
+      }
+      setRouteModal(false);
+      loadRoutes();
+    } catch (err) {
+      setRouteSaveErr(err?.message ?? "Save failed");
+    } finally {
+      setIsSavingRoute(false);
     }
-    setRouteModal(false);
   }
 
   function saveStop(routeId) {
@@ -540,7 +549,22 @@ export default function RoutesPage() {
     }));
   }
 
-  function toggleActive(id) { setRoutes(prev => prev.map(r => r.id === id ? { ...r, active: !r.active } : r)); }
+  const showToast = (msg, isError = false) => {
+    setToast({ msg, isError });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  async function toggleActive(route) {
+    const newActive = !route.active;
+    setRoutes(prev => prev.map(r => r.id === route.id ? { ...r, active: newActive } : r));
+    try {
+      await updateRoute(route.id, { is_active: newActive });
+      showToast(`${route.code} ${newActive ? "activated" : "deactivated"}`);
+    } catch (err) {
+      setRoutes(prev => prev.map(r => r.id === route.id ? { ...r, active: route.active } : r));
+      showToast(err?.message ?? "Failed to update route", true);
+    }
+  }
   function getTab(id) { return activeTab[id] ?? "stops"; }
   function setTab(id, tab) { setActiveTab(prev => ({ ...prev, [id]: tab })); }
 
@@ -552,6 +576,13 @@ export default function RoutesPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{ position: "fixed", top: 24, right: 24, zIndex: 2000, background: toast.isError ? "#EF4444" : "#1E293B", color: "#fff", borderRadius: 10, padding: "12px 20px", fontSize: 13, fontWeight: 600, boxShadow: "0 8px 24px rgba(0,0,0,.2)" }}>
+          {toast.msg}
+        </div>
+      )}
 
       {/* ── Header ── */}
       <div style={{ display: "flex", alignItems: "center" }}>
@@ -576,7 +607,7 @@ export default function RoutesPage() {
       {routesLoading && <PageLoading message="Loading routes…" />}
       {routesError   && <PageError message={routesError} onRetry={loadRoutes} />}
       {!routesLoading && !routesError && routes.length === 0 && (
-        <PageEmpty message="No routes configured" hint="Create your first route with the + New Route button" icon="🗺️" />
+        <PageEmpty message="No routes configured" hint="Create your first route with the + Add Route button" />
       )}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {routes.map(route => (
@@ -612,13 +643,13 @@ export default function RoutesPage() {
                   title="Edit route on map"
                   style={{ fontSize: 11, color: "#7C3AED", background: "#F5F3FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontWeight: 600 }}
                 >
-                  🗺️ Map
+                  Map
                 </button>
                 <button onClick={() => openEditRoute(route)} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Edit</button>
-                <button onClick={() => toggleActive(route.id)} style={{ fontSize: 11, color: route.active ? "#B91C1C" : "#059669", background: route.active ? "#FEF2F2" : "#ECFDF5", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>
+                <button onClick={() => toggleActive(route)} style={{ fontSize: 11, color: route.active ? "#B91C1C" : "#059669", background: route.active ? "#FEF2F2" : "#ECFDF5", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>
                   {route.active ? "Deactivate" : "Activate"}
                 </button>
-                <button onClick={() => setDeleteRoute(route.id)} style={{ fontSize: 11, color: "#B91C1C", background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Delete</button>
+                <button onClick={() => { setDeleteTarget(route); setDeleteErr(null); }} style={{ fontSize: 11, color: "#B91C1C", background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Delete</button>
               </div>
               <span style={{ color: "#bbb", fontSize: 16, marginLeft: 4 }}>{expanded === route.id ? "▲" : "▼"}</span>
             </div>
@@ -630,7 +661,7 @@ export default function RoutesPage() {
                 <div style={{ display: "flex", gap: 0, borderTop: "1px solid #F1F5F9", background: "#F8FAFC" }}>
                   {[
                     { id: "stops", label: `Stops (${route.stops.length})` },
-                    { id: "zones", label: "💰 Fare Zones" },
+                    { id: "zones", label: "Fare Zones" },
                   ].map(tab => (
                     <button key={tab.id} onClick={() => setTab(route.id, tab.id)} style={{
                       padding: "10px 20px", border: "none", background: "none",
@@ -673,7 +704,8 @@ export default function RoutesPage() {
 
       {/* ── Add/Edit Route Modal ── */}
       {routeModal && (
-        <Modal title={editRoute ? "Edit route" : "Add new route"} onClose={() => setRouteModal(false)} onSave={saveRoute}>
+        <Modal title={editRoute ? "Edit route" : "Add new route"} onClose={() => { setRouteModal(false); setRouteSaveErr(null); }} onSave={saveRoute} saving={isSavingRoute}>
+          {routeSaveErr && <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>{routeSaveErr}</div>}
           {[
             { label: "Route code", key: "code",     placeholder: "e.g. Route 14F" },
             { label: "Route name", key: "name",     placeholder: "e.g. Airport → Downtown" },
@@ -714,14 +746,27 @@ export default function RoutesPage() {
       )}
 
       {/* ── Delete Route Modal ── */}
-      {deleteRoute && (
-        <Modal title="Delete route" onClose={() => setDeleteRoute(null)}>
-          <p style={{ fontSize: 14, color: "#333", marginBottom: 20 }}>Delete this route and all its stops? This cannot be undone.</p>
+      {deleteTarget && (
+        <Modal title="Delete route" onClose={() => { setDeleteTarget(null); setDeleteErr(null); setIsDeleting(false); }}>
+          {deleteErr && <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>{deleteErr}</div>}
+          <p style={{ fontSize: 14, color: "#333", marginBottom: 6 }}>Delete <strong>{deleteTarget.code}</strong>?</p>
+          <p style={{ fontSize: 12, color: "#64748B", marginBottom: 20 }}>{deleteTarget.name} — all stops, waypoints, and fare zones will be removed. This cannot be undone.</p>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-            <button onClick={() => setDeleteRoute(null)} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #ddd", background: "#fff", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-            <button onClick={() => { setRoutes(p => p.filter(r => r.id !== deleteRoute)); setDeleteRoute(null); }}
-              style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#EF4444", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-              Delete
+            <button onClick={() => { setDeleteTarget(null); setDeleteErr(null); }} disabled={isDeleting} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid #E2E8F0", background: "#fff", fontSize: 13, cursor: "pointer" }}>Cancel</button>
+            <button
+              disabled={isDeleting}
+              onClick={async () => {
+                setIsDeleting(true); setDeleteErr(null);
+                try {
+                  await deleteRoute(deleteTarget.id);
+                  setDeleteTarget(null);
+                  loadRoutes();
+                } catch (err) {
+                  setDeleteErr(err?.message ?? "Delete failed");
+                } finally { setIsDeleting(false); }
+              }}
+              style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#EF4444", color: "#fff", fontSize: 13, fontWeight: 600, cursor: isDeleting ? "not-allowed" : "pointer", opacity: isDeleting ? 0.7 : 1 }}>
+              {isDeleting ? "Deleting…" : "Delete"}
             </button>
           </div>
         </Modal>

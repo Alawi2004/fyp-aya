@@ -3,6 +3,7 @@ import {
   getRatings,
   createRating,
   getTripRatings,
+  getDriverRatings,
 } from "../controllers/ratings.controller.js";
 
 const router = express.Router();
@@ -71,6 +72,7 @@ router.post("/", createRating);
  *       200:
  *         description: Trip ratings
  */
+router.get("/driver", getDriverRatings);
 router.get("/trip/:trip_id", getTripRatings);
 router.get("/:trip_id", getTripRatings);
 

@@ -9,6 +9,7 @@ export const getTrips              = ()         => apiClient.get('/trips');
 export const getTripById           = (id)       => apiClient.get(`/trips/${id}`);
 export const createTrip            = (data)     => apiClient.post('/trips', data);
 export const updateTripStatus      = (id, status) => apiClient.put(`/trips/${id}/status`, { status });
+export const updateTrip            = (id, data)   => apiClient.put(`/trips/${id}`, data);
 export const getTripsByVehicleType = (type)     => apiClient.get(`/trips/vehicle/${type}`);
 export const getPassengerLoad      = (id)       => apiClient.get(`/trips/${id}/load`);
 export const getTripGpsLogs        = (id, date) => apiClient.get(`/gps/trip/${id}${date ? `?date=${date}` : ''}`);
@@ -35,6 +36,7 @@ export const addFuelRecord           = (data)     => apiClient.post('/vehicles/f
 export const getVehicleFuelLog       = (id)       => apiClient.get(`/vehicles/${id}/fuel`);
 export const getVehiclePhotos        = (id)       => apiClient.get(`/vehicles/${id}/photos`);
 export const uploadVehiclePhoto      = (id, formData) => apiClient.post(`/vehicles/${id}/photos`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+export const deleteVehicle           = (id)            => apiClient.delete(`/vehicles/${id}`);
 export const deleteVehiclePhotoApi   = (id, filename) => apiClient.delete(`/vehicles/${id}/photos/${filename}`);
 
 // Drivers
@@ -51,6 +53,7 @@ export const getRoutes = () => apiClient.get('/routes');
 export const getRouteById = (id) => apiClient.get(`/routes/${id}`);
 export const createRoute = (data) => apiClient.post('/routes', data);
 export const updateRoute = (id, data) => apiClient.put(`/routes/${id}`, data);
+export const deleteRoute = (id) => apiClient.delete(`/routes/${id}`);
 
 // Stops
 export const getStops           = ()              => apiClient.get('/stops');
@@ -85,10 +88,13 @@ export const createRating = (data) => apiClient.post('/ratings', data);
 
 
 // Users
-export const getUsers = () => apiClient.get('/users');
-export const getUserById = (id) => apiClient.get(`/users/${id}`);
-export const getUserTickets = (id) => apiClient.get(`/users/${id}/tickets`);
-export const getUserNotifications = (id) => apiClient.get(`/users/${id}/notifications`);
+export const getUsers        = ()         => apiClient.get('/users');
+export const getUserById     = (id)       => apiClient.get(`/users/${id}`);
+export const createUser      = (data)     => apiClient.post('/users', data);
+export const updateUser      = (id, data) => apiClient.put(`/users/${id}`, data);
+export const deleteUserApi   = (id)       => apiClient.delete(`/users/${id}`);
+export const getUserTickets        = (id) => apiClient.get(`/users/${id}/tickets`);
+export const getUserNotifications  = (id) => apiClient.get(`/users/${id}/notifications`);
 
 // Passengers
 export const getPassengers       = ()           => apiClient.get('/users/passengers/list');
@@ -125,15 +131,18 @@ export const getAdjustmentHistory = (limit = 100) => apiClient.get(`/wallet/adju
 // Notifications
 export const getNotifications           = ()       => apiClient.get('/notifications');
 export const getUserNotifications_v2    = (id)     => apiClient.get(`/notifications/user/${id}`);
-export const markNotificationAsRead     = (id)     => apiClient.put(`/notifications/${id}/read`, {});
-export const createNotification         = (data)   => apiClient.post('/notifications', data);
+export const markNotificationAsRead     = (id)       => apiClient.put(`/notifications/${id}/read`, {});
+export const createNotification         = (data)     => apiClient.post('/notifications', data);
+export const updateNotificationApi      = (id, data) => apiClient.put(`/notifications/${id}`, data);
+export const deleteNotificationApi      = (id)       => apiClient.delete(`/notifications/${id}`);
 export const getNotificationTemplates   = ()       => apiClient.get('/notifications/templates');
 export const createTemplate             = (data)   => apiClient.post('/notifications/templates', data);
 export const updateTemplate             = (id, d)  => apiClient.put(`/notifications/templates/${id}`, d);
 export const deleteTemplate             = (id)     => apiClient.delete(`/notifications/templates/${id}`);
-export const getScheduledNotifications  = ()       => apiClient.get('/notifications/scheduled');
-export const scheduleNotification       = (data)   => apiClient.post('/notifications/schedule', data);
-export const cancelScheduled            = (id)     => apiClient.delete(`/notifications/scheduled/${id}`);
+export const getScheduledNotifications  = ()         => apiClient.get('/notifications/scheduled');
+export const scheduleNotification       = (data)     => apiClient.post('/notifications/schedule', data);
+export const updateScheduled            = (id, data) => apiClient.put(`/notifications/scheduled/${id}`, data);
+export const cancelScheduled            = (id)       => apiClient.delete(`/notifications/scheduled/${id}`);
 
 // Trip conflicts (server-side detection)
 export const getTripConflicts = () => apiClient.get('/trips/conflicts');

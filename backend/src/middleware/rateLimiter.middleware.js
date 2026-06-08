@@ -11,6 +11,15 @@ export const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// OTP: separate window so testing doesn't exhaust the login limiter
+export const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30,
+  message: { error: "Too many OTP requests, please try again in 15 minutes" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Registration: max 5 new accounts per IP per hour
 export const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour

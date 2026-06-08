@@ -12,15 +12,54 @@ export const getRoutes = async (req, res) => {
 };
 
 export const deleteRoute = async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ error: "Invalid route id" });
   try {
-    const pool   = await poolPromise;
-    const result = await pool.request()
-      .input("id", sql.Int, req.params.id)
-      .query("UPDATE routes SET is_deleted = 1 WHERE route_id = @id AND is_deleted = 0");
-    if (result.rowsAffected[0] === 0) return res.status(404).json({ error: "Route not found" });
-    res.json({ message: "Route soft-deleted" });
+    const pool = await poolPromise;
+
+    // Block deletion if any trips reference this route
+    const tripCheck = await pool.request().input("id", sql.Int, id).query(`
+      SELECT COUNT(*) AS trip_count FROM trips WHERE route_id = @id
+    `);
+    const tripCount = tripCheck.recordset[0]?.trip_count ?? 0;
+    if (tripCount > 0) {
+      return res.status(409).json({
+        error: `This route has ${tripCount} trip${tripCount !== 1 ? "s" : ""} assigned to it. Reassign or delete those trips before removing the route.`,
+        trip_count: tripCount,
+      });
+    }
+
+    // Step 1 — clean up complaints (allow NULL route_id)
+    await pool.request().input("id", sql.Int, id).query(`
+      IF OBJECT_ID('complaints','U') IS NOT NULL
+        UPDATE complaints SET route_id = NULL WHERE route_id = @id;
+    `);
+
+    // Step 2 — hard-delete everything else referencing this route
+    await pool.request().input("id", sql.Int, id).query(`
+      IF OBJECT_ID('user_favorite_routes','U') IS NOT NULL
+        DELETE FROM user_favorite_routes WHERE route_id = @id;
+      IF OBJECT_ID('geofence_events','U') IS NOT NULL
+        DELETE FROM geofence_events WHERE route_id = @id;
+      IF OBJECT_ID('fare_zone_stops','U') IS NOT NULL
+        DELETE FROM fare_zone_stops
+        WHERE zone_id IN (SELECT zone_id FROM fare_zones WHERE route_id = @id);
+      IF OBJECT_ID('fare_zones','U') IS NOT NULL
+        DELETE FROM fare_zones WHERE route_id = @id;
+      IF OBJECT_ID('route_waypoints','U') IS NOT NULL
+        DELETE FROM route_waypoints WHERE route_id = @id;
+      IF OBJECT_ID('route_stops','U') IS NOT NULL
+        DELETE FROM route_stops WHERE route_id = @id;
+    `);
+
+    // Step 3 — delete the route itself
+    const del = await pool.request().input("id", sql.Int, id)
+      .query("DELETE FROM routes WHERE route_id = @id");
+    if (del.rowsAffected[0] === 0) return res.status(404).json({ error: "Route not found" });
+    res.json({ message: "Route deleted" });
   } catch (err) {
-    res.status(500).json({ error: "Failed to delete route" });
+    console.error("[deleteRoute]", err.message);
+    res.status(500).json({ error: "Delete failed: " + err.message });
   }
 };
 
@@ -39,19 +78,19 @@ export const getRouteById = async (req, res) => {
 
 export const updateRoute = async (req, res) => {
   try {
-    const { route_name, start_location, end_location } = req.body;
+    const { route_name, start_location, end_location, is_active } = req.body;
     const pool = await poolPromise;
-    await pool
-      .request()
-      .input("id", sql.Int, req.params.id)
-      .input("route_name", sql.VarChar, route_name)
-      .input("start_location", sql.VarChar, start_location)
-      .input("end_location", sql.VarChar, end_location)
-      .query(
-        "UPDATE routes SET route_name=@route_name, start_location=@start_location, end_location=@end_location WHERE route_id=@id"
-      );
+    const r = pool.request().input("id", sql.Int, req.params.id);
+    const sets = [];
+    if (route_name    !== undefined) { r.input("route_name",     sql.VarChar, route_name);     sets.push("route_name=@route_name"); }
+    if (start_location!== undefined) { r.input("start_location", sql.VarChar, start_location); sets.push("start_location=@start_location"); }
+    if (end_location  !== undefined) { r.input("end_location",   sql.VarChar, end_location);   sets.push("end_location=@end_location"); }
+    if (is_active     !== undefined) { r.input("is_active",      sql.Bit,     is_active ? 1 : 0); sets.push("is_active=@is_active"); }
+    if (sets.length === 0) return res.status(400).json({ error: "No fields to update" });
+    await r.query(`UPDATE routes SET ${sets.join(", ")} WHERE route_id=@id`);
     res.json({ message: "Route updated" });
   } catch (err) {
+    console.error("[updateRoute]", err.message);
     res.status(500).json({ error: "Failed to update route" });
   }
 };
@@ -70,7 +109,7 @@ export const createRoute = async (req, res) => {
         VALUES (@route_name, @start_location, @end_location)
       `);
 
-    res.json({ message: "✅ Route created successfully" });
+    res.json({ message: "Route created successfully" });
   } catch (err) {
     console.error("Create route error:", err);
     res.status(500).json({ error: "Failed to create route" });

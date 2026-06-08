@@ -3,6 +3,7 @@ import { ensureOperationalTables } from "../db/featureSetup.js";
 import { verifyPassengerQrToken } from "../utils/passengerQr.js";
 import { Expo } from "expo-server-sdk";
 import { claimQrJti, getRedis } from "../services/redis.service.js";
+import { broadcastGpsUpdate } from "../services/gps.stream.service.js";
 
 const _expo = new Expo({ accessToken: process.env.EXPO_ACCESS_TOKEN });
 
@@ -47,13 +48,20 @@ async function _pushDelayToPassengers(pool, tripId, delayMin, reason) {
 }
 
 // GET /api/driver/trips — trips assigned to the authenticated driver
-// Uses driver_id from query param until auth middleware is added
 export const getDriverTrips = async (req, res) => {
   try {
-    const driverId = req.query.driver_id || req.user?.driver_id;
+    const pool = await poolPromise;
+    let driverId = req.query.driver_id || req.user?.driver_id;
+
+    // Auto-resolve driver_id from JWT user_id if not supplied
+    if (!driverId && req.user?.user_id) {
+      const dr = await pool.request()
+        .input("uid", sql.Int, req.user.user_id)
+        .query("SELECT driver_id FROM drivers WHERE user_id = @uid");
+      driverId = dr.recordset[0]?.driver_id;
+    }
     if (!driverId) return res.status(400).json({ error: "driver_id required" });
 
-    const pool = await poolPromise;
     const result = await pool
       .request()
       .input("id", sql.Int, driverId)
@@ -79,7 +87,7 @@ export const startTrip = async (req, res) => {
     await pool
       .request()
       .input("id", sql.Int, req.params.id)
-      .query("UPDATE trips SET status='ongoing' WHERE trip_id=@id");
+      .query("UPDATE trips SET status='ongoing', start_time = ISNULL(start_time, GETDATE()) WHERE trip_id=@id");
     res.json({ message: "Trip started" });
   } catch (err) {
     res.status(500).json({ error: "Failed to start trip" });
@@ -93,7 +101,7 @@ export const completeTrip = async (req, res) => {
     await pool
       .request()
       .input("id", sql.Int, req.params.id)
-      .query("UPDATE trips SET status='completed' WHERE trip_id=@id");
+      .query("UPDATE trips SET status='completed', end_time = GETDATE() WHERE trip_id=@id");
     res.json({ message: "Trip completed" });
   } catch (err) {
     res.status(500).json({ error: "Failed to complete trip" });
@@ -398,6 +406,29 @@ export const updateLocation = async (req, res) => {
         VALUES (@trip_id, @lat, @lng, GETDATE())
       `);
     res.json({ message: "Location updated" });
+
+    // Fire-and-forget: broadcast to WebSocket subscribers keyed by both plate and trip_id
+    pool.request()
+      .input("tid", sql.Int, trip_id)
+      .query(`
+        SELECT v.plate_number AS vehicle_id, r.route_name AS route
+        FROM trips t
+        LEFT JOIN vehicles v ON v.vehicle_id = t.vehicle_id
+        LEFT JOIN routes   r ON r.route_id   = t.route_id
+        WHERE t.trip_id = @tid
+      `)
+      .then(tripRow => {
+        const meta = tripRow.recordset[0] ?? {};
+        broadcastGpsUpdate({
+          trip_id,
+          vehicle_id:  meta.vehicle_id ?? null,
+          route:       meta.route      ?? null,
+          lat:         parseFloat(latitude),
+          lng:         parseFloat(longitude),
+          recorded_at: new Date().toISOString(),
+        });
+      })
+      .catch(() => {});
   } catch (err) {
     res.status(500).json({ error: "Failed to update location" });
   }

@@ -8,6 +8,8 @@ import {
   sseGpsBus,
   getGeofenceAlerts,
 } from "../controllers/gps.controller.js";
+import { requireAuth } from "../middleware/auth.middleware.js";
+import { requireRole, requirePermission } from "../middleware/permissions.middleware.js";
 
 const router = express.Router();
 
@@ -48,14 +50,14 @@ const router = express.Router();
  *       200:
  *         description: Location recorded
  */
-router.post("/", sendGpsLocation);
+router.post("/", requireRole("driver"), sendGpsLocation);
 
 // Named routes must precede /:trip_id/latest to avoid param capture
-router.get("/live",                getLiveGps);
-router.get("/geofence-alerts",     getGeofenceAlerts);
-router.get("/bus/:vehicleId",      getBusGps);
-router.get("/sse/bus/:vehicleId",  sseGpsBus);
-router.get("/trip/:id",            getTripGpsHistory);
+router.get("/live",                requirePermission("live", "view"), getLiveGps);
+router.get("/geofence-alerts",     requireAuth, getGeofenceAlerts);
+router.get("/bus/:vehicleId",      requireAuth, getBusGps);
+router.get("/sse/bus/:vehicleId",  requireAuth, sseGpsBus);
+router.get("/trip/:id",            requireAuth, getTripGpsHistory);
 
 /**
  * @swagger
@@ -75,6 +77,6 @@ router.get("/trip/:id",            getTripGpsHistory);
  *       404:
  *         description: No GPS data found for this trip
  */
-router.get("/:trip_id/latest", getLatestGps);
+router.get("/:trip_id/latest", requireAuth, getLatestGps);
 
 export default router;

@@ -1,32 +1,84 @@
-import React from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Platform, StatusBar } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  View, Text, FlatList, StyleSheet, TouchableOpacity,
+  Platform, StatusBar, ActivityIndicator, RefreshControl,
+} from 'react-native';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
+import { useAuth } from '../../context/AuthContext';
+import apiClient from '../../api/apiClient';
 
-const MOCK_NOTIFS = [
-  { _id: '1', type: 'arrival', title: 'Bus arriving soon', body: 'Express 101 is 5 minutes away from your stop.', time: '2 min ago', read: false },
-  { _id: '2', type: 'delay', title: 'Trip delayed', body: 'City Line 5 is delayed by 10 minutes due to traffic.', time: '15 min ago', read: false },
-  { _id: '3', type: 'reward', title: 'Loyalty reward!', body: 'You have completed 10 trips! Enjoy a free ride.', time: '1 hr ago', read: true },
-  { _id: '4', type: 'emergency', title: 'Emergency alert', body: 'Emergency reported on Route 5 near Main Street.', time: '2 hrs ago', read: true },
-];
+const POLL_MS = 30000;
 
-const iconMap = {
-  arrival: 'bus',
-  delay: 'time',
-  reward: 'gift',
-  emergency: 'warning',
+const TYPE_CFG = {
+  arrival:   { icon: 'bus',                color: COLORS.success,  bg: COLORS.success  + '18' },
+  delay:     { icon: 'time',               color: COLORS.warning,  bg: COLORS.warning  + '18' },
+  reward:    { icon: 'gift',               color: COLORS.primary,  bg: COLORS.primary  + '18' },
+  emergency: { icon: 'warning',            color: '#EF4444',       bg: '#EF444418'             },
+  info:      { icon: 'notifications',      color: COLORS.primary,  bg: COLORS.primary  + '18' },
+  success:   { icon: 'checkmark-circle',   color: COLORS.success,  bg: COLORS.success  + '18' },
 };
-const colorMap = {
-  arrival: COLORS.success,
-  delay: COLORS.warning,
-  reward: COLORS.primary,
-  emergency: COLORS.danger,
-};
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const min = Math.floor((Date.now() - new Date(dateStr)) / 60000);
+  if (min < 1)  return 'Just now';
+  if (min < 60) return `${min}m ago`;
+  const h = Math.floor(min / 60);
+  if (h < 24)   return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
 
 const NotificationsScreen = () => {
   const headerInsets = useHeaderInsets();
-  const unreadCount = MOCK_NOTIFS.filter(n => !n.read).length;
+  const { user } = useAuth();
+  const [notifs,     setNotifs]     = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const timerRef = useRef(null);
+
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const userId = user?.user_id ?? user?._id;
+      if (!userId) return;
+      const res = await apiClient.get(`/notifications/user/${userId}`);
+      const data = Array.isArray(res.data) ? res.data : [];
+      setNotifs(data);
+    } catch (err) {
+      // keep previous data on error; don't clear the list
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [user]);
+
+  // Initial load + polling
+  useEffect(() => {
+    load();
+    timerRef.current = setInterval(() => load(true), POLL_MS);
+    return () => clearInterval(timerRef.current);
+  }, [load]);
+
+  const handleRead = useCallback(async (id) => {
+    setNotifs(prev => prev.map(n =>
+      n.notification_id === id ? { ...n, is_read: true } : n
+    ));
+    try {
+      await apiClient.put(`/notifications/${id}/read`, {});
+    } catch { /* best-effort */ }
+  }, []);
+
+  const markAllRead = useCallback(async () => {
+    const unread = notifs.filter(n => !n.is_read);
+    setNotifs(prev => prev.map(n => ({ ...n, is_read: true })));
+    await Promise.all(unread.map(n =>
+      apiClient.put(`/notifications/${n.notification_id}/read`, {}).catch(() => {})
+    ));
+  }, [notifs]);
+
+  const unreadCount = notifs.filter(n => !n.is_read).length;
 
   return (
     <View style={styles.container}>
@@ -40,44 +92,76 @@ const NotificationsScreen = () => {
             <Text style={styles.unreadBadgeText}>{unreadCount} new</Text>
           </View>
         )}
-      </View>
-
-      <FlatList
-        data={MOCK_NOTIFS}
-        keyExtractor={i => i._id}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[styles.item, !item.read && styles.itemUnread]}
-            activeOpacity={0.75}
-          >
-            <View style={[styles.iconWrap, { backgroundColor: colorMap[item.type] + '18' }]}>
-              <Ionicons name={iconMap[item.type]} size={21} color={colorMap[item.type]} />
-            </View>
-            <View style={styles.itemBody}>
-              <View style={styles.itemTop}>
-                <Text style={styles.itemTitle}>{item.title}</Text>
-                <Text style={styles.itemTime}>{item.time}</Text>
-              </View>
-              <Text style={styles.itemText}>{item.body}</Text>
-            </View>
-            {!item.read && <View style={styles.unreadDot} />}
+        {unreadCount > 0 && (
+          <TouchableOpacity onPress={markAllRead} style={styles.markAllBtn}>
+            <Text style={styles.markAllText}>Mark all read</Text>
           </TouchableOpacity>
         )}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Ionicons name="notifications-off-outline" size={48} color={COLORS.textMuted} />
-            <Text style={styles.emptyText}>No notifications yet</Text>
-          </View>
-        }
-      />
+      </View>
+
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={notifs}
+          keyExtractor={i => String(i.notification_id)}
+          contentContainerStyle={[styles.list, notifs.length === 0 && styles.listEmpty]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => { setRefreshing(true); load(true); }}
+              tintColor={COLORS.primary}
+              colors={[COLORS.primary]}
+            />
+          }
+          renderItem={({ item }) => {
+            const cfg = TYPE_CFG[item.type] ?? TYPE_CFG.info;
+            return (
+              <TouchableOpacity
+                style={[styles.item, !item.is_read && styles.itemUnread]}
+                activeOpacity={0.75}
+                onPress={() => { if (!item.is_read) handleRead(item.notification_id); }}
+              >
+                <View style={[styles.iconWrap, { backgroundColor: cfg.bg }]}>
+                  <Ionicons name={cfg.icon} size={21} color={cfg.color} />
+                </View>
+                <View style={styles.itemBody}>
+                  <View style={styles.itemTop}>
+                    <Text style={[styles.itemTitle, !item.is_read && styles.itemTitleUnread]}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.itemTime}>{timeAgo(item.created_at)}</Text>
+                  </View>
+                  <Text style={styles.itemText}>{item.body || item.message}</Text>
+                  {!item.is_read && (
+                    <Text style={[styles.tapHint, { color: cfg.color }]}>Tap to mark as read</Text>
+                  )}
+                </View>
+                {!item.is_read && <View style={[styles.unreadDot, { backgroundColor: cfg.color }]} />}
+              </TouchableOpacity>
+            );
+          }}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Ionicons name="notifications-off-outline" size={48} color={COLORS.textMuted} />
+              <Text style={styles.emptyText}>No notifications yet</Text>
+              <Text style={styles.emptySubText}>
+                Updates from the transit system will appear here
+              </Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container:   { flex: 1, backgroundColor: COLORS.background },
+  center:      { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   pageHeader: {
     flexDirection: 'row',
@@ -89,7 +173,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  pageTitle: { fontSize: 24, fontWeight: '800', color: COLORS.textPrimary },
+  pageTitle:       { fontSize: 24, fontWeight: '800', color: COLORS.textPrimary, flex: 1 },
   unreadBadge: {
     backgroundColor: COLORS.primary,
     borderRadius: 999,
@@ -97,8 +181,11 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   unreadBadgeText: { fontSize: 12, fontWeight: '700', color: COLORS.white },
+  markAllBtn:      { paddingHorizontal: 4 },
+  markAllText:     { fontSize: 12, fontWeight: '600', color: COLORS.primary },
 
-  list: { padding: 16, gap: 8 },
+  list:      { padding: 16, gap: 8 },
+  listEmpty: { flex: 1 },
 
   item: {
     flexDirection: 'row',
@@ -107,34 +194,44 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderRadius: 16,
     padding: 14,
+    position: 'relative',
   },
-  itemUnread: { backgroundColor: '#EEF3FF' },
+  itemUnread:    { backgroundColor: '#EEF3FF' },
   iconWrap: {
-    width: 46,
-    height: 46,
+    width: 46, height: 46,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  itemBody: { flex: 1 },
+  itemBody:  { flex: 1 },
   itemTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 4,
   },
-  itemTitle: { fontSize: 14, fontWeight: '700', color: COLORS.textPrimary, flex: 1, marginRight: 8 },
-  itemTime: { fontSize: 11, color: COLORS.textMuted, flexShrink: 0 },
-  itemText: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 19 },
+  itemTitle:       { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary, flex: 1, marginRight: 8 },
+  itemTitleUnread: { fontWeight: '700', color: COLORS.textPrimary },
+  itemTime:        { fontSize: 11, color: COLORS.textMuted, flexShrink: 0 },
+  itemText:        { fontSize: 13, color: COLORS.textSecondary, lineHeight: 19 },
+  tapHint:         { fontSize: 10, fontWeight: '600', marginTop: 4 },
   unreadDot: {
-    width: 8, height: 8, borderRadius: 4,
-    backgroundColor: COLORS.primary,
-    marginTop: 4, flexShrink: 0,
+    position: 'absolute',
+    top: 12, right: 12,
+    width: 8, height: 8,
+    borderRadius: 4,
   },
 
-  empty: { alignItems: 'center', justifyContent: 'center', paddingTop: 80, gap: 12 },
-  emptyText: { fontSize: 15, color: COLORS.textMuted, fontWeight: '500' },
+  empty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 80,
+    gap: 8,
+  },
+  emptyText:    { fontSize: 15, color: COLORS.textMuted, fontWeight: '600' },
+  emptySubText: { fontSize: 13, color: COLORS.textMuted, textAlign: 'center', paddingHorizontal: 32 },
 });
 
 export default NotificationsScreen;

@@ -3,8 +3,8 @@ import { Panel } from "../components/Panel";
 import { Modal } from "../components/Modal";
 import { StatCard } from "../components/StatCard";
 import { StatusPill } from "../components/StatusPill";
-import { getComplaints, createComplaint, updateComplaint, addComplaintComment } from "../api/endpoints";
-import { MOCK_COMPLAINTS, MOCK_DRIVERS, MOCK_ROUTES } from "../data/mockData";
+import { useAuth } from "../context/AuthContext";
+import { getComplaints, createComplaint, updateComplaint, addComplaintComment, getDrivers, getRoutes } from "../api/endpoints";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const PRIORITIES = ["Critical", "High", "Medium", "Low"];
@@ -25,9 +25,9 @@ const STATUS_STYLE = {
   "Closed":      { bg: "#F8FAFC", color: "#94A3B8" },
 };
 
-const CAT_ICON = {
-  "Driver Behavior": "👤", "Route Issue": "🗺️", "Payment": "💳",
-  "App Issue": "📱", "Safety": "⚠️", "Vehicle": "🚌", "Other": "📋",
+const CAT_COLOR = {
+  "Driver Behavior": "#2563EB", "Route Issue": "#7C3AED", "Payment": "#059669",
+  "App Issue": "#D97706",      "Safety": "#DC2626",       "Vehicle": "#0891B2", "Other": "#64748B",
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -83,7 +83,8 @@ function ComplaintDetail({ complaint, onClose, onUpdate, onAddComment }) {
 
   function handleComment() {
     if (!newComment.trim()) return;
-    const comment = { author: "Admin User", text: newComment.trim(), time: new Date().toISOString() };
+    const author  = user?.full_name ?? user?.email ?? "Admin";
+    const comment = { author, text: newComment.trim(), time: new Date().toISOString() };
     onAddComment(complaint.id, comment);
     setNewComment("");
   }
@@ -113,10 +114,10 @@ function ComplaintDetail({ complaint, onClose, onUpdate, onAddComment }) {
           </div>
           <div style={{ fontSize: 17, fontWeight: 800, color: "#0F172A", marginBottom: 8, lineHeight: 1.3 }}>{complaint.title}</div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 11, color: "#64748B" }}>
-            <span>{CAT_ICON[complaint.category]} {complaint.category}</span>
+            <span style={{ color: CAT_COLOR[complaint.category] ?? "#64748B", fontWeight: 600 }}>{complaint.category}</span>
             <span>·</span>
-            <span>🕐 {fmtDate(complaint.created_at)}</span>
-            {complaint.assigned_to && <><span>·</span><span>👤 {complaint.assigned_to}</span></>}
+            <span>{fmtDate(complaint.created_at)}</span>
+            {complaint.assigned_to && <><span>·</span><span>{complaint.assigned_to}</span></>}
           </div>
         </div>
 
@@ -189,7 +190,7 @@ function ComplaintDetail({ complaint, onClose, onUpdate, onAddComment }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
             {/* Opened event */}
             <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-              <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#F1F5F9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, flexShrink: 0 }}>📋</div>
+              <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#F1F5F9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#64748B", flexShrink: 0 }}>!</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: "#0F172A" }}>Complaint opened</div>
                 <div style={{ fontSize: 11, color: "#94A3B8" }}>{fmtDate(complaint.created_at)}</div>
@@ -235,7 +236,7 @@ function ComplaintDetail({ complaint, onClose, onUpdate, onAddComment }) {
 }
 
 // ── Create complaint modal ─────────────────────────────────────────────────────
-function CreateComplaintModal({ onClose, onSave }) {
+function CreateComplaintModal({ onClose, onSave, drivers = [], routes = [] }) {
   const EMPTY = { title: "", category: "Driver Behavior", priority: "Medium", description: "", passenger: "", driver: "", route: "" };
   const [form, setForm] = useState(EMPTY);
   const set = k => v => setForm(f => ({ ...f, [k]: v }));
@@ -275,14 +276,14 @@ function CreateComplaintModal({ onClose, onSave }) {
           <label style={lbl}>Driver (optional)</label>
           <select value={form.driver} onChange={e => set("driver")(e.target.value)} style={inp}>
             <option value="">— None —</option>
-            {MOCK_DRIVERS.map(d => <option key={d.id}>{d.name}</option>)}
+            {drivers.map(d => <option key={d.driver_id ?? d.id} value={d.full_name ?? d.name}>{d.full_name ?? d.name}</option>)}
           </select>
         </div>
         <div>
           <label style={lbl}>Route (optional)</label>
           <select value={form.route} onChange={e => set("route")(e.target.value)} style={inp}>
             <option value="">— None —</option>
-            {MOCK_ROUTES.map(r => <option key={r.id}>{r.name}</option>)}
+            {routes.map(r => <option key={r.route_id ?? r.id} value={r.route_name ?? r.name}>{r.route_name ?? r.name}</option>)}
           </select>
         </div>
       </div>
@@ -295,6 +296,7 @@ const inp = { width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", b
 
 // ── Main ComplaintsPage ───────────────────────────────────────────────────────
 export default function ComplaintsPage() {
+  const { user } = useAuth();
   const [complaints,   setComplaints]   = useState([]);
   const [statusFilter, setStatusFilter] = useState("All");
   const [prioFilter,   setPrioFilter]   = useState("All");
@@ -303,10 +305,19 @@ export default function ComplaintsPage() {
   const [detail,       setDetail]       = useState(null);
   const [createOpen,   setCreateOpen]   = useState(false);
 
+  const [driversOpts, setDriversOpts] = useState([]);
+  const [routesOpts,  setRoutesOpts]  = useState([]);
+
   useEffect(() => {
     getComplaints()
-      .then(d => setComplaints((d || []).length ? d : MOCK_COMPLAINTS))
-      .catch(() => setComplaints(MOCK_COMPLAINTS));
+      .then(d => setComplaints(Array.isArray(d) ? d : []))
+      .catch(() => setComplaints([]));
+    getDrivers()
+      .then(d => setDriversOpts(Array.isArray(d) ? d : []))
+      .catch(() => {});
+    getRoutes()
+      .then(d => setRoutesOpts(Array.isArray(d) ? d : []))
+      .catch(() => {});
   }, []);
 
   const visible = complaints.filter(c => {
@@ -432,8 +443,8 @@ export default function ComplaintsPage() {
                 {/* Priority stripe */}
                 <div style={{ width: 4, borderRadius: 4, background: PRIORITY_STYLE[c.priority]?.color ?? "#94A3B8", flexShrink: 0 }} />
 
-                {/* Icon */}
-                <div style={{ fontSize: 22, flexShrink: 0, marginTop: 2 }}>{CAT_ICON[c.category] ?? "📋"}</div>
+                {/* Category colour dot */}
+                <div style={{ width: 10, height: 10, borderRadius: "50%", background: CAT_COLOR[c.category] ?? "#94A3B8", flexShrink: 0, marginTop: 5 }} />
 
                 {/* Content */}
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -446,11 +457,11 @@ export default function ComplaintsPage() {
                   <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A", marginBottom: 5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.title}</div>
                   <div style={{ fontSize: 11, color: "#64748B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 6 }}>{c.description}</div>
                   <div style={{ display: "flex", gap: 12, fontSize: 11, color: "#94A3B8", flexWrap: "wrap" }}>
-                    <span>👤 {c.passenger}</span>
-                    {c.driver && <span>🚌 {c.driver}</span>}
-                    {c.route  && <span>🗺️ {c.route}</span>}
-                    {c.assigned_to && <span>📌 {c.assigned_to}</span>}
-                    {c.comments?.length > 0 && <span>💬 {c.comments.length} comment{c.comments.length !== 1 ? "s" : ""}</span>}
+                    <span>{c.passenger}</span>
+                    {c.driver && <span>Driver: {c.driver}</span>}
+                    {c.route  && <span>Route: {c.route}</span>}
+                    {c.assigned_to && <span>Assigned: {c.assigned_to}</span>}
+                    {c.comments?.length > 0 && <span>{c.comments.length} comment{c.comments.length !== 1 ? "s" : ""}</span>}
                   </div>
                 </div>
 
@@ -479,7 +490,7 @@ export default function ComplaintsPage() {
 
       {/* Create modal */}
       {createOpen && (
-        <CreateComplaintModal onClose={() => setCreateOpen(false)} onSave={handleCreate} />
+        <CreateComplaintModal onClose={() => setCreateOpen(false)} onSave={handleCreate} drivers={driversOpts} routes={routesOpts} />
       )}
     </div>
   );

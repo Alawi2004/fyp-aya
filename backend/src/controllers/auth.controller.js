@@ -5,7 +5,7 @@ import speakeasy from "speakeasy";
 import qrcode from "qrcode";
 import { poolPromise, sql } from "../db/db.js";
 import { ensureAuthTables } from "../db/featureSetup.js";
-import { sendPasswordResetEmail } from "../services/email.service.js";
+import { sendPasswordResetEmail, sendOTPEmail } from "../services/email.service.js";
 import { isForce2FA } from "../db/settingsCache.js";
 
 const ACCESS_TOKEN_TTL     = "15m";
@@ -253,18 +253,20 @@ async function enforceSessionLimit(pool, userId, currentHash) {
 export const register = async (req, res) => {
   try {
     // Never trust the client's role field — always register as passenger.
-    // The registerSchema validator also enforces this, but we hardcode here
-    // as an independent defence against any future middleware misconfiguration.
-    const { full_name, email, password, phone } = req.body;
+    const { full_name, email, password, phone, birth_date } = req.body;
     const hashed = await bcrypt.hash(password, 10);
     const pool = await poolPromise;
 
     await pool.request()
-      .input("full_name", sql.VarChar, full_name)
-      .input("email",     sql.VarChar, email)
-      .input("password",  sql.VarChar, hashed)
-      .input("phone",     sql.VarChar, phone ?? null)
-      .query("INSERT INTO users(full_name,email,password_hash,phone,role) VALUES(@full_name,@email,@password,@phone,'passenger')");
+      .input("full_name",  sql.VarChar,   full_name)
+      .input("email",      sql.VarChar,   email)
+      .input("password",   sql.VarChar,   hashed)
+      .input("phone",      sql.VarChar,   phone ?? null)
+      .input("birth_date", sql.Date,      birth_date ? new Date(birth_date) : null)
+      .query(`
+        INSERT INTO users(full_name,email,password_hash,phone,birth_date,role)
+        VALUES(@full_name,@email,@password,@phone,@birth_date,'passenger')
+      `);
 
     res.status(201).json({ message: "User registered" });
   } catch (err) {
@@ -368,7 +370,19 @@ export const login = async (req, res) => {
 
     setCookies(res, access_token, refresh_token);
     const { password_hash, ...safeUser } = user;
-    return res.json({ user: safeUser });
+
+    // For driver users, include driver_id so mobile app can use it
+    if (safeUser.role === "driver") {
+      try {
+        const dr = await pool.request()
+          .input("uid", sql.Int, safeUser.user_id)
+          .query("SELECT driver_id FROM drivers WHERE user_id = @uid");
+        safeUser.driver_id = dr.recordset[0]?.driver_id ?? null;
+      } catch (_) { safeUser.driver_id = null; }
+    }
+
+    // Return access_token in body so mobile clients can store it as Bearer token
+    return res.json({ user: safeUser, access_token });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Login failed" });
@@ -660,8 +674,12 @@ export const forgotPassword = async (req, res) => {
       .query("INSERT INTO password_reset_tokens(user_id,token_hash,expires_at) VALUES(@user_id,@token_hash,@expires_at)");
 
     const adminBase = process.env.ADMIN_BASE_URL || "http://localhost:5173";
-    await sendPasswordResetEmail(email, `${adminBase}?token=${raw}`);
-    console.log(`[auth] Password reset email sent to ${email}`);
+    try {
+      await sendPasswordResetEmail(email, `${adminBase}?token=${raw}`);
+      console.log(`[auth] Password reset email sent to ${email}`);
+    } catch (emailErr) {
+      console.error("[auth] forgotPassword - SMTP error:", emailErr);
+    }
 
     return res.json({ message: "If that email exists, a reset link has been sent." });
   } catch (err) {
@@ -756,7 +774,7 @@ export const refresh = async (req, res) => {
 
     const access_token = issueAccessToken({ user_id: record.user_id, role: record.role });
     setCookies(res, access_token, new_refresh_token);
-    res.json({ ok: true });
+    res.json({ ok: true, access_token });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Token refresh failed" });
@@ -783,6 +801,85 @@ export const logout = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Logout failed" });
+  }
+};
+
+// ── OTP (email verification for passenger registration & login) ───────────────
+
+export const sendOtp = async (req, res) => {
+  const { email, purpose } = req.body;
+  if (!email) return res.status(400).json({ error: "Email required" });
+
+  try {
+    const code      = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
+
+    const pool = await poolPromise;
+    await ensureAuthTables(pool);
+
+    // Replace any existing OTP for this email then insert the fresh one
+    await pool.request()
+      .input("email", sql.NVarChar(120), email)
+      .query("DELETE FROM otp_codes WHERE email = @email");
+
+    await pool.request()
+      .input("email",      sql.NVarChar(120), email)
+      .input("code",       sql.NVarChar(6),   code)
+      .input("purpose",    sql.NVarChar(30),  purpose ?? null)
+      .input("expires_at", sql.DateTime2,     expiresAt)
+      .query("INSERT INTO otp_codes(email, code, purpose, expires_at) VALUES(@email, @code, @purpose, @expires_at)");
+
+    // Fire-and-forget — don't block the HTTP response waiting on SMTP
+    if (process.env.SMTP_HOST && process.env.SMTP_USER) {
+      sendOTPEmail(email, code)
+        .then(() => console.log(`[otp] sent to ${email}`))
+        .catch(err => console.error("[otp] email send failed:", err.message));
+    } else {
+      console.log(`[otp] dev mode — code for ${email}: ${code}`);
+    }
+
+    return res.json({ message: "Verification code sent" });
+  } catch (err) {
+    console.error("[otp] sendOtp error:", err.message);
+    return res.status(500).json({ error: "Could not send verification code. Please try again." });
+  }
+};
+
+export const verifyOtp = async (req, res) => {
+  const { email, code } = req.body;
+  if (!email || !code) return res.status(400).json({ error: "Email and code required" });
+
+  try {
+    const pool = await poolPromise;
+    await ensureAuthTables(pool);
+
+    const result = await pool.request()
+      .input("email", sql.NVarChar(120), email)
+      .query("SELECT TOP 1 otp_id, code, expires_at FROM otp_codes WHERE email = @email ORDER BY created_at DESC");
+
+    const stored = result.recordset[0];
+    if (!stored) return res.status(400).json({ error: "No code found — request a new one" });
+
+    if (new Date() > new Date(stored.expires_at)) {
+      await pool.request()
+        .input("otp_id", sql.Int, stored.otp_id)
+        .query("DELETE FROM otp_codes WHERE otp_id = @otp_id");
+      return res.status(400).json({ error: "Code expired — request a new one" });
+    }
+
+    if (stored.code !== String(code).trim()) {
+      return res.status(400).json({ error: "Invalid code" });
+    }
+
+    // Single-use: delete after successful match
+    await pool.request()
+      .input("otp_id", sql.Int, stored.otp_id)
+      .query("DELETE FROM otp_codes WHERE otp_id = @otp_id");
+
+    return res.json({ valid: true });
+  } catch (err) {
+    console.error("[otp] verifyOtp error:", err.message);
+    return res.status(500).json({ error: "Verification failed. Please try again." });
   }
 };
 

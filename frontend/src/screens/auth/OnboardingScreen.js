@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
+import { THEME } from '../../constants/theme';
 
 const { width } = Dimensions.get('window');
 
@@ -15,8 +16,9 @@ const SLIDES = [
     key: '1',
     icon: 'bus',
     bgColor: '#EFF6FF',
+    ringColor: 'rgba(37,99,235,0.10)',
     iconColor: COLORS.primary,
-    title: 'Welcome to BusApp',
+    title: 'Welcome to Yalla Transit',
     subtitle:
       'Your smart companion for bus travel.\nTrack buses in real-time and never miss your ride.',
   },
@@ -24,6 +26,7 @@ const SLIDES = [
     key: '2',
     icon: 'ticket-outline',
     bgColor: '#F5F3FF',
+    ringColor: 'rgba(124,58,237,0.10)',
     iconColor: '#7C3AED',
     title: 'Book Your Seat',
     subtitle:
@@ -33,6 +36,7 @@ const SLIDES = [
     key: '3',
     icon: 'wallet-outline',
     bgColor: '#ECFDF5',
+    ringColor: 'rgba(16,185,129,0.10)',
     iconColor: COLORS.secondary,
     title: 'Top Up & Pay',
     subtitle:
@@ -76,7 +80,7 @@ const OnboardingScreen = ({ navigation }) => {
         </TouchableOpacity>
       )}
 
-      {/* Slides — scrollEnabled off so only Next button advances */}
+      {/* Slides */}
       <FlatList
         ref={flatRef}
         data={SLIDES}
@@ -88,29 +92,36 @@ const OnboardingScreen = ({ navigation }) => {
         getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
         renderItem={({ item }) => (
           <View style={styles.slide}>
-            <View style={[styles.illustrationWrap, { backgroundColor: item.bgColor }]}>
-              <View style={[styles.iconCircle, { backgroundColor: item.iconColor }]}>
-                <Ionicons name={item.icon} size={56} color={COLORS.white} />
+            {/* Layered illustration: outer ring → colored bg circle → icon */}
+            <View style={[styles.ringOuter, { backgroundColor: item.ringColor }]}>
+              <View style={[styles.illustrationWrap, { backgroundColor: item.bgColor }]}>
+                <View style={[styles.iconCircle, { backgroundColor: item.iconColor }]}>
+                  <View style={styles.iconInnerHighlight} pointerEvents="none" />
+                  <Ionicons name={item.icon} size={54} color={COLORS.white} />
+                </View>
               </View>
             </View>
+
             <Text style={styles.title}>{item.title}</Text>
             <Text style={styles.subtitle}>{item.subtitle}</Text>
           </View>
         )}
       />
 
-      {/* State-driven dot indicators */}
+      {/* Dot indicators */}
       <View style={styles.dotsRow}>
         {SLIDES.map((s, i) => (
-          <TouchableOpacity key={i} onPress={() => goTo(i)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <View
-              style={[
-                styles.dot,
-                i === current
-                  ? { width: 24, backgroundColor: slide.iconColor }
-                  : { width: 8, backgroundColor: COLORS.border },
-              ]}
-            />
+          <TouchableOpacity
+            key={i}
+            onPress={() => goTo(i)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <View style={[
+              styles.dot,
+              i === current
+                ? { width: 28, backgroundColor: slide.iconColor }
+                : { width: 8, backgroundColor: COLORS.border },
+            ]} />
           </TouchableOpacity>
         ))}
       </View>
@@ -120,8 +131,9 @@ const OnboardingScreen = ({ navigation }) => {
         <TouchableOpacity
           style={[styles.btn, { backgroundColor: slide.iconColor }]}
           onPress={next}
-          activeOpacity={0.85}
+          activeOpacity={0.84}
         >
+          <View style={styles.btnHighlight} pointerEvents="none" />
           <Text style={styles.btnText}>
             {current === SLIDES.length - 1 ? 'Get Started' : 'Next'}
           </Text>
@@ -141,22 +153,34 @@ const styles = StyleSheet.create({
 
   skip: {
     position: 'absolute',
-    top: 52,
+    top: 56,
     right: 24,
     zIndex: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: THEME.borderRadius.round,
     backgroundColor: COLORS.background,
   },
-  skipText: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary },
+  skipText: {
+    fontSize: THEME.fontSize.sm,
+    fontWeight: THEME.fontWeight.semibold,
+    color: COLORS.textSecondary,
+  },
 
   slide: {
     width,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 36,
-    paddingTop: 60,
+    paddingTop: 64,
+  },
+  ringOuter: {
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 48,
   },
   illustrationWrap: {
     width: 220,
@@ -164,33 +188,42 @@ const styles = StyleSheet.create({
     borderRadius: 110,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 44,
   },
   iconCircle: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: 144,
+    height: 144,
+    borderRadius: 72,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  iconInnerHighlight: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 999,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontSize: THEME.fontSize.xxl,
+    fontWeight: THEME.fontWeight.extrabold,
     color: COLORS.textPrimary,
     textAlign: 'center',
     marginBottom: 16,
-    letterSpacing: 0.3,
+    letterSpacing: -0.4,
+    lineHeight: 36,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: THEME.fontSize.base,
     color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 26,
+    fontWeight: THEME.fontWeight.medium,
   },
 
   dotsRow: {
@@ -215,15 +248,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    paddingVertical: 17,
-    borderRadius: 16,
+    paddingVertical: 18,
+    borderRadius: THEME.borderRadius.xl,
+    overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 6,
   },
-  btnText: { fontSize: 17, fontWeight: '700', color: COLORS.white },
+  btnHighlight: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 999,
+  },
+  btnText: {
+    fontSize: THEME.fontSize.md,
+    fontWeight: THEME.fontWeight.bold,
+    color: COLORS.white,
+    letterSpacing: 0.2,
+  },
 });
 
 export default OnboardingScreen;

@@ -1,68 +1,100 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
-  Platform, StatusBar,
+  StatusBar, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
+import { getDriverTripsApi } from '../../api/driverApi';
 
 const STATUS_CFG = {
   completed: { label: 'Completed', bg: COLORS.secondaryLight, text: COLORS.secondary,  icon: 'checkmark-circle'  },
   cancelled: { label: 'Cancelled', bg: COLORS.dangerLight,    text: COLORS.danger,     icon: 'close-circle'      },
   upcoming:  { label: 'Upcoming',  bg: COLORS.primaryLight,   text: COLORS.primary,    icon: 'time-outline'      },
+  ongoing:   { label: 'Active',    bg: COLORS.warningLight ?? COLORS.primaryLight, text: COLORS.warning ?? COLORS.primary, icon: 'radio-button-on' },
 };
 
-const MOCK_HISTORY = [
-  {
-    _id: '1', routeName: 'Route A — City Center',   busNumber: 'BUS-101',
-    origin: 'Terminal North', destination: 'City Mall',
-    date: 'Today', departureTime: '08:00', arrivalTime: '09:15',
-    passengers: 18, totalSeats: 30, earnings: 54.00, status: 'completed', duration: '1h 15m',
-  },
-  {
-    _id: '2', routeName: 'Route C — Airport Express', busNumber: 'BUS-303',
-    origin: 'Downtown Hub', destination: 'Airport',
-    date: 'Today', departureTime: '06:00', arrivalTime: '07:00',
-    passengers: 28, totalSeats: 30, earnings: 84.00, status: 'completed', duration: '1h 00m',
-  },
-  {
-    _id: '3', routeName: 'Route B — University',    busNumber: 'BUS-202',
-    origin: 'Central Station', destination: 'University Campus',
-    date: 'Yesterday', departureTime: '13:00', arrivalTime: '13:50',
-    passengers: 22, totalSeats: 30, earnings: 66.00, status: 'completed', duration: '50m',
-  },
-  {
-    _id: '4', routeName: 'Route D — Industrial',    busNumber: 'BUS-404',
-    origin: 'City Center', destination: 'Industrial Park',
-    date: 'Yesterday', departureTime: '15:30', arrivalTime: '16:20',
-    passengers: 0, totalSeats: 30, earnings: 0, status: 'cancelled', duration: '—',
-  },
-  {
-    _id: '5', routeName: 'Route A — City Center',   busNumber: 'BUS-101',
-    origin: 'Terminal North', destination: 'City Mall',
-    date: '2 days ago', departureTime: '08:00', arrivalTime: '09:15',
-    passengers: 25, totalSeats: 30, earnings: 75.00, status: 'completed', duration: '1h 15m',
-  },
-];
+function formatTime(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  return isNaN(d) ? String(dateStr) : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  if (isNaN(d)) return '—';
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString())     return 'Today';
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+function durationStr(start, end) {
+  if (!start || !end) return '—';
+  const diffMin = Math.round((new Date(end) - new Date(start)) / 60000);
+  if (isNaN(diffMin) || diffMin <= 0) return '—';
+  const h = Math.floor(diffMin / 60);
+  const m = diffMin % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function normaliseTrip(t) {
+  return {
+    _id:           String(t.trip_id ?? t._id ?? ''),
+    routeName:     t.route_name    ?? t.routeName    ?? 'Route',
+    busNumber:     t.plate_number  ?? t.busNumber    ?? (t.vehicle_model ?? 'Bus'),
+    origin:        t.start_location ?? t.origin      ?? '—',
+    destination:   t.end_location   ?? t.destination ?? '—',
+    date:          formatDate(t.start_time ?? t.departureTime),
+    departureTime: formatTime(t.start_time ?? t.departureTime),
+    arrivalTime:   formatTime(t.end_time   ?? t.arrivalTime),
+    passengers:    t.passengers    ?? 0,
+    totalSeats:    t.totalSeats    ?? t.capacity ?? 30,
+    earnings:      parseFloat(t.earnings ?? 0),
+    status:        t.status        ?? 'upcoming',
+    duration:      durationStr(t.start_time, t.end_time),
+  };
+}
 
 const DriverTripHistoryScreen = ({ navigation }) => {
   const headerInsets = useHeaderInsets();
-  const [filter, setFilter] = useState('all');
+  const [trips,      setTrips]      = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [filter,     setFilter]     = useState('all');
 
-  const totalEarned  = MOCK_HISTORY.filter(t => t.status === 'completed').reduce((s, t) => s + t.earnings, 0);
-  const completedCnt = MOCK_HISTORY.filter(t => t.status === 'completed').length;
-  const cancelledCnt = MOCK_HISTORY.filter(t => t.status === 'cancelled').length;
+  const loadTrips = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const res  = await getDriverTripsApi();
+      const data = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.trips) ? res.data.trips : []);
+      setTrips(data.map(normaliseTrip));
+    } catch {
+      setTrips([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
-  const filtered = filter === 'all' ? MOCK_HISTORY : MOCK_HISTORY.filter(t => t.status === filter);
+  useEffect(() => { loadTrips(); }, [loadTrips]);
+
+  const filtered = filter === 'all' ? trips : trips.filter(t => t.status === filter);
+
+  const totalEarned  = trips.filter(t => t.status === 'completed').reduce((s, t) => s + t.earnings, 0);
+  const completedCnt = trips.filter(t => t.status === 'completed').length;
+  const cancelledCnt = trips.filter(t => t.status === 'cancelled').length;
 
   const renderItem = ({ item }) => {
-    const cfg = STATUS_CFG[item.status] || STATUS_CFG.completed;
+    const cfg  = STATUS_CFG[item.status] || STATUS_CFG.upcoming;
     const fill = item.totalSeats > 0 ? item.passengers / item.totalSeats : 0;
 
     return (
       <View style={styles.card}>
-        {/* Header */}
         <View style={styles.cardTop}>
           <View style={styles.cardIconWrap}>
             <Ionicons name="bus" size={16} color={COLORS.primary} />
@@ -77,7 +109,6 @@ const DriverTripHistoryScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Journey */}
         <View style={styles.journey}>
           <View style={styles.journeyStop}>
             <View style={[styles.jDot, { backgroundColor: COLORS.secondary }]} />
@@ -104,7 +135,6 @@ const DriverTripHistoryScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Pills row */}
         <View style={styles.pillRow}>
           <View style={styles.pill}>
             <Ionicons name="people-outline" size={11} color={COLORS.textMuted} />
@@ -140,7 +170,6 @@ const DriverTripHistoryScreen = ({ navigation }) => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
 
-      {/* Header */}
       <View style={[styles.header, headerInsets]}>
         <View style={styles.headerDecor} />
         <View style={styles.headerTop}>
@@ -154,7 +183,6 @@ const DriverTripHistoryScreen = ({ navigation }) => {
           <View style={{ width: 40 }} />
         </View>
 
-        {/* Summary chips */}
         <View style={styles.summaryRow}>
           {[
             { icon: 'checkmark-circle', label: 'Completed', value: completedCnt, color: COLORS.secondary   },
@@ -170,7 +198,6 @@ const DriverTripHistoryScreen = ({ navigation }) => {
         </View>
       </View>
 
-      {/* Filters */}
       <View style={styles.filterWrap}>
         {[
           { key: 'all',       label: 'All Trips'  },
@@ -189,19 +216,33 @@ const DriverTripHistoryScreen = ({ navigation }) => {
         ))}
       </View>
 
-      <FlatList
-        data={filtered}
-        keyExtractor={item => item._id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyWrap}>
-            <Ionicons name="receipt-outline" size={38} color={COLORS.textMuted} />
-            <Text style={styles.emptyText}>No trips found</Text>
-          </View>
-        }
-      />
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={item => item._id}
+          renderItem={renderItem}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => { setRefreshing(true); loadTrips(true); }}
+              colors={[COLORS.primary]}
+              tintColor={COLORS.primary}
+            />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyWrap}>
+              <Ionicons name="receipt-outline" size={38} color={COLORS.textMuted} />
+              <Text style={styles.emptyText}>No trips found</Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 };
@@ -209,7 +250,6 @@ const DriverTripHistoryScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
 
-  /* Header */
   header: {
     backgroundColor: COLORS.headerBg,
     overflow: 'hidden',
@@ -238,7 +278,6 @@ const styles = StyleSheet.create({
   summaryVal: { fontSize: 16, fontWeight: '900' },
   summaryLbl: { fontSize: 9, color: 'rgba(255,255,255,0.5)', fontWeight: '600', textTransform: 'uppercase' },
 
-  /* Filters */
   filterWrap: { flexDirection: 'row', padding: 14, gap: 8 },
   filterBtn: {
     paddingHorizontal: 16, paddingVertical: 8,
@@ -249,9 +288,9 @@ const styles = StyleSheet.create({
   filterText: { fontSize: 12, fontWeight: '700', color: COLORS.textMuted },
   filterTextActive: { color: COLORS.primary },
 
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { paddingHorizontal: 14, paddingBottom: 24 },
 
-  /* Card */
   card: {
     backgroundColor: COLORS.white, borderRadius: 18, padding: 14, marginBottom: 10,
     shadowColor: '#64748B', shadowOffset: { width: 0, height: 3 },
@@ -270,7 +309,6 @@ const styles = StyleSheet.create({
   },
   statusText: { fontSize: 10, fontWeight: '700' },
 
-  /* Journey */
   journey: {
     flexDirection: 'row', alignItems: 'center',
     paddingBottom: 12, marginBottom: 10,
@@ -288,7 +326,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
   },
 
-  /* Pills */
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' },
   pill: {
     flexDirection: 'row', alignItems: 'center', gap: 4,

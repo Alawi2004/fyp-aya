@@ -179,63 +179,108 @@ const mockAdminResponse = (method, endpoint, data = {}) => {
   return method === 'GET' ? [] : { ok: true, id: Date.now(), ...data };
 };
 
+// Token stored in sessionStorage by AuthContext after login
+function getToken() {
+  try { return sessionStorage.getItem('admin_token') || null; } catch { return null; }
+}
+function setToken(t) {
+  try { if (t) sessionStorage.setItem('admin_token', t); else sessionStorage.removeItem('admin_token'); } catch {}
+}
+
 class ApiClient {
   constructor(baseURL) {
     this.baseURL = baseURL;
+    this._refreshing = null;
+  }
+
+  _authHeaders() {
+    const token = getToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
   async handleResponse(response) {
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`API Error ${response.status}: ${error}`);
+      // Read body once as text, then try to parse as JSON
+      const text = await response.text().catch(() => "");
+      let message;
+      try {
+        const data = JSON.parse(text);
+        message = data.error || data.message || response.statusText;
+      } catch {
+        message = text || response.statusText;
+      }
+      throw new Error(message || `Request failed (${response.status})`);
     }
     return response.json();
   }
 
-  async get(endpoint) {
-    if (FRONTEND_ONLY) return mockAdminResponse('GET', endpoint);
-
-    const response = await fetch(`${this.baseURL}${endpoint}`, {
-      method: 'GET',
+  async _tryRefresh() {
+    if (this._refreshing) return this._refreshing;
+    this._refreshing = fetch(`${this.baseURL}/auth/refresh`, {
+      method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    }).then(async r => {
+      this._refreshing = null;
+      if (r.ok) {
+        // Store new access_token from refresh response body
+        try {
+          const body = await r.clone().json();
+          if (body.access_token) setToken(body.access_token);
+        } catch {}
+      }
+      return r.ok;
+    }).catch(() => {
+      this._refreshing = null;
+      return false;
     });
+    return this._refreshing;
+  }
+
+  async _fetch(method, endpoint, data) {
+    const buildOpts = () => ({
+      method,
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...this._authHeaders() },
+      ...(data !== undefined ? { body: JSON.stringify(data) } : {}),
+    });
+
+    let response = await fetch(`${this.baseURL}${endpoint}`, buildOpts());
+
+    if (response.status === 401 && !endpoint.startsWith('/auth/')) {
+      const refreshed = await this._tryRefresh();
+      if (refreshed) {
+        response = await fetch(`${this.baseURL}${endpoint}`, buildOpts());
+      } else {
+        localStorage.removeItem('admin_user');
+        sessionStorage.removeItem('admin_token');
+        window.location.href = '/';
+        throw new Error('Session expired. Please log in again.');
+      }
+    }
+
     return this.handleResponse(response);
+  }
+
+  async get(endpoint) {
+    if (FRONTEND_ONLY) return mockAdminResponse('GET', endpoint);
+    return this._fetch('GET', endpoint);
   }
 
   async post(endpoint, data) {
     if (FRONTEND_ONLY) return mockAdminResponse('POST', endpoint, data);
-
-    const response = await fetch(`${this.baseURL}${endpoint}`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    return this.handleResponse(response);
+    return this._fetch('POST', endpoint, data);
   }
 
   async put(endpoint, data) {
     if (FRONTEND_ONLY) return mockAdminResponse('PUT', endpoint, data);
-
-    const response = await fetch(`${this.baseURL}${endpoint}`, {
-      method: 'PUT',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    return this.handleResponse(response);
+    return this._fetch('PUT', endpoint, data);
   }
 
   async delete(endpoint) {
     if (FRONTEND_ONLY) return { ok: true };
-
-    const response = await fetch(`${this.baseURL}${endpoint}`, {
-      method: 'DELETE',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    return this.handleResponse(response);
+    return this._fetch('DELETE', endpoint);
   }
 }
 

@@ -9,15 +9,6 @@ import { useCounterData }     from '../hooks/useCounterData';
 import { CAMERA_REST_URL } from '../config/camera';
 const CAMERA_SERVER_REST = CAMERA_REST_URL;
 
-const MOCK_BUSES = [
-  { bus_id: 'BUS-01', driver: 'Karim Moussa',   route: 'Route 12A', on_bus: 24, driver_alert: 'focused',   active: true  },
-  { bus_id: 'BUS-05', driver: 'Lara Abi Nader', route: 'Route 7B',  on_bus: 18, driver_alert: 'focused',   active: true  },
-  { bus_id: 'BUS-09', driver: 'Joe Pharaon',    route: 'Route 3C',  on_bus: 40, driver_alert: 'focused',   active: true  },
-  { bus_id: 'BUS-02', driver: 'Maya Salameh',   route: 'Route 5D',  on_bus: 11, driver_alert: 'focused',   active: false },
-  { bus_id: 'BUS-11', driver: 'Rami Khoury',    route: 'Route 9E',  on_bus:  0, driver_alert: 'focused',   active: false },
-  { bus_id: 'BUS-07', driver: 'Sara Khoury',    route: 'Route 3C',  on_bus: 25, driver_alert: 'focused',   active: false },
-  { bus_id: 'BUS-12', driver: 'Fadi Gemayel',   route: 'Route 7B',  on_bus: 30, driver_alert: 'focused',   active: true  },
-];
 
 const ALERT_META = {
   focused:        { color: '#059669', bg: '#dcfce7', border: '#86efac', Icon: Check,         label: 'Focused',         severity: 0 },
@@ -1211,7 +1202,7 @@ function DriverStatusPanel({ busId, bus, driverStatus, simAlerts }) {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function CameraPage() {
-  const [buses,         setBuses]         = useState(MOCK_BUSES);
+  const [buses,         setBuses]         = useState([]);
   const [busesLoading,  setBusesLoading]  = useState(false);
   const [selectedBusId, setSelectedBusId] = useState(null);
   const [showEvents,    setShowEvents]    = useState(false);
@@ -1271,19 +1262,15 @@ export default function CameraPage() {
       if (res.ok) {
         const data = await res.json();
         if (data.buses && data.buses.length > 0) {
-          const merged = data.buses.map(b => ({
-            ...MOCK_BUSES.find(m => m.bus_id === b.bus_id) || {},
-            ...b, active: true,
-          }));
+          const merged = data.buses.map(b => ({ ...b, active: true }));
           setBuses(merged);
           if (!selectedBusId) setSelectedBusId(merged[0]?.bus_id);
           setBusesLoading(false);
           return;
         }
       }
-    } catch { /* fall through to mock */ }
-    setBuses(MOCK_BUSES);
-    if (!selectedBusId) setSelectedBusId(MOCK_BUSES.find(b => b.active !== false)?.bus_id || null);
+    } catch { /* fall through */ }
+    setBuses([]);
     setBusesLoading(false);
   }, [selectedBusId]);
 

@@ -230,7 +230,9 @@ const TicketScreen = ({ route, navigation }) => {
           {/* Details grid */}
           <View style={styles.detailsGrid}>
             {[
-              { label: 'SEAT',   value: booking.seatId,              highlight: false },
+              { label: booking.seats?.length > 1 ? 'SEATS' : 'SEAT',
+                value: booking.seats?.length > 1 ? booking.seats.join(', ') : booking.seatId,
+                highlight: false },
               { label: 'FARE',   value: `$${booking.price}`,         highlight: true  },
               { label: 'DATE',   value: formatDateTime(booking.date), highlight: false },
               { label: 'STATUS', value: 'Confirmed', highlight: true, green: true },
@@ -387,7 +389,7 @@ const TicketScreen = ({ route, navigation }) => {
         <View style={styles.actions}>
           <Button
             title="Track My Bus"
-            onPress={() => navigation.navigate('BusTracking', { busId: booking.bus?._id || 'bus1', busName: booking.bus?.name })}
+            onPress={() => navigation.navigate('BusTracking', { tripId: booking.bus?._id, busName: booking.bus?.name })}
             icon={<Ionicons name="navigate-outline" size={18} color={COLORS.white} />}
             size="lg"
           />

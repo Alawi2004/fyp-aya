@@ -14,3 +14,5 @@ export const reportDelayApi       = (tripId, data)           => apiClient.post(`
 export const getDriverNotificationsApi = (userId)            => apiClient.get(`/notifications/user/${userId}`).then(r => r.data);
 export const markNotificationReadApi   = (notifId)           => apiClient.put(`/notifications/${notifId}/read`, {}).then(r => r.data);
 export const getRouteWaypointsApi      = (routeId)           => apiClient.get(`/routes/${routeId}/waypoints`).then(r => r.data);
+export const getRouteStopsApi          = (routeId)           => apiClient.get(`/routes/${routeId}/stops`).then(r => r.data);
+export const getDriverRatingsApi       = (driverId)          => apiClient.get(`/ratings/driver?driver_id=${driverId}`).then(r => r.data);

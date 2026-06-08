@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, StatusBar } from 'react-nativ
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
+import { THEME } from '../../constants/theme';
 
 const ScreenHeader = ({
   title,
@@ -15,10 +16,14 @@ const ScreenHeader = ({
 }) => {
   const insets = useSafeAreaInsets();
   const textColor = dark ? COLORS.white : COLORS.textPrimary;
-  const iconBg = dark ? 'rgba(255,255,255,0.2)' : COLORS.background;
+  const iconBg = dark ? 'rgba(255,255,255,0.18)' : COLORS.background;
 
   return (
-    <View style={[styles.container, { backgroundColor, paddingTop: insets.top + 12 }]}>
+    <View style={[
+      styles.container,
+      { backgroundColor, paddingTop: insets.top + 12 },
+      !dark && styles.shadowLight,
+    ]}>
       {onBack ? (
         <TouchableOpacity
           style={[styles.backBtn, { backgroundColor: iconBg }]}
@@ -33,7 +38,11 @@ const ScreenHeader = ({
 
       <View style={styles.center}>
         <Text style={[styles.title, { color: textColor }]} numberOfLines={1}>{title}</Text>
-        {subtitle ? <Text style={[styles.subtitle, { color: dark ? 'rgba(255,255,255,0.75)' : COLORS.textSecondary }]}>{subtitle}</Text> : null}
+        {subtitle ? (
+          <Text style={[styles.subtitle, { color: dark ? 'rgba(255,255,255,0.7)' : COLORS.textSecondary }]}>
+            {subtitle}
+          </Text>
+        ) : null}
       </View>
 
       <View style={styles.spacer}>
@@ -47,15 +56,20 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: 14,
+    paddingBottom: 16,
     paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+  },
+  shadowLight: {
+    shadowColor: '#94A3B8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: THEME.borderRadius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -64,16 +78,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   spacer: {
-    width: 38,
+    width: 40,
     alignItems: 'flex-end',
   },
   title: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: THEME.fontSize.md,
+    fontWeight: THEME.fontWeight.bold,
+    letterSpacing: -0.2,
   },
   subtitle: {
-    fontSize: 12,
-    marginTop: 1,
+    fontSize: THEME.fontSize.xs,
+    marginTop: 2,
+    fontWeight: THEME.fontWeight.medium,
   },
 });
 

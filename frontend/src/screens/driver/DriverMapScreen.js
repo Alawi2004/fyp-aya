@@ -8,29 +8,7 @@ import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
 import { useLocation } from '../../hooks/useLocation';
-import { markStopArrivalApi, getRouteWaypointsApi } from '../../api/driverApi';
-
-// Fallback route — Lebanese coordinates (Beirut → Jounieh, Route 12A)
-const MOCK_ROUTE = [
-  { latitude: 33.8938, longitude: 35.5018 },
-  { latitude: 33.9100, longitude: 35.5150 },
-  { latitude: 33.9280, longitude: 35.5340 },
-  { latitude: 33.9566, longitude: 35.5901 },
-  { latitude: 33.9806, longitude: 35.6178 },
-];
-
-const INITIAL_STOPS = [
-  { id: 1, name: 'Hamra Station',    lat: 33.8938, lng: 35.5018, done: true  },
-  { id: 2, name: 'Adliyeh Junction', lat: 33.9280, lng: 35.5340, done: true  },
-  { id: 3, name: 'Jounieh Highway',  lat: 33.9566, lng: 35.5901, done: false },
-  { id: 4, name: 'Jounieh Terminal', lat: 33.9806, lng: 35.6178, done: false },
-];
-
-const TRIP_INFO = {
-  route: 'Route A — City Center',
-  busNumber: 'BUS-101',
-  totalStops: 4,
-};
+import { markStopArrivalApi, getRouteWaypointsApi, getRouteStopsApi } from '../../api/driverApi';
 
 const ARRIVAL_RADIUS_M   = 50;   // auto-mark arrived within 50 m
 const APPROACH_RADIUS_M  = 200;  // show "Approaching" indicator within 200 m
@@ -47,28 +25,30 @@ const haversine = (lat1, lon1, lat2, lon2) => {
 };
 
 const DriverMapScreen = ({ navigation, route }) => {
-  const tripId  = route?.params?.tripId  ?? null;
-  const routeId = route?.params?.routeId ?? null;
+  const tripId    = route?.params?.tripId    ?? null;
+  const routeId   = route?.params?.routeId   ?? null;
+  const routeName = route?.params?.routeName ?? 'Active Route';
+  const busNumber = route?.params?.busNumber ?? '';
   const insets = useSafeAreaInsets();
   const mapRef      = useRef(null);
   const pulseAnim   = useRef(new Animated.Value(1)).current;
   const panelAnim   = useRef(new Animated.Value(100)).current;
   const routeAnim   = useRef(new Animated.Value(0)).current;
   const triggeredRef = useRef(new Set()); // stop IDs already auto-marked
-  const [routeWaypoints, setRouteWaypoints] = useState(MOCK_ROUTE);
-  const [location, setLocation]         = useState(MOCK_ROUTE[0]);
+  const [routeWaypoints, setRouteWaypoints] = useState([]);
+  const [location, setLocation]         = useState(null);
   const [broadcasting, setBroadcasting] = useState(true);
-  const [stops, setStops]               = useState(INITIAL_STOPS);
+  const [stops, setStops]               = useState([]);
   const [approaching, setApproaching]         = useState(false);
   const [deviating, setDeviating]             = useState(false);
   const [deviationDismissed, setDeviationDismissed] = useState(false);
-  const [speed]      = useState(38);
-  const [onBoard]    = useState(18);
-  const [etaMins]    = useState(12);
-  const [distanceKm] = useState(2.1);
+  const [speed]      = useState(0);
+  const [onBoard]    = useState(0);
+  const [etaMins]    = useState(0);
+  const [distanceKm] = useState(0);
   useLocation({ tripId, broadcasting, onLocationUpdate: setLocation });
 
-  // Fetch real route waypoints when a routeId is provided
+  // Fetch real route waypoints and stops when routeId is provided
   useEffect(() => {
     if (!routeId) return;
     getRouteWaypointsApi(routeId)
@@ -79,7 +59,23 @@ const DriverMapScreen = ({ navigation, route }) => {
           );
         }
       })
-      .catch(() => { /* keep MOCK_ROUTE fallback on error */ });
+      .catch(() => {});
+
+    getRouteStopsApi(routeId)
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          setStops(
+            data.map(s => ({
+              id:   s.stop_id,
+              name: s.stop_name,
+              lat:  parseFloat(s.latitude),
+              lng:  parseFloat(s.longitude),
+              done: false,
+            }))
+          );
+        }
+      })
+      .catch(() => {});
   }, [routeId]);
 
   const nextStop  = stops.find(s => !s.done);
@@ -129,6 +125,17 @@ const DriverMapScreen = ({ navigation, route }) => {
 
     return () => pulse.stop();
   }, []);
+
+  if (!location) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.white }]}>
+        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+        <Ionicons name="navigate-circle-outline" size={48} color={COLORS.primary} />
+        <Text style={{ marginTop: 12, fontSize: 15, fontWeight: '600', color: COLORS.textPrimary }}>Acquiring GPS signal…</Text>
+        <Text style={{ marginTop: 4, fontSize: 12, color: COLORS.textMuted }}>Please wait while your location is detected.</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -190,8 +197,8 @@ const DriverMapScreen = ({ navigation, route }) => {
           <Ionicons name="arrow-back" size={20} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <View style={styles.topCenter}>
-          <Text style={styles.topRoute}>{TRIP_INFO.route}</Text>
-          <Text style={styles.topBus}>{TRIP_INFO.busNumber} · {doneStops}/{TRIP_INFO.totalStops} stops</Text>
+          <Text style={styles.topRoute}>{routeName}</Text>
+          <Text style={styles.topBus}>{busNumber}{busNumber ? ' · ' : ''}{doneStops}/{stops.length} stops</Text>
         </View>
         <View style={[styles.etaBadge, { backgroundColor: broadcasting ? COLORS.secondaryLight : COLORS.dangerLight }]}>
           <View style={[styles.etaDot, { backgroundColor: broadcasting ? COLORS.secondary : COLORS.danger }]} />

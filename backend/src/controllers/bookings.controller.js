@@ -50,16 +50,30 @@ export const getBookingById = async (req, res) => {
   }
 };
 
-// DELETE /api/bookings/:id — cancel a booking
+// DELETE /api/bookings/:id — cancel a booking (only if not already cancelled)
 export const cancelBooking = async (req, res) => {
   try {
     const pool = await poolPromise;
-    await pool
-      .request()
+
+    // Check current status first
+    const check = await pool.request()
       .input("id", sql.Int, req.params.id)
-      .query("UPDATE tickets SET status='cancelled' WHERE ticket_id=@id");
+      .query("SELECT status FROM tickets WHERE ticket_id = @id");
+
+    if (!check.recordset[0]) {
+      return res.status(404).json({ error: "Ticket not found" });
+    }
+    if (check.recordset[0].status === "cancelled") {
+      return res.status(409).json({ error: "Ticket is already cancelled and cannot be modified." });
+    }
+
+    await pool.request()
+      .input("id", sql.Int, req.params.id)
+      .query("UPDATE tickets SET status='cancelled' WHERE ticket_id=@id AND status != 'cancelled'");
+
     res.json({ message: "Booking cancelled" });
   } catch (err) {
+    console.error("[cancelBooking]", err.message);
     res.status(500).json({ error: "Failed to cancel booking" });
   }
 };

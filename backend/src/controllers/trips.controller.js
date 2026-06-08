@@ -1,21 +1,28 @@
 import { poolPromise, sql } from "../db/db.js";
 
 export const createTrip = async (req, res) => {
-  const pool = await poolPromise;
-  const { vehicle_id, driver_id, route_id, start_time, status } = req.body;
+  try {
+    const pool = await poolPromise;
+    const { vehicle_id, driver_id, route_id, start_time, status } = req.body;
 
-  await pool
-    .request()
-    .input("vehicle_id", sql.Int, vehicle_id)
-    .input("driver_id", sql.Int, driver_id)
-    .input("route_id", sql.Int, route_id)
-    .input("start_time", sql.DateTime, start_time)
-    .input("status", sql.VarChar, status).query(`
-      INSERT INTO trips(vehicle_id,driver_id,route_id,start_time,status)
-      VALUES(@vehicle_id,@driver_id,@route_id,@start_time,@status)
-    `);
+    const result = await pool
+      .request()
+      .input("vehicle_id", sql.Int,      vehicle_id)
+      .input("driver_id",  sql.Int,      driver_id)
+      .input("route_id",   sql.Int,      route_id)
+      .input("start_time", sql.DateTime, start_time)
+      .input("status",     sql.VarChar,  status || "scheduled")
+      .query(`
+        INSERT INTO trips(vehicle_id,driver_id,route_id,start_time,status)
+        OUTPUT INSERTED.trip_id
+        VALUES(@vehicle_id,@driver_id,@route_id,@start_time,@status)
+      `);
 
-  res.status(201).json({ message: "Trip created" });
+    res.status(201).json({ trip_id: result.recordset[0].trip_id, message: "Trip created" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to create trip" });
+  }
 };
 
 export const getTrips = async (req, res) => {
@@ -52,8 +59,10 @@ export const getTrips = async (req, res) => {
     const { r: dr } = build();
     const dataRes  = await dr.query(`
       SELECT
-        t.trip_id, t.status, t.start_time, t.end_time,
+        t.trip_id, t.route_id, t.driver_id, t.vehicle_id,
+        t.status, t.start_time, t.end_time,
         r.route_name, r.start_location, r.end_location,
+        d.driver_id AS drv_id,
         du.full_name AS driver_name,
         v.plate_number, v.model AS vehicle_model, v.capacity
       ${JOINS}
@@ -82,14 +91,45 @@ export const getTripById = async (req, res) => {
 };
 
 export const updateTripStatus = async (req, res) => {
-  const pool = await poolPromise;
-  await pool
-    .request()
-    .input("id", sql.Int, req.params.id)
-    .input("status", sql.VarChar, req.body.status)
-    .query("UPDATE trips SET status=@status WHERE trip_id=@id");
+  try {
+    const pool = await poolPromise;
+    await pool
+      .request()
+      .input("id",     sql.Int,     req.params.id)
+      .input("status", sql.VarChar, req.body.status)
+      .query("UPDATE trips SET status=@status WHERE trip_id=@id");
+    res.json({ message: "Trip updated" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to update trip status" });
+  }
+};
 
-  res.json({ message: "Trip updated" });
+export const updateTrip = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const { route_id, driver_id, vehicle_id, start_time, status } = req.body;
+    await pool.request()
+      .input("id",         sql.Int,      req.params.id)
+      .input("route_id",   sql.Int,      route_id   ?? null)
+      .input("driver_id",  sql.Int,      driver_id  ?? null)
+      .input("vehicle_id", sql.Int,      vehicle_id ?? null)
+      .input("start_time", sql.DateTime, start_time ?? null)
+      .input("status",     sql.VarChar,  status     ?? null)
+      .query(`
+        UPDATE trips SET
+          route_id   = COALESCE(@route_id,   route_id),
+          driver_id  = COALESCE(@driver_id,  driver_id),
+          vehicle_id = COALESCE(@vehicle_id, vehicle_id),
+          start_time = COALESCE(@start_time, start_time),
+          status     = COALESCE(@status,     status)
+        WHERE trip_id = @id
+      `);
+    res.json({ message: "Trip updated" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to update trip" });
+  }
 };
 
 export const getTripsByVehicleType = async (req, res) => {
@@ -128,6 +168,7 @@ export const getTripConflicts = async (req, res) => {
       WITH enriched AS (
         SELECT
           t.trip_id,
+          t.route_id,
           t.driver_id,
           t.vehicle_id,
           t.status,
@@ -150,6 +191,9 @@ export const getTripConflicts = async (req, res) => {
              THEN ISNULL(a.driver_name,'')
              ELSE ISNULL(a.vehicle_plate,'') END                      AS resource,
         a.trip_id        AS a_id,
+        a.route_id       AS a_route_id,
+        a.driver_id      AS a_driver_id,
+        a.vehicle_id     AS a_vehicle_id,
         a.route_name     AS a_route,
         a.driver_name    AS a_driver,
         a.vehicle_plate  AS a_vehicle,
@@ -157,6 +201,9 @@ export const getTripConflicts = async (req, res) => {
         CONVERT(VARCHAR(5),  a.start_time, 108) AS a_time,
         a.status         AS a_status,
         b.trip_id        AS b_id,
+        b.route_id       AS b_route_id,
+        b.driver_id      AS b_driver_id,
+        b.vehicle_id     AS b_vehicle_id,
         b.route_name     AS b_route,
         b.driver_name    AS b_driver,
         b.vehicle_plate  AS b_vehicle,
@@ -179,22 +226,28 @@ export const getTripConflicts = async (req, res) => {
       type:     row.conflict_type,
       resource: row.resource,
       a: {
-        id:      row.a_id,
-        route:   row.a_route   ?? "",
-        driver:  row.a_driver  ?? "",
-        vehicle: row.a_vehicle ?? "",
-        date:    row.a_date    ?? "",
-        time:    row.a_time    ?? "",
-        status:  row.a_status  ?? "Scheduled",
+        id:         row.a_id,
+        route_id:   row.a_route_id   ?? null,
+        driver_id:  row.a_driver_id  ?? null,
+        vehicle_id: row.a_vehicle_id ?? null,
+        route:      row.a_route      ?? "",
+        driver:     row.a_driver     ?? "",
+        vehicle:    row.a_vehicle    ?? "",
+        date:       row.a_date       ?? "",
+        time:       row.a_time       ?? "",
+        status:     row.a_status     ?? "Scheduled",
       },
       b: {
-        id:      row.b_id,
-        route:   row.b_route   ?? "",
-        driver:  row.b_driver  ?? "",
-        vehicle: row.b_vehicle ?? "",
-        date:    row.b_date    ?? "",
-        time:    row.b_time    ?? "",
-        status:  row.b_status  ?? "Scheduled",
+        id:         row.b_id,
+        route_id:   row.b_route_id   ?? null,
+        driver_id:  row.b_driver_id  ?? null,
+        vehicle_id: row.b_vehicle_id ?? null,
+        route:      row.b_route      ?? "",
+        driver:     row.b_driver     ?? "",
+        vehicle:    row.b_vehicle    ?? "",
+        date:       row.b_date       ?? "",
+        time:       row.b_time       ?? "",
+        status:     row.b_status     ?? "Scheduled",
       },
     }));
 
@@ -356,6 +409,9 @@ export const getTimetableTrips = async (req, res) => {
       .query(`
         SELECT
           t.trip_id                                          AS id,
+          t.route_id,
+          d.driver_id,
+          v.vehicle_id,
           r.route_name                                       AS route,
           du.full_name                                       AS driver,
           v.plate_number                                     AS vehicle,

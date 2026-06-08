@@ -143,6 +143,9 @@ async function _loadFromDb() {
     `);
 
     if (result.recordset.length === 0) {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error("[permissionCache] role_permissions table is empty — seed the DB before starting in production");
+      }
       console.warn("[permissionCache] DB returned 0 rows — using hardcoded fallback");
       cached = HARDCODED_MATRIX;
       return cached;
@@ -164,6 +167,10 @@ async function _loadFromDb() {
     console.log(`[permissionCache] Loaded ${result.recordset.length} permission rows for ${Object.keys(matrix).length} roles`);
     return cached;
   } catch (err) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("[permissionCache] DB load failed in production — refusing to start with hardcoded fallback:", err.message);
+      throw err;
+    }
     console.error("[permissionCache] DB load failed — using hardcoded fallback:", err.message);
     cached = HARDCODED_MATRIX;
     return cached;

@@ -6,15 +6,12 @@ import { Modal } from "../components/Modal";
 import { StatusPill } from "../components/StatusPill";
 import { StatCard } from "../components/StatCard";
 import {
-  getTrips, createTrip, updateTripStatus,
+  getTrips, createTrip, updateTripStatus, updateTrip,
   getTimetableTrips, getRecurringSchedules,
   createRecurringSchedule, updateRecurringSchedule, deleteRecurringSchedule,
   getTripConflicts, getTripDelays, getTripStopArrivals,
 } from "../api/endpoints";
-import {
-  MOCK_TRIPS, MOCK_TIMETABLE_TRIPS, MOCK_RECURRING_SCHEDULES,
-  MOCK_ROUTES, MOCK_DRIVERS, MOCK_VEHICLES,
-} from "../data/mockData";
+import { getRoutes, getDrivers, getVehicles } from "../api/endpoints";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const STATUSES     = ["Scheduled", "Ongoing", "Completed", "Delayed", "Cancelled"];
@@ -45,20 +42,23 @@ const STATUS_COLORS = {
   Cancelled: { bg: "#FEF2F2", color: "#DC2626", border: "#FECACA" },
 };
 
-const TODAY = "2026-05-06";
+const TODAY = new Date().toISOString().slice(0, 10);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function normalizeTrip(t) {
   const dt = t.start_time ? new Date(t.start_time) : null;
   return {
-    id:      t.trip_id ?? t.id,
-    route:   t.route_name ?? t.route ?? "",
-    driver:  t.driver_name ?? t.driver ?? "",
-    vehicle: t.plate_number ?? t.vehicle ?? "",
-    seats:   t.seats ?? `0/${t.capacity ?? 30}`,
-    date:    dt ? dt.toISOString().split("T")[0] : (t.date ?? ""),
-    time:    dt ? dt.toTimeString().slice(0, 5) : (t.time ?? ""),
-    status:  t.status ? t.status.charAt(0).toUpperCase() + t.status.slice(1) : "Scheduled",
+    id:         t.trip_id  ?? t.id,
+    route_id:   t.route_id   ?? null,
+    driver_id:  t.driver_id  ?? t.drv_id ?? null,
+    vehicle_id: t.vehicle_id ?? null,
+    route:      t.route_name   ?? t.route   ?? "",
+    driver:     t.driver_name  ?? t.driver  ?? "",
+    vehicle:    t.plate_number ?? t.vehicle ?? "",
+    seats:      t.seats ?? `0/${t.capacity ?? 30}`,
+    date:       dt ? dt.toISOString().split("T")[0] : (t.date ?? ""),
+    time:       dt ? dt.toTimeString().slice(0, 5)  : (t.time ?? ""),
+    status:     t.status ? t.status.charAt(0).toUpperCase() + t.status.slice(1) : "Scheduled",
   };
 }
 
@@ -130,16 +130,14 @@ function TabNav({ tabs, active, onChange }) {
 }
 
 // ── Create / Edit Trip Modal (with conflict check + recurring) ────────────────
-function TripModal({ trip, allTrips, onClose, onSave }) {
+function TripModal({ trip, allTrips, onClose, onSave, routeOpts = [], driverOpts = [], vehicleOpts = [] }) {
   const isEdit = Boolean(trip);
-  const EMPTY  = { route: "", driver: "", vehicle: "", date: TODAY, time: "", status: "Scheduled", recurrence: "none", days: [] };
+  const EMPTY  = { route: "", route_id: null, driver: "", driver_id: null, vehicle: "", vehicle_id: null, date: new Date().toISOString().split("T")[0], time: "", status: "Scheduled", recurrence: "none", days: [] };
 
-  const [form,       setForm]       = useState(isEdit ? { ...trip, recurrence: "none", days: [] } : EMPTY);
-  const [warnings,   setWarnings]   = useState([]);
-
-  const routeNames   = MOCK_ROUTES.map(r => r.name);
-  const driverNames  = MOCK_DRIVERS.map(d => d.name);
-  const vehiclePlates = [...new Set(MOCK_VEHICLES.filter(v => v.status === "Active").map(v => v.plate))];
+  const [form,     setForm]     = useState(isEdit ? { ...trip, route_id: trip.route_id ?? null, driver_id: trip.driver_id ?? null, vehicle_id: trip.vehicle_id ?? null, recurrence: "none", days: [] } : EMPTY);
+  const [warnings, setWarnings] = useState([]);
+  const [saving,   setSaving]   = useState(false);
+  const [error,    setError]    = useState(null);
 
   const set = k => v => setForm(f => ({ ...f, [k]: v }));
 
@@ -154,23 +152,28 @@ function TripModal({ trip, allTrips, onClose, onSave }) {
     }));
   }
 
-  function handleSave() {
-    if (!form.date || !form.time || !form.route) return;
-    onSave(form);
+  async function handleSave() {
+    setError(null);
+    if (!form.date || !form.time)  { setError("Date and time are required."); return; }
+    if (!form.route_id)            { setError("Please select a route."); return; }
+    if (!form.driver_id)           { setError("Please select a driver."); return; }
+    if (!form.vehicle_id)          { setError("Please select a vehicle."); return; }
+    setSaving(true);
+    const err = await onSave(form);
+    setSaving(false);
+    if (err) { setError(err); return; }
     onClose();
   }
 
-  const field = (label, key, type = "text", placeholder = "") => (
-    <div style={{ marginBottom: 13 }}>
-      <label style={lbl}>{label}</label>
-      <input type={type} placeholder={placeholder} value={form[key]}
-        onChange={e => set(key)(e.target.value)}
-        style={inp} />
-    </div>
-  );
-
   return (
     <Modal title={isEdit ? "Edit Trip" : "Create New Trip"} onClose={onClose} onSave={handleSave}>
+      {/* Error banner */}
+      {error && (
+        <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>
+          {error}
+        </div>
+      )}
+
       {/* Conflict warnings */}
       {warnings.length > 0 && (
         <div style={{ padding: "10px 14px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 9, marginBottom: 14 }}>
@@ -188,28 +191,58 @@ function TripModal({ trip, allTrips, onClose, onSave }) {
 
       {/* Route select */}
       <div style={{ marginBottom: 13 }}>
-        <label style={lbl}>Route</label>
-        <select value={form.route} onChange={e => set("route")(e.target.value)} style={inp}>
+        <label style={lbl}>Route *</label>
+        <select
+          value={form.route_id ?? ""}
+          onChange={e => {
+            const id  = e.target.value ? Number(e.target.value) : null;
+            const obj = routeOpts.find(r => r.route_id === id);
+            setForm(f => ({ ...f, route_id: id, route: obj?.route_name ?? obj?.name ?? "" }));
+          }}
+          style={inp}
+        >
           <option value="">— Select route —</option>
-          {routeNames.map(r => <option key={r}>{r}</option>)}
+          {routeOpts.map(r => (
+            <option key={r.route_id} value={r.route_id}>{r.route_name ?? r.name}</option>
+          ))}
         </select>
       </div>
 
       {/* Driver select */}
       <div style={{ marginBottom: 13 }}>
         <label style={lbl}>Driver</label>
-        <select value={form.driver} onChange={e => set("driver")(e.target.value)} style={inp}>
+        <select
+          value={form.driver_id ?? ""}
+          onChange={e => {
+            const id  = e.target.value ? Number(e.target.value) : null;
+            const obj = driverOpts.find(d => d.driver_id === id);
+            setForm(f => ({ ...f, driver_id: id, driver: obj?.full_name ?? obj?.name ?? "" }));
+          }}
+          style={inp}
+        >
           <option value="">— Select driver —</option>
-          {driverNames.map(d => <option key={d}>{d}</option>)}
+          {driverOpts.map(d => (
+            <option key={d.driver_id} value={d.driver_id}>{d.full_name ?? d.name}</option>
+          ))}
         </select>
       </div>
 
       {/* Vehicle select */}
       <div style={{ marginBottom: 13 }}>
         <label style={lbl}>Vehicle</label>
-        <select value={form.vehicle} onChange={e => set("vehicle")(e.target.value)} style={inp}>
+        <select
+          value={form.vehicle_id ?? ""}
+          onChange={e => {
+            const id  = e.target.value ? Number(e.target.value) : null;
+            const obj = vehicleOpts.find(v => v.vehicle_id === id);
+            setForm(f => ({ ...f, vehicle_id: id, vehicle: obj?.plate_number ?? obj?.plate ?? "" }));
+          }}
+          style={inp}
+        >
           <option value="">— Select vehicle —</option>
-          {vehiclePlates.map(v => <option key={v}>{v}</option>)}
+          {vehicleOpts.map(v => (
+            <option key={v.vehicle_id} value={v.vehicle_id}>{v.plate_number ?? v.plate}</option>
+          ))}
         </select>
       </div>
 
@@ -349,14 +382,26 @@ const SLOTS      = (GRID_END - GRID_START) / 30;  // 34 slots
 const ROW_H      = 54;
 const LABEL_W    = 130;
 
-function TimetableTab({ timetableTrips }) {
-  const [date,       setDate]       = useState(TODAY);
-  const [routeFilter,setRouteFilter]= useState("All");
-  const [tooltip,    setTooltip]    = useState(null);
+function TimetableTab({ routeOpts = [] }) {
+  const [date,        setDate]       = useState(TODAY);
+  const [routeFilter, setRouteFilter]= useState("All");
+  const [tooltip,     setTooltip]    = useState(null);
+  const [trips,       setTrips]      = useState([]);
+  const [loading,     setLoading]    = useState(false);
 
-  const routes = MOCK_ROUTES.map(r => r.name);
+  useEffect(() => {
+    setLoading(true);
+    getTimetableTrips(date)
+      .then(d => setTrips(Array.isArray(d) ? d : []))
+      .catch(() => setTrips([]))
+      .finally(() => setLoading(false));
+  }, [date]);
 
-  const dayTrips = timetableTrips.filter(t => t.date === date &&
+  const routes = routeOpts.length > 0
+    ? routeOpts.map(r => r.route_name ?? r.name)
+    : [...new Set(trips.map(t => t.route).filter(Boolean))];
+
+  const dayTrips = trips.filter(t =>
     (routeFilter === "All" || t.route === routeFilter));
 
   const hours = [];
@@ -404,9 +449,11 @@ function TimetableTab({ timetableTrips }) {
       </div>
 
       <Panel title="Daily Timetable Grid" noPad>
-        {dayTrips.length === 0 ? (
+        {loading ? (
+          <div style={{ padding: "48px 0", textAlign: "center", color: "#94A3B8", fontSize: 13 }}>Loading…</div>
+        ) : dayTrips.length === 0 ? (
           <div style={{ padding: "48px 0", textAlign: "center", color: "#bbb", fontSize: 13 }}>
-            No trips scheduled for this date. Try {TODAY}.
+            No trips scheduled for {date}.
           </div>
         ) : (
           <div style={{ overflowX: "auto", overflowY: "visible" }}>
@@ -429,7 +476,7 @@ function TimetableTab({ timetableTrips }) {
               {/* Route rows */}
               {visibleRoutes.map((route, ri) => {
                 const routeTrips = dayTrips.filter(t => t.route === route);
-                const routeInfo  = MOCK_ROUTES.find(r => r.name === route);
+                const routeInfo  = routeOpts.find(r => (r.route_name ?? r.name) === route);
                 return (
                   <div key={route} style={{
                     display: "flex", alignItems: "center",
@@ -515,9 +562,9 @@ function TimetableTab({ timetableTrips }) {
           minWidth: 180,
         }}>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>{tooltip.t.id} — {tooltip.t.route}</div>
-          <div style={{ color: "#94A3B8", marginBottom: 2 }}>🕐 {tooltip.t.time} ({ROUTE_DURATIONS[tooltip.t.route]} min)</div>
-          <div style={{ color: "#94A3B8", marginBottom: 2 }}>👤 {tooltip.t.driver}</div>
-          <div style={{ color: "#94A3B8", marginBottom: 2 }}>🚌 {tooltip.t.vehicle}</div>
+          <div style={{ color: "#94A3B8", marginBottom: 2 }}>{tooltip.t.time} · {ROUTE_DURATIONS[tooltip.t.route] ?? "—"} min</div>
+          <div style={{ color: "#94A3B8", marginBottom: 2 }}>Driver: {tooltip.t.driver ?? "—"}</div>
+          <div style={{ color: "#94A3B8", marginBottom: 2 }}>Vehicle: {tooltip.t.vehicle ?? "—"}</div>
           <div style={{ marginTop: 6 }}>
             <span style={{
               fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 6,
@@ -532,6 +579,64 @@ function TimetableTab({ timetableTrips }) {
 }
 
 // ── Tab 3: Recurring schedules ────────────────────────────────────────────────
+
+const DAY_INDEX = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 };
+
+function nextOccurrence(r) {
+  const now  = new Date();
+  const todayDow = now.getDay(); // 0=Sun … 6=Sat
+  const todayStr = now.toISOString().slice(0, 10);
+
+  const addDays = (n) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() + n);
+    return d.toISOString().slice(0, 10);
+  };
+
+  const fmt = (iso) => {
+    const d   = new Date(iso + "T00:00:00");
+    const diff = Math.round((d - new Date(todayStr + "T00:00:00")) / 86400000);
+    if (diff === 0) return "Today";
+    if (diff === 1) return "Tomorrow";
+    if (diff < 7)  return d.toLocaleDateString("en-GB", { weekday: "long" });
+    return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+  };
+
+  if (r.recurrence === "daily") {
+    return fmt(addDays(1));
+  }
+  if (r.recurrence === "weekdays") {
+    // Next Mon-Fri
+    for (let i = 1; i <= 7; i++) {
+      const d = new Date(now); d.setDate(d.getDate() + i);
+      if (d.getDay() >= 1 && d.getDay() <= 5) return fmt(d.toISOString().slice(0, 10));
+    }
+  }
+  if (r.recurrence === "weekends") {
+    for (let i = 1; i <= 7; i++) {
+      const d = new Date(now); d.setDate(d.getDate() + i);
+      if (d.getDay() === 0 || d.getDay() === 6) return fmt(d.toISOString().slice(0, 10));
+    }
+  }
+  if (r.recurrence === "custom" && r.days?.length > 0) {
+    const targets = r.days.map(d => DAY_INDEX[d]).filter(x => x !== undefined);
+    for (let i = 1; i <= 7; i++) {
+      const d = new Date(now); d.setDate(d.getDate() + i);
+      if (targets.includes(d.getDay())) return fmt(d.toISOString().slice(0, 10));
+    }
+  }
+  return r.next_run ?? "—";
+}
+
+function recurrenceLabel(r) {
+  if (r.recurrence === "daily")    return "Runs every day";
+  if (r.recurrence === "weekdays") return "Runs Mon – Fri";
+  if (r.recurrence === "weekends") return "Runs Sat & Sun";
+  if (r.recurrence === "custom" && r.days?.length > 0)
+    return `Runs every ${r.days.join(", ")}`;
+  return "Custom schedule";
+}
+
 const RECURRENCE_BADGE = {
   daily:    { label: "Daily",    bg: "#EFF6FF", color: "#2563EB" },
   weekdays: { label: "Weekdays", bg: "#F0FDF4", color: "#059669" },
@@ -539,14 +644,14 @@ const RECURRENCE_BADGE = {
   custom:   { label: "Custom",   bg: "#FFFBEB", color: "#D97706" },
 };
 
-function RecurringTab({ recurring, onAdd, onEdit, onDelete, onToggle }) {
-  const [modal, setModal] = useState(false);
+function RecurringTab({ recurring, onAdd, onEdit, onDelete, onToggle, routeOpts = [], driverOpts = [], vehicleOpts = [] }) {
+  const [modal,   setModal]   = useState(false);
   const [editRec, setEditRec] = useState(null);
-  const [form, setForm] = useState({ route: "", driver: "", vehicle: "", time: "", recurrence: "daily", days: [], status: "Active" });
+  const [form,    setForm]    = useState({ route: "", driver: "", vehicle: "", time: "", recurrence: "daily", days: [], status: "Active" });
 
-  const routeNames    = MOCK_ROUTES.map(r => r.name);
-  const driverNames   = MOCK_DRIVERS.map(d => d.name);
-  const vehiclePlates = MOCK_VEHICLES.filter(v => v.status === "Active").map(v => v.plate);
+  const routeNames    = routeOpts.map(r => r.route_name ?? r.name).filter(Boolean);
+  const driverNames   = driverOpts.map(d => d.full_name ?? d.name).filter(Boolean);
+  const vehiclePlates = vehicleOpts.map(v => v.plate_number ?? v.plate).filter(Boolean);
 
   function openAdd()   { setEditRec(null); setForm({ route: "", driver: "", vehicle: "", time: "", recurrence: "daily", days: [], status: "Active" }); setModal(true); }
   function openEdit(r) { setEditRec(r); setForm({ route: r.route, driver: r.driver, vehicle: r.vehicle, time: r.time, recurrence: r.recurrence, days: r.days ?? [], status: r.status }); setModal(true); }
@@ -570,65 +675,78 @@ function RecurringTab({ recurring, onAdd, onEdit, onDelete, onToggle }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: 13, color: "#64748B" }}>{recurring.length} schedule{recurring.length !== 1 ? "s" : ""} · each runs automatically on its defined days</span>
         <button onClick={openAdd} style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
           + New Recurring Schedule
         </button>
       </div>
 
-      <Panel title={`${recurring.length} recurring schedules`} noPad>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ background: "#FAFAFA", borderBottom: "1px solid #F1F5F9" }}>
-              {["Route", "Driver", "Vehicle", "Departs", "Recurrence", "Days", "Next Run", "Status", "Actions"].map(h => (
-                <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".05em", whiteSpace: "nowrap" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {recurring.map((r, i) => {
-              const rb = RECURRENCE_BADGE[r.recurrence] || RECURRENCE_BADGE.daily;
-              return (
-                <tr key={r.id} style={{ borderBottom: "1px solid #F8FAFC", background: i % 2 === 0 ? "#fff" : "#FAFAFA" }}>
-                  <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 600, color: "#0F172A" }}>{r.route}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 12 }}>{r.driver}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 12, fontFamily: "monospace", color: "#2563EB", fontWeight: 600 }}>{r.vehicle}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 700, color: "#0F172A" }}>{r.time}</td>
-                  <td style={{ padding: "12px 14px" }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: rb.bg, color: rb.color }}>{rb.label}</span>
-                  </td>
-                  <td style={{ padding: "12px 14px" }}>
-                    {r.recurrence === "custom" && r.days?.length > 0
-                      ? <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-                          {r.days.map(d => <span key={d} style={{ fontSize: 9, fontWeight: 700, padding: "2px 5px", borderRadius: 5, background: "#EFF6FF", color: "#2563EB" }}>{d}</span>)}
+      {recurring.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "48px 0", color: "#94A3B8", fontSize: 13 }}>
+          No recurring schedules yet. Create one to auto-generate trips on a repeating pattern.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {recurring.map(r => {
+            const rb      = RECURRENCE_BADGE[r.recurrence] || RECURRENCE_BADGE.daily;
+            const next    = nextOccurrence(r);
+            const label   = recurrenceLabel(r);
+            const active  = r.status === "Active";
+            return (
+              <div key={r.id} style={{ background: "#fff", border: `1px solid ${active ? "#E2E8F0" : "#F1F5F9"}`, borderRadius: 12, padding: "16px 20px", opacity: active ? 1 : 0.6 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
+
+                  {/* Left: time + recurrence badge */}
+                  <div style={{ textAlign: "center", minWidth: 64 }}>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: active ? "#0F172A" : "#94A3B8", lineHeight: 1 }}>{r.time}</div>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 20, background: rb.bg, color: rb.color, marginTop: 4, display: "inline-block" }}>{rb.label}</span>
+                  </div>
+
+                  {/* Middle: route + details + next run */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: "#0F172A", marginBottom: 4 }}>{r.route}</div>
+                    <div style={{ fontSize: 12, color: "#64748B", marginBottom: 6 }}>
+                      {r.driver} · {r.vehicle}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 11, color: "#475569", fontWeight: 500 }}>{label}</span>
+                      {r.recurrence === "custom" && r.days?.length > 0 && (
+                        <div style={{ display: "flex", gap: 3 }}>
+                          {r.days.map(d => (
+                            <span key={d} style={{ fontSize: 9, fontWeight: 700, padding: "2px 5px", borderRadius: 5, background: "#EFF6FF", color: "#2563EB" }}>{d}</span>
+                          ))}
                         </div>
-                      : <span style={{ fontSize: 11, color: "#94A3B8" }}>—</span>
-                    }
-                  </td>
-                  <td style={{ padding: "12px 14px", fontSize: 11, color: "#64748B" }}>{r.next_run}</td>
-                  <td style={{ padding: "12px 14px" }}>
-                    <StatusPill status={r.status === "Active" ? "Active" : "Inactive"} />
-                  </td>
-                  <td style={{ padding: "12px 14px" }}>
+                      )}
+                      <span style={{ fontSize: 11, color: active ? "#059669" : "#94A3B8", fontWeight: 600, background: active ? "#ECFDF5" : "#F8FAFC", padding: "2px 8px", borderRadius: 6 }}>
+                        Next: {active ? next : "Paused"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Right: status + actions */}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
+                    <StatusPill status={active ? "Active" : "Inactive"} />
                     <div style={{ display: "flex", gap: 6 }}>
                       <button onClick={() => openEdit(r)} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 9px", cursor: "pointer" }}>Edit</button>
-                      <button onClick={() => { onToggle(r.id); updateRecurringSchedule(r.id, { status: r.status === "Active" ? "Paused" : "Active" }).catch(() => {}); }}
-                        style={{ fontSize: 11, color: r.status === "Active" ? "#D97706" : "#059669", background: r.status === "Active" ? "#FFFBEB" : "#ECFDF5", border: "none", borderRadius: 6, padding: "4px 9px", cursor: "pointer" }}>
-                        {r.status === "Active" ? "Pause" : "Resume"}
+                      <button
+                        onClick={() => { onToggle(r.id); updateRecurringSchedule(r.id, { status: active ? "Paused" : "Active" }).catch(() => {}); }}
+                        style={{ fontSize: 11, color: active ? "#D97706" : "#059669", background: active ? "#FFFBEB" : "#ECFDF5", border: "none", borderRadius: 6, padding: "4px 9px", cursor: "pointer" }}>
+                        {active ? "Pause" : "Resume"}
                       </button>
-                      <button onClick={() => { onDelete(r.id); deleteRecurringSchedule(r.id).catch(() => {}); }}
-                        style={{ fontSize: 11, color: "#DC2626", background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 9px", cursor: "pointer" }}>Delete</button>
+                      <button
+                        onClick={() => { onDelete(r.id); deleteRecurringSchedule(r.id).catch(() => {}); }}
+                        style={{ fontSize: 11, color: "#DC2626", background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 9px", cursor: "pointer" }}>
+                        Delete
+                      </button>
                     </div>
-                  </td>
-                </tr>
-              );
-            })}
-            {recurring.length === 0 && (
-              <tr><td colSpan={9} style={{ padding: "32px 0", textAlign: "center", color: "#bbb", fontSize: 13 }}>No recurring schedules. Click "+ New Recurring Schedule" to create one.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </Panel>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {modal && (
         <Modal title={editRec ? "Edit Recurring Schedule" : "New Recurring Schedule"} onClose={() => setModal(false)} onSave={handleSave}>
@@ -739,11 +857,9 @@ function ConflictsTab({ conflicts, onResolve }) {
               const bg     = isDriver ? "#FEF2F2" : "#FFFBEB";
               const border = isDriver ? "#FECACA" : "#FDE68A";
               const color  = isDriver ? "#B91C1C" : "#B45309";
-              const icon   = isDriver ? "👤" : "🚌";
               return (
                 <div key={i} style={{ padding: "14px 16px", background: bg, border: `1px solid ${border}`, borderRadius: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                    <span style={{ fontSize: 18 }}>{icon}</span>
                     <div>
                       <span style={{ fontSize: 12, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: color, color: "#fff", marginRight: 8 }}>
                         {isDriver ? "Driver Conflict" : "Vehicle Conflict"}
@@ -757,8 +873,8 @@ function ConflictsTab({ conflicts, onResolve }) {
                       <div key={0} style={{ background: "#fff", borderRadius: 9, padding: "10px 12px", border: "1px solid #F1F5F9" }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: "#2563EB", marginBottom: 3, fontFamily: "monospace" }}>{t.id}</div>
                         <div style={{ fontSize: 12, fontWeight: 600, color: "#0F172A", marginBottom: 2 }}>{t.route}</div>
-                        <div style={{ fontSize: 11, color: "#64748B" }}>🕐 {t.time} ({ROUTE_DURATIONS[t.route] ?? "?"} min)</div>
-                        <div style={{ fontSize: 11, color: "#64748B" }}>👤 {t.driver} · 🚌 {t.vehicle}</div>
+                        <div style={{ fontSize: 11, color: "#64748B" }}>{t.time} · {ROUTE_DURATIONS[t.route] ?? "?"} min</div>
+                        <div style={{ fontSize: 11, color: "#64748B" }}>{t.driver} · {t.vehicle}</div>
                         <div style={{ marginTop: 6 }}><StatusPill status={t.status} /></div>
                       </div>
                     ) : [
@@ -769,8 +885,8 @@ function ConflictsTab({ conflicts, onResolve }) {
                       <div key={1} style={{ background: "#fff", borderRadius: 9, padding: "10px 12px", border: "1px solid #F1F5F9" }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: "#2563EB", marginBottom: 3, fontFamily: "monospace" }}>{t.id}</div>
                         <div style={{ fontSize: 12, fontWeight: 600, color: "#0F172A", marginBottom: 2 }}>{t.route}</div>
-                        <div style={{ fontSize: 11, color: "#64748B" }}>🕐 {t.time} ({ROUTE_DURATIONS[t.route] ?? "?"} min)</div>
-                        <div style={{ fontSize: 11, color: "#64748B" }}>👤 {t.driver} · 🚌 {t.vehicle}</div>
+                        <div style={{ fontSize: 11, color: "#64748B" }}>{t.time} · {ROUTE_DURATIONS[t.route] ?? "?"} min</div>
+                        <div style={{ fontSize: 11, color: "#64748B" }}>{t.driver} · {t.vehicle}</div>
                         <div style={{ marginTop: 6 }}><StatusPill status={t.status} /></div>
                       </div>,
                     ])}
@@ -806,13 +922,6 @@ const DELAY_REASON_COLORS = {
   "Other":              { bg: "#F8FAFC", color: "#64748B", border: "#E2E8F0" },
 };
 
-const MOCK_TRIP_DELAYS = [
-  { delay_id: 1, trip_id: 41, trip_ref: "TRP-041", route: "Route 12A", driver: "Karim Moussa",   vehicle: "BUS-01", reason: "Traffic",            delay_minutes: 15, notes: "Heavy traffic near downtown intersection",          reported_at: "2026-05-15T08:22:00", affected_passengers: 24 },
-  { delay_id: 2, trip_id: 38, trip_ref: "TRP-038", route: "Route 7B",  driver: "Sara Khoury",    vehicle: "BUS-07", reason: "Road Block",          delay_minutes: 30, notes: "Police checkpoint at Jounieh highway",              reported_at: "2026-05-15T09:45:00", affected_passengers: 18 },
-  { delay_id: 3, trip_id: 29, trip_ref: "TRP-029", route: "Route 3C",  driver: "Joe Pharaon",    vehicle: "BUS-09", reason: "Mechanical",          delay_minutes: 45, notes: "Engine warning light — waiting for inspection",     reported_at: "2026-05-15T10:10:00", affected_passengers: 30 },
-  { delay_id: 4, trip_id: 33, trip_ref: "TRP-033", route: "Route 5D",  driver: "Maya Salameh",   vehicle: "BUS-02", reason: "Passenger Incident",  delay_minutes: 10, notes: "Medical situation onboard, waiting for paramedics", reported_at: "2026-05-14T14:30:00", affected_passengers: 11 },
-  { delay_id: 5, trip_id: 45, trip_ref: "TRP-045", route: "Route 9E",  driver: "Lara Abi Nader", vehicle: "BUS-05", reason: "Traffic",             delay_minutes: 20, notes: null,                                               reported_at: "2026-05-14T16:55:00", affected_passengers: 22 },
-];
 
 function DelaysTab({ delays, loading, error, onRetry }) {
   const [reasonFilter, setReasonFilter] = useState("All");
@@ -1005,7 +1114,9 @@ function TripDetailDrawer({ trip, onClose, onEdit }) {
 
           {/* Trip ID + status */}
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 48, height: 48, borderRadius: 12, background: "#EFF6FF", border: "2px solid #BFDBFE", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>🚌</div>
+            <div style={{ width: 48, height: 48, borderRadius: 12, background: "#EFF6FF", border: "2px solid #BFDBFE", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="11" x2="22" y2="11"/><line x1="8" y1="5" x2="8" y2="11"/><line x1="16" y1="5" x2="16" y2="11"/><circle cx="6.5" cy="20" r="1.5"/><circle cx="17.5" cy="20" r="1.5"/></svg>
+            </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 16, fontWeight: 800, color: "#0F172A", fontFamily: "monospace", marginBottom: 4 }}>{trip.id}</div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -1057,7 +1168,7 @@ function TripDetailDrawer({ trip, onClose, onEdit }) {
             <div style={{ padding: "32px 0", textAlign: "center", color: "#94A3B8", fontSize: 13 }}>Loading stop data…</div>
           ) : arrivals.length === 0 ? (
             <div style={{ padding: "32px 0", textAlign: "center" }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>📍</div>
+              <div style={{ fontSize: 28, marginBottom: 8, color: "#CBD5E1" }}>—</div>
               <div style={{ fontSize: 13, color: "#94A3B8", fontWeight: 600 }}>No stop arrival data yet</div>
               <div style={{ fontSize: 11, color: "#CBD5E1", marginTop: 4 }}>Stop arrivals are recorded as the driver marks each stop.</div>
             </div>
@@ -1137,10 +1248,19 @@ export default function TripsPage() {
   const [recurring,       setRecurring]       = useState([]);
   const [serverConflicts, setServerConflicts] = useState(null); // null = not yet loaded
   const [tripModal,       setTripModal]       = useState(null); // null = closed, false = new, trip obj = edit
+  const [routeOpts,       setRouteOpts]       = useState([]);
+  const [driverOpts,      setDriverOpts]      = useState([]);
+  const [vehicleOpts,     setVehicleOpts]     = useState([]);
   const [delays,          setDelays]          = useState([]);
   const [delaysLoading,   setDelaysLoading]   = useState(true);
   const [delaysError,     setDelaysError]     = useState(null);
   const [detailTrip,      setDetailTrip]      = useState(null);
+
+  const loadConflicts = useCallback(() => {
+    getTripConflicts()
+      .then(d => setServerConflicts(Array.isArray(d) ? d : null))
+      .catch(() => setServerConflicts(null));
+  }, []);
 
   const loadTrips = useCallback(() => {
     setTripsLoading(true);
@@ -1151,8 +1271,8 @@ export default function TripsPage() {
         setTrips((rows || []).map(normalizeTrip));
       })
       .catch(err => {
-        setTrips(MOCK_TRIPS);
-        setTripsError(err?.message ?? "Could not reach server — showing demo data");
+        setTrips([]);
+        setTripsError(err?.message ?? "Could not reach server");
       })
       .finally(() => setTripsLoading(false));
   }, []);
@@ -1160,23 +1280,29 @@ export default function TripsPage() {
   useEffect(() => {
     loadTrips();
 
+    getRoutes().then(d => setRouteOpts(Array.isArray(d) ? d : [])).catch(() => {});
+    getDrivers().then(d => setDriverOpts(Array.isArray(d?.data ?? d) ? (d?.data ?? d) : [])).catch(() => {});
+    getVehicles().then(d => setVehicleOpts(Array.isArray(d?.data ?? d) ? (d?.data ?? d) : [])).catch(() => {});
+
     getTimetableTrips(TODAY)
-      .then(d => setTimetableTrips((d || []).length ? d : MOCK_TIMETABLE_TRIPS))
-      .catch(() => setTimetableTrips(MOCK_TIMETABLE_TRIPS));
+      .then(d => setTimetableTrips(Array.isArray(d) ? d : []))
+      .catch(() => setTimetableTrips([]));
 
     getRecurringSchedules()
-      .then(d => setRecurring((d || []).length ? d : MOCK_RECURRING_SCHEDULES))
-      .catch(() => setRecurring(MOCK_RECURRING_SCHEDULES));
+      .then(d => setRecurring(Array.isArray(d) ? d : []))
+      .catch(() => setRecurring([]));
 
-    getTripConflicts()
-      .then(d => setServerConflicts(Array.isArray(d) ? d : null))
-      .catch(() => setServerConflicts(null));
+    loadConflicts();
 
     getTripDelays()
-      .then(d => setDelays(Array.isArray(d) ? d : MOCK_TRIP_DELAYS))
-      .catch(() => setDelays(MOCK_TRIP_DELAYS))
+      .then(d => setDelays(Array.isArray(d) ? d : []))
+      .catch(() => setDelays([]))
       .finally(() => setDelaysLoading(false));
-  }, []);
+
+    // Auto-refresh trip status every 30s so driver start/complete updates appear
+    const statusPoll = setInterval(loadTrips, 30000);
+    return () => clearInterval(statusPoll);
+  }, [loadTrips]);
 
   // All trips for conflict checking (list + timetable for today)
   const allTrips = useMemo(() => {
@@ -1197,29 +1323,51 @@ export default function TripsPage() {
     completed: trips.filter(t => t.status === "Completed").length,
   };
 
-  function handleSaveTrip(form) {
+  async function handleSaveTrip(form) {
     const isEdit = tripModal && tripModal !== false;
     if (isEdit) {
-      updateTripStatus(tripModal.id, form.status.toLowerCase()).catch(() => {});
-      setTrips(prev => prev.map(t => t.id === tripModal.id ? { ...t, ...form } : t));
-      setTimetableTrips(prev => prev.map(t => t.id === tripModal.id ? { ...t, ...form } : t));
+      try {
+        await updateTrip(tripModal.id, {
+          route_id:   form.route_id   ?? null,
+          driver_id:  form.driver_id  ?? null,
+          vehicle_id: form.vehicle_id ?? null,
+          start_time: `${form.date}T${form.time}:00`,
+          status:     form.status.toLowerCase(),
+        });
+        loadTrips();
+        loadConflicts(); // refresh so resolved conflicts disappear
+        return null;
+      } catch (err) {
+        return err?.message ?? "Failed to update trip.";
+      }
     } else {
-      createTrip({ start_time: `${form.date}T${form.time}:00`, status: form.status.toLowerCase() }).catch(() => {});
-      const newTrip = { id: `TRP-${String(Date.now()).slice(-4)}`, ...form, seats: "0/30" };
-      setTrips(prev => [newTrip, ...prev]);
-      if (form.date === TODAY) setTimetableTrips(prev => [newTrip, ...prev]);
-      // Create recurring schedule if needed
-      if (form.recurrence !== "none") {
-        const nr = { id: Date.now(), route: form.route, driver: form.driver, vehicle: form.vehicle, time: form.time, recurrence: form.recurrence, days: form.days, status: "Active", active_from: form.date, next_run: form.date };
-        setRecurring(prev => [nr, ...prev]);
-        createRecurringSchedule(nr).catch(() => {});
+      try {
+        await createTrip({
+          route_id:   form.route_id   ?? null,
+          driver_id:  form.driver_id  ?? null,
+          vehicle_id: form.vehicle_id ?? null,
+          start_time: `${form.date}T${form.time}:00`,
+          status:     form.status.toLowerCase(),
+        });
+        loadTrips();
+        if (form.recurrence !== "none") {
+          const nr = { id: Date.now(), route: form.route, driver: form.driver, vehicle: form.vehicle, time: form.time, recurrence: form.recurrence, days: form.days, status: "Active", active_from: form.date, next_run: form.date };
+          setRecurring(prev => [nr, ...prev]);
+          createRecurringSchedule(nr).catch(() => {});
+        }
+        return null;
+      } catch (err) {
+        return err?.message ?? "Failed to create trip.";
       }
     }
   }
 
-  function handleResolve(trip) {
-    setTripModal(trip);
-    setTab("trips");
+  function handleResolve(conflictTrip) {
+    // Server conflicts now include route_id/driver_id/vehicle_id directly.
+    // For client-side conflicts (timetableTrips), look up the normalized trip first.
+    const fromList = allTrips.find(t => Number(t.id) === Number(conflictTrip.id));
+    setTripModal(fromList ?? conflictTrip);
+    // Modal renders at the top level — no tab switch needed
   }
 
   const tabs = [
@@ -1267,7 +1415,7 @@ export default function TripsPage() {
           ? <PageError message={tripsError} onRetry={loadTrips} />
           : <TripsListTab trips={trips} allTrips={allTrips} onAdd={() => setTripModal(false)} onEdit={t => setTripModal(t)} onDetail={t => setDetailTrip(t)} />
       )}
-      {tab === "timetable" && <TimetableTab  timetableTrips={timetableTrips} />}
+      {tab === "timetable" && <TimetableTab routeOpts={routeOpts} />}
       {tab === "recurring" && (
         <RecurringTab
           recurring={recurring}
@@ -1275,6 +1423,9 @@ export default function TripsPage() {
           onEdit={r  => setRecurring(prev => prev.map(p => p.id === r.id ? r : p))}
           onDelete={id => setRecurring(prev => prev.filter(r => r.id !== id))}
           onToggle={id => setRecurring(prev => prev.map(r => r.id === id ? { ...r, status: r.status === "Active" ? "Paused" : "Active" } : r))}
+          routeOpts={routeOpts}
+          driverOpts={driverOpts}
+          vehicleOpts={vehicleOpts}
         />
       )}
       {tab === "conflicts" && <ConflictsTab conflicts={conflicts} onResolve={handleResolve} />}
@@ -1287,7 +1438,7 @@ export default function TripsPage() {
             setDelaysLoading(true);
             setDelaysError(null);
             getTripDelays()
-              .then(d => setDelays(Array.isArray(d) ? d : MOCK_TRIP_DELAYS))
+              .then(d => setDelays(Array.isArray(d) ? d : []))
               .catch(err => setDelaysError(err?.message ?? "Could not load delay reports"))
               .finally(() => setDelaysLoading(false));
           }}
@@ -1310,6 +1461,9 @@ export default function TripsPage() {
           allTrips={allTrips}
           onClose={() => setTripModal(null)}
           onSave={handleSaveTrip}
+          routeOpts={routeOpts}
+          driverOpts={driverOpts}
+          vehicleOpts={vehicleOpts}
         />
       )}
     </div>

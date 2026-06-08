@@ -22,10 +22,18 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yallatransit.app"
+      "bundleIdentifier": "com.yallatransit.app",
+      "config": {
+        "googleMapsApiKey": "AIzaSyBDjPl-hMJ3n354sSDwpL6UqmbVb_OPj-U"
+      }
     },
     "android": {
       "package": "com.yallatransit.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBDjPl-hMJ3n354sSDwpL6UqmbVb_OPj-U"
+        }
+      },
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -37,14 +45,28 @@
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            { "scheme": "yallatransit" }
+            {
+              "scheme": "yallatransit"
+            }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
+      ],
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b3fb1f56-c476-4738-8a57-b567b6444c3f"
+      }
     }
   }
 }

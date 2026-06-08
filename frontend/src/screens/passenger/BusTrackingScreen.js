@@ -7,11 +7,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Notifications from 'expo-notifications';
 import { Ionicons } from '@expo/vector-icons';
-import { useApp } from '../../context/AppContext';
+// AppContext import removed — passenger tracking uses backend GPS directly
 import { getTripEtaPredictions } from '../../api/etaApi';
 import { fetchBusGps } from '../../api/apiClient';
 import { useGpsWebSocket } from '../../hooks/useGpsWebSocket';
 import { COLORS } from '../../constants/colors';
+import apiClient from '../../api/apiClient';
 
 const CAMERA_SERVER = 'http://localhost:9000';
 const SEAT_POLL_MS  = 5_000;
@@ -24,26 +25,7 @@ function capacityFromBusId(busId = '') {
   return 40;
 }
 
-const ROUTE_WAYPOINTS = [
-  { latitude: 33.8880, longitude: 35.4950 },
-  { latitude: 33.8910, longitude: 35.4990 },
-  { latitude: 33.8938, longitude: 35.5018 },
-  { latitude: 33.8970, longitude: 35.5080 },
-  { latitude: 33.9010, longitude: 35.5150 },
-  { latitude: 33.9050, longitude: 35.5220 },
-];
-
-// Mock stops used when ETA API is unavailable (frontend-only mode)
-const MOCK_STOPS_ETA = [
-  { stop_id: 'ms1', stop_name: 'Hamra Circle',    eta_min: 8,  eta_time: '—' },
-  { stop_id: 'ms2', stop_name: 'Verdun Square',   eta_min: 14, eta_time: '—' },
-  { stop_id: 'ms3', stop_name: 'Sassine Square',  eta_min: 21, eta_time: '—' },
-];
-
-const MOCK_DRIVER = {
-  name: 'Ahmad Al-Hassan', rating: 4.8, trips: 1243,
-  initials: 'AH', vehicle: 'Express 101 · White Bus', phone: '+961 70 000 000',
-};
+const EMPTY_STOPS = [];
 
 const ETA_POLL_MS = 30_000;
 const GPS_POLL_MS = 3_000;
@@ -92,8 +74,8 @@ const deriveConfidence = (isLive, timeSinceUpdate, hasEtaData) => {
 // ── Component ─────────────────────────────────────────────────────────────────
 const BusTrackingScreen = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
-  const { busId = 'bus1', busName = 'Express 101', tripId } = route.params || {};
-  const { getBusLocation } = useApp();
+  const { tripId, busName = 'Bus' } = route.params || {};
+  const vehicleId = String(tripId ?? '');
   const mapRef      = useRef(null);
   const pulseAnim   = useRef(new Animated.Value(1)).current;
   const panelSlide  = useRef(new Animated.Value(0)).current;
@@ -107,32 +89,50 @@ const BusTrackingScreen = ({ route, navigation }) => {
     isLive:      wsIsLive,
     isConnected: wsConnected,
     lastUpdated: wsLastUpdated,
-  } = useGpsWebSocket(busId, getBusLocation?.(busId) || { latitude: 33.8938, longitude: 35.5018 });
+  } = useGpsWebSocket(vehicleId, { latitude: 33.8938, longitude: 35.5018 });
 
-  const [busLocation, setBusLocation]   = useState(
-    getBusLocation?.(busId) || { latitude: 33.8938, longitude: 35.5018 }
-  );
+  const [busLocation, setBusLocation]   = useState({ latitude: 33.8938, longitude: 35.5018 });
   const [isLive, setIsLive]             = useState(false);
   const [lastUpdated, setLastUpdated]   = useState(null);
   const [etaData, setEtaData]           = useState(null);
   const [etaLoading, setEtaLoading]     = useState(false);
+  const [driverInfo, setDriverInfo]     = useState(null);
 
-  // Mock ETA offset — decrements 1 min every 30 s so demo alert fires
-  const [mockOffset, setMockOffset]     = useState(0);
-
-  // Seat availability
-  const capacity = capacityFromBusId(busId);
-  const [seatInfo, setSeatInfo]         = useState({ capacity, occupied: 0, available: capacity });
+  // Seat availability (capacity updated when driver info loads)
+  const [capacity, setCapacity]         = useState(40);
+  const [seatInfo, setSeatInfo]         = useState({ capacity: 40, occupied: 0, available: 40 });
   const seatInterval                    = useRef(null);
 
-  // ── Derived stop list (real or mock) ──────────────────────────────────────
+  // Load driver info and real capacity for the trip
+  useEffect(() => {
+    if (!tripId) return;
+    apiClient.get(`/buses/${tripId}`).then(r => {
+      const d = r.data;
+      if (!d) return;
+      if (d.driver_name) {
+        const initials = d.driver_name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+        setDriverInfo({
+          name:     d.driver_name,
+          initials,
+          vehicle:  `${d.name ?? ''} · ${d.plate_number ?? ''}`.trim().replace(/^·\s*/, ''),
+          rating:   parseFloat(d.driver_rating ?? 0).toFixed(1),
+          trips:    d.driver_trips ?? 0,
+          phone:    d.driver_phone ?? null,
+        });
+      }
+      if (d.totalSeats) {
+        const cap = parseInt(d.totalSeats, 10);
+        setCapacity(cap);
+        setSeatInfo(s => ({ ...s, capacity: cap, available: Math.max(0, cap - s.occupied) }));
+      }
+    }).catch(() => {});
+  }, [tripId]);
+
+  // ── Derived stop list (real or empty) ────────────────────────────────────
   const stopsList = useMemo(() => {
     if (etaData?.stops?.length > 0) return etaData.stops;
-    return MOCK_STOPS_ETA.map((s) => ({
-      ...s,
-      eta_min: Math.max(0, s.eta_min - mockOffset),
-    }));
-  }, [etaData, mockOffset]);
+    return EMPTY_STOPS;
+  }, [etaData]);
 
   const nextStop   = stopsList[0];
   const etaDisplay = nextStop
@@ -173,14 +173,14 @@ const BusTrackingScreen = ({ route, navigation }) => {
 
   const fetchSeatInfo = useCallback(async () => {
     try {
-      const res = await fetch(`${CAMERA_SERVER}/api/counter/${busId}`, { signal: AbortSignal.timeout(2000) });
+      const res = await fetch(`${CAMERA_SERVER}/api/counter/${vehicleId}`, { signal: AbortSignal.timeout(2000) });
       if (res.ok) {
         const data    = await res.json();
         const occupied = data.on_bus ?? 0;
-        setSeatInfo({ capacity, occupied, available: Math.max(0, capacity - occupied) });
+        setSeatInfo(s => ({ ...s, occupied, available: Math.max(0, s.capacity - occupied) }));
       }
     } catch { /* camera server may be offline */ }
-  }, [busId, capacity]);
+  }, [vehicleId]);
 
   const fetchEta = useCallback(async () => {
     if (!tripId) return;
@@ -225,15 +225,11 @@ const BusTrackingScreen = ({ route, navigation }) => {
     fetchSeatInfo();
     seatInterval.current = setInterval(fetchSeatInfo, SEAT_POLL_MS);
 
-    // Mock ETA countdown (decreases by 1 min every 30 s for demo)
-    const mockTimer = setInterval(() => setMockOffset((o) => o + 1), 30_000);
-
     return () => {
       clearInterval(etaInterval.current);
       clearInterval(seatInterval.current);
-      clearInterval(mockTimer);
     };
-  }, [busId, fetchEta]);
+  }, [tripId, fetchEta]);
 
   const centerOnBus = () => {
     mapRef.current?.animateToRegion(
@@ -255,7 +251,6 @@ const BusTrackingScreen = ({ route, navigation }) => {
         provider={PROVIDER_GOOGLE}
         initialRegion={{ ...busLocation, latitudeDelta: 0.05, longitudeDelta: 0.05 }}
       >
-        <Polyline coordinates={ROUTE_WAYPOINTS} strokeColor={COLORS.primary} strokeWidth={4} lineDashPattern={[1]} />
         <Marker coordinate={busLocation} title={busName} anchor={{ x: 0.5, y: 0.5 }}>
           <View style={styles.busMarkerWrap}>
             <Animated.View style={[styles.busPulse, { transform: [{ scale: pulseAnim }] }]} />
@@ -264,10 +259,10 @@ const BusTrackingScreen = ({ route, navigation }) => {
             </View>
           </View>
         </Marker>
-        {stopsList.map((stop, i) => (
+        {stopsList.map((stop, i) => stop.latitude && stop.longitude ? (
           <Marker
             key={`stop-${stop.stop_id ?? i}`}
-            coordinate={ROUTE_WAYPOINTS[Math.min(i + 1, ROUTE_WAYPOINTS.length - 1)]}
+            coordinate={{ latitude: parseFloat(stop.latitude), longitude: parseFloat(stop.longitude) }}
             title={stop.stop_name}
             anchor={{ x: 0.5, y: 0.5 }}
           >
@@ -275,7 +270,7 @@ const BusTrackingScreen = ({ route, navigation }) => {
               <View style={[styles.stopDot, i === 0 && styles.stopDotNext]} />
             </View>
           </Marker>
-        ))}
+        ) : null)}
       </MapView>
 
       {/* Top bar */}
@@ -427,23 +422,25 @@ const BusTrackingScreen = ({ route, navigation }) => {
         )}
 
         {/* Driver Card */}
-        <View style={styles.driverCard}>
-          <View style={styles.driverAvatar}>
-            <Text style={styles.driverAvatarText}>{MOCK_DRIVER.initials}</Text>
-          </View>
-          <View style={styles.driverInfo}>
-            <Text style={styles.driverName}>{MOCK_DRIVER.name}</Text>
-            <Text style={styles.driverVehicle}>{MOCK_DRIVER.vehicle}</Text>
-            <View style={styles.driverRatingRow}>
-              <Ionicons name="star" size={13} color={COLORS.warning} />
-              <Text style={styles.driverRating}>{MOCK_DRIVER.rating}</Text>
-              <Text style={styles.driverTrips}>· {MOCK_DRIVER.trips} trips</Text>
+        {driverInfo && (
+          <View style={styles.driverCard}>
+            <View style={styles.driverAvatar}>
+              <Text style={styles.driverAvatarText}>{driverInfo.initials}</Text>
             </View>
+            <View style={styles.driverInfo}>
+              <Text style={styles.driverName}>{driverInfo.name}</Text>
+              <Text style={styles.driverVehicle}>{driverInfo.vehicle}</Text>
+              <View style={styles.driverRatingRow}>
+                <Ionicons name="star" size={13} color={COLORS.warning} />
+                <Text style={styles.driverRating}>{driverInfo.rating}</Text>
+                <Text style={styles.driverTrips}>· {driverInfo.trips} trips</Text>
+              </View>
+            </View>
+            <TouchableOpacity style={styles.callBtn}>
+              <Ionicons name="call" size={18} color={COLORS.white} />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.callBtn}>
-            <Ionicons name="call" size={18} color={COLORS.white} />
-          </TouchableOpacity>
-        </View>
+        )}
 
         <TouchableOpacity style={styles.emergencyBtn} activeOpacity={0.85}>
           <Ionicons name="warning-outline" size={18} color={COLORS.danger} />

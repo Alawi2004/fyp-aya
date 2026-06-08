@@ -14,32 +14,12 @@ import EmptyState from '../../components/common/EmptyState';
 import { getBusesApi } from '../../api/busApi';
 import { COLORS } from '../../constants/colors';
 
-const ALL_VEHICLES = [
-  // ── Bus ──────────────────────────────────────────────────────────────────
-  { _id: '1',  type: 'bus',     name: 'Express 101',   route: 'Route A', origin: 'Central Station',  destination: 'Airport',          departureTime: '08:00 AM', arrivalTime: '09:30 AM', duration: '1h 30m', price: '4.50', totalSeats: 40, bookedSeats: 32, status: 'active'   },
-  { _id: '2',  type: 'bus',     name: 'City Line 5',   route: 'Route B', origin: 'Mall Junction',    destination: 'University',       departureTime: '09:15 AM', arrivalTime: '10:00 AM', duration: '45m',    price: '2.00', totalSeats: 30, bookedSeats: 10, status: 'boarding' },
-  { _id: '3',  type: 'bus',     name: 'Night Owl',     route: 'Route C', origin: 'Downtown',         destination: 'Suburbs',          departureTime: '10:30 AM', arrivalTime: '11:45 AM', duration: '1h 15m', price: '3.00', totalSeats: 35, bookedSeats: 35, status: 'delayed'  },
-  { _id: '4',  type: 'bus',     name: 'Metro Bus 7',   route: 'Route D', origin: 'Hospital',         destination: 'Market',           departureTime: '11:00 AM', arrivalTime: '11:30 AM', duration: '30m',    price: '1.50', totalSeats: 40, bookedSeats: 20, status: 'active'   },
-  // ── Van ───────────────────────────────────────────────────────────────────
-  { _id: '5',  type: 'van',     name: 'QuickVan A1',   route: 'Route E', origin: 'Tech Park',        destination: 'City Center',      departureTime: '07:30 AM', arrivalTime: '08:10 AM', duration: '40m',    price: '3.50', totalSeats: 12, bookedSeats: 7,  status: 'active'   },
-  { _id: '6',  type: 'van',     name: 'MaxiVan B2',    route: 'Route F', origin: 'Riverside Plaza',  destination: 'Sports Complex',   departureTime: '09:00 AM', arrivalTime: '09:35 AM', duration: '35m',    price: '3.00', totalSeats: 12, bookedSeats: 4,  status: 'boarding' },
-  { _id: '7',  type: 'van',     name: 'Hiace VIP',     route: 'Route G', origin: 'Uptown Gate',      destination: 'Business District', departureTime: '08:45 AM', arrivalTime: '09:20 AM', duration: '35m',   price: '4.00', totalSeats: 10, bookedSeats: 9,  status: 'active'   },
-  // ── Taxi ──────────────────────────────────────────────────────────────────
-  { _id: '8',  type: 'taxi',    name: 'GrabCab 001',   route: 'On Demand', origin: 'Your Location', destination: 'Anywhere',          departureTime: 'On Call',  arrivalTime: 'Variable',  duration: 'Varies', price: '6.00', totalSeats: 4,  bookedSeats: 0,  status: 'active'   },
-  { _id: '9',  type: 'taxi',    name: 'BlueTaxi X2',   route: 'On Demand', origin: 'City Depot',    destination: 'Airport Terminal', departureTime: 'On Call',  arrivalTime: 'Variable',  duration: 'Varies', price: '8.50', totalSeats: 4,  bookedSeats: 0,  status: 'active'   },
-  { _id: '10', type: 'taxi',    name: 'AirportRide 3', route: 'Route H', origin: 'City Hub',         destination: 'Int\' Airport',    departureTime: '06:00 AM', arrivalTime: '07:15 AM', duration: '1h 15m', price: '12.00', totalSeats: 4, bookedSeats: 2,  status: 'boarding' },
-  // ── Shuttle ───────────────────────────────────────────────────────────────
-  { _id: '11', type: 'shuttle', name: 'Campus Shuttle', route: 'Route I', origin: 'Main Gate',       destination: 'Cafeteria Block',  departureTime: '07:00 AM', arrivalTime: '07:20 AM', duration: '20m',    price: '1.00', totalSeats: 20, bookedSeats: 15, status: 'active'   },
-  { _id: '12', type: 'shuttle', name: 'Airport Shuttle', route: 'Route J', origin: 'Hotel Row',      destination: 'Departure Hall',   departureTime: '05:30 AM', arrivalTime: '06:15 AM', duration: '45m',    price: '5.00', totalSeats: 18, bookedSeats: 10, status: 'active'   },
-  { _id: '13', type: 'shuttle', name: 'Mall Hopper',   route: 'Route K', origin: 'North Terminal',   destination: 'Grand Mall',       departureTime: '10:00 AM', arrivalTime: '10:25 AM', duration: '25m',    price: '2.50', totalSeats: 16, bookedSeats: 3,  status: 'boarding' },
-];
-
 const VEHICLE_TYPES = [
-  { key: 'all',     label: 'All',     icon: 'apps-outline'       },
-  { key: 'bus',     label: 'Bus',     icon: 'bus-outline'        },
-  { key: 'van',     label: 'Van',     icon: 'car-outline'        },
-  { key: 'taxi',    label: 'Taxi',    icon: 'car-sport-outline'  },
-  { key: 'shuttle', label: 'Shuttle', icon: 'train-outline'      },
+  { key: 'all',    label: 'All',    icon: 'apps-outline'      },
+  { key: 'bus',    label: 'Bus',    icon: 'bus-outline'       },
+  { key: 'van',    label: 'Van',    icon: 'car-outline'       },
+  { key: 'taxi',   label: 'Taxi',   icon: 'car-sport-outline' },
+  { key: 'tuktuk', label: 'Tuktuk', icon: 'bicycle-outline'   },
 ];
 
 const STATUS_FILTERS = ['All', 'Active', 'Boarding', 'Delayed'];
@@ -110,9 +90,9 @@ const HomeScreen = ({ navigation }) => {
   const loadBuses = async () => {
     try {
       const res = await getBusesApi();
-      setBuses(res.data.buses || ALL_VEHICLES);
+      setBuses(res.data.buses ?? []);
     } catch {
-      setBuses(ALL_VEHICLES);
+      setBuses([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -128,7 +108,7 @@ const HomeScreen = ({ navigation }) => {
         <TouchableOpacity
           style={styles.activeRideCard}
           onPress={() => navigation.navigate('BusTracking', {
-            busId: activeBooking.bus?._id || 'bus1',
+            tripId: activeBooking.bus?._id,
             busName: activeBooking.bus?.name,
           })}
           activeOpacity={0.9}
@@ -268,6 +248,22 @@ const HomeScreen = ({ navigation }) => {
             </View>
           </TouchableOpacity>
         </View>
+
+        {/* Reserve Taxi banner */}
+        <TouchableOpacity
+          style={styles.taxiCard}
+          onPress={() => navigation.navigate('TaxiReservation')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.taxiIconWrap}>
+            <Ionicons name="car-sport" size={22} color={COLORS.warning} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.taxiTitle}>Reserve a Taxi</Text>
+            <Text style={styles.taxiSub}>Book now or schedule for later · set recurring rides</Text>
+          </View>
+          <Ionicons name="arrow-forward" size={16} color={COLORS.warning} />
+        </TouchableOpacity>
 
         {/* Vehicle type pills */}
         <ScrollView
@@ -414,15 +410,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.white,
-    borderRadius: 16,
+    borderRadius: 18,
     paddingHorizontal: 14,
-    height: 48,
+    height: 50,
     marginHorizontal: 20,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
+    shadowColor: '#1E293B',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.10,
+    shadowRadius: 12,
     elevation: 4,
   },
   searchInput: {
@@ -444,21 +440,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     backgroundColor: COLORS.white,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
     borderWidth: 1.5,
-    borderColor: COLORS.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    borderColor: COLORS.borderLight,
+    shadowColor: '#94A3B8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 2,
   },
   quickActionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -470,6 +466,46 @@ const styles = StyleSheet.create({
     marginBottom: 1,
   },
   quickActionSub: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontWeight: '500',
+  },
+
+  /* Reserve Taxi banner */
+  taxiCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: COLORS.white,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginHorizontal: 20,
+    marginBottom: 10,
+    borderWidth: 1.5,
+    borderColor: COLORS.warningMid ?? '#FCD34D',
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.10,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  taxiIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: COLORS.warningLight ?? '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  taxiTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.warning ?? '#D97706',
+    marginBottom: 1,
+  },
+  taxiSub: {
     fontSize: 11,
     color: COLORS.textMuted,
     fontWeight: '500',
@@ -599,37 +635,42 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     backgroundColor: COLORS.white,
-    borderRadius: 16, padding: 14,
+    borderRadius: 20,
+    padding: 16,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    elevation: 3,
   },
   statIcon: {
-    width: 40, height: 40, borderRadius: 12,
+    width: 44, height: 44, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   statValue: {
-    fontSize: 16, fontWeight: '800', color: COLORS.textPrimary, marginBottom: 2,
+    fontSize: 17, fontWeight: '800', color: COLORS.textPrimary, marginBottom: 2,
+    letterSpacing: -0.3,
   },
   statLabel: {
-    fontSize: 11, color: COLORS.textMuted, fontWeight: '500',
+    fontSize: 11, color: COLORS.textMuted, fontWeight: '600',
   },
 
   /* Section heading */
   sectionRow: {
     flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', marginBottom: 12,
+    justifyContent: 'space-between', marginBottom: 14,
   },
   sectionTitle: {
     fontSize: 17, fontWeight: '800',
-    color: COLORS.textPrimary, letterSpacing: -0.2,
+    color: COLORS.textPrimary, letterSpacing: -0.3,
   },
   sectionCount: {
-    fontSize: 13, color: COLORS.textMuted, fontWeight: '500',
+    fontSize: 12, color: COLORS.textMuted, fontWeight: '600',
+    backgroundColor: COLORS.background,
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: 999,
   },
 });
 

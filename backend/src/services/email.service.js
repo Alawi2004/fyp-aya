@@ -11,15 +11,16 @@ function getTransporter() {
   if (_transporter && key === _transporterKey) return _transporter;
 
   _transporter = nodemailer.createTransport({
-    host:   process.env.SMTP_HOST,
-    port:   Number(process.env.SMTP_PORT) || 587,
-    secure: process.env.SMTP_SECURE === "true",
+    host:              process.env.SMTP_HOST,
+    port:              Number(process.env.SMTP_PORT) || 587,
+    secure:            process.env.SMTP_SECURE === "true",
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
-    // Keeps the TCP connection open across multiple sends (important for Mailgun/SES).
-    pool: true,
+    connectionTimeout: 10000, // 10 s — fail fast instead of hanging for 2 min
+    greetingTimeout:   10000,
+    socketTimeout:     15000,
     // Accept self-signed certs in dev; in production TLS is verified by default.
     tls: { rejectUnauthorized: process.env.NODE_ENV === "production" },
   });
@@ -36,41 +37,16 @@ const REPORT_LABELS = {
   "revenue":              "Revenue Summary Report",
 };
 
-function buildReportHtml(reportType, reportName) {
-  const date    = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
-  const label   = REPORT_LABELS[reportType] || reportName;
-  const sampleRows = {
-    "driver-performance": [
-      ["1", "Karim Moussa",   "45", "94%", "0", "4.9", "97"],
-      ["2", "Maya Salameh",   "28", "96%", "0", "4.7", "95"],
-      ["3", "Fadi Gemayel",   "42", "91%", "1", "4.8", "92"],
-      ["4", "Lara Abi Nader", "38", "88%", "1", "4.5", "88"],
-    ],
-    "vehicle-utilization": [
-      ["BUS-06", "Articulated", "11.0h", "1.0h",  "18", "460 km", "92%"],
-      ["BUS-03", "Articulated", "10.5h", "1.5h",  "16", "410 km", "88%"],
-      ["BUS-01", "Standard",    "9.5h",  "2.5h",  "14", "320 km", "79%"],
-      ["BUS-08", "Standard",    "8.5h",  "3.5h",  "12", "290 km", "71%"],
-    ],
-    "revenue": [
-      ["Route 12A", "City Center → Airport",   "42", "$3,360", "88%"],
-      ["Route 7B",  "University → Downtown",   "38", "$2,660", "75%"],
-      ["Route 3C",  "North Terminal → Mall",   "31", "$2,170", "94%"],
-    ],
-  };
+function buildReportHtml(reportType, reportName, rows = [], cols = []) {
+  const date  = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
+  const label = REPORT_LABELS[reportType] || reportName;
 
-  const headers = {
-    "driver-performance":  ["Rank", "Driver", "Trips", "On-Time", "Complaints", "Rating", "Score"],
-    "vehicle-utilization": ["Vehicle", "Type", "Active Hrs", "Idle Hrs", "Trips", "Distance", "Utilization"],
-    "revenue":             ["Route", "Description", "Trips", "Revenue", "Avg Load"],
-  };
-
-  const rows = sampleRows[reportType] || [];
-  const cols = headers[reportType]    || [];
   const thead = cols.map(c => `<th style="padding:8px 12px;background:#f4f6f8;border:1px solid #e2e8f0;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#64748B">${c}</th>`).join("");
-  const tbody = rows.map((r, i) =>
-    `<tr style="background:${i % 2 === 0 ? "#fff" : "#f9fafb"}">${r.map(v => `<td style="padding:8px 12px;border:1px solid #e2e8f0;font-size:13px">${v}</td>`).join("")}</tr>`
-  ).join("");
+  const tbody = rows.length > 0
+    ? rows.map((r, i) =>
+        `<tr style="background:${i % 2 === 0 ? "#fff" : "#f9fafb"}">${r.map(v => `<td style="padding:8px 12px;border:1px solid #e2e8f0;font-size:13px">${v ?? "—"}</td>`).join("")}</tr>`
+      ).join("")
+    : `<tr><td colspan="${cols.length || 1}" style="padding:16px 12px;text-align:center;color:#94A3B8;font-size:13px">No data available for this period.</td></tr>`;
 
   return `
     <div style="font-family:Inter,Arial,sans-serif;max-width:640px;margin:auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #E2E8F0">
@@ -89,13 +65,38 @@ function buildReportHtml(reportType, reportName) {
     </div>`;
 }
 
-export async function sendScheduledReport(recipients, reportType, reportName) {
+export async function sendScheduledReport(recipients, reportType, reportName, rows = [], cols = []) {
   const transporter = getTransporter();
   await transporter.sendMail({
     from:    `"${process.env.SMTP_FROM_NAME || "Yalla Transit"}" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
     to:      recipients.join(", "),
     subject: `📊 Scheduled Report: ${reportName} — ${new Date().toLocaleDateString("en-GB", { day:"2-digit", month:"short", year:"numeric" })}`,
-    html:    buildReportHtml(reportType, reportName),
+    html:    buildReportHtml(reportType, reportName, rows, cols),
+  });
+}
+
+export async function sendOTPEmail(toEmail, code) {
+  const transporter = getTransporter();
+  await transporter.sendMail({
+    from: `"Yalla Transit" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
+    to: toEmail,
+    subject: `${code} — Your Yalla Transit verification code`,
+    text: `Your verification code is: ${code}\n\nThis code expires in 10 minutes. Do not share it with anyone.`,
+    html: `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:auto;background:#fff;border-radius:14px;overflow:hidden;border:1px solid #E2E8F0">
+        <div style="background:linear-gradient(135deg,#1E3A8A,#2563EB);padding:28px 32px;text-align:center">
+          <div style="font-size:13px;color:rgba(255,255,255,.7);margin-bottom:6px">Yalla Transit</div>
+          <div style="font-size:22px;font-weight:700;color:#fff">Email Verification</div>
+        </div>
+        <div style="padding:32px;text-align:center">
+          <p style="color:#475569;font-size:15px;margin:0 0 24px">Use the code below to verify your account. It expires in <strong>10 minutes</strong>.</p>
+          <div style="display:inline-block;background:#F1F5F9;border-radius:12px;padding:18px 36px;margin-bottom:24px">
+            <span style="font-size:40px;font-weight:800;letter-spacing:8px;color:#1E3A8A;font-family:monospace">${code}</span>
+          </div>
+          <p style="color:#94A3B8;font-size:13px;margin:0">If you did not request this, you can safely ignore this email.</p>
+        </div>
+      </div>
+    `,
   });
 }
 

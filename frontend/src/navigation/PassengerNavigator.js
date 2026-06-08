@@ -21,6 +21,8 @@ import DeleteAccountScreen from '../screens/passenger/DeleteAccountScreen';
 import NfcCardScreen from '../screens/passenger/NfcCardScreen';
 import NearbyStopsScreen from '../screens/passenger/NearbyStopsScreen';
 import ComplaintScreen from '../screens/passenger/ComplaintScreen';
+import TaxiReservationScreen from '../screens/passenger/TaxiReservationScreen';
+import MapLocationPickerScreen from '../screens/passenger/MapLocationPickerScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -33,8 +35,10 @@ const HomeStack = () => (
     <Stack.Screen name="BusTracking" component={BusTrackingScreen} />
     <Stack.Screen name="Feedback"    component={FeedbackScreen} />
     <Stack.Screen name="TripPlanner"   component={TripPlannerScreen} />
-    <Stack.Screen name="NearbyStops"   component={NearbyStopsScreen} />
-    <Stack.Screen name="Complaint"     component={ComplaintScreen} />
+    <Stack.Screen name="NearbyStops"       component={NearbyStopsScreen} />
+    <Stack.Screen name="Complaint"         component={ComplaintScreen} />
+    <Stack.Screen name="TaxiReservation"    component={TaxiReservationScreen} />
+    <Stack.Screen name="MapLocationPicker" component={MapLocationPickerScreen} />
   </Stack.Navigator>
 );
 

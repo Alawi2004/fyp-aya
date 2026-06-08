@@ -10,9 +10,6 @@ import { Panel }    from "../components/Panel";
 import { StatCard } from "../components/StatCard";
 import DashboardMap from "../components/map/DashboardMap";
 import { getDashboardStats, getDashboardOverview, getEmergencyAlerts } from "../api/endpoints";
-import { MOCK_DASHBOARD_STATS } from "../data/mockData";
-
-// ─── Mock fallbacks (used until the real API responds) ────────────────────────
 
 const ALERT_CFG = {
   emergency: { dot: "#EF4444", bg: "#FEF2F2", color: "#DC2626", label: "Emergency" },
@@ -20,69 +17,6 @@ const ALERT_CFG = {
   info:      { dot: "#3B82F6", bg: "#EFF6FF", color: "#2563EB", label: "Info"      },
 };
 
-const DEFAULT_ALERTS = [
-  { type: "emergency", text: "Driver K. Moussa sent emergency alert — Trip #TRP-041", time: "2m ago"  },
-  { type: "delay",     text: "Trip #TRP-038 reporting 15 min delay — heavy traffic",   time: "11m ago" },
-  { type: "delay",     text: "Vehicle BUS-07 flagged for maintenance check",           time: "34m ago" },
-  { type: "info",      text: "New passenger registration spike — 38 today",            time: "1h ago"  },
-];
-
-const DEFAULT_TRIPS = [
-  { id: "TRP-041", route: "Route 12A", name: "City Center → Airport",  seats: "24/30", eta: "14:15", status: "Ongoing"   },
-  { id: "TRP-038", route: "Route 7B",  name: "University → Downtown",  seats: "18/30", eta: "14:42", status: "Delayed"   },
-  { id: "TRP-029", route: "Route 3C",  name: "North Terminal → Mall",  seats: "30/30", eta: "13:58", status: "Ongoing"   },
-  { id: "TRP-033", route: "Route 5D",  name: "Hospital → Station",     seats: "11/30", eta: "14:30", status: "Scheduled" },
-  { id: "TRP-045", route: "Route 9E",  name: "Harbor → Old City",      seats: "22/30", eta: "15:05", status: "Ongoing"   },
-];
-
-const DEFAULT_VEHICLES = [
-  { id: "BUS-01", driver: "Karim Moussa",   speed: 45, location: "Hamra, Beirut",     fuel: 78, status: "Active" },
-  { id: "BUS-05", driver: "Lara Abi Nader", speed: 62, location: "Achrafieh, Beirut", fuel: 52, status: "Active" },
-  { id: "BUS-09", driver: "Joe Pharaon",    speed: 0,  location: "Dbayeh Highway",    fuel: 35, status: "Idle"   },
-  { id: "BUS-02", driver: "Maya Salameh",   speed: 38, location: "Corniche, Beirut",  fuel: 91, status: "Active" },
-  { id: "BUS-11", driver: "Rami Khoury",    speed: 0,  location: "Depot - Mtayleb",   fuel: 12, status: "Alert"  },
-  { id: "BUS-07", driver: "Sara Khoury",    speed: 55, location: "Jounieh Highway",   fuel: 64, status: "Active" },
-];
-
-const DEFAULT_FLEET = [
-  { label: "Active",      count: 8, total: 13, color: "#10B981" },
-  { label: "Maintenance", count: 2, total: 13, color: "#F59E0B" },
-  { label: "Offline",     count: 3, total: 13, color: "#EF4444" },
-];
-
-const DEFAULT_DRIVERS = [
-  { initials: "KM", name: "Karim Moussa",   trips: 12, rating: 4.9, change: "+0.2" },
-  { initials: "LA", name: "Lara Abi Nader", trips: 9,  rating: 4.5, change: "+0.1" },
-  { initials: "JP", name: "Joe Pharaon",    trips: 7,  rating: 4.3, change: "-0.1" },
-  { initials: "MS", name: "Maya Salameh",   trips: 5,  rating: 4.7, change: "+0.3" },
-];
-
-const DEFAULT_WEEK = [
-  { day: "Mon", trips: 42, rev: 72 },
-  { day: "Tue", trips: 51, rev: 85 },
-  { day: "Wed", trips: 38, rev: 64 },
-  { day: "Thu", trips: 58, rev: 90 },
-  { day: "Fri", trips: 49, rev: 78 },
-  { day: "Sat", trips: 32, rev: 55 },
-  { day: "Sun", trips: 29, rev: 48 },
-];
-
-const DEFAULT_EMERGENCIES = [
-  { id: 1, driver_id: 1, driver_name: "Karim Moussa",   vehicle: "BUS-01", trip_ref: "TRP-041", message: "Passenger collapse on board",            latitude: 33.8938, longitude: 35.5018, status: "active",   created_at: "2026-05-15T13:58:00" },
-  { id: 2, driver_id: 3, driver_name: "Joe Pharaon",    vehicle: "BUS-09", trip_ref: "TRP-029", message: "Vehicle collision — minor fender bender", latitude: 33.9800, longitude: 35.5500, status: "resolved", created_at: "2026-05-14T09:30:00" },
-  { id: 3, driver_id: 4, driver_name: "Maya Salameh",   vehicle: "BUS-02", trip_ref: null,      message: "Engine overheating warning",              latitude: 33.8700, longitude: 35.5100, status: "active",   created_at: "2026-05-15T11:22:00" },
-];
-
-const DEFAULT_LOAD_HOURS = [
-  { label: "6am",  pct: 38 },
-  { label: "8am",  pct: 70 },
-  { label: "9am",  pct: 90 },
-  { label: "11am", pct: 57 },
-  { label: "1pm",  pct: 76 },
-  { label: "Now",  pct: 100, current: true  },
-  { label: "3pm",  pct: 25,  future:  true  },
-  { label: "5pm",  pct: 20,  future:  true  },
-];
 
 // ─── Mini helpers ─────────────────────────────────────────────────────────────
 
@@ -203,16 +137,17 @@ export default function DashboardPage({ onNavigate }) {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
-  const [stats,     setStats]     = useState(MOCK_DASHBOARD_STATS);
-  const [alerts,    setAlerts]    = useState(DEFAULT_ALERTS);
-  const [trips,     setTrips]     = useState(DEFAULT_TRIPS);
-  const [vehicles,  setVehicles]  = useState(DEFAULT_VEHICLES);
-  const [fleet,     setFleet]     = useState(DEFAULT_FLEET);
-  const [drivers,   setDrivers]   = useState(DEFAULT_DRIVERS);
-  const [week,      setWeek]      = useState(DEFAULT_WEEK);
-  const [loadHours, setLoadHours] = useState(DEFAULT_LOAD_HOURS);
-  const [revSummary,   setRevSummary]   = useState({ this_week: 8420, last_week: 7390, change_pct: 14 });
-  const [emergencies,  setEmergencies]  = useState(DEFAULT_EMERGENCIES);
+  const EMPTY_STATS = { totalVehicles: 0, activeVehicles: 0, activeTrips: 0, totalUsers: 0, avgRating: 0, todayRevenue: 0, totalDrivers: 0, pendingComplaints: 0 };
+  const [stats,     setStats]     = useState(EMPTY_STATS);
+  const [alerts,    setAlerts]    = useState([]);
+  const [trips,     setTrips]     = useState([]);
+  const [vehicles,  setVehicles]  = useState([]);
+  const [fleet,     setFleet]     = useState([]);
+  const [drivers,   setDrivers]   = useState([]);
+  const [week,      setWeek]      = useState([]);
+  const [loadHours, setLoadHours] = useState([]);
+  const [revSummary,   setRevSummary]   = useState({ this_week: 0, last_week: 0, change_pct: 0 });
+  const [emergencies,  setEmergencies]  = useState([]);
 
   useEffect(() => {
     getDashboardStats()
@@ -221,19 +156,19 @@ export default function DashboardPage({ onNavigate }) {
 
     getDashboardOverview()
       .then(d => {
-        if (d.alerts?.length)     setAlerts(d.alerts);
-        if (d.trips?.length)      setTrips(d.trips);
-        if (d.vehicles?.length)   setVehicles(d.vehicles);
-        if (d.fleet?.length)      setFleet(d.fleet);
-        if (d.drivers?.length)    setDrivers(d.drivers);
-        if (d.week?.length)       setWeek(d.week);
-        if (d.load_hours?.length) setLoadHours(d.load_hours);
-        if (d.rev_summary)        setRevSummary(d.rev_summary);
+        if (d.alerts)     setAlerts(d.alerts ?? []);
+        if (d.trips)      setTrips(d.trips ?? []);
+        if (d.vehicles)   setVehicles(d.vehicles ?? []);
+        if (d.fleet)      setFleet(d.fleet ?? []);
+        if (d.drivers)    setDrivers(d.drivers ?? []);
+        if (d.week)       setWeek(d.week ?? []);
+        if (d.load_hours) setLoadHours(d.load_hours ?? []);
+        if (d.rev_summary) setRevSummary(d.rev_summary);
       })
       .catch(() => {});
 
     getEmergencyAlerts()
-      .then(d => { if (Array.isArray(d) && d.length) setEmergencies(d); })
+      .then(d => { if (Array.isArray(d)) setEmergencies(d); })
       .catch(() => {});
   }, []);
 

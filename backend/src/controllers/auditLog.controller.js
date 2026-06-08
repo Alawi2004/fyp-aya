@@ -9,31 +9,26 @@ export const getAuditLogs = async (req, res) => {
 
     const { action, entity_type, actor_id, from, to, search } = req.query;
 
-    const request = pool.request()
-      .input("limit",  sql.Int, limit)
-      .input("offset", sql.Int, offset);
+    // Build WHERE clause and bind params to both count + data requests
+    function buildRequest(r) {
+      let where = "WHERE 1=1";
+      if (action)      { r.input("action",      sql.NVarChar(100), `%${action}%`);     where += " AND al.action_name LIKE @action"; }
+      if (entity_type) { r.input("entity_type", sql.NVarChar(100), entity_type);        where += " AND al.entity_type = @entity_type"; }
+      if (actor_id)    { r.input("actor_id",    sql.Int,           parseInt(actor_id)); where += " AND al.actor_user_id = @actor_id"; }
+      if (from)        { r.input("from",        sql.Date,          from);               where += " AND CAST(al.created_at AS DATE) >= @from"; }
+      if (to)          { r.input("to",          sql.Date,          to);                 where += " AND CAST(al.created_at AS DATE) <= @to"; }
+      if (search)      { r.input("search",      sql.NVarChar(200), `%${search}%`);      where += " AND (u.full_name LIKE @search OR al.action_name LIKE @search OR al.entity_type LIKE @search)"; }
+      return where;
+    }
 
-    let where = "WHERE 1=1";
-    if (action)      { request.input("action",      sql.NVarChar(100), `%${action}%`);      where += " AND al.action_name LIKE @action"; }
-    if (entity_type) { request.input("entity_type", sql.NVarChar(100), entity_type);         where += " AND al.entity_type = @entity_type"; }
-    if (actor_id)    { request.input("actor_id",    sql.Int,           parseInt(actor_id));  where += " AND al.actor_user_id = @actor_id"; }
-    if (from)        { request.input("from",        sql.Date,          from);                where += " AND CAST(al.created_at AS DATE) >= @from"; }
-    if (to)          { request.input("to",          sql.Date,          to);                  where += " AND CAST(al.created_at AS DATE) <= @to"; }
-    if (search)      { request.input("search",      sql.NVarChar(200), `%${search}%`);       where += " AND (u.full_name LIKE @search OR al.action_name LIKE @search OR al.entity_type LIKE @search)"; }
+    const countReq = pool.request();
+    const where    = buildRequest(countReq);
+    const countRes = await countReq.query(
+      `SELECT COUNT(*) AS total FROM audit_logs al LEFT JOIN users u ON u.user_id=al.actor_user_id ${where}`
+    );
 
-    const countRes = await pool.request()
-      .query(`SELECT COUNT(*) AS total FROM audit_logs al LEFT JOIN users u ON u.user_id=al.actor_user_id ${where.replace(/@\w+/g, m => `${m}`)}`);
-
-    // Re-add inputs for the data query
-    const dataReq = pool.request()
-      .input("limit",  sql.Int, limit)
-      .input("offset", sql.Int, offset);
-    if (action)      dataReq.input("action",      sql.NVarChar(100), `%${action}%`);
-    if (entity_type) dataReq.input("entity_type", sql.NVarChar(100), entity_type);
-    if (actor_id)    dataReq.input("actor_id",    sql.Int,           parseInt(actor_id));
-    if (from)        dataReq.input("from",        sql.Date,          from);
-    if (to)          dataReq.input("to",          sql.Date,          to);
-    if (search)      dataReq.input("search",      sql.NVarChar(200), `%${search}%`);
+    const dataReq = pool.request().input("limit", sql.Int, limit).input("offset", sql.Int, offset);
+    buildRequest(dataReq);
 
     const dataRes = await dataReq.query(`
       SELECT

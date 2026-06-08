@@ -3,10 +3,24 @@ import {
   getAllNotifications,
   markNotificationRead,
   createNotification,
+  updateNotification,
+  deleteNotification,
   getUserNotifications,
+  getTemplates,
+  createTemplateDb,
+  updateTemplateDb,
+  deleteTemplateDb,
+  getScheduledNotifications,
+  createScheduledNotification,
+  updateScheduledNotification,
+  cancelScheduledNotification,
 } from "../controllers/notifications.controller.js";
+import { requireAuth } from "../middleware/auth.middleware.js";
+import { requirePermission } from "../middleware/permissions.middleware.js";
 
 const router = express.Router();
+
+router.use(requireAuth);
 
 /**
  * @swagger
@@ -51,48 +65,27 @@ const router = express.Router();
  *       201:
  *         description: Notification created
  */
-router.get("/", getAllNotifications);
-router.post("/", createNotification);
+router.get("/",    getAllNotifications);
+router.post("/",   requirePermission("notifications", "create"), createNotification);
 
-/**
- * @swagger
- * /api/notifications/{id}/read:
- *   put:
- *     tags: [Notifications]
- *     summary: Mark a notification as read
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Notification marked as read
- */
-router.put("/:id/read", markNotificationRead);
+// ── Specific sub-paths BEFORE /:id catch-alls ─────────────────────────────────
+router.put("/:id/read",         markNotificationRead);
+router.get("/user/:user_id",    getUserNotifications);
 
-/**
- * @swagger
- * /api/notifications/user/{user_id}:
- *   get:
- *     tags: [Notifications]
- *     summary: Get notifications for a specific user
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: user_id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: User's notifications
- */
-router.get("/user/:user_id", getUserNotifications);
-router.get("/:user_id", getUserNotifications);
+// ── Templates (must be before /:id so /templates/:id is not swallowed) ────────
+router.get("/templates",        getTemplates);
+router.post("/templates",       requirePermission("notifications", "create"), createTemplateDb);
+router.put("/templates/:id",    requirePermission("notifications", "edit"),   updateTemplateDb);
+router.delete("/templates/:id", requirePermission("notifications", "delete"), deleteTemplateDb);
+
+// ── Scheduled notifications ───────────────────────────────────────────────────
+router.get("/scheduled",        getScheduledNotifications);
+router.post("/schedule",        requirePermission("notifications", "create"), createScheduledNotification);
+router.put("/scheduled/:id",    requirePermission("notifications", "edit"),   updateScheduledNotification);
+router.delete("/scheduled/:id", requirePermission("notifications", "delete"), cancelScheduledNotification);
+
+// ── Generic /:id catch-alls last ──────────────────────────────────────────────
+router.put("/:id",    requirePermission("notifications", "edit"),   updateNotification);
+router.delete("/:id", requirePermission("notifications", "delete"), deleteNotification);
 
 export default router;

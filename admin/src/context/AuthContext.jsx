@@ -3,7 +3,17 @@ import { createContext, useContext, useState, useCallback } from "react";
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
 const FRONTEND_ONLY = import.meta.env.VITE_FRONTEND_ONLY !== "false";
 
-const USER_KEY = "admin_user";
+const USER_KEY  = "admin_user";
+const TOKEN_KEY = "admin_token";
+
+export function getStoredToken() {
+  return sessionStorage.getItem(TOKEN_KEY) || null;
+}
+
+function storeToken(token) {
+  if (token) sessionStorage.setItem(TOKEN_KEY, token);
+  else        sessionStorage.removeItem(TOKEN_KEY);
+}
 
 function loadStored() {
   try {
@@ -118,6 +128,7 @@ export function AuthProvider({ children }) {
         return { ok: false, requires_2fa: true, temp_token: data.temp_token };
       }
       persist(data.user);
+      storeToken(data.access_token);
       return { ok: true };
     } catch (err) {
       setError(err.message);
@@ -133,6 +144,7 @@ export function AuthProvider({ children }) {
     try {
       const data = await apiPost("/auth/verify-2fa", { temp_token: tempToken, totp_code: totpCode });
       persist(data.user);
+      storeToken(data.access_token);
       return { ok: true };
     } catch (err) {
       setError(err.message);
@@ -153,6 +165,7 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     setUser(null);
     localStorage.removeItem(USER_KEY);
+    storeToken(null);
     apiPost("/auth/logout", {}).catch(() => {});
   }, []);
 

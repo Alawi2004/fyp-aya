@@ -34,18 +34,6 @@ import { registerPushToken, registerFcmToken } from '../api/apiClient';
 
 const AppContext = createContext();
 
-const MOCK_RATINGS = [
-  { _id: '1', passengerName: 'Sarah Johnson', rating: 5, comment: 'Very smooth ride, driver was professional!', trip: 'Route A', date: '2024-01-15', avatar: 'S' },
-  { _id: '2', passengerName: 'Mike Davis', rating: 4, comment: 'Good trip, slightly delayed but driver communicated well.', trip: 'Route B', date: '2024-01-14', avatar: 'M' },
-  { _id: '3', passengerName: 'Emma Wilson', rating: 5, comment: 'Excellent service, very clean bus!', trip: 'Route A', date: '2024-01-13', avatar: 'E' },
-  { _id: '4', passengerName: 'James Brown', rating: 3, comment: 'Average experience, bus was a bit crowded.', trip: 'Route C', date: '2024-01-12', avatar: 'J' },
-];
-
-const MOCK_BOOKINGS = [
-  { _id: 'b1', bus: { _id: 'bus1', name: 'Express 101', route: 'Route A', origin: 'Central Station', destination: 'Airport' }, seatId: 'B3', price: 4.50, date: new Date().toISOString(), status: 'upcoming' },
-  { _id: 'b2', bus: { _id: 'bus2', name: 'City Line 5', route: 'Route B', origin: 'Mall Junction', destination: 'University' }, seatId: 'A1', price: 2.00, date: new Date(Date.now() - 86400000).toISOString(), status: 'completed' },
-  { _id: 'b3', bus: { _id: 'bus3', name: 'Metro Bus 7', route: 'Route C', origin: 'Hospital', destination: 'Market' }, seatId: 'C4', price: 1.50, date: new Date(Date.now() - 172800000).toISOString(), status: 'completed' },
-];
 
 export const AppProvider = ({ children }) => {
   // Register push tokens on mount (Expo + raw FCM) — best-effort, no throw
@@ -71,21 +59,15 @@ export const AppProvider = ({ children }) => {
     })();
   }, []);
 
-  const [walletBalance, setWalletBalance] = useState(35.50);
-  const [ratings, setRatings] = useState(MOCK_RATINGS);
-  const [bookings, setBookings] = useState(MOCK_BOOKINGS);
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [ratings, setRatings] = useState([]);
+  const [bookings, setBookings] = useState([]);
   const [activeBooking, setActiveBooking] = useState(null);
-  const [notifications, setNotifications] = useState([
-    { _id: '1', type: 'arrival', title: 'Bus arriving soon', body: 'Express 101 is 5 minutes away.', time: '2 min ago', read: false },
-    { _id: '2', type: 'delay', title: 'Trip delayed', body: 'City Line 5 delayed by 10 minutes.', time: '15 min ago', read: false },
-  ]);
+  const [notifications, setNotifications] = useState([]);
   const [emergencyAlerts, setEmergencyAlerts] = useState([]);
 
   // GPS state — driver writes, passenger reads
-  const [busLocations, setBusLocations] = useState({
-    bus1: { latitude: 33.8938, longitude: 35.5018, heading: 45, speed: 40, updatedAt: new Date() },
-    bus2: { latitude: 33.9100, longitude: 35.5200, heading: 90, speed: 35, updatedAt: new Date() },
-  });
+  const [busLocations, setBusLocations] = useState({});
 
   const updateBalance = (amount) => setWalletBalance(amount);
 

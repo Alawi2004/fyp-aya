@@ -27,14 +27,6 @@ const STATUS_CFG = {
   resolved:    { label: "Resolved",    bg: "#ECFDF5", color: "#059669", border: "#A7F3D0" },
 };
 
-const MOCK_ISSUES_FALLBACK = [
-  { issue_id: 1, driver_name: "Sara Khoury",    vehicle: "BUS-07", trip_ref: "TRP-038", description: "Brake pedal feels soft, needs inspection",      category: "Mechanical",         priority: "high",   status: "open",        created_at: "2026-05-16T09:15:00" },
-  { issue_id: 2, driver_name: "Joe Pharaon",    vehicle: "BUS-09", trip_ref: "TRP-029", description: "AC not working, passengers complaining",         category: "Mechanical",         priority: "medium", status: "in_progress", created_at: "2026-05-16T10:30:00" },
-  { issue_id: 3, driver_name: "Karim Moussa",   vehicle: "BUS-01", trip_ref: "TRP-041", description: "Passenger argument — intervention required",     category: "Passenger Incident", priority: "high",   status: "open",        created_at: "2026-05-15T14:00:00" },
-  { issue_id: 4, driver_name: "Maya Salameh",   vehicle: "BUS-02", trip_ref: "TRP-033", description: "Road blockage — had to reroute via Highway 1",  category: "Road Obstruction",   priority: "low",    status: "resolved",    created_at: "2026-05-15T11:20:00" },
-  { issue_id: 5, driver_name: "Lara Abi Nader", vehicle: "BUS-05", trip_ref: null,      description: "Windscreen wiper broken, cannot drive in rain",  category: "Mechanical",         priority: "high",   status: "open",        created_at: "2026-05-14T08:45:00" },
-  { issue_id: 6, driver_name: "Joe Pharaon",    vehicle: "BUS-09", trip_ref: "TRP-029", description: "Suspicious package found under rear seat",      category: "Security",           priority: "high",   status: "resolved",    created_at: "2026-05-13T16:30:00" },
-];
 
 // ── Shared badge ──────────────────────────────────────────────────────────────
 function Badge({ label, bg, color, border }) {
@@ -140,8 +132,8 @@ export default function IssuesPage() {
 
   useEffect(() => {
     getAdminIssues()
-      .then(d => setIssues(Array.isArray(d) && d.length ? d : MOCK_ISSUES_FALLBACK))
-      .catch(() => setIssues(MOCK_ISSUES_FALLBACK))
+      .then(d => setIssues(Array.isArray(d) ? d : []))
+      .catch(() => setIssues([]))
       .finally(() => setLoading(false));
   }, []);
 

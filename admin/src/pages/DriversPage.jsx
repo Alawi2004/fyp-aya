@@ -10,8 +10,8 @@ import { useCounterData } from "../hooks/useCounterData";
 import {
   getDrivers, createDriver, updateDriver,
   getDriverPerformance, getDriverSchedules, updateDriverSchedule,
+  createUser,
 } from "../api/endpoints";
-import { MOCK_DRIVERS, MOCK_DRIVER_LICENSE_ALERTS, MOCK_PERFORMANCE, MOCK_SCHEDULES, MOCK_TRIPS, MOCK_RATINGS } from "../data/mockData";
 import { getTripChecklists } from "../api/endpoints";
 
 import { CAMERA_REST_URL } from '../config/camera';
@@ -29,14 +29,11 @@ const SHIFT_CONFIG = {
 };
 
 function normalizeDriver(d) {
-  const seeded = MOCK_DRIVER_LICENSE_ALERTS.find(
-    (entry) => entry.license === (d.license_number ?? d.license) || entry.name === (d.full_name ?? d.name)
-  );
   return {
     id: d.driver_id ?? d.id,
     name: d.full_name ?? d.name ?? "",
     license: d.license_number ?? d.license ?? "",
-    license_expiry: d.license_expiry ?? seeded?.expiry ?? "",
+    license_expiry: d.license_expiry ?? "",
     phone: d.phone ?? d.email ?? "",
     trips: d.trips ?? 0,
     rating: d.rating ?? null,
@@ -44,7 +41,15 @@ function normalizeDriver(d) {
   };
 }
 
-const EMPTY_FORM = { name: "", license: "", license_expiry: "", phone: "", status: "Active" };
+const DEFAULT_SCHEDULE = { Mon: "off", Tue: "off", Wed: "off", Thu: "off", Fri: "off", Sat: "off", Sun: "off" };
+const EMPTY_FORM = {
+  // user fields
+  name: "", email: "", password: "", phone: "", birthDate: "",
+  // driver fields
+  license: "", license_expiry: "", status: "Active",
+  // schedule
+  schedule: { ...DEFAULT_SCHEDULE },
+};
 
 function daysUntil(dateStr) {
   return Math.floor((new Date(dateStr) - TODAY) / 86400000);
@@ -380,13 +385,56 @@ function BusSelector({ selectedBusId, onSelect }) {
 
 // ── Driver Profile Drawer (admin view) ───────────────────────────────────────
 function DriverProfile({ driver, onClose, onEdit }) {
-  const perf = MOCK_PERFORMANCE.find(p => p.name === driver.name) || {
+  const [schedule,      setSchedule]      = useState(null);
+  const [editDay,       setEditDay]       = useState(null);   // "Mon" | null
+  const [pickedShift,   setPickedShift]   = useState("off");
+  const [schedSaving,   setSchedSaving]   = useState(false);
+  const [schedError,    setSchedError]    = useState(null);
+
+  useEffect(() => {
+    const did = Number(driver.id);
+    getDriverSchedules()
+      .then(list => {
+        const match = (list || []).find(s => Number(s.driver_id) === did);
+        if (match) setSchedule(match);
+      })
+      .catch(() => {});
+  }, [driver.id]);
+
+  function openDayPicker(day) {
+    const current = schedule?.[day.toLowerCase()] || "off";
+    setPickedShift(current);
+    setEditDay(day);
+    setSchedError(null);
+  }
+
+  async function saveDayShift() {
+    if (!editDay) return;
+    setSchedSaving(true);
+    setSchedError(null);
+    const base    = schedule ?? {};
+    const dayKey  = editDay.toLowerCase();
+    const updated = { ...base, [dayKey]: pickedShift };
+    const payload = Object.fromEntries(
+      DAYS.map(d => [d, updated[d.toLowerCase()] || "off"])
+    );
+    try {
+      await updateDriverSchedule(driver.id, payload);
+      setSchedule(updated);
+      setEditDay(null);
+    } catch (err) {
+      setSchedError(err?.message ?? "Failed to save");
+    } finally {
+      setSchedSaving(false);
+    }
+  }
+
+  const perf = {
     trips_week: driver.trips || 0, on_time_pct: 85, complaints: 0,
     avg_rating: driver.rating, idle_hours: 3.0,
   };
-  const schedule   = MOCK_SCHEDULES.find(s => s.driver_name === driver.name);
-  const recentTrips = MOCK_TRIPS.filter(t => t.driver === driver.name).slice(0, 5);
-  const driverRatings = MOCK_RATINGS.filter(r => r.driver === driver.name);
+  const recentTrips = [];
+  const driverRatings = [];
   const score      = calcScore(perf);
   const scoreColor = score >= 85 ? "#10B981" : score >= 70 ? "#F59E0B" : "#EF4444";
   const initials   = driver.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
@@ -480,24 +528,80 @@ function DriverProfile({ driver, onClose, onEdit }) {
         </div>
 
         {/* ── This Week's Schedule ── */}
-        {schedule && (
-          <div style={{ padding: "20px 24px", borderBottom: "1px solid #F1F5F9" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#94A3B8", marginBottom: 14 }}>This Week&apos;s Schedule</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {DAYS.map(day => {
-                const shift = schedule[day] || "off";
-                const cfg   = SHIFT_CONFIG[shift] || SHIFT_CONFIG.off;
-                return (
-                  <div key={day} style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 4, fontWeight: 600 }}>{day}</div>
-                    <div style={{ padding: "5px 8px", borderRadius: 7, background: cfg.bg, border: `1px solid ${cfg.color}30`, fontSize: 10, fontWeight: 700, color: cfg.color, whiteSpace: "nowrap" }}>
-                      {cfg.label}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+        <div style={{ padding: "20px 24px", borderBottom: "1px solid #F1F5F9" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#94A3B8" }}>This Week&apos;s Schedule</div>
+            <span style={{ fontSize: 10, color: "#94A3B8" }}>Click a day to change</span>
           </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {DAYS.map(day => {
+              const key   = day.toLowerCase();
+              const shift = schedule?.[key] || "off";
+              const cfg   = SHIFT_CONFIG[shift] || SHIFT_CONFIG.off;
+              return (
+                <div key={day} style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 4, fontWeight: 600 }}>{day}</div>
+                  <button
+                    onClick={() => openDayPicker(day)}
+                    style={{
+                      padding: "6px 10px", borderRadius: 7, cursor: "pointer",
+                      background: cfg.bg, border: `1px solid ${cfg.color}44`,
+                      fontSize: 10, fontWeight: 700, color: cfg.color, whiteSpace: "nowrap",
+                      transition: "filter .15s",
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.filter = "brightness(0.93)"}
+                    onMouseLeave={e => e.currentTarget.style.filter = "none"}
+                  >
+                    {cfg.label}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── Day shift picker modal ── */}
+        {editDay && (
+          <Modal
+            title={`${driver.name} — ${editDay}`}
+            onClose={() => { setEditDay(null); setSchedError(null); }}
+            onSave={saveDayShift}
+            saving={schedSaving}
+          >
+            {schedError && (
+              <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>
+                {schedError}
+              </div>
+            )}
+            <p style={{ fontSize: 13, color: "#475569", marginBottom: 14, marginTop: 0 }}>
+              Select shift for <strong>{editDay}</strong>:
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {Object.entries(SHIFT_CONFIG).map(([key, cfg]) => (
+                <label
+                  key={key}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 12,
+                    padding: "10px 14px", borderRadius: 10, cursor: "pointer",
+                    border: `2px solid ${pickedShift === key ? cfg.color : "#E2E8F0"}`,
+                    background: pickedShift === key ? cfg.bg : "#fff",
+                    transition: "all .15s",
+                  }}
+                >
+                  <input
+                    type="radio" name="profileShift" value={key}
+                    checked={pickedShift === key}
+                    onChange={() => setPickedShift(key)}
+                    style={{ accentColor: cfg.color }}
+                  />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: cfg.color }}>{cfg.label}</div>
+                    {cfg.time && <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>{cfg.time}</div>}
+                  </div>
+                </label>
+              ))}
+            </div>
+          </Modal>
         )}
 
         {/* ── Recent Ratings ── */}
@@ -641,8 +745,8 @@ function PerformanceTab() {
 
   useEffect(() => {
     getDriverPerformance()
-      .then(d => setData((d || []).length ? d : MOCK_PERFORMANCE))
-      .catch(() => setData(MOCK_PERFORMANCE));
+      .then(d => setData(Array.isArray(d) ? d : []))
+      .catch(() => setData([]));
   }, []);
 
   const rows = data.map(d => ({ ...d, score: calcScore(d) }));
@@ -777,15 +881,17 @@ function ShiftCell({ shift, onClick }) {
 
 // ── Schedule Tab ─────────────────────────────────────────────────────────────
 function ScheduleTab() {
-  const [schedules, setSchedules] = useState([]);
-  const [weekOffset, setWeekOffset] = useState(0);
-  const [assignModal, setAssignModal] = useState(null);
+  const [schedules,    setSchedules]    = useState([]);
+  const [weekOffset,   setWeekOffset]   = useState(0);
+  const [assignModal,  setAssignModal]  = useState(null);
   const [selectedShift, setSelectedShift] = useState("morning");
+  const [saveError,    setSaveError]    = useState(null);
+  const [saving,       setSaving]       = useState(false);
 
   useEffect(() => {
     getDriverSchedules()
-      .then(d => setSchedules((d || []).length ? d : MOCK_SCHEDULES))
-      .catch(() => setSchedules(MOCK_SCHEDULES));
+      .then(d => setSchedules(Array.isArray(d) ? d : []))
+      .catch(() => setSchedules([]));
   }, []);
 
   // Compute dates for the displayed week
@@ -805,26 +911,40 @@ function ScheduleTab() {
   const weekLabel = `${weekDates[0].label} – ${weekDates[6].label}`;
 
   function openAssign(schedule, day) {
-    setSelectedShift(schedule[day] || "off");
+    // DB columns are lowercase (mon/tue/…) — always use lowercase to read
+    setSelectedShift(schedule[day.toLowerCase()] || "off");
     setAssignModal({ driverId: schedule.driver_id, driverName: schedule.driver_name, day });
+    setSaveError(null);
   }
 
-  function handleAssign() {
+  async function handleAssign() {
+    setSaving(true);
+    setSaveError(null);
+    // Update the local copy using lowercase keys so reads stay consistent
+    const dayKey  = assignModal.day.toLowerCase();
     const updated = schedules.map(s =>
-      s.driver_id === assignModal.driverId ? { ...s, [assignModal.day]: selectedShift } : s
+      s.driver_id === assignModal.driverId ? { ...s, [dayKey]: selectedShift } : s
     );
-    setSchedules(updated);
-    // Optimistically save — backend may not have the table yet
-    updateDriverSchedule(assignModal.driverId, Object.fromEntries(
-      DAYS.map(d => [d, updated.find(s => s.driver_id === assignModal.driverId)?.[d] || "off"])
-    )).catch(() => {});
-    setAssignModal(null);
+    const row = updated.find(s => s.driver_id === assignModal.driverId);
+    // Build the payload the backend expects (Mon/Tue/… keys)
+    const payload = Object.fromEntries(
+      DAYS.map(d => [d, row?.[d.toLowerCase()] || "off"])
+    );
+    try {
+      await updateDriverSchedule(assignModal.driverId, payload);
+      setSchedules(updated);
+      setAssignModal(null);
+    } catch (err) {
+      setSaveError(err?.message ?? "Failed to save schedule");
+    } finally {
+      setSaving(false);
+    }
   }
 
   const shiftSummary = Object.fromEntries(
     Object.keys(SHIFT_CONFIG).map(k => [k, 0])
   );
-  schedules.forEach(s => DAYS.forEach(d => { if (shiftSummary[s[d]] !== undefined) shiftSummary[s[d]]++; }));
+  schedules.forEach(s => DAYS.forEach(d => { const v = s[d.toLowerCase()]; if (shiftSummary[v] !== undefined) shiftSummary[v]++; }));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -888,7 +1008,7 @@ function ScheduleTab() {
                   </td>
                   {DAYS.map(day => (
                     <td key={day} style={{ padding: "6px 4px", textAlign: "center" }}>
-                      <ShiftCell shift={schedule[day] || "off"} onClick={() => openAssign(schedule, day)} />
+                      <ShiftCell shift={schedule[day.toLowerCase()] || "off"} onClick={() => openAssign(schedule, day)} />
                     </td>
                   ))}
                 </tr>
@@ -903,7 +1023,12 @@ function ScheduleTab() {
 
       {/* Assign shift modal */}
       {assignModal && (
-        <Modal title={`Assign Shift — ${assignModal.driverName}`} onClose={() => setAssignModal(null)} onSave={handleAssign}>
+        <Modal title={`Assign Shift — ${assignModal.driverName}`} onClose={() => { setAssignModal(null); setSaveError(null); }} onSave={handleAssign} saving={saving}>
+          {saveError && (
+            <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>
+              {saveError}
+            </div>
+          )}
           <p style={{ fontSize: 13, color: "#475569", marginBottom: 16, marginTop: 0 }}>
             Select shift for <strong>{assignModal.day}</strong>:
           </p>
@@ -1020,14 +1145,6 @@ function LicenseAlertsTab({ drivers, onEdit }) {
 }
 
 // ── Checklist audit tab ───────────────────────────────────────────────────────
-const MOCK_CHECKLISTS_LOCAL = [
-  { checklist_id: 1, trip_id: 41, trip_ref: "TRP-041", driver: "Karim Moussa",   vehicle: "BUS-01", route: "Route 12A", fuel_ok: 1, lights_ok: 1, tires_ok: 1, submitted_at: "2026-05-16T05:45:00" },
-  { checklist_id: 2, trip_id: 38, trip_ref: "TRP-038", driver: "Sara Khoury",    vehicle: "BUS-07", route: "Route 7B",  fuel_ok: 1, lights_ok: 0, tires_ok: 1, submitted_at: "2026-05-16T06:10:00" },
-  { checklist_id: 3, trip_id: 29, trip_ref: "TRP-029", driver: "Joe Pharaon",    vehicle: "BUS-09", route: "Route 3C",  fuel_ok: 0, lights_ok: 1, tires_ok: 0, submitted_at: "2026-05-16T06:30:00" },
-  { checklist_id: 4, trip_id: 33, trip_ref: "TRP-033", driver: "Maya Salameh",   vehicle: "BUS-02", route: "Route 5D",  fuel_ok: 1, lights_ok: 1, tires_ok: 1, submitted_at: "2026-05-15T06:20:00" },
-  { checklist_id: 5, trip_id: 45, trip_ref: "TRP-045", driver: "Lara Abi Nader", vehicle: "BUS-05", route: "Route 9E",  fuel_ok: 1, lights_ok: 1, tires_ok: 1, submitted_at: "2026-05-15T07:00:00" },
-  { checklist_id: 6, trip_id: 50, trip_ref: "TRP-050", driver: "Karim Moussa",   vehicle: "BUS-01", route: "Route 12A", fuel_ok: 1, lights_ok: 1, tires_ok: 0, submitted_at: "2026-05-14T05:50:00" },
-];
 
 function CheckMark({ ok }) {
   return ok
@@ -1043,8 +1160,8 @@ function ChecklistsTab() {
 
   useEffect(() => {
     getTripChecklists()
-      .then(d => setRows(Array.isArray(d) && d.length ? d : MOCK_CHECKLISTS_LOCAL))
-      .catch(() => setRows(MOCK_CHECKLISTS_LOCAL))
+      .then(d => setRows(Array.isArray(d) ? d : []))
+      .catch(() => setRows([]))
       .finally(() => setLoading(false));
   }, []);
 
@@ -1191,11 +1308,14 @@ export default function DriversPage() {
   const [driversError,   setDriversError]   = useState(null);
   const [search, setSearch] = useState("");
   const [selectedBusId, setSelectedBusId] = useState(DEFAULT_BUS_ID);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editTarget, setEditTarget] = useState(null);
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [deleteId, setDeleteId] = useState(null);
-  const [profile, setProfile] = useState(null); // driver profile drawer
+  const [modalOpen,        setModalOpen]        = useState(false);
+  const [editTarget,       setEditTarget]       = useState(null);
+  const [form,             setForm]             = useState(EMPTY_FORM);
+  const [saveError,        setSaveError]        = useState(null);
+  const [isSaving,         setIsSaving]         = useState(false);
+  const [formSchedEditDay, setFormSchedEditDay] = useState(null); // which day pill is open in add modal
+  const [deleteId,         setDeleteId]         = useState(null);
+  const [profile,          setProfile]          = useState(null);
 
   const loadDrivers = useCallback(() => {
     setDriversLoading(true);
@@ -1206,7 +1326,7 @@ export default function DriversPage() {
         setDrivers((rows || []).map(normalizeDriver));
       })
       .catch(err => {
-        setDrivers(MOCK_DRIVERS);   // silent fallback to mock
+        setDrivers([]);
         setDriversError(err?.message ?? "Could not reach server — showing demo data");
       })
       .finally(() => setDriversLoading(false));
@@ -1215,23 +1335,70 @@ export default function DriversPage() {
   useEffect(() => { loadDrivers(); }, [loadDrivers]);
 
   function openProfile(d) { setProfile(d); }
-  function openAdd()  { setEditTarget(null); setForm(EMPTY_FORM); setModalOpen(true); }
-  function openEdit(d) {
-    setEditTarget(d.id);
-    setForm({ name: d.name, license: d.license, license_expiry: d.license_expiry ?? "", phone: d.phone, status: d.status });
+
+  function openAdd() {
+    setEditTarget(null);
+    setForm(EMPTY_FORM);
+    setSaveError(null);
+    setFormSchedEditDay(null);
     setModalOpen(true);
   }
 
+  function openEdit(d) {
+    setEditTarget(d.id);
+    setSaveError(null);
+    setForm({ name: d.name, email: "", password: "", phone: d.phone ?? "", birthDate: "", license: d.license, license_expiry: d.license_expiry ?? "", status: d.status, schedule: { ...DEFAULT_SCHEDULE } });
+    setModalOpen(true);
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+
   async function handleSave() {
-    if (!form.name || !form.license) return;
-    if (editTarget) {
-      await updateDriver(editTarget, { license_number: form.license }).catch(() => {});
-      setDrivers(prev => prev.map(d => d.id === editTarget ? { ...d, ...form } : d));
-    } else {
-      await createDriver({ license_number: form.license }).catch(() => {});
-      setDrivers(prev => [...prev, { id: Date.now(), ...form, trips: 0, rating: null }]);
+    if (!form.license) { setSaveError("License number is required."); return; }
+    if (!editTarget) {
+      if (!form.name)     { setSaveError("Full name is required."); return; }
+      if (!form.email)    { setSaveError("Email is required."); return; }
+      if (!form.password) { setSaveError("Password is required."); return; }
+      if (form.birthDate && form.birthDate > today) { setSaveError("Date of birth cannot be in the future."); return; }
     }
-    setModalOpen(false);
+    setSaveError(null);
+    setIsSaving(true);
+    try {
+      if (editTarget) {
+        await updateDriver(editTarget, {
+          license_number:      form.license,
+          license_expiry_date: form.license_expiry || null,
+        });
+        setDrivers(prev => prev.map(d => d.id === editTarget ? { ...d, license: form.license, license_expiry: form.license_expiry, status: form.status } : d));
+      } else {
+        // 1. Create the user with role=driver
+        const newUser = await createUser({
+          full_name:  form.name,
+          email:      form.email,
+          password:   form.password,
+          phone:      form.phone || null,
+          birth_date: form.birthDate || null,
+          role:       "driver",
+        });
+        // 2. Create the driver record
+        const newDriver = await createDriver({
+          user_id:             newUser.user_id,
+          license_number:      form.license,
+          license_expiry_date: form.license_expiry || null,
+          hire_date:           today,
+        });
+        // 3. Seed the schedule
+        if (newDriver?.driver_id) {
+          await updateDriverSchedule(newDriver.driver_id, form.schedule).catch(() => {});
+        }
+        await loadDrivers();
+      }
+      setModalOpen(false);
+    } catch (err) {
+      setSaveError(err?.message ?? "Save failed");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   function handleDelete() { setDrivers(prev => prev.filter(d => d.id !== deleteId)); setDeleteId(null); }
@@ -1252,14 +1419,13 @@ export default function DriversPage() {
           </p>
         </div>
         <div style={{ flex: 1 }} />
-        {tab === "Overview" && (
-          <>
-            <BusSelector selectedBusId={selectedBusId} onSelect={setSelectedBusId} />
-            <button onClick={openAdd} style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", letterSpacing: "-.1px" }}>
-              + Add driver
-            </button>
-          </>
-        )}
+        {/* Always reserve space so TabNav never shifts position */}
+        <div style={{ display: "flex", gap: 10, alignItems: "center", visibility: tab === "Overview" ? "visible" : "hidden", pointerEvents: tab === "Overview" ? "auto" : "none" }}>
+          <BusSelector selectedBusId={selectedBusId} onSelect={setSelectedBusId} />
+          <button onClick={openAdd} style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", letterSpacing: "-.1px" }}>
+            + Add driver
+          </button>
+        </div>
         <TabNav tabs={["Overview", "Performance", "Schedules", "License Alerts", "Checklists"]} active={tab} onChange={setTab} />
       </div>
 
@@ -1297,39 +1463,144 @@ export default function DriversPage() {
 
       {/* Add / Edit modal */}
       {modalOpen && (
-        <Modal title={editTarget ? "Edit driver" : "Add new driver"} onClose={() => setModalOpen(false)} onSave={handleSave}>
-          {[
-            { label: "Full name",      key: "name",    placeholder: "e.g. Karim Moussa" },
-            { label: "License number", key: "license", placeholder: "e.g. LB-20341"     },
-            { label: "Phone number",   key: "phone",   placeholder: "+961 3 ..."         },
-          ].map(field => (
-            <div key={field.key} style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12, color: "#475569", display: "block", marginBottom: 5, fontWeight: 600 }}>{field.label}</label>
-              <input
-                placeholder={field.placeholder}
-                value={form[field.key]}
-                onChange={e => setForm(f => ({ ...f, [field.key]: e.target.value }))}
+        <Modal title={editTarget ? "Edit driver" : "Add new driver"} onClose={() => { setModalOpen(false); setSaveError(null); setFormSchedEditDay(null); }} onSave={handleSave} saving={isSaving}>
+          {saveError && (
+            <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>
+              {saveError}
+            </div>
+          )}
+
+          {/* ── New user fields (add only) ── */}
+          {!editTarget && (<>
+            {[
+              { label: "Full name *",  key: "name",     type: "text",     placeholder: "e.g. Karim Moussa" },
+              { label: "Email *",      key: "email",    type: "email",    placeholder: "driver@example.com" },
+              { label: "Password *",   key: "password", type: "password", placeholder: "Min 8 chars, 1 upper, 1 digit, 1 symbol" },
+              { label: "Phone",        key: "phone",    type: "text",     placeholder: "+968 9..." },
+            ].map(({ label, key, type, placeholder }) => (
+              <div key={key} style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 12, color: "#475569", display: "block", marginBottom: 5, fontWeight: 600 }}>{label}</label>
+                <input
+                  type={type} placeholder={placeholder} value={form[key]}
+                  onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                  style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                />
+              </div>
+            ))}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, color: "#475569", display: "block", marginBottom: 5, fontWeight: 600 }}>
+                Date of birth <span style={{ fontWeight: 400, color: "#94A3B8" }}>(optional)</span>
+              </label>
+              <input type="date" value={form.birthDate} max={today}
+                onChange={e => setForm(f => ({ ...f, birthDate: e.target.value }))}
                 style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }}
               />
             </div>
-          ))}
+            <div style={{ height: 1, background: "#F1F5F9", margin: "4px 0 16px" }} />
+          </>)}
+
+          {/* ── Driver fields ── */}
           <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 12, color: "#475569", display: "block", marginBottom: 5, fontWeight: 600 }}>License expiry</label>
+            <label style={{ fontSize: 12, color: "#475569", display: "block", marginBottom: 5, fontWeight: 600 }}>License number *</label>
             <input
-              type="date"
-              value={form.license_expiry}
-              onChange={e => setForm(f => ({ ...f, license_expiry: e.target.value }))}
+              placeholder="e.g. LB-20341" value={form.license}
+              onChange={e => setForm(f => ({ ...f, license: e.target.value }))}
               style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }}
             />
           </div>
           <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 12, color: "#475569", display: "block", marginBottom: 5, fontWeight: 600 }}>Status</label>
-            <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-              style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13 }}>
-              <option>Active</option>
-              <option>Inactive</option>
-            </select>
+            <label style={{ fontSize: 12, color: "#475569", display: "block", marginBottom: 5, fontWeight: 600 }}>License expiry</label>
+            <input type="date" value={form.license_expiry}
+              onChange={e => setForm(f => ({ ...f, license_expiry: e.target.value }))}
+              style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }}
+            />
           </div>
+          {editTarget && (
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, color: "#475569", display: "block", marginBottom: 5, fontWeight: 600 }}>Status</label>
+              <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+                style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13 }}>
+                <option>Active</option><option>Inactive</option>
+              </select>
+            </div>
+          )}
+
+          {/* ── Schedule (add only) — same pill UI as profile ── */}
+          {!editTarget && (
+            <div>
+              <div style={{ height: 1, background: "#F1F5F9", margin: "4px 0 16px" }} />
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <label style={{ fontSize: 12, color: "#475569", fontWeight: 600 }}>
+                  Weekly schedule <span style={{ fontWeight: 400, color: "#94A3B8" }}>(click a day to set)</span>
+                </label>
+              </div>
+
+              {/* Day pills */}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: formSchedEditDay ? 12 : 0 }}>
+                {DAYS.map(day => {
+                  const val = form.schedule[day] || "off";
+                  const cfg = SHIFT_CONFIG[val] || SHIFT_CONFIG.off;
+                  const active = formSchedEditDay === day;
+                  return (
+                    <div key={day} style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 4, fontWeight: 600 }}>{day}</div>
+                      <button
+                        onClick={() => setFormSchedEditDay(active ? null : day)}
+                        style={{
+                          padding: "6px 10px", borderRadius: 7, cursor: "pointer",
+                          background: cfg.bg,
+                          border: `${active ? 2 : 1}px solid ${active ? cfg.color : cfg.color + "44"}`,
+                          fontSize: 10, fontWeight: 700, color: cfg.color, whiteSpace: "nowrap",
+                          boxShadow: active ? `0 0 0 2px ${cfg.color}33` : "none",
+                        }}
+                      >
+                        {cfg.label}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Inline shift picker — appears below pills when a day is active */}
+              {formSchedEditDay && (
+                <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 10, padding: "12px 14px" }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#64748B", marginBottom: 10 }}>
+                    {formSchedEditDay} — select shift:
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {Object.entries(SHIFT_CONFIG).map(([key, cfg]) => {
+                      const selected = (form.schedule[formSchedEditDay] || "off") === key;
+                      return (
+                        <label
+                          key={key}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 10,
+                            padding: "8px 12px", borderRadius: 8, cursor: "pointer",
+                            border: `2px solid ${selected ? cfg.color : "#E2E8F0"}`,
+                            background: selected ? cfg.bg : "#fff",
+                            transition: "all .12s",
+                          }}
+                        >
+                          <input
+                            type="radio" name="formShift" value={key} checked={selected}
+                            onChange={() => {
+                              setForm(f => ({ ...f, schedule: { ...f.schedule, [formSchedEditDay]: key } }));
+                              setFormSchedEditDay(null);
+                            }}
+                            style={{ accentColor: cfg.color }}
+                          />
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: cfg.color }}>{cfg.label}</div>
+                            {cfg.time && <div style={{ fontSize: 10, color: cfg.color + "99", marginTop: 1 }}>{cfg.time}</div>}
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </Modal>
       )}
 
