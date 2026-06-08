@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
+import { File, Paths } from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
 import ShareTicketCard from './ShareTicketCard';
 import { COLORS } from '../../constants/colors';
@@ -65,9 +66,16 @@ const ShareTicketModal = ({ visible, onClose, booking, ticket, passengerName, us
         </div>
       </body></html>`;
 
-      const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
+      const { uri: tempUri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
 
-      await Sharing.shareAsync(uri, {
+      // Move the auto-named temp file to a readable filename before sharing
+      const busName  = (bus.name || 'Ticket').replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
+      const dateSlug = booking?.date ? new Date(booking.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+      const filename = `${busName}_Seat${seat}_${dateSlug}.pdf`;
+      const namedFile = new File(Paths.cache, filename);
+      new File(tempUri).move(namedFile);
+
+      await Sharing.shareAsync(namedFile.uri, {
         mimeType:    'application/pdf',
         dialogTitle: `Save Ticket PDF — Seat ${seat}`,
         UTI:         'com.adobe.pdf',
