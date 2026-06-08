@@ -105,4 +105,25 @@ export const requestAccountDeletion = () => apiClient.delete('/users/me').then((
 // Ratings
 export const submitRating = (payload) => apiClient.post('/ratings', payload).then((r) => r.data);
 
+// Complaints
+export const submitComplaint = ({ category, description, priority, trip_id, photoUri }) => {
+  const form = new FormData();
+  form.append('category', category);
+  form.append('description', description);
+  form.append('priority', priority || 'medium');
+  if (trip_id) form.append('trip_id', String(trip_id));
+  if (photoUri) {
+    const filename = photoUri.split('/').pop() || 'photo.jpg';
+    const ext = (/\.(\w+)$/.exec(filename)?.[1] || 'jpg').toLowerCase();
+    const type = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+    form.append('photo', { uri: photoUri, name: filename, type });
+  }
+  return apiClient
+    .post('/complaints', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+    .then((r) => r.data);
+};
+export const getMyComplaints   = ()              => apiClient.get('/complaints').then((r) => r.data);
+export const updateMyComplaint = (id, payload)   => apiClient.put(`/complaints/${id}`, payload).then((r) => r.data);
+export const deleteMyComplaint = (id)            => apiClient.delete(`/complaints/${id}`).then((r) => r.data);
+
 export default apiClient;

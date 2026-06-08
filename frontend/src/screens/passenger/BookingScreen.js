@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Alert, Platform, StatusBar, TouchableOpacity,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import SeatPicker from '../../components/passenger/SeatPicker';
 import Button from '../../components/common/Button';
@@ -9,7 +10,10 @@ import Card from '../../components/common/Card';
 import ScreenHeader from '../../components/common/ScreenHeader';
 import { useApp } from '../../context/AppContext';
 import { createBookingApi } from '../../api/bookingApi';
+import { getBusDetailsApi } from '../../api/busApi';
 import { COLORS } from '../../constants/colors';
+
+const csvToSeats = (csv) => String(csv ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 
 const BookingScreen = ({ route, navigation }) => {
   const { bus } = route.params;
@@ -17,12 +21,34 @@ const BookingScreen = ({ route, navigation }) => {
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // The `bus` passed in via navigation comes from the buses list, which can
+  // go stale the moment another passenger books a seat. Re-fetch the trip's
+  // live seat map every time this screen gains focus so booked seats stay
+  // in sync with the DB instead of showing whatever was true when the list
+  // was last loaded.
+  const [bookedSeats, setBookedSeats] = useState(() => csvToSeats(bus.bookedSeatsCsv));
+  const [totalSeats, setTotalSeats]   = useState(bus.totalSeats);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      getBusDetailsApi(bus._id)
+        .then((res) => {
+          if (cancelled || !res.data) return;
+          setBookedSeats(csvToSeats(res.data.bookedSeatsCsv));
+          setTotalSeats(res.data.totalSeats ?? bus.totalSeats);
+        })
+        .catch(() => {});
+      return () => { cancelled = true; };
+    }, [bus._id])
+  );
+
   const unitPrice           = parseFloat(bus.price);
   const totalPrice          = selectedSeats.length * unitPrice;
   const price               = unitPrice; // kept for display in route card
   const insufficientBalance = selectedSeats.length > 0 && walletBalance < totalPrice;
   const shortfall           = Math.max(0, totalPrice - walletBalance).toFixed(2);
-  const availableSeats      = bus.totalSeats - bus.bookedSeats;
+  const availableSeats      = totalSeats - bookedSeats.length;
 
   const handleConfirm = async () => {
     if (selectedSeats.length === 0) {
@@ -70,6 +96,16 @@ const BookingScreen = ({ route, navigation }) => {
             } catch (err) {
               const msg = err?.response?.data?.error || 'Something went wrong. Please try again.';
               Alert.alert('Booking Failed', msg);
+              // Someone may have grabbed the seat first (409 conflict) — refresh
+              // the live seat map so the picker reflects what's actually free now.
+              setSelectedSeats([]);
+              getBusDetailsApi(bus._id)
+                .then((res) => {
+                  if (!res.data) return;
+                  setBookedSeats(csvToSeats(res.data.bookedSeatsCsv));
+                  setTotalSeats(res.data.totalSeats ?? bus.totalSeats);
+                })
+                .catch(() => {});
             } finally {
               setLoading(false);
             }
@@ -197,7 +233,7 @@ const BookingScreen = ({ route, navigation }) => {
           <View style={styles.seatCardHeader}>
             <View>
               <Text style={styles.seatCardTitle}>Choose Your Seat</Text>
-              <Text style={styles.seatCardSub}>{availableSeats} of {bus.totalSeats} seats free</Text>
+              <Text style={styles.seatCardSub}>{availableSeats} of {totalSeats} seats free</Text>
             </View>
             <View style={styles.seatCountBadge}>
               <Text style={styles.seatCountText}>{availableSeats} left</Text>
@@ -219,8 +255,8 @@ const BookingScreen = ({ route, navigation }) => {
           </View>
 
           <SeatPicker
-            totalSeats={bus.totalSeats}
-            bookedSeats={Array.from({ length: bus.bookedSeats }, (_, i) => `A${i + 1}`)}
+            totalSeats={totalSeats}
+            bookedSeats={bookedSeats}
             onSelect={setSelectedSeats}
             multiSelect
           />

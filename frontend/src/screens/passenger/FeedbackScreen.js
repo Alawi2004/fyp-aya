@@ -97,11 +97,9 @@ const FeedbackScreen = ({ route, navigation }) => {
     // POST to real API — best-effort (don't block the success screen on failure)
     try {
       await submitRating({
-        user_id:    user?._id ?? user?.user_id ?? null,
-        trip_id:    booking?._id ?? booking?.trip_id ?? null,
-        rating:     overall,
-        comment:    fullComment || null,
-        categories: { ...scores },   // extended payload — backend ignores unknown fields
+        trip_id: booking?.trip_id ?? null,
+        rating:  overall,
+        comment: fullComment || null,
       });
     } catch { /* API failure should not block the success screen */ }
 

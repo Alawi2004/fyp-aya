@@ -1,6 +1,8 @@
 import express from "express";
 import {
   assignComplaint,
+  deleteMyComplaint,
+  editMyComplaint,
   getComplaintById,
   getComplaintTracking,
   listComplaints,
@@ -9,6 +11,7 @@ import {
   updateComplaintStatus,
 } from "../controllers/complaints.controller.js";
 import { requireAdmin, requireAuth } from "../middleware/auth.middleware.js";
+import { uploadComplaintPhoto } from "../middleware/complaintUpload.middleware.js";
 
 const router = express.Router();
 
@@ -33,8 +36,25 @@ const router = express.Router();
  *     security:
  *       - bearerAuth: []
  */
-router.post("/", requireAuth, submitComplaint);
+router.post("/", requireAuth, uploadComplaintPhoto, submitComplaint);
 router.get("/", requireAuth, listComplaints);
+
+/**
+ * @swagger
+ * /api/complaints/{id}:
+ *   put:
+ *     tags: [Complaints]
+ *     summary: Edit your own complaint (only while status is 'submitted')
+ *     security:
+ *       - bearerAuth: []
+ *   delete:
+ *     tags: [Complaints]
+ *     summary: Delete your own complaint (only while status is 'submitted')
+ *     security:
+ *       - bearerAuth: []
+ */
+router.put("/:id",    requireAuth, editMyComplaint);
+router.delete("/:id", requireAuth, deleteMyComplaint);
 
 /**
  * @swagger

@@ -19,7 +19,15 @@
           "faceIDPermission": "Allow Yalla Transit to use Face ID for secure login."
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Yalla Transit to access your photos so you can attach images to complaints.",
+          "cameraPermission": "Allow Yalla Transit to use your camera to attach photos to complaints."
+        }
+      ]
     ],
     "ios": {
       "supportsTablet": true,

@@ -22,6 +22,9 @@ import PersonalInfoScreen  from '../screens/passenger/PersonalInfoScreen';
 import RatingsScreen       from '../screens/passenger/RatingsScreen';
 import NearbyStopsScreen from '../screens/passenger/NearbyStopsScreen';
 import ComplaintScreen from '../screens/passenger/ComplaintScreen';
+import MyComplaintsScreen from '../screens/passenger/MyComplaintsScreen';
+import PrivacyPolicyScreen from '../screens/passenger/PrivacyPolicyScreen';
+import RateAppScreen       from '../screens/passenger/RateAppScreen';
 import TaxiReservationScreen from '../screens/passenger/TaxiReservationScreen';
 import MapLocationPickerScreen from '../screens/passenger/MapLocationPickerScreen';
 
@@ -53,6 +56,11 @@ const ProfileStack = () => (
     <Stack.Screen name="Notifications"  component={NotificationsScreen} />
     <Stack.Screen name="FavoriteRoutes" component={FavoriteRoutesScreen} />
     <Stack.Screen name="DeleteAccount"  component={DeleteAccountScreen} />
+    <Stack.Screen name="Complaint"      component={ComplaintScreen} />
+    <Stack.Screen name="MyComplaints"   component={MyComplaintsScreen} />
+    <Stack.Screen name="FileComplaint"  component={ComplaintScreen} />
+    <Stack.Screen name="PrivacyPolicy"  component={PrivacyPolicyScreen} />
+    <Stack.Screen name="RateApp"        component={RateAppScreen} />
   </Stack.Navigator>
 );
 

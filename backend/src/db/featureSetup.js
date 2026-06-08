@@ -282,6 +282,46 @@ BEGIN
   CREATE INDEX IX_password_reset_tokens_user
     ON password_reset_tokens (user_id, created_at DESC);
 END;
+
+-- Allow ratings without a linked trip (app-level ratings, test data, etc.)
+IF EXISTS (
+  SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_NAME = 'ratings' AND COLUMN_NAME = 'trip_id' AND IS_NULLABLE = 'NO'
+)
+BEGIN
+  ALTER TABLE ratings ALTER COLUMN trip_id INT NULL;
+END;
+
+-- Track when each rating was posted (needed for "My Ratings" + the 24h edit window)
+IF NOT EXISTS (
+  SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_NAME = 'ratings' AND COLUMN_NAME = 'created_at'
+)
+BEGIN
+  ALTER TABLE ratings ADD created_at DATETIME2 NOT NULL DEFAULT GETUTCDATE();
+END;
+
+-- Allow passengers to attach a photo to a complaint
+IF NOT EXISTS (
+  SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_NAME = 'complaints' AND COLUMN_NAME = 'photo_url'
+)
+BEGIN
+  ALTER TABLE complaints ADD photo_url NVARCHAR(500) NULL;
+END;
+
+IF NOT EXISTS (
+  SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'app_feedback'
+)
+BEGIN
+  CREATE TABLE app_feedback (
+    feedback_id   INT            NOT NULL IDENTITY(1,1) PRIMARY KEY,
+    user_id       INT            NOT NULL REFERENCES users(user_id),
+    rating        INT            NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    comment       NVARCHAR(1000) NULL,
+    created_at    DATETIME2      NOT NULL DEFAULT GETUTCDATE()
+  );
+END;
 `;
 
 export const ensureOperationalTables = async (pool) => {

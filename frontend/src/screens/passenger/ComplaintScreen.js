@@ -9,6 +9,7 @@ import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS } from '../../constants/colors';
 import { formatDateTime } from '../../utils/formatters';
+import { submitComplaint as submitComplaintApi } from '../../api/apiClient';
 
 // expo-image-picker loaded optionally (not available offline)
 let ImagePicker = null;
@@ -74,23 +75,26 @@ const ComplaintScreen = ({ navigation, route }) => {
 
   // ── Photo attachment ────────────────────────────────────────────────────────
   const handleAddPhoto = async () => {
-    if (ImagePicker) {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Allow photo access to attach an image.');
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true, aspect: [4, 3], quality: 0.8,
-      });
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        setPhotoUri(result.assets[0].uri);
-      }
-    } else {
-      // Mock — simulate attached photo
-      setPhotoUri('mock://complaint-photo.jpg');
-      Alert.alert('Photo Attached', 'Photo has been attached to your complaint. (Demo mode)');
+    if (!ImagePicker) {
+      Alert.alert('Unavailable', 'Photo attachments are not available on this build.');
+      return;
+    }
+    const { status, canAskAgain } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permission needed',
+        canAskAgain
+          ? 'Allow photo library access to attach an image to your complaint.'
+          : 'Photo access was denied. Enable it from your device Settings → Yalla Transit → Photos.',
+      );
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true, aspect: [4, 3], quality: 0.8,
+    });
+    if (!result.canceled && result.assets?.[0]?.uri) {
+      setPhotoUri(result.assets[0].uri);
     }
   };
 
@@ -103,14 +107,26 @@ const ComplaintScreen = ({ navigation, route }) => {
     return true;
   };
 
+  const [trackingCode, setTrackingCode] = useState(null);
+
   const handleSubmit = async () => {
-    if (!validate()) return;
+    if (!validate() || submitting) return;
     setSubmitting(true);
-    // Simulate API submission
-    setTimeout(() => {
-      setSubmitting(false);
+    try {
+      const res = await submitComplaintApi({
+        category,
+        description: description.trim(),
+        priority,
+        trip_id: linkedTrip?.trip_id ?? null,
+        photoUri: photoUri && !photoUri.startsWith('mock://') ? photoUri : null,
+      });
+      setTrackingCode(res?.complaint?.tracking_code || null);
       setSubmitted(true);
-    }, 1000);
+    } catch (err) {
+      Alert.alert('Error', err?.response?.data?.error || 'Could not submit your complaint. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // ── Success screen ──────────────────────────────────────────────────────────
@@ -128,11 +144,11 @@ const ComplaintScreen = ({ navigation, route }) => {
             Our team will review it within 48 hours.
           </Text>
           <View style={styles.refNumCard}>
-            <Text style={styles.refNumLabel}>Reference Number</Text>
-            <Text style={styles.refNum}>CMP-{Date.now().toString().slice(-6)}</Text>
+            <Text style={styles.refNumLabel}>Tracking Code</Text>
+            <Text style={styles.refNum}>{trackingCode || '—'}</Text>
           </View>
           <TouchableOpacity style={styles.doneBtn} onPress={() => navigation.goBack()}>
-            <Text style={styles.doneBtnText}>Back to Trips</Text>
+            <Text style={styles.doneBtnText}>Back to My Complaints</Text>
           </TouchableOpacity>
         </View>
       </View>

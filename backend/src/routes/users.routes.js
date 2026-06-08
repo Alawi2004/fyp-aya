@@ -104,7 +104,12 @@ router.post("/", requirePermission("users", "create"), createUser);
  *         description: Updated successfully
  */
 router.get("/:id",    requirePermission("users", "view"),   getUserProfile);
-router.put("/:id",    requirePermission("users", "edit"),   updateUserProfile);
+router.put("/:id",    requireAuth, (req, res, next) => {
+  // Passengers can always update their own profile
+  const isSelf = req.params.id === 'me' || String(req.params.id) === String(req.user.user_id);
+  if (isSelf) return next();
+  requirePermission("users", "edit")(req, res, next);
+}, updateUserProfile);
 router.delete("/:id", requirePermission("users", "delete"), deleteUser);
 
 /**

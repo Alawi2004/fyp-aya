@@ -147,13 +147,13 @@ const ProfileScreen = ({ navigation }) => {
           {/* Support */}
           <Text style={styles.sectionLabel}>Support</Text>
           <View style={styles.menuCard}>
-            <MenuItem icon="shield-checkmark-outline" label="Privacy Policy" onPress={() => {}} />
+            <MenuItem icon="shield-checkmark-outline" label="Privacy Policy" onPress={() => navigation.push('PrivacyPolicy')} />
             <MenuItem
               icon="help-buoy-outline"
               label="Help & Support"
-              onPress={() => navigation.navigate('HomeStack', { screen: 'Complaint' })}
+              onPress={() => navigation.push('MyComplaints')}
             />
-            <MenuItem icon="star-outline" label="Rate the App" onPress={() => {}} />
+            <MenuItem icon="star-outline" label="Rate the App" onPress={() => navigation.push('RateApp')} />
             <MenuItem
               icon="log-out-outline"
               label="Sign Out"

@@ -184,38 +184,51 @@ export const updateUserProfile = async (req, res) => {
   try {
     const { full_name, phone, role, status, birth_date } = req.body;
 
-    if (role && !["passenger", "driver", "admin", "staff"].includes(role.toLowerCase())) {
-      return res.status(400).json({ error: `role must be one of: passenger, driver, admin, staff` });
+    // 'me' or own user_id → self-edit (passengers allowed, role/status locked)
+    const isSelf = req.params.id === 'me' || String(req.params.id) === String(req.user.user_id);
+    const targetId = req.params.id === 'me' ? req.user.user_id : Number(req.params.id);
+    const isAdmin  = ["admin", "super_admin"].includes(req.user.role);
+
+    if (!full_name || !String(full_name).trim()) {
+      return res.status(400).json({ error: "Full name is required" });
     }
     const dobError = validateBirthDate(birth_date);
     if (dobError) return res.status(400).json({ error: dobError });
 
     const pool = await poolPromise;
-
-    const validRoles    = ["passenger", "driver", "admin", "staff"];
-    const validStatuses = ["active", "inactive", "suspended", "blocked"];
-
     const r = pool.request()
-      .input("id",        sql.Int,          req.params.id)
-      .input("full_name", sql.NVarChar(100), full_name ?? null)
-      .input("phone",     sql.NVarChar(30),  phone ?? null)
-      .input("birth_date", sql.Date,         birth_date ? new Date(birth_date) : null);
+      .input("id",         sql.Int,          targetId)
+      .input("full_name",  sql.NVarChar(100), String(full_name).trim())
+      .input("phone",      sql.NVarChar(30),  phone ? String(phone).trim() : null)
+      .input("birth_date", sql.Date,          birth_date ? new Date(birth_date) : null);
 
     let sets = "full_name=@full_name, phone=@phone, birth_date=@birth_date";
 
-    if (role && validRoles.includes(role.toLowerCase())) {
-      r.input("role", sql.NVarChar(20), role.toLowerCase());
-      sets += ", role=@role";
-    }
-    if (status && validStatuses.includes(status.toLowerCase())) {
-      r.input("status", sql.NVarChar(20), status.toLowerCase());
-      sets += ", status=@status";
+    // Only admins can change role or status — passengers editing their own profile cannot
+    if (isAdmin) {
+      const validRoles    = ["passenger", "driver", "admin", "staff"];
+      const validStatuses = ["active", "inactive", "suspended", "blocked"];
+      if (role && validRoles.includes(role.toLowerCase())) {
+        r.input("role", sql.NVarChar(20), role.toLowerCase());
+        sets += ", role=@role";
+      }
+      if (status && validStatuses.includes(status.toLowerCase())) {
+        r.input("status", sql.NVarChar(20), status.toLowerCase());
+        sets += ", status=@status";
+      }
     }
 
-    const pool2 = await poolPromise;
-    await r.query(`UPDATE users SET ${sets} WHERE user_id=@id`);
-    writeAuditLog(pool2, { actorUserId: req.user?.user_id, actorRole: req.user?.role, actionName: "user.updated", entityType: "user", entityId: req.params.id, newValues: { full_name, role, status }, req });
-    res.json({ message: "Profile updated" });
+    const result = await r.query(`
+      UPDATE users SET ${sets}
+      OUTPUT INSERTED.user_id, INSERTED.full_name, INSERTED.email, INSERTED.phone,
+             INSERTED.role, INSERTED.status, INSERTED.birth_date, INSERTED.created_at
+      WHERE user_id = @id
+    `);
+
+    if (!result.recordset[0]) return res.status(404).json({ error: "User not found" });
+
+    writeAuditLog(pool, { actorUserId: req.user?.user_id, actorRole: req.user?.role, actionName: "user.updated", entityType: "user", entityId: targetId, newValues: { full_name, role, status }, req });
+    res.json({ message: "Profile updated", user: result.recordset[0] });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to update user profile" });

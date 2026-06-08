@@ -15,20 +15,30 @@ import apiClient from '../../api/apiClient';
 
 function parseIso(iso) {
   if (!iso) return null;
-  const d = new Date(iso);
+  // Parse as local midnight to avoid UTC timezone shifting the date backward.
+  // "2026-06-01" or "2026-06-01T00:00:00.000Z" → local June 1 midnight.
+  const parts = String(iso).slice(0, 10).split('-').map(Number);
+  if (parts.length !== 3 || parts.some(isNaN)) return null;
+  const d = new Date(parts[0], parts[1] - 1, parts[2]);
   return isNaN(d.getTime()) ? null : d;
 }
 
 function formatDisplay(date) {
   if (!date) return '';
-  const dd = String(date.getUTCDate()).padStart(2, '0');
-  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
-  return `${dd}/${mm}/${date.getUTCFullYear()}`;
+  // Use local components — the date was constructed as local midnight.
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}/${date.getFullYear()}`;
 }
 
 function toIso(date) {
   if (!date) return null;
-  return date.toISOString().slice(0, 10);
+  // Use local components so we send the date the user actually picked,
+  // not the UTC-shifted equivalent.
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────

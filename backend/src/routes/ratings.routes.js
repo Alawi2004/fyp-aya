@@ -2,6 +2,8 @@ import express from "express";
 import {
   getRatings,
   createRating,
+  createAppFeedback,
+  editMyRating,
   getTripRatings,
   getDriverRatings,
   getMyRatings,
@@ -56,12 +58,14 @@ const router = express.Router();
  *       201:
  *         description: Rating submitted
  */
-router.get("/me",       requireAuth, getMyRatings);
-router.delete("/:id",   requireAuth, deleteMyRating);
-router.get("/",         getRatings);
-router.post("/",        createRating);
-router.get("/driver",   getDriverRatings);
+router.get("/me",            requireAuth, getMyRatings);
+router.post("/app",          requireAuth, createAppFeedback);
+router.put("/:id",           requireAuth, editMyRating);
+router.delete("/:id",        requireAuth, deleteMyRating);
+router.get("/",              getRatings);
+router.post("/",             requireAuth, createRating);
+router.get("/driver",        getDriverRatings);
 router.get("/trip/:trip_id", getTripRatings);
-router.get("/:trip_id", getTripRatings);
+router.get("/:trip_id",      getTripRatings);
 
 export default router;
