@@ -7,21 +7,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
-import * as FileSystem from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
 import ShareTicketCard from './ShareTicketCard';
 import { COLORS } from '../../constants/colors';
-
-// ── Derive a safe filename from trip/seat/date ────────────────────────────────
-const buildPdfFilename = (booking, ticket) => {
-  const bus     = booking?.bus ?? {};
-  const name    = (bus.name || 'Trip').replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
-  const seat    = ticket?.seat_number ?? booking?.seatId ?? 'X';
-  const dateStr = booking?.date
-    ? new Date(booking.date).toISOString().slice(0, 10)
-    : new Date().toISOString().slice(0, 10);
-  return `${name}_Seat${seat}_${dateStr}.pdf`;
-};
 
 // ── Main modal ────────────────────────────────────────────────────────────────
 const ShareTicketModal = ({ visible, onClose, booking, ticket, passengerName, user, boardingQr }) => {
@@ -77,16 +65,11 @@ const ShareTicketModal = ({ visible, onClose, booking, ticket, passengerName, us
         </div>
       </body></html>`;
 
-      const { uri: rawUri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
+      const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
 
-      // Rename the generated file so the share sheet shows a meaningful name
-      const filename = buildPdfFilename(booking, ticket);
-      const namedUri = (FileSystem.cacheDirectory ?? '') + filename;
-      await FileSystem.copyAsync({ from: rawUri, to: namedUri });
-
-      await Sharing.shareAsync(namedUri, {
+      await Sharing.shareAsync(uri, {
         mimeType:    'application/pdf',
-        dialogTitle: `Ticket — ${bus.name || ''} Seat ${seat}`,
+        dialogTitle: `Save Ticket PDF — Seat ${seat}`,
         UTI:         'com.adobe.pdf',
       });
     } catch (err) {
