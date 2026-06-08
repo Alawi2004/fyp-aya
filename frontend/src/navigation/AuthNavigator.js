@@ -1,5 +1,5 @@
 import React from 'react';
-import { createStackNavigator } from '@react-navigation/stack';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import SplashScreen from '../screens/auth/SplashScreen';
 import OnboardingScreen from '../screens/auth/OnboardingScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -8,7 +8,7 @@ import PassengerRegisterScreen from '../screens/auth/PassengerRegisterScreen';
 import OtpVerifyScreen from '../screens/auth/OtpVerifyScreen';
 import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 
-const Stack = createStackNavigator();
+const Stack = createNativeStackNavigator();
 
 const AuthNavigator = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Splash">

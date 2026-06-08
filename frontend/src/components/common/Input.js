@@ -63,14 +63,12 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: COLORS.border,
   },
+  // NOTE: focus highlight only changes borderColor. Do NOT toggle
+  // backgroundColor / shadow / elevation here — on the New Architecture
+  // (Fabric) those heavy parent redraws during the onFocus event make the
+  // native field drop focus instantly (no cursor / can't type).
   focused: {
     borderColor: COLORS.primary,
-    backgroundColor: COLORS.white,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.14,
-    shadowRadius: 8,
-    elevation: 0,
   },
   error: { borderColor: COLORS.danger },
   disabled: { opacity: 0.55 },
