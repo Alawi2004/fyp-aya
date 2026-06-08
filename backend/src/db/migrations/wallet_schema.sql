@@ -32,17 +32,19 @@ BEGIN
     city         NVARCHAR(100) NOT NULL,
     phone        NVARCHAR(50)  NULL,
     hours        NVARCHAR(255) NULL,
+    latitude     DECIMAL(9,6)  NULL,
+    longitude    DECIMAL(9,6)  NULL,
     is_active    BIT           NOT NULL DEFAULT 1
   );
 
   -- Seed with initial locations
-  INSERT INTO top_up_locations (name, address, city, phone, hours) VALUES
-    ('Riad El Solh Transit Hub',      '5 Riad El Solh Square',          'Beirut',         '+961 1 201010', 'Mon-Fri 06:00-20:00, Sat-Sun 08:00-18:00'),
-    ('Hamra Customer Service Centre', '12 Hamra Main Street',            'Beirut',         '+961 1 202020', 'Daily 07:00-21:00'),
-    ('Dora Terminal Office',          'Dora Bus Terminal, Ground Floor', 'Dora',           '+961 1 203030', 'Daily 06:00-22:00'),
-    ('Jounieh Service Point',         '3 Jounieh Waterfront Road',       'Jounieh',        '+961 9 204040', 'Mon-Fri 08:00-18:00'),
-    ('Antelias Agent Counter',        'Antelias Center, Shop 5',         'Antelias',       '+961 4 205050', 'Mon-Sat 09:00-19:00'),
-    ('Airport Transit Kiosk',         'Terminal 1, Arrivals Hall',       'Beirut Airport', '+961 1 206060', 'Daily 05:00-23:00');
+  INSERT INTO top_up_locations (name, address, city, phone, hours, latitude, longitude) VALUES
+    ('Riad El Solh Transit Hub',      '5 Riad El Solh Square',          'Beirut',         '+961 1 201010', 'Mon-Fri 06:00-20:00, Sat-Sun 08:00-18:00', 33.895900, 35.504700),
+    ('Hamra Customer Service Centre', '12 Hamra Main Street',            'Beirut',         '+961 1 202020', 'Daily 07:00-21:00',                        33.895900, 35.478400),
+    ('Dora Terminal Office',          'Dora Bus Terminal, Ground Floor', 'Dora',           '+961 1 203030', 'Daily 06:00-22:00',                        33.871400, 35.546900),
+    ('Jounieh Service Point',         '3 Jounieh Waterfront Road',       'Jounieh',        '+961 9 204040', 'Mon-Fri 08:00-18:00',                       33.980800, 35.617800),
+    ('Antelias Agent Counter',        'Antelias Center, Shop 5',         'Antelias',       '+961 4 205050', 'Mon-Sat 09:00-19:00',                       33.918100, 35.596900),
+    ('Airport Transit Kiosk',         'Terminal 1, Arrivals Hall',       'Beirut Airport', '+961 1 206060', 'Daily 05:00-23:00',                         33.820900, 35.488400);
 END;
 
 -- ── wallet_recharges ──────────────────────────────────────────

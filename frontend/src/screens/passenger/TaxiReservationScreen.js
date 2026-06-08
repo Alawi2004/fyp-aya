@@ -164,7 +164,6 @@ const TaxiReservationScreen = ({ navigation, route }) => {
   const [recurr,    setRecurr]  = useState('once');
   const [notes,     setNotes]   = useState('');
   const [timeMod,   setTimeMod] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
 
   // Receive picked location from MapLocationPickerScreen via module store
   useEffect(() => {
@@ -186,7 +185,6 @@ const TaxiReservationScreen = ({ navigation, route }) => {
   };
 
   const timeLabel = `${hour.trim()}:${minute} ${ampm}`;
-  const selDayObj  = DAYS.find(d => d.key === selDay);
   const canConfirm = pickup.trim() && dest.trim() && (bookNow || minute !== null);
 
   const handleConfirm = () => {
@@ -198,7 +196,7 @@ const TaxiReservationScreen = ({ navigation, route }) => {
     const when = bookNow
       ? 'Now'
       : `${selDayObjNow?.short ?? selDayObjNow?.day} ${selDayObjNow?.date} ${selDayObjNow?.month} at ${hour.trim()}:${minute} ${ampm}`;
-    addBooking({
+    const newBooking = {
       _id: Date.now().toString(),
       type: 'taxi',
       bus: { name: 'Taxi Reservation', origin: pickup, destination: dest },
@@ -210,67 +208,10 @@ const TaxiReservationScreen = ({ navigation, route }) => {
       scheduledFor: when,
       recurrence: recurr,
       notes,
-    });
-    setConfirmed(true);
+    };
+    addBooking(newBooking);
+    navigation.replace('Ticket', { booking: newBooking });
   };
-
-  // ── Success screen ────────────────────────────────────────────────────────────
-  if (confirmed) {
-    const when = bookNow
-      ? 'Now'
-      : `${selDayObj?.short ?? selDayObj?.day} ${selDayObj?.date} ${selDayObj?.month} at ${timeLabel}`;
-    const repeatLabel = RECURRENCE.find(r => r.key === recurr)?.label;
-
-    return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={22} color={COLORS.white} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Confirmed</Text>
-          <View style={{ width: 38 }} />
-        </View>
-
-        <ScrollView contentContainerStyle={styles.successWrap} showsVerticalScrollIndicator={false}>
-          <View style={styles.successCircle}>
-            <Ionicons name="checkmark" size={52} color={COLORS.white} />
-          </View>
-          <Text style={styles.successTitle}>
-            {bookNow ? 'Taxi Booked!' : 'Reservation Placed!'}
-          </Text>
-          <Text style={styles.successSub}>
-            {bookNow
-              ? 'Your taxi is being arranged. You will be notified when a driver accepts.'
-              : `Scheduled for ${when}${recurr !== 'once' ? ` · Repeats ${repeatLabel}` : ''}.`}
-          </Text>
-
-          <View style={styles.summaryCard}>
-            <SummaryRow icon="location-outline" label="Pickup"      value={pickup} />
-            <SummaryRow icon="flag-outline"     label="Destination" value={dest} />
-            <SummaryRow icon="time-outline"     label="When"        value={bookNow ? 'Immediately' : when} />
-            {!bookNow && recurr !== 'once' && (
-              <SummaryRow icon="sync-outline" label="Recurring" value={repeatLabel} />
-            )}
-            {notes.trim() ? (
-              <SummaryRow icon="chatbubble-outline" label="Driver notes" value={notes} />
-            ) : null}
-          </View>
-
-          <TouchableOpacity style={styles.doneBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
-            <Text style={styles.doneBtnText}>Done</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.newBtn}
-            onPress={() => { setConfirmed(false); setPickup(''); setDest(''); setBookNow(true); setRecurr('once'); setNotes(''); }}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.newBtnText}>Make Another Reservation</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
-    );
-  }
 
   // ── Booking form ──────────────────────────────────────────────────────────────
   return (
@@ -459,19 +400,6 @@ const TaxiReservationScreen = ({ navigation, route }) => {
   );
 };
 
-// ── Summary row (success screen) ──────────────────────────────────────────────
-const SummaryRow = ({ icon, label, value }) => (
-  <View style={styles.sumRow}>
-    <View style={styles.sumIcon}>
-      <Ionicons name={icon} size={14} color={COLORS.primary} />
-    </View>
-    <View style={{ flex: 1 }}>
-      <Text style={styles.sumLabel}>{label}</Text>
-      <Text style={styles.sumValue}>{value}</Text>
-    </View>
-  </View>
-);
-
 // ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container:   { flex: 1, backgroundColor: COLORS.background },
@@ -643,42 +571,6 @@ const styles = StyleSheet.create({
   ampmBtnActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   ampmText:      { fontSize: 15, fontWeight: '700', color: COLORS.textMuted },
   ampmTextActive:{ color: COLORS.white },
-
-  // ── Success screen ────────────────────────────────────────────────────────────
-  successWrap: { alignItems: 'center', padding: 24, paddingTop: 40 },
-  successCircle: {
-    width: 100, height: 100, borderRadius: 50,
-    backgroundColor: COLORS.secondary,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 24,
-    shadowColor: COLORS.secondary, shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35, shadowRadius: 16, elevation: 8,
-  },
-  successTitle: { fontSize: 26, fontWeight: '800', color: COLORS.textPrimary, marginBottom: 8 },
-  successSub: {
-    fontSize: 14, color: COLORS.textSecondary,
-    textAlign: 'center', lineHeight: 21, marginBottom: 28,
-  },
-  summaryCard: {
-    width: '100%', backgroundColor: COLORS.white, borderRadius: 16, padding: 16,
-    borderWidth: 1, borderColor: COLORS.border, gap: 12, marginBottom: 28,
-  },
-  sumRow:  { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  sumIcon: {
-    width: 28, height: 28, borderRadius: 8, backgroundColor: COLORS.primaryLight,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-  },
-  sumLabel: {
-    fontSize: 10, fontWeight: '700', color: COLORS.textMuted,
-    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 1,
-  },
-  sumValue: { fontSize: 14, fontWeight: '600', color: COLORS.textPrimary },
-  doneBtn: {
-    width: '100%', backgroundColor: COLORS.primary,
-    borderRadius: 14, paddingVertical: 15, alignItems: 'center', marginBottom: 12,
-  },
-  doneBtnText: { fontSize: 16, fontWeight: '800', color: COLORS.white },
-  newBtn:    { paddingVertical: 10 },
-  newBtnText:{ fontSize: 14, fontWeight: '700', color: COLORS.textMuted },
 });
 
 export default TaxiReservationScreen;

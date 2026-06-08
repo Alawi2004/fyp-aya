@@ -15,7 +15,7 @@ export const issueToken = async (req, res) => {
   const uid = userId || req.user?.id || 'guest';
   const { token, expiresAt } = issueShareToken(bookingId, uid, seatId);
 
-  const shareUrl = `${SHARE_BASE_URL}/ticket/share?t=${token}`;
+  const shareUrl = `${SHARE_BASE_URL}/api/share/ticket?t=${token}`;
   const deepLink = `${APP_SCHEME}://ticket/share?t=${token}`;
 
   // Increment share analytics — non-critical, log but don't fail

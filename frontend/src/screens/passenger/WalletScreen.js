@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   StatusBar, Animated, ActivityIndicator, RefreshControl,
-  Platform,
+  Platform, Linking,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -17,6 +17,12 @@ const MAP_REGION = {
   longitude: 35.5200,
   latitudeDelta: 0.18,
   longitudeDelta: 0.18,
+};
+
+const hasCoords = (loc) => {
+  const lat = Number(loc?.latitude);
+  const lng = Number(loc?.longitude);
+  return Number.isFinite(lat) && Number.isFinite(lng);
 };
 
 const WalletScreen = () => {
@@ -81,10 +87,10 @@ const WalletScreen = () => {
 
   const handleMarkerPress = (loc) => {
     setSelectedStation(loc.location_id);
-    if (viewMode === 'map') {
+    if (viewMode === 'map' && hasCoords(loc)) {
       mapRef.current?.animateToRegion({
-        latitude: loc.latitude,
-        longitude: loc.longitude,
+        latitude: Number(loc.latitude),
+        longitude: Number(loc.longitude),
         latitudeDelta: 0.04,
         longitudeDelta: 0.04,
       }, 400);
@@ -187,10 +193,10 @@ const WalletScreen = () => {
                 showsUserLocation={locPermission === 'granted'}
                 showsMyLocationButton={false}
               >
-                {locations.map((loc, i) => (
+                {locations.filter(hasCoords).map((loc, i) => (
                   <Marker
                     key={`marker-${loc.location_id ?? i}`}
-                    coordinate={{ latitude: loc.latitude, longitude: loc.longitude }}
+                    coordinate={{ latitude: Number(loc.latitude), longitude: Number(loc.longitude) }}
                     title={loc.name}
                     description={`${loc.address}, ${loc.city}`}
                     onPress={() => handleMarkerPress(loc)}
@@ -255,10 +261,14 @@ const WalletScreen = () => {
                       </View>
                     ) : null}
                     {loc.phone ? (
-                      <View style={styles.locationMetaRow}>
+                      <TouchableOpacity
+                        style={styles.locationMetaRow}
+                        onPress={() => Linking.openURL(`tel:${loc.phone}`).catch(() => {})}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      >
                         <Ionicons name="call-outline" size={12} color={COLORS.textMuted} />
-                        <Text style={styles.locationMeta}>{loc.phone}</Text>
-                      </View>
+                        <Text style={[styles.locationMeta, styles.locationPhoneLink]}>{loc.phone}</Text>
+                      </TouchableOpacity>
                     ) : null}
                   </View>
                   <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
@@ -457,6 +467,7 @@ const styles = StyleSheet.create({
   locationAddress: { fontSize: 12, color: COLORS.textSecondary, marginBottom: 3 },
   locationMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 1 },
   locationMeta: { fontSize: 11, color: COLORS.textMuted },
+  locationPhoneLink: { color: COLORS.primary, fontWeight: '600', textDecorationLine: 'underline' },
 
   /* Transactions */
   txCount: { fontSize: 12, color: COLORS.textMuted, fontWeight: '500' },

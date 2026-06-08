@@ -153,7 +153,11 @@ const ProfileScreen = ({ navigation }) => {
           <Text style={styles.sectionLabel}>Support</Text>
           <View style={styles.menuCard}>
             <MenuItem icon="shield-checkmark-outline" label="Privacy Policy" onPress={() => {}} />
-            <MenuItem icon="help-buoy-outline" label="Help & Support" onPress={() => {}} />
+            <MenuItem
+              icon="help-buoy-outline"
+              label="Help & Support"
+              onPress={() => navigation.navigate('HomeStack', { screen: 'Complaint' })}
+            />
             <MenuItem icon="star-outline" label="Rate the App" onPress={() => {}} />
             <MenuItem
               icon="log-out-outline"

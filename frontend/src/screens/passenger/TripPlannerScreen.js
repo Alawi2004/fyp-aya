@@ -649,8 +649,8 @@ const TripPlannerScreen = ({ navigation, route }) => {
               })}
               activeOpacity={0.85}
             >
-              <Ionicons name="car-sport" size={18} color={COLORS.white} />
-              <Text style={styles.bookNowText}>Book Now</Text>
+              <Ionicons name="arrow-forward-circle" size={18} color={COLORS.white} />
+              <Text style={styles.bookNowText}>Continue · Book This Trip</Text>
             </TouchableOpacity>
           </>
         ) : null}

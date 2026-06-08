@@ -7,6 +7,16 @@ import { poolPromise }           from "./db/db.js";
 
 const PORT = process.env.PORT || 4000;
 
+// Last-resort safety net — log and keep running instead of crashing the
+// whole process on a stray unhandled rejection or thrown error in a
+// background task (consistent with this server's "stay alive" design).
+process.on("unhandledRejection", (reason) => {
+  console.error("❌ Unhandled promise rejection:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("❌ Uncaught exception:", err);
+});
+
 // Create a bare HTTP server so we can attach WebSocket alongside Express
 const server = http.createServer(app);
 

@@ -68,7 +68,7 @@ export const getTopUpLocations = async (req, res) => {
     const result = await pool
       .request()
       .query(`
-        SELECT location_id, name, address, city, phone, hours, is_active
+        SELECT location_id, name, address, city, phone, hours, latitude, longitude, is_active
         FROM top_up_locations
         WHERE is_active = 1
         ORDER BY city, name

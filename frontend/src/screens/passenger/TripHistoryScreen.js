@@ -175,7 +175,7 @@ const TripHistoryScreen = ({ navigation }) => {
           <View style={[styles.statusBadge, { backgroundColor: st.bg }]}>
             <Ionicons name={st.icon} size={12} color={st.text} />
             <Text style={[styles.statusText, { color: st.text }]}>
-              {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+              {(item.status || 'upcoming').charAt(0).toUpperCase() + (item.status || 'upcoming').slice(1)}
             </Text>
           </View>
         </View>
