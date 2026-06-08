@@ -52,8 +52,15 @@ const FavoriteRoutesScreen = ({ navigation }) => {
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
       <View style={[styles.pageHeader, headerInsets]}>
-        <Text style={styles.pageTitle}>Favorite Routes</Text>
-        <Text style={styles.pageSubtitle}>{favorites.length} saved route{favorites.length !== 1 ? 's' : ''}</Text>
+        {navigation?.canGoBack() ? (
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
+          </TouchableOpacity>
+        ) : null}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.pageTitle}>Favorite Routes</Text>
+          <Text style={styles.pageSubtitle}>{favorites.length} saved route{favorites.length !== 1 ? 's' : ''}</Text>
+        </View>
       </View>
 
       {loading ? (
@@ -118,11 +125,19 @@ const styles = StyleSheet.create({
   center:    { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     backgroundColor: COLORS.white,
     paddingHorizontal: 16,
     paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+  },
+  backBtn: {
+    width: 34, height: 34, borderRadius: 10,
+    backgroundColor: COLORS.background,
+    alignItems: 'center', justifyContent: 'center',
   },
   pageTitle:    { fontSize: 24, fontWeight: '800', color: COLORS.textPrimary },
   pageSubtitle: { fontSize: 13, color: COLORS.textMuted, marginTop: 2 },

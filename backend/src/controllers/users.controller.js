@@ -494,6 +494,59 @@ export const removeFavorite = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Self-service profile  (GET /api/users/me  /  PUT /api/users/me)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const getMe = async (req, res) => {
+  try {
+    const pool   = await poolPromise;
+    const result = await pool.request()
+      .input("id", sql.Int, req.user.user_id)
+      .query(`
+        SELECT user_id, full_name, email, phone, role, status, birth_date, created_at
+        FROM   users
+        WHERE  user_id = @id
+      `);
+    if (!result.recordset[0]) return res.status(404).json({ error: "User not found" });
+    res.json(result.recordset[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch profile" });
+  }
+};
+
+export const updateMe = async (req, res) => {
+  const { full_name, phone, birth_date } = req.body;
+
+  if (!full_name || !String(full_name).trim()) {
+    return res.status(400).json({ error: "Full name is required" });
+  }
+  const dobError = validateBirthDate(birth_date);
+  if (dobError) return res.status(400).json({ error: dobError });
+
+  try {
+    const pool   = await poolPromise;
+    const result = await pool.request()
+      .input("id",         sql.Int,          req.user.user_id)
+      .input("full_name",  sql.NVarChar(100), String(full_name).trim())
+      .input("phone",      sql.NVarChar(30),  phone ? String(phone).trim() : null)
+      .input("birth_date", sql.Date,          birth_date ? new Date(birth_date) : null)
+      .query(`
+        UPDATE users
+        SET full_name = @full_name, phone = @phone, birth_date = @birth_date
+        OUTPUT INSERTED.user_id, INSERTED.full_name, INSERTED.email, INSERTED.phone,
+               INSERTED.role, INSERTED.status, INSERTED.birth_date, INSERTED.created_at
+        WHERE  user_id = @id
+      `);
+    if (!result.recordset[0]) return res.status(404).json({ error: "User not found" });
+    res.json({ message: "Profile updated", user: result.recordset[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to update profile" });
+  }
+};
+
 export const deleteMyAccount = async (req, res) => {
   const pool   = await poolPromise;
   const userId = req.user.user_id;

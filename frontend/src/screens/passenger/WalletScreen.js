@@ -4,6 +4,7 @@ import {
   StatusBar, Animated, ActivityIndicator, RefreshControl,
   Platform, Linking,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
@@ -26,6 +27,7 @@ const hasCoords = (loc) => {
 };
 
 const WalletScreen = () => {
+  const navigation  = useNavigation();
   const headerInsets = useHeaderInsets(20);
   const { walletBalance, updateBalance } = useApp();
   const [transactions, setTransactions] = useState([]);
@@ -121,6 +123,12 @@ const WalletScreen = () => {
         <View style={[styles.hero, headerInsets]}>
           <View style={styles.heroDecor1} />
           <View style={styles.heroDecor2} />
+
+          {navigation.canGoBack() ? (
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.heroBackBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="chevron-back" size={22} color={COLORS.white} />
+            </TouchableOpacity>
+          ) : null}
 
           <Text style={styles.heroLabel}>Available Balance</Text>
           <Animated.Text style={[styles.heroAmount, { transform: [{ scale: balanceAnim }] }]}>
@@ -342,6 +350,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.headerBg,
     paddingBottom: 32, alignItems: 'center', paddingHorizontal: 24,
     overflow: 'hidden',
+  },
+  heroBackBtn: {
+    position: 'absolute', top: 0, left: 16,
+    width: 36, height: 36, borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center', justifyContent: 'center',
+    zIndex: 10,
   },
   heroDecor1: {
     position: 'absolute', width: 220, height: 220, borderRadius: 110,

@@ -112,7 +112,7 @@ const ProfileScreen = ({ navigation }) => {
               icon="person-circle-outline"
               label="Personal Info"
               value={user?.phone || 'Tap to update'}
-              onPress={() => {}}
+              onPress={() => navigation.navigate('PersonalInfo')}
             />
             <MenuItem
               icon="wallet-outline"

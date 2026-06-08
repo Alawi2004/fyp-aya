@@ -1,0 +1,375 @@
+import React, { useState, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  TextInput, Alert, ActivityIndicator, StatusBar,
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../context/AuthContext';
+import { COLORS } from '../../constants/colors';
+import apiClient from '../../api/apiClient';
+
+// ── Date helpers ──────────────────────────────────────────────────────────────
+
+function isoToDisplay(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}/${d.getUTCFullYear()}`;
+}
+
+function displayToIso(str) {
+  if (!str || !str.trim()) return null;
+  const parts = str.trim().split('/');
+  if (parts.length !== 3) return null;
+  const [dd, mm, yyyy] = parts.map(Number);
+  if (!dd || !mm || !yyyy || yyyy < 1900 || yyyy > new Date().getFullYear()) return null;
+  if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
+  const d = new Date(Date.UTC(yyyy, mm - 1, dd));
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+const FieldRow = ({
+  icon, label, value, onChangeText,
+  placeholder, keyboardType = 'default', autoCapitalize = 'none', last = false,
+}) => (
+  <View style={[styles.fieldRow, !last && styles.fieldRowBorder]}>
+    <View style={styles.fieldIcon}>
+      <Ionicons name={icon} size={16} color={COLORS.primary} />
+    </View>
+    <View style={{ flex: 1 }}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        style={styles.fieldInput}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={COLORS.textMuted}
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
+        returnKeyType="done"
+      />
+    </View>
+  </View>
+);
+
+const ReadOnlyRow = ({ icon, label, value, last = false }) => (
+  <View style={[styles.fieldRow, !last && styles.fieldRowBorder]}>
+    <View style={[styles.fieldIcon, { backgroundColor: COLORS.background }]}>
+      <Ionicons name={icon} size={16} color={COLORS.textMuted} />
+    </View>
+    <View style={{ flex: 1 }}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <Text style={styles.fieldReadOnly}>{value || '—'}</Text>
+    </View>
+    <Ionicons name="lock-closed-outline" size={13} color={COLORS.textMuted} />
+  </View>
+);
+
+// ── Main screen ───────────────────────────────────────────────────────────────
+
+const PersonalInfoScreen = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
+  const { user, setUser } = useAuth();
+
+  const [fullName, setFullName] = useState(user?.full_name || user?.name || '');
+  const [phone,    setPhone]    = useState(user?.phone || '');
+  const [dob,      setDob]      = useState(isoToDisplay(user?.birth_date));
+  const [saving,   setSaving]   = useState(false);
+  const [dirty,    setDirty]    = useState(false);
+
+  const initials = fullName
+    ? fullName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+    : 'P';
+
+  const createdAt = user?.created_at
+    ? new Date(user.created_at).toLocaleDateString('en-GB', {
+        day: 'numeric', month: 'long', year: 'numeric',
+      })
+    : '—';
+
+  const handleBack = useCallback(() => {
+    if (dirty) {
+      Alert.alert('Unsaved Changes', 'You have unsaved changes. Leave anyway?', [
+        { text: 'Stay', style: 'cancel' },
+        { text: 'Leave', style: 'destructive', onPress: () => navigation.goBack() },
+      ]);
+    } else {
+      navigation.goBack();
+    }
+  }, [dirty, navigation]);
+
+  const handleSave = async () => {
+    const trimmedName = fullName.trim();
+    if (!trimmedName) {
+      Alert.alert('Required', 'Full name cannot be empty.');
+      return;
+    }
+
+    let birth_date = null;
+    if (dob.trim()) {
+      birth_date = displayToIso(dob);
+      if (!birth_date) {
+        Alert.alert('Invalid Date', 'Enter your date of birth in DD/MM/YYYY format (e.g. 15/03/1995).');
+        return;
+      }
+      if (new Date(birth_date) > new Date()) {
+        Alert.alert('Invalid Date', 'Date of birth cannot be in the future.');
+        return;
+      }
+    }
+
+    setSaving(true);
+    try {
+      const res = await apiClient.put('/users/me', {
+        full_name: trimmedName,
+        phone: phone.trim() || null,
+        birth_date,
+      });
+
+      const raw = res.data.user;
+      const updatedUser = {
+        ...user,
+        full_name:   raw.full_name,
+        name:        raw.full_name,
+        phone:       raw.phone,
+        birth_date:  raw.birth_date,
+      };
+
+      setUser(updatedUser);
+      await AsyncStorage.setItem('userData', JSON.stringify(updatedUser));
+      setDirty(false);
+
+      Alert.alert('Saved', 'Your profile has been updated.', [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
+    } catch (err) {
+      const msg = err?.response?.data?.error || 'Could not save. Please try again.';
+      Alert.alert('Error', msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+
+      {/* ── Header ── */}
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <TouchableOpacity style={styles.backBtn} onPress={handleBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="chevron-back" size={22} color={COLORS.white} />
+        </TouchableOpacity>
+
+        <Text style={styles.headerTitle}>Personal Info</Text>
+
+        <TouchableOpacity
+          style={[styles.saveHeaderBtn, (!dirty || saving) && { opacity: 0.38 }]}
+          onPress={handleSave}
+          disabled={!dirty || saving}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={styles.saveHeaderText}>{saving ? 'Saving…' : 'Save'}</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
+      >
+        {/* ── Avatar ── */}
+        <View style={styles.avatarSection}>
+          <View style={styles.avatarWrap}>
+            <Text style={styles.avatarText}>{initials}</Text>
+          </View>
+          <Text style={styles.avatarName}>{fullName || 'Your Name'}</Text>
+          <Text style={styles.avatarEmail}>{user?.email || ''}</Text>
+        </View>
+
+        {/* ── Editable fields ── */}
+        <View style={styles.formSection}>
+          <Text style={styles.sectionLabel}>BASIC INFORMATION</Text>
+          <View style={styles.formCard}>
+            <FieldRow
+              icon="person-outline"
+              label="Full Name"
+              value={fullName}
+              onChangeText={v => { setFullName(v); setDirty(true); }}
+              placeholder="Your full name"
+              autoCapitalize="words"
+            />
+            <FieldRow
+              icon="call-outline"
+              label="Phone"
+              value={phone}
+              onChangeText={v => { setPhone(v); setDirty(true); }}
+              placeholder="+961 xx xxx xxx"
+              keyboardType="phone-pad"
+            />
+            <FieldRow
+              icon="calendar-outline"
+              label="Date of Birth"
+              value={dob}
+              onChangeText={v => { setDob(v); setDirty(true); }}
+              placeholder="DD/MM/YYYY"
+              keyboardType="numeric"
+              last
+            />
+          </View>
+
+          {/* ── Read-only fields ── */}
+          <Text style={styles.sectionLabel}>ACCOUNT DETAILS</Text>
+          <View style={styles.formCard}>
+            <ReadOnlyRow
+              icon="mail-outline"
+              label="Email Address"
+              value={user?.email}
+            />
+            <ReadOnlyRow
+              icon="shield-checkmark-outline"
+              label="Account Type"
+              value={user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : '—'}
+            />
+            <ReadOnlyRow
+              icon="time-outline"
+              label="Member Since"
+              value={createdAt}
+              last
+            />
+          </View>
+
+          <Text style={styles.hintText}>
+            To change your email address, contact support.
+          </Text>
+        </View>
+
+        {/* ── Save button ── */}
+        <View style={styles.saveBtnWrap}>
+          <TouchableOpacity
+            style={[styles.saveBtn, (!dirty || saving) && { opacity: 0.45 }]}
+            onPress={handleSave}
+            disabled={!dirty || saving}
+            activeOpacity={0.82}
+          >
+            {saving
+              ? <ActivityIndicator color={COLORS.white} size="small" />
+              : <Ionicons name="checkmark-circle-outline" size={20} color={COLORS.white} />
+            }
+            <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save Changes'}</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
+  );
+};
+
+export default PersonalInfoScreen;
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.background },
+
+  /* Header */
+  header: {
+    backgroundColor: COLORS.headerBg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  backBtn: {
+    width: 36, height: 36, borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  headerTitle: {
+    flex: 1, textAlign: 'center',
+    fontSize: 17, fontWeight: '800',
+    color: COLORS.white,
+  },
+  saveHeaderBtn: { paddingHorizontal: 4 },
+  saveHeaderText: { fontSize: 15, fontWeight: '700', color: COLORS.white },
+
+  /* Avatar section */
+  avatarSection: {
+    backgroundColor: COLORS.headerBg,
+    alignItems: 'center',
+    paddingBottom: 28,
+    paddingHorizontal: 24,
+  },
+  avatarWrap: {
+    width: 80, height: 80, borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.35)',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 12,
+  },
+  avatarText: { fontSize: 28, fontWeight: '800', color: COLORS.white },
+  avatarName: { fontSize: 18, fontWeight: '800', color: COLORS.white, marginBottom: 3 },
+  avatarEmail: { fontSize: 13, color: 'rgba(255,255,255,0.65)' },
+
+  /* Form */
+  formSection: { paddingHorizontal: 16, paddingTop: 24 },
+  sectionLabel: {
+    fontSize: 11, fontWeight: '700', color: COLORS.textMuted,
+    textTransform: 'uppercase', letterSpacing: 0.9,
+    marginBottom: 8, marginLeft: 4,
+  },
+  formCard: {
+    backgroundColor: COLORS.white, borderRadius: 18,
+    marginBottom: 20, overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
+  },
+
+  /* Fields */
+  fieldRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 14, gap: 12,
+  },
+  fieldRowBorder: {
+    borderBottomWidth: 1, borderBottomColor: COLORS.borderLight,
+  },
+  fieldIcon: {
+    width: 34, height: 34, borderRadius: 10,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  fieldLabel: {
+    fontSize: 10, fontWeight: '700', color: COLORS.textMuted,
+    textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 3,
+  },
+  fieldInput: {
+    fontSize: 15, fontWeight: '600', color: COLORS.textPrimary,
+    padding: 0, margin: 0,
+  },
+  fieldReadOnly: {
+    fontSize: 15, fontWeight: '600', color: COLORS.textSecondary,
+  },
+
+  hintText: {
+    fontSize: 12, color: COLORS.textMuted,
+    textAlign: 'center', marginTop: -8, marginBottom: 20,
+    lineHeight: 18,
+  },
+
+  /* Save button */
+  saveBtnWrap: { paddingHorizontal: 20, marginTop: 4 },
+  saveBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: COLORS.primary,
+    borderRadius: 16, paddingVertical: 16,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
+  },
+  saveBtnText: { fontSize: 16, fontWeight: '800', color: COLORS.white },
+});

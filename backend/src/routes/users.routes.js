@@ -15,6 +15,8 @@ import {
   addFavorite,
   removeFavorite,
   deleteMyAccount,
+  getMe,
+  updateMe,
 } from "../controllers/users.controller.js";
 import { requirePermission } from "../middleware/permissions.middleware.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
@@ -43,6 +45,8 @@ const router = express.Router();
 // ── Self-service routes (any authenticated user) ─────────────────────────────
 // IMPORTANT: these must come BEFORE /:id to avoid route capture.
 
+router.get("/me",                       requireAuth, getMe);
+router.put("/me",                       requireAuth, updateMe);
 router.get("/me/favorites",             requireAuth, getFavorites);
 router.post("/me/favorites",            requireAuth, addFavorite);
 router.delete("/me/favorites/:routeId", requireAuth, removeFavorite);

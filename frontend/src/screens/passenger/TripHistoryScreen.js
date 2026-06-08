@@ -298,7 +298,12 @@ const TripHistoryScreen = ({ navigation }) => {
 
       {/* Header */}
       <View style={[styles.pageHeader, headerInsets]}>
-        <View>
+        {navigation?.canGoBack() ? (
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
+          </TouchableOpacity>
+        ) : null}
+        <View style={{ flex: 1 }}>
           <Text style={styles.pageTitle}>My Trips</Text>
           <Text style={styles.pageSubtitle}>{(bookings || []).length} bookings total</Text>
         </View>
@@ -347,9 +352,14 @@ const styles = StyleSheet.create({
   /* Header */
   pageHeader: {
     backgroundColor: COLORS.white,
-    paddingHorizontal: 20, paddingBottom: 14,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingBottom: 14,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
     borderBottomWidth: 1, borderBottomColor: COLORS.border,
+  },
+  backBtn: {
+    width: 34, height: 34, borderRadius: 10,
+    backgroundColor: COLORS.background,
+    alignItems: 'center', justifyContent: 'center',
   },
   pageTitle: { fontSize: 24, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.3 },
   pageSubtitle: { fontSize: 13, color: COLORS.textMuted, marginTop: 2, fontWeight: '500' },

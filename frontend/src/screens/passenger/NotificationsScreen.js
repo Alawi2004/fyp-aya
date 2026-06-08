@@ -30,7 +30,7 @@ function timeAgo(dateStr) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-const NotificationsScreen = () => {
+const NotificationsScreen = ({ navigation }) => {
   const headerInsets = useHeaderInsets();
   const { user } = useAuth();
   const [notifs,     setNotifs]     = useState([]);
@@ -86,6 +86,11 @@ const NotificationsScreen = () => {
 
       {/* Page Header */}
       <View style={[styles.pageHeader, headerInsets]}>
+        {navigation?.canGoBack() ? (
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="chevron-back" size={22} color={COLORS.textPrimary} />
+          </TouchableOpacity>
+        ) : null}
         <Text style={styles.pageTitle}>Notifications</Text>
         {unreadCount > 0 && (
           <View style={styles.unreadBadge}>
@@ -172,6 +177,11 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+  },
+  backBtn: {
+    width: 34, height: 34, borderRadius: 10,
+    backgroundColor: COLORS.background,
+    alignItems: 'center', justifyContent: 'center',
   },
   pageTitle:       { fontSize: 24, fontWeight: '800', color: COLORS.textPrimary, flex: 1 },
   unreadBadge: {
