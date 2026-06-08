@@ -492,38 +492,43 @@ WHEN MATCHED THEN UPDATE SET
 -- 14. WALLETS (one per user)
 -- ─────────────────────────────────────────────────────────────
 PRINT '14. wallets';
-INSERT INTO wallets (user_id, balance, is_frozen)
-SELECT u.user_id, m.balance, 0
-FROM (VALUES
-  ('superadmin@yallatransit.lb',    0.00),
-  ('admin@yallatransit.lb',         0.00),
-  ('karim.saad@yallatransit.lb',    0.00),
-  ('lara.haddad@yallatransit.lb',   0.00),
-  ('nour.khalil@yallatransit.lb',   0.00),
-  ('samer.azar@yallatransit.lb',    0.00),
-  ('dina.nassar@yallatransit.lb',   0.00),
-  ('rami.saleh@yallatransit.lb',    0.00),
-  ('maya.frem@yallatransit.lb',     0.00),
-  ('ahmad.khalil@yallatransit.lb',  0.00),
-  ('fadi.mansour@yallatransit.lb',  0.00),
-  ('omar.nassar@yallatransit.lb',   0.00),
-  ('walid.haddad@yallatransit.lb',  0.00),
-  ('hassan.rizk@yallatransit.lb',   0.00),
-  ('sara.mousa@gmail.com',         47.50),
-  ('ali.hassan@gmail.com',         18.75),
-  ('hana.gergi@gmail.com',         62.00),
-  ('jad.khoury@gmail.com',         25.00),
-  ('nadia.bou@gmail.com',           8.50),
-  ('tony.abi@gmail.com',           35.00),
-  ('rana.zein@gmail.com',          12.00),
-  ('george.nader@gmail.com',       55.00),
-  ('lina.tawk@gmail.com',          30.00),
-  ('kamal.srour@gmail.com',        22.50)
-) AS m(email, balance)
-JOIN users u ON u.email = m.email
-WHERE NOT EXISTS (
-  SELECT 1 FROM wallets w WHERE w.user_id = u.user_id
-);
+MERGE wallets AS t
+USING (
+  SELECT u.user_id, m.balance
+  FROM (VALUES
+    ('superadmin@yallatransit.lb',    0.00),
+    ('admin@yallatransit.lb',         0.00),
+    ('karim.saad@yallatransit.lb',    0.00),
+    ('lara.haddad@yallatransit.lb',   0.00),
+    ('nour.khalil@yallatransit.lb',   0.00),
+    ('samer.azar@yallatransit.lb',    0.00),
+    ('dina.nassar@yallatransit.lb',   0.00),
+    ('rami.saleh@yallatransit.lb',    0.00),
+    ('maya.frem@yallatransit.lb',     0.00),
+    ('ahmad.khalil@yallatransit.lb',  0.00),
+    ('fadi.mansour@yallatransit.lb',  0.00),
+    ('omar.nassar@yallatransit.lb',   0.00),
+    ('walid.haddad@yallatransit.lb',  0.00),
+    ('hassan.rizk@yallatransit.lb',   0.00),
+    ('sara.mousa@gmail.com',         75.00),
+    ('ali.hassan@gmail.com',         40.00),
+    ('hana.gergi@gmail.com',         90.00),
+    ('jad.khoury@gmail.com',         55.00),
+    ('nadia.bou@gmail.com',          30.00),
+    ('tony.abi@gmail.com',           60.00),
+    ('rana.zein@gmail.com',          35.00),
+    ('george.nader@gmail.com',       85.00),
+    ('lina.tawk@gmail.com',          50.00),
+    ('kamal.srour@gmail.com',        45.00)
+  ) AS m(email, balance)
+  JOIN users u ON u.email = m.email
+) AS s
+ON t.user_id = s.user_id
+WHEN NOT MATCHED THEN
+  INSERT (user_id, balance, is_frozen)
+  VALUES (s.user_id, s.balance, 0)
+WHEN MATCHED THEN UPDATE SET
+  t.balance = s.balance;
 
 -- ─────────────────────────────────────────────────────────────
 -- 15. TRIPS
@@ -540,7 +545,13 @@ FROM (VALUES
   ('BEY-1001', 'hassan.rizk@yallatransit.lb',   'Route 1 - Riad El Solh to Ras Beirut', '2026-05-27 07:00:00', NULL,                  'scheduled'),
   ('BEY-1002', 'ahmad.khalil@yallatransit.lb',  'Route 2 - Dora to Downtown Beirut',    '2026-05-24 08:00:00', '2026-05-24 10:15:00', 'completed'),
   ('BEY-1003', 'fadi.mansour@yallatransit.lb',  'Route 3 - Jounieh to Dora',            '2026-05-24 07:00:00', '2026-05-24 09:45:00', 'completed'),
-  ('BEY-2002', 'walid.haddad@yallatransit.lb',  'Route 4 - Airport to Achrafieh',       '2026-05-23 10:00:00', NULL,                  'cancelled')
+  ('BEY-2002', 'walid.haddad@yallatransit.lb',  'Route 4 - Airport to Achrafieh',       '2026-05-23 10:00:00', NULL,                  'cancelled'),
+  -- Upcoming trips (relative to "today" = 2026-06-08)
+  ('BEY-1001', 'ahmad.khalil@yallatransit.lb',  'Route 1 - Riad El Solh to Ras Beirut', '2026-06-10 07:00:00', NULL,                  'scheduled'),
+  ('BEY-1002', 'fadi.mansour@yallatransit.lb',  'Route 2 - Dora to Downtown Beirut',    '2026-06-10 08:30:00', NULL,                  'scheduled'),
+  ('BEY-1003', 'omar.nassar@yallatransit.lb',   'Route 3 - Jounieh to Dora',            '2026-06-11 07:00:00', NULL,                  'scheduled'),
+  ('BEY-2001', 'walid.haddad@yallatransit.lb',  'Route 4 - Airport to Achrafieh',       '2026-06-12 14:00:00', NULL,                  'scheduled'),
+  ('BEY-1001', 'hassan.rizk@yallatransit.lb',   'Route 1 - Riad El Solh to Ras Beirut', '2026-06-13 07:00:00', NULL,                  'scheduled')
 ) AS m(plate_number, driver_email, route_name, start_time, end_time, status)
 JOIN vehicles v ON v.plate_number = m.plate_number
 JOIN users    u ON u.email        = m.driver_email
