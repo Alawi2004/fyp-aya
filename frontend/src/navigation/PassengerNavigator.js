@@ -19,6 +19,7 @@ import FavoriteRoutesScreen from '../screens/passenger/FavoriteRoutesScreen';
 import TripPlannerScreen from '../screens/passenger/TripPlannerScreen';
 import DeleteAccountScreen from '../screens/passenger/DeleteAccountScreen';
 import PersonalInfoScreen  from '../screens/passenger/PersonalInfoScreen';
+import RatingsScreen       from '../screens/passenger/RatingsScreen';
 import NearbyStopsScreen from '../screens/passenger/NearbyStopsScreen';
 import ComplaintScreen from '../screens/passenger/ComplaintScreen';
 import TaxiReservationScreen from '../screens/passenger/TaxiReservationScreen';
@@ -46,6 +47,7 @@ const ProfileStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="Profile"        component={ProfileScreen} />
     <Stack.Screen name="PersonalInfo"   component={PersonalInfoScreen} />
+    <Stack.Screen name="Ratings"        component={RatingsScreen} />
     <Stack.Screen name="Wallet"         component={WalletScreen} />
     <Stack.Screen name="TripHistory"    component={TripHistoryScreen} />
     <Stack.Screen name="Notifications"  component={NotificationsScreen} />

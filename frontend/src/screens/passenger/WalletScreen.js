@@ -352,11 +352,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   heroBackBtn: {
-    position: 'absolute', top: 0, left: 16,
+    alignSelf: 'flex-start',
+    marginBottom: 14,
     width: 36, height: 36, borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center', justifyContent: 'center',
-    zIndex: 10,
   },
   heroDecor1: {
     position: 'absolute', width: 220, height: 220, borderRadius: 110,

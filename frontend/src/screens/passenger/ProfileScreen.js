@@ -112,29 +112,35 @@ const ProfileScreen = ({ navigation }) => {
               icon="person-circle-outline"
               label="Personal Info"
               value={user?.phone || 'Tap to update'}
-              onPress={() => navigation.navigate('PersonalInfo')}
+              onPress={() => navigation.push('PersonalInfo')}
             />
             <MenuItem
               icon="wallet-outline"
               label="My Wallet"
               value={`$${walletBalance?.toFixed(2) ?? '0.00'} available`}
-              onPress={() => navigation.navigate('Wallet')}
+              onPress={() => navigation.push('Wallet')}
             />
             <MenuItem
               icon="receipt-outline"
               label="Trip History"
               value={`${totalTrips} bookings`}
-              onPress={() => navigation.navigate('TripHistory')}
+              onPress={() => navigation.push('TripHistory')}
+            />
+            <MenuItem
+              icon="star-outline"
+              label="My Ratings"
+              value={`${completedTrips} submitted`}
+              onPress={() => navigation.push('Ratings')}
             />
             <MenuItem
               icon="heart-outline"
               label="Favorite Routes"
-              onPress={() => navigation.navigate('FavoriteRoutes')}
+              onPress={() => navigation.push('FavoriteRoutes')}
             />
             <MenuItem
               icon="notifications-outline"
               label="Notifications"
-              onPress={() => navigation.navigate('Notifications')}
+              onPress={() => navigation.push('Notifications')}
             />
           </View>
 
@@ -163,12 +169,11 @@ const ProfileScreen = ({ navigation }) => {
               icon="trash-outline"
               label="Delete Account"
               value="30-day cooling off period"
-              onPress={() => navigation.navigate('DeleteAccount')}
+              onPress={() => navigation.push('DeleteAccount')}
               danger
             />
           </View>
 
-          <Text style={styles.version}>RideAya v1.0.0 · Made with ❤️</Text>
         </View>
       </ScrollView>
     </View>

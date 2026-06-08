@@ -74,6 +74,49 @@ export const getTripRatings = async (req, res) => {
 };
 
 // GET /api/driver/ratings — ratings for a specific driver's trips
+// GET /api/ratings/me — current user's own submitted ratings
+export const getMyRatings = async (req, res) => {
+  try {
+    const pool   = await poolPromise;
+    const result = await pool.request()
+      .input("uid", sql.Int, req.user.user_id)
+      .query(`
+        SELECT
+          r.rating_id, r.trip_id, r.rating, r.comment, r.created_at,
+          ro.route_name,
+          du.full_name AS driver_name
+        FROM   ratings r
+        LEFT JOIN trips   t  ON t.trip_id   = r.trip_id
+        LEFT JOIN routes  ro ON ro.route_id = t.route_id
+        LEFT JOIN drivers d  ON d.driver_id = t.driver_id
+        LEFT JOIN users   du ON du.user_id  = d.user_id
+        WHERE  r.user_id = @uid
+        ORDER  BY r.created_at DESC
+      `);
+    res.json(result.recordset);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// DELETE /api/ratings/:id — owner can delete their own rating
+export const deleteMyRating = async (req, res) => {
+  try {
+    const pool   = await poolPromise;
+    const result = await pool.request()
+      .input("id",  sql.Int, Number(req.params.id))
+      .input("uid", sql.Int, req.user.user_id)
+      .query("DELETE FROM ratings WHERE rating_id = @id AND user_id = @uid");
+
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).json({ error: "Rating not found or not yours" });
+    }
+    res.json({ message: "Rating deleted" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 export const getDriverRatings = async (req, res) => {
   try {
     const driverId = req.query.driver_id || req.user?.driver_id;

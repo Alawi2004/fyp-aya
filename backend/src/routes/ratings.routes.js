@@ -4,7 +4,10 @@ import {
   createRating,
   getTripRatings,
   getDriverRatings,
+  getMyRatings,
+  deleteMyRating,
 } from "../controllers/ratings.controller.js";
+import { requireAuth } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
@@ -53,26 +56,11 @@ const router = express.Router();
  *       201:
  *         description: Rating submitted
  */
-router.get("/", getRatings);
-router.post("/", createRating);
-
-/**
- * @swagger
- * /api/ratings/trip/{trip_id}:
- *   get:
- *     tags: [Ratings]
- *     summary: Get all ratings for a specific trip
- *     parameters:
- *       - in: path
- *         name: trip_id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Trip ratings
- */
-router.get("/driver", getDriverRatings);
+router.get("/me",       requireAuth, getMyRatings);
+router.delete("/:id",   requireAuth, deleteMyRating);
+router.get("/",         getRatings);
+router.post("/",        createRating);
+router.get("/driver",   getDriverRatings);
 router.get("/trip/:trip_id", getTripRatings);
 router.get("/:trip_id", getTripRatings);
 
