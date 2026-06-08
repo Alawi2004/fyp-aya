@@ -18,7 +18,8 @@
         {
           "faceIDPermission": "Allow Yalla Transit to use Face ID for secure login."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "ios": {
       "supportsTablet": true,
