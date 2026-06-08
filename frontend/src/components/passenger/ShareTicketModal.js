@@ -1,95 +1,39 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, Modal, TouchableOpacity,
-  ScrollView, Animated, Linking, Alert, useColorScheme,
-  ActivityIndicator, Platform,
+  Animated, Alert, useColorScheme, ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
-import * as Clipboard from 'expo-clipboard';
+import * as FileSystem from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
 import ShareTicketCard from './ShareTicketCard';
-import { issueShareTokenApi } from '../../api/shareApi';
 import { COLORS } from '../../constants/colors';
 
-// expo-crypto for client-side token when backend unavailable
-let Crypto = null;
-try { Crypto = require('expo-crypto'); } catch (_) {}
-
-// Share URL uses the real backend so links actually open in a browser.
-// Change EXPO_PUBLIC_API_URL in .env to your LAN IP (e.g. http://192.168.1.x:4000/api)
-// for cross-device sharing during development.
-const SHARE_BASE = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000/api')
-  .replace(/\/api\/?$/, '');
-
-// ── Client-side token fallback (mock / offline) ───────────────────────────────
-const buildClientToken = async (booking, ticket, user) => {
-  const exp = Math.floor(Date.now() / 1000) + 604800;
-  const raw = `${ticket.ticket_id}.${user?._id ?? 'g'}.${ticket.seat_number}.${exp}.ticket_share`;
-  const b64 = btoa(unescape(encodeURIComponent(raw)))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  let sig = 'mocksig0000000000000000000000000';
-  if (Crypto) {
-    sig = (await Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      `yalla-share-secret-dev-2026:${b64}`,
-      { encoding: Crypto.CryptoEncoding.HEX }
-    )).slice(0, 32);
-  }
-  return `${b64}.${sig}`;
+// ── Derive a safe filename from trip/seat/date ────────────────────────────────
+const buildPdfFilename = (booking, ticket) => {
+  const bus     = booking?.bus ?? {};
+  const name    = (bus.name || 'Trip').replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
+  const seat    = ticket?.seat_number ?? booking?.seatId ?? 'X';
+  const dateStr = booking?.date
+    ? new Date(booking.date).toISOString().slice(0, 10)
+    : new Date().toISOString().slice(0, 10);
+  return `${name}_Seat${seat}_${dateStr}.pdf`;
 };
-
-const buildShareText = (booking, ticket, passengerName, shareUrl) => {
-  const bus = booking?.bus ?? {};
-  return [
-    '🚌 *Yalla Transit Ticket*',
-    '─────────────────────',
-    `*${bus.name || 'Bus Service'}*`,
-    `📍 ${bus.origin || '—'} → ${bus.destination || '—'}`,
-    `📅 ${bus.departureTime || '—'}${bus.arrivalTime ? ` → ${bus.arrivalTime}` : ''}`,
-    `👤 ${passengerName || 'Passenger'}  |  Seat *${ticket?.seat_number || '—'}*`,
-    `💰 $${parseFloat(ticket?.amount ?? booking?.price ?? 0).toFixed(2)}  |  ✅ ${booking?.status?.toUpperCase() || 'CONFIRMED'}`,
-    `🔖 Ticket #${ticket?.ticket_id || '—'}  ·  Booking #${booking?._id || '—'}`,
-    '─────────────────────',
-    `🔗 View ticket: ${shareUrl}`,
-    '',
-    '_Open in Yalla Transit for live tracking_',
-  ].join('\n');
-};
-
-// ── Action button ─────────────────────────────────────────────────────────────
-const ActionBtn = ({ icon, label, onPress, color, loading, disabled }) => (
-  <TouchableOpacity
-    style={[styles.actionBtn, { borderColor: color + '33', backgroundColor: color + '12' }, disabled && { opacity: 0.45 }]}
-    onPress={onPress}
-    disabled={disabled || loading}
-    activeOpacity={0.75}
-  >
-    {loading
-      ? <ActivityIndicator size="small" color={color} />
-      : <Ionicons name={icon} size={22} color={color} />
-    }
-    <Text style={[styles.actionLabel, { color }]}>{label}</Text>
-  </TouchableOpacity>
-);
 
 // ── Main modal ────────────────────────────────────────────────────────────────
-const ShareTicketModal = ({ visible, onClose, booking, ticket, passengerName, user }) => {
+const ShareTicketModal = ({ visible, onClose, booking, ticket, passengerName, user, boardingQr }) => {
   const insets    = useSafeAreaInsets();
   const scheme    = useColorScheme();
   const isDark    = scheme === 'dark';
   const cardRef   = useRef(null);
   const slideAnim = useRef(new Animated.Value(600)).current;
 
-  const [shareUrl,    setShareUrl]    = useState('');
-  const [shareToken,  setShareToken]  = useState('');
-  const [tokenLoading, setTokenLoading] = useState(false);
-  const [copied,      setCopied]      = useState(false);
-  const [generating,  setGenerating]  = useState(null); // 'image' | 'pdf' | null
+  const [generating, setGenerating] = useState(false);
 
-  // Animate in/out
+  // Animate sheet in/out
   useEffect(() => {
     Animated.spring(slideAnim, {
       toValue: visible ? 0 : 600,
@@ -98,61 +42,22 @@ const ShareTicketModal = ({ visible, onClose, booking, ticket, passengerName, us
     }).start();
   }, [visible]);
 
-  // Generate share token when modal opens — issued per-ticket so each seat
-  // in a multi-seat booking gets its own distinct, view-only share link.
-  useEffect(() => {
-    if (!visible || !booking || !ticket) return;
-    let cancelled = false;
-    (async () => {
-      setTokenLoading(true);
-      try {
-        const res = await issueShareTokenApi({
-          bookingId: ticket.ticket_id ?? booking._id,
-          seatId:    ticket.seat_number,
-          userId:    user?._id,
-        });
-        if (!cancelled) {
-          setShareToken(res.data?.token   ?? '');
-          setShareUrl(res.data?.shareUrl  ?? `${SHARE_BASE}/ticket/share?t=demo`);
-        }
-      } catch {
-        // API unavailable — generate client-side
-        const t = await buildClientToken(booking, ticket, user);
-        if (!cancelled) {
-          setShareToken(t);
-          setShareUrl(`${SHARE_BASE}/ticket/share?t=${t}`);
-        }
-      } finally {
-        if (!cancelled) setTokenLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [visible, booking, ticket, user]);
-
-  // ── Capture QR card as PNG → native share ────────────────────────────────
-  const handleShareImage = useCallback(async () => {
-    setGenerating('image');
+  // ── Capture card as PNG → embed in A4 PDF → share ────────────────────────
+  const handleSharePdf = useCallback(async () => {
+    if (generating) return;
+    setGenerating(true);
     try {
       const canShare = await Sharing.isAvailableAsync();
-      if (!canShare) throw new Error('Sharing not available');
-      const uri = await captureRef(cardRef, { format: 'png', quality: 1, result: 'tmpfile' });
-      await Sharing.shareAsync(uri, {
-        mimeType: 'image/png',
-        dialogTitle: 'Share Ticket Image',
-        UTI: 'public.png',
-      });
-    } catch {
-      Alert.alert('Could not share image', 'Try "Share Link" instead.');
-    } finally {
-      setGenerating(null);
-    }
-  }, []);
+      if (!canShare) throw new Error('Sharing not available on this device');
 
-  // ── Capture as PNG → embed in A4 PDF → share ─────────────────────────────
-  const handleDownloadPdf = useCallback(async () => {
-    setGenerating('pdf');
-    try {
       const imgUri = await captureRef(cardRef, { format: 'png', quality: 1, result: 'tmpfile' });
+
+      const bus     = booking?.bus ?? {};
+      const seat    = ticket?.seat_number ?? booking?.seatId ?? '—';
+      const dateStr = booking?.date
+        ? new Date(booking.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+        : '—';
+
       const html = `<!DOCTYPE html><html><head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width">
@@ -168,75 +73,43 @@ const ShareTicketModal = ({ visible, onClose, booking, ticket, passengerName, us
       </head><body>
         <div class="card">
           <img src="${imgUri}" />
-          <footer>Yalla Transit — Official Digital Ticket · Seat ${ticket?.seat_number ?? '—'} · ${shareUrl}</footer>
+          <footer>Yalla Transit — Official Digital Ticket · ${bus.name || ''} · Seat ${seat} · ${dateStr}</footer>
         </div>
       </body></html>`;
-      const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
-      await Sharing.shareAsync(uri, {
-        mimeType: 'application/pdf',
-        dialogTitle: `Save Ticket PDF — Seat ${ticket?.seat_number ?? ''}`,
-        UTI: 'com.adobe.pdf',
+
+      const { uri: rawUri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
+
+      // Rename the generated file so the share sheet shows a meaningful name
+      const filename = buildPdfFilename(booking, ticket);
+      const namedUri = (FileSystem.cacheDirectory ?? '') + filename;
+      await FileSystem.copyAsync({ from: rawUri, to: namedUri });
+
+      await Sharing.shareAsync(namedUri, {
+        mimeType:    'application/pdf',
+        dialogTitle: `Ticket — ${bus.name || ''} Seat ${seat}`,
+        UTI:         'com.adobe.pdf',
       });
-    } catch {
-      Alert.alert('PDF error', 'Could not generate PDF. Try sharing the image instead.');
+    } catch (err) {
+      Alert.alert('Could not share PDF', err?.message || 'Please try again.');
     } finally {
-      setGenerating(null);
+      setGenerating(false);
     }
-  }, [isDark, shareUrl, ticket]);
+  }, [isDark, booking, ticket, generating]);
 
-  // ── Copy link ─────────────────────────────────────────────────────────────
-  const handleCopyLink = useCallback(async () => {
-    await Clipboard.setStringAsync(shareUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
-  }, [shareUrl]);
+  // ── Auto-share as PDF the moment the sheet is visible ────────────────────
+  const autoSharedRef = useRef(false);
+  useEffect(() => {
+    if (!visible) { autoSharedRef.current = false; return; }
+    if (autoSharedRef.current) return;
+    autoSharedRef.current = true;
+    const t = setTimeout(() => { handleSharePdf(); }, 350);
+    return () => clearTimeout(t);
+  }, [visible, handleSharePdf]);
 
-  // ── Native Share (text + URL) ─────────────────────────────────────────────
-  const handleNativeShare = useCallback(async () => {
-    try {
-      const { Share } = await import('react-native');
-      await Share.share({
-        title:   'My Yalla Transit Ticket',
-        message: buildShareText(booking, ticket, passengerName, shareUrl),
-        url:     shareUrl, // iOS uses url for iMessage link preview
-      });
-    } catch (_) {}
-  }, [booking, ticket, passengerName, shareUrl]);
-
-  // ── Platform-specific openers ─────────────────────────────────────────────
-  const openWhatsApp = useCallback(() => {
-    const text = encodeURIComponent(buildShareText(booking, ticket, passengerName, shareUrl));
-    Linking.openURL(`whatsapp://send?text=${text}`).catch(() =>
-      Linking.openURL(`https://wa.me/?text=${text}`)
-    );
-  }, [booking, ticket, passengerName, shareUrl]);
-
-  const openTelegram = useCallback(() => {
-    const text = encodeURIComponent(buildShareText(booking, ticket, passengerName, shareUrl));
-    Linking.openURL(`tg://msg?text=${text}`).catch(() =>
-      Linking.openURL(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent('🚌 My Yalla Transit Ticket')}`)
-    );
-  }, [booking, ticket, passengerName, shareUrl]);
-
-  const openEmail = useCallback(() => {
-    const bus  = booking?.bus ?? {};
-    const subj = encodeURIComponent(`Yalla Transit Ticket — ${bus.name || 'Bus Service'} (Seat ${ticket?.seat_number ?? ''})`);
-    const body = encodeURIComponent(buildShareText(booking, ticket, passengerName, shareUrl));
-    Linking.openURL(`mailto:?subject=${subj}&body=${body}`);
-  }, [booking, ticket, passengerName, shareUrl]);
-
-  const openSms = useCallback(() => {
-    const body = encodeURIComponent(buildShareText(booking, ticket, passengerName, shareUrl));
-    const sep  = Platform.OS === 'ios' ? '&' : '?';
-    Linking.openURL(`sms:${sep}body=${body}`);
-  }, [booking, ticket, passengerName, shareUrl]);
-
-  // ─────────────────────────────────────────────────────────────────────────
-  const bgModal  = isDark ? '#0F172A' : COLORS.white;
-  const bgCard   = isDark ? '#1E293B' : COLORS.background;
-  const txPri    = isDark ? COLORS.white : COLORS.textPrimary;
-  const txSec    = isDark ? 'rgba(255,255,255,0.6)' : COLORS.textSecondary;
-  const bdr      = isDark ? 'rgba(255,255,255,0.1)' : COLORS.border;
+  const bgModal = isDark ? '#0F172A' : COLORS.white;
+  const bgCard  = isDark ? '#1E293B' : COLORS.background;
+  const txPri   = isDark ? COLORS.white : COLORS.textPrimary;
+  const txSec   = isDark ? 'rgba(255,255,255,0.6)' : COLORS.textSecondary;
 
   return (
     <Modal
@@ -247,11 +120,7 @@ const ShareTicketModal = ({ visible, onClose, booking, ticket, passengerName, us
       onRequestClose={onClose}
     >
       {/* Backdrop */}
-      <TouchableOpacity
-        style={styles.backdrop}
-        activeOpacity={1}
-        onPress={onClose}
-      />
+      <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
 
       {/* Sheet */}
       <Animated.View
@@ -272,116 +141,40 @@ const ShareTicketModal = ({ visible, onClose, booking, ticket, passengerName, us
           </TouchableOpacity>
         </View>
 
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8 }}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Token loading */}
-          {tokenLoading && (
-            <View style={styles.tokenLoading}>
-              <ActivityIndicator color={COLORS.primary} />
-              <Text style={[styles.tokenLoadingText, { color: txSec }]}>Generating secure link…</Text>
-            </View>
-          )}
+        {/* Ticket card preview */}
+        <View style={styles.cardWrap}>
+          <ShareTicketCard
+            ref={cardRef}
+            booking={booking}
+            ticket={ticket}
+            passengerName={passengerName}
+            boardingQr={boardingQr}
+            isDark={isDark}
+          />
+        </View>
 
-          {/* ── Ticket card preview ── */}
-          <View style={styles.cardWrap}>
-            <ShareTicketCard
-              ref={cardRef}
-              booking={booking}
-              ticket={ticket}
-              passengerName={passengerName}
-              shareUrl={shareUrl}
-              isDark={isDark}
-            />
-          </View>
+        {/* Share PDF button — manual trigger / retry */}
+        <View style={styles.actionWrap}>
+          <TouchableOpacity
+            style={[styles.pdfBtn, generating && { opacity: 0.6 }]}
+            onPress={handleSharePdf}
+            disabled={generating}
+            activeOpacity={0.8}
+          >
+            {generating
+              ? <ActivityIndicator size="small" color={COLORS.white} />
+              : <Ionicons name="document-outline" size={20} color={COLORS.white} />
+            }
+            <Text style={styles.pdfBtnText}>{generating ? 'Generating PDF…' : 'Share as PDF'}</Text>
+          </TouchableOpacity>
 
-          {/* ── Copyable link row ── */}
-          <View style={[styles.linkRow, { backgroundColor: bgCard, borderColor: bdr }]}>
-            <Ionicons name="link-outline" size={16} color={COLORS.primary} />
-            <Text style={[styles.linkText, { color: txSec }]} numberOfLines={1} ellipsizeMode="middle">
-              {shareUrl || 'Generating link…'}
-            </Text>
-            <TouchableOpacity
-              style={[styles.copyBtn, { backgroundColor: copied ? COLORS.secondary : COLORS.primary }]}
-              onPress={handleCopyLink}
-              disabled={!shareUrl}
-            >
-              <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={14} color={COLORS.white} />
-              <Text style={styles.copyBtnText}>{copied ? 'Copied!' : 'Copy'}</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* ── Primary actions ── */}
-          <Text style={[styles.sectionLabel, { color: txSec }]}>Share options</Text>
-          <View style={styles.actionsGrid}>
-            <ActionBtn
-              icon="share-social-outline"
-              label="Share"
-              color={COLORS.primary}
-              onPress={handleNativeShare}
-              disabled={!shareUrl}
-            />
-            <ActionBtn
-              icon="image-outline"
-              label="Image"
-              color="#7C3AED"
-              onPress={handleShareImage}
-              loading={generating === 'image'}
-              disabled={!!generating || !shareUrl}
-            />
-            <ActionBtn
-              icon="document-outline"
-              label="PDF"
-              color={COLORS.danger}
-              onPress={handleDownloadPdf}
-              loading={generating === 'pdf'}
-              disabled={!!generating || !shareUrl}
-            />
-          </View>
-
-          {/* ── Platform shortcuts ── */}
-          <Text style={[styles.sectionLabel, { color: txSec }]}>Send via</Text>
-          <View style={styles.platformRow}>
-            <TouchableOpacity style={[styles.platformBtn, { backgroundColor: '#25D366' + '18', borderColor: '#25D36633' }]} onPress={openWhatsApp} disabled={!shareUrl}>
-              <View style={[styles.platformIcon, { backgroundColor: '#25D366' }]}>
-                <Ionicons name="logo-whatsapp" size={18} color={COLORS.white} />
-              </View>
-              <Text style={[styles.platformLabel, { color: txPri }]}>WhatsApp</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.platformBtn, { backgroundColor: '#2AABEE' + '18', borderColor: '#2AABEE33' }]} onPress={openTelegram} disabled={!shareUrl}>
-              <View style={[styles.platformIcon, { backgroundColor: '#2AABEE' }]}>
-                <Ionicons name="paper-plane-outline" size={18} color={COLORS.white} />
-              </View>
-              <Text style={[styles.platformLabel, { color: txPri }]}>Telegram</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.platformBtn, { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primaryMid }]} onPress={openEmail} disabled={!shareUrl}>
-              <View style={[styles.platformIcon, { backgroundColor: COLORS.primary }]}>
-                <Ionicons name="mail-outline" size={18} color={COLORS.white} />
-              </View>
-              <Text style={[styles.platformLabel, { color: txPri }]}>Email</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.platformBtn, { backgroundColor: COLORS.secondaryLight, borderColor: COLORS.secondaryMid }]} onPress={openSms} disabled={!shareUrl}>
-              <View style={[styles.platformIcon, { backgroundColor: COLORS.secondary }]}>
-                <Ionicons name="chatbubble-outline" size={18} color={COLORS.white} />
-              </View>
-              <Text style={[styles.platformLabel, { color: txPri }]}>SMS</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Security note */}
-          <View style={[styles.securityNote, { backgroundColor: bgCard, borderColor: bdr }]}>
+          <View style={styles.boardingNote}>
             <Ionicons name="shield-checkmark-outline" size={14} color={COLORS.secondary} />
-            <Text style={[styles.securityText, { color: txSec }]}>
-              Secure link · HMAC-signed · Expires in 7 days · Share token is view-only
-              and cannot be used for boarding.
+            <Text style={[styles.boardingNoteText, { color: txSec }]}>
+              The QR code in this PDF can be used for boarding — anyone holding it can scan in.
             </Text>
           </View>
-        </ScrollView>
+        </View>
       </Animated.View>
     </Modal>
   );
@@ -416,57 +209,20 @@ const styles = StyleSheet.create({
     width: 36, height: 36, borderRadius: 18,
     alignItems: 'center', justifyContent: 'center',
   },
-
-  tokenLoading: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 12, justifyContent: 'center',
+  cardWrap: { paddingHorizontal: 16, marginBottom: 16 },
+  actionWrap: { paddingHorizontal: 16 },
+  pdfBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: COLORS.danger,
+    borderRadius: 16, paddingVertical: 16,
+    shadowColor: COLORS.danger,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
   },
-  tokenLoadingText: { fontSize: 13, fontWeight: '500' },
-
-  cardWrap: { marginBottom: 16 },
-
-  /* Link row */
-  linkRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    borderRadius: 14, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10,
-    marginBottom: 20,
-  },
-  linkText: { flex: 1, fontSize: 12, fontWeight: '500' },
-  copyBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
-  },
-  copyBtnText: { fontSize: 12, fontWeight: '700', color: COLORS.white },
-
-  sectionLabel: {
-    fontSize: 11, fontWeight: '700', textTransform: 'uppercase',
-    letterSpacing: 0.7, marginBottom: 10,
-  },
-
-  /* Primary actions */
-  actionsGrid: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  actionBtn: {
-    flex: 1, alignItems: 'center', gap: 6,
-    paddingVertical: 14, borderRadius: 14, borderWidth: 1.5,
-  },
-  actionLabel: { fontSize: 12, fontWeight: '700' },
-
-  /* Platform row */
-  platformRow: { flexDirection: 'row', gap: 8, marginBottom: 20 },
-  platformBtn: {
-    flex: 1, alignItems: 'center', gap: 6,
-    paddingVertical: 12, borderRadius: 14, borderWidth: 1,
-  },
-  platformIcon: {
-    width: 36, height: 36, borderRadius: 11,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  platformLabel: { fontSize: 11, fontWeight: '600' },
-
-  /* Security note */
-  securityNote: {
+  pdfBtnText: { fontSize: 16, fontWeight: '800', color: COLORS.white },
+  boardingNote: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    borderRadius: 12, borderWidth: 1, padding: 12,
+    marginTop: 14, paddingHorizontal: 4,
   },
-  securityText: { flex: 1, fontSize: 11, lineHeight: 17 },
+  boardingNoteText: { flex: 1, fontSize: 12, lineHeight: 18 },
 });

@@ -50,11 +50,11 @@ const DetailCell = ({ label, value, accent, isDark }) => (
 
 // ── Main card ─────────────────────────────────────────────────────────────────
 const ShareTicketCard = React.forwardRef(
-  ({ booking, ticket, passengerName, shareUrl, isDark = false }, ref) => {
+  ({ booking, ticket, passengerName, boardingQr, shareUrl, isDark = false }, ref) => {
     const status  = booking?.status ?? 'upcoming';
     const cfg     = STATUS_CFG[status] ?? STATUS_CFG.default;
     const bus     = booking?.bus ?? {};
-    const qrValue = shareUrl || `https://yallatransit.app/ticket/share?t=demo`;
+    const qrValue = boardingQr || shareUrl || `yallatransit://ticket/${booking?._id ?? 'demo'}`;
 
     const bg    = isDark ? '#0F172A' : COLORS.white;
     const body  = isDark ? '#1E293B' : COLORS.background;
@@ -166,7 +166,7 @@ const ShareTicketCard = React.forwardRef(
         {/* ── QR section ── */}
         <View style={[styles.qrSection, { backgroundColor: isDark ? '#1E293B' : COLORS.background }]}>
           <Text style={[styles.qrTitle, { color: txSec }]}>
-            Scan to view & verify ticket
+            Scan to board
           </Text>
 
           <View style={[styles.qrFrame, { borderColor: isDark ? 'rgba(255,255,255,0.15)' : COLORS.border }]}>
@@ -181,11 +181,10 @@ const ShareTicketCard = React.forwardRef(
             </View>
           </View>
 
-          {/* Live-track link hint */}
           <View style={styles.trackRow}>
-            <Ionicons name="navigate-circle-outline" size={14} color={COLORS.primary} />
-            <Text style={[styles.trackText, { color: COLORS.primary }]}>
-              Track live · Open in Yalla Transit
+            <Ionicons name="shield-checkmark-outline" size={14} color={COLORS.secondary} />
+            <Text style={[styles.trackText, { color: COLORS.secondary }]}>
+              Valid boarding pass · Show this QR to board
             </Text>
           </View>
         </View>

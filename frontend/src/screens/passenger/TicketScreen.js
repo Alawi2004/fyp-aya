@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  StatusBar, TouchableOpacity, Animated,
+  StatusBar, TouchableOpacity,
 } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
@@ -17,12 +17,14 @@ import { formatDateTime } from '../../utils/formatters';
 let Crypto = null;
 try { Crypto = require('expo-crypto'); } catch (_) {}
 
-const HMAC_SECRET    = 'yalla-transit-qr-secret-2026';
-const QR_WINDOW_SECS = 60;
+const HMAC_SECRET = 'yalla-transit-qr-secret-2026';
 
 // ── HMAC helpers ─────────────────────────────────────────────────────────────
+// Each ticket gets exactly one signed QR — generated once and reused for the
+// life of the ticket, so it stays scannable in screenshots, printouts and PDFs
+// (a refreshing QR would go stale the moment it's shared).
 const computeHmac = async (payload) => {
-  const msg = `${payload.bid}:${payload.uid}:${payload.seat}:${payload.exp}`;
+  const msg = `${payload.bid}:${payload.uid}:${payload.seat}:${payload.tid}`;
   if (Crypto) {
     const digest = await Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
@@ -31,14 +33,10 @@ const computeHmac = async (payload) => {
     );
     return digest.slice(0, 32);
   }
-  return `${msg.length.toString(16).padStart(8, '0')}${payload.exp.toString(16)}`.slice(0, 32);
+  return `${msg.length.toString(16).padStart(8, '0')}`.slice(0, 32);
 };
 
-const secondsLeftInWindow = () => QR_WINDOW_SECS - (Math.floor(Date.now() / 1000) % QR_WINDOW_SECS);
-const currentWindowExp    = () =>
-  Math.floor(Date.now() / (QR_WINDOW_SECS * 1000)) * (QR_WINDOW_SECS * 1000) + QR_WINDOW_SECS * 1000;
-
-// ── Static QR payload (offline, no expiry) ───────────────────────────────────
+// ── Static QR payload (offline, no signature) ────────────────────────────────
 const buildStaticQr = (booking, ticket, userId) =>
   JSON.stringify({
     bid:    booking._id,
@@ -65,14 +63,9 @@ const TicketScreen = ({ route, navigation }) => {
   const [activeIndex, setActiveIndex] = useState(0);
   const activeTicket = tickets[Math.min(activeIndex, tickets.length - 1)];
 
-  const [isOnline, setIsOnline]         = useState(true);
-  const [qrToken, setQrToken]           = useState('');
-  const [secondsLeft, setSecondsLeft]   = useState(secondsLeftInWindow());
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [qrToken, setQrToken]   = useState('');
 
-  const pulseAnim      = useRef(new Animated.Value(1)).current;
-  const flashAnim      = useRef(new Animated.Value(1)).current;
-  const lastWindow     = useRef(currentWindowExp());
   const ticketRef      = useRef(null);
   const [showShare, setShowShare] = useState(false);
 
@@ -84,65 +77,32 @@ const TicketScreen = ({ route, navigation }) => {
     return () => unsub();
   }, []);
 
-  // ── Online: rotating HMAC QR — unique per ticket (includes ticket_id) ───
-  const generateToken = useCallback(async () => {
-    if (!isOnline) return;
-    setIsRefreshing(true);
-    Animated.sequence([
-      Animated.timing(flashAnim, { toValue: 0, duration: 120, useNativeDriver: true }),
-      Animated.timing(flashAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
-    ]).start();
-    const payload = {
-      bid:  booking._id,
-      tid:  activeTicket.ticket_id,
-      uid:  user?._id ?? 'guest',
-      seat: activeTicket.seat_number,
-      fare: activeTicket.amount,
-      exp:  currentWindowExp(),
-    };
-    const sig = await computeHmac(payload);
-    setQrToken(JSON.stringify({ ...payload, sig }));
-    setIsRefreshing(false);
-    lastWindow.current = currentWindowExp();
-  }, [booking, activeTicket, user, isOnline]);
-
-  // ── Offline: static QR ─────────────────────────────────────────────────
+  // ── QR generation — one signed token per ticket, generated once and kept
+  // for the life of the ticket (no rotation). Online uses an HMAC-signed
+  // payload; offline falls back to an unsigned static payload the driver
+  // verifies manually. Either way the same code is shown every time the
+  // screen opens, so it stays valid in screenshots, printouts and shared PDFs.
   useEffect(() => {
-    if (!isOnline) {
-      setQrToken(buildStaticQr(booking, activeTicket, user?._id));
-    }
+    let cancelled = false;
+    (async () => {
+      if (isOnline) {
+        const payload = {
+          bid:  booking._id,
+          tid:  activeTicket.ticket_id,
+          uid:  user?._id ?? 'guest',
+          seat: activeTicket.seat_number,
+          fare: activeTicket.amount,
+        };
+        const sig = await computeHmac(payload);
+        if (!cancelled) setQrToken(JSON.stringify({ ...payload, sig }));
+      } else {
+        setQrToken(buildStaticQr(booking, activeTicket, user?._id));
+      }
+    })();
+    return () => { cancelled = true; };
   }, [isOnline, booking, activeTicket, user]);
 
-  // Online countdown & token rotation — restarts whenever the active ticket changes
-  useEffect(() => {
-    if (!isOnline) return;
-    generateToken();
-    const tick = setInterval(() => {
-      const secs = secondsLeftInWindow();
-      setSecondsLeft(secs);
-      if (currentWindowExp() !== lastWindow.current) generateToken();
-    }, 1000);
-    return () => clearInterval(tick);
-  }, [generateToken, isOnline]);
-
-  // Pulse animation near expiry (online only)
-  useEffect(() => {
-    if (!isOnline || secondsLeft > 10) {
-      pulseAnim.stopAnimation();
-      pulseAnim.setValue(1);
-      return;
-    }
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.03, duration: 400, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1,    duration: 400, useNativeDriver: true }),
-      ])
-    ).start();
-  }, [secondsLeft <= 10, isOnline]);
-
-  const urgencyColor = isOnline
-    ? (secondsLeft <= 10 ? COLORS.danger : secondsLeft <= 20 ? COLORS.warning : COLORS.secondary)
-    : COLORS.warning;
+  const urgencyColor = COLORS.secondary;
 
   const shareTicket = () => setShowShare(true);
 
@@ -155,7 +115,7 @@ const TicketScreen = ({ route, navigation }) => {
         <View style={styles.headerDecor} />
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={() => navigation.navigate('Home')}
+          onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Home')}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons name="arrow-back" size={20} color={COLORS.white} />
@@ -279,14 +239,11 @@ const TicketScreen = ({ route, navigation }) => {
           <View style={styles.qrSection}>
               <Text style={styles.qrLabel}>
                 {isOnline
-                  ? `Seat ${activeTicket.seat_number} · Scan to board · Rotates every 60s`
+                  ? `Seat ${activeTicket.seat_number} · Scan to board`
                   : 'Offline static QR — driver verifies manually'}
               </Text>
 
-              <Animated.View style={[
-                styles.qrOuter,
-                { transform: [{ scale: isOnline ? pulseAnim : 1 }], opacity: isOnline ? flashAnim : 1 },
-              ]}>
+              <View style={styles.qrOuter}>
                 <View style={[styles.qrBorder, { borderColor: urgencyColor }]}>
                   {qrToken ? (
                     <QRCode value={qrToken} size={148} color={COLORS.textPrimary} backgroundColor={COLORS.white} />
@@ -302,30 +259,7 @@ const TicketScreen = ({ route, navigation }) => {
                   <Ionicons name={isOnline ? 'lock-closed' : 'cloud-offline-outline'} size={10} color={COLORS.white} />
                   <Text style={styles.modeBadgeText}>{isOnline ? 'HMAC-SHA256' : 'OFFLINE'}</Text>
                 </View>
-              </Animated.View>
-
-              {/* Online countdown bar */}
-              {isOnline && (
-                <View style={styles.countdownWrap}>
-                  <View style={styles.countdownBar}>
-                    <View
-                      style={[
-                        styles.countdownFill,
-                        {
-                          width: `${(secondsLeft / QR_WINDOW_SECS) * 100}%`,
-                          backgroundColor: urgencyColor,
-                        },
-                      ]}
-                    />
-                  </View>
-                  <View style={styles.countdownRow}>
-                    <Ionicons name="refresh-outline" size={12} color={urgencyColor} />
-                    <Text style={[styles.countdownText, { color: urgencyColor }]}>
-                      {isRefreshing ? 'Refreshing…' : `Refreshes in ${secondsLeft}s`}
-                    </Text>
-                  </View>
-                </View>
-              )}
+              </View>
 
               {/* Offline instruction */}
               {!isOnline && (
@@ -376,6 +310,7 @@ const TicketScreen = ({ route, navigation }) => {
         ticket={activeTicket}
         passengerName={user?.name}
         user={user}
+        boardingQr={qrToken}
       />
     </View>
   );
@@ -495,12 +430,6 @@ const styles = StyleSheet.create({
     borderWidth: 2, borderColor: COLORS.white,
   },
   modeBadgeText: { fontSize: 10, fontWeight: '700', color: COLORS.white },
-
-  countdownWrap: { width: '90%', marginTop: 8, marginBottom: 14 },
-  countdownBar: { height: 5, borderRadius: 4, backgroundColor: COLORS.border, overflow: 'hidden', marginBottom: 8 },
-  countdownFill: { height: '100%', borderRadius: 4 },
-  countdownRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
-  countdownText: { fontSize: 12, fontWeight: '700' },
 
   offlineNote: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 8,

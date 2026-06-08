@@ -21,6 +21,8 @@ export const getBuses = async (req, res) => {
         v.capacity                                              AS totalSeats,
         (SELECT COUNT(*) FROM tickets tk
          WHERE tk.trip_id = t.trip_id AND tk.status != 'cancelled') AS bookedSeats,
+        ISNULL((SELECT STRING_AGG(tk.seat_number, ',') FROM tickets tk
+                WHERE tk.trip_id = t.trip_id AND tk.status != 'cancelled'), '') AS bookedSeatsCsv,
         ISNULL((SELECT MIN(fz.base_fare) FROM fare_zones fz
                 WHERE fz.route_id = r.route_id), 0)            AS price
       FROM trips t
@@ -52,11 +54,18 @@ export const getBusById = async (req, res) => {
           t.start_time     AS departureTime,
           t.status,
           v.capacity       AS totalSeats,
+          (SELECT COUNT(*) FROM tickets tk
+           WHERE tk.trip_id = t.trip_id AND tk.status != 'cancelled') AS bookedSeats,
+          ISNULL((SELECT STRING_AGG(tk.seat_number, ',') FROM tickets tk
+                  WHERE tk.trip_id = t.trip_id AND tk.status != 'cancelled'), '') AS bookedSeatsCsv,
           u.full_name      AS driver_name,
           u.phone          AS driver_phone,
           d.driver_id,
-          d.rating         AS driver_rating,
-          d.total_trips    AS driver_trips
+          ISNULL((SELECT AVG(CAST(rt.rating AS FLOAT)) FROM ratings rt
+                  JOIN trips tr ON tr.trip_id = rt.trip_id
+                  WHERE tr.driver_id = d.driver_id), 0)            AS driver_rating,
+          (SELECT COUNT(*) FROM trips tr
+           WHERE tr.driver_id = d.driver_id AND tr.status = 'completed') AS driver_trips
         FROM trips t
         JOIN vehicles v ON t.vehicle_id = v.vehicle_id
         JOIN routes  r ON t.route_id   = r.route_id

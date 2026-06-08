@@ -237,6 +237,15 @@ const TripHistoryScreen = ({ navigation }) => {
             {!isTaxi && (
               <TouchableOpacity
                 style={styles.actionBtnBlue}
+                onPress={() => navigation.navigate('HomeStack', { screen: 'Ticket', params: { booking: item } })}
+              >
+                <Ionicons name="ticket-outline" size={14} color={COLORS.primary} />
+                <Text style={styles.actionTextBlue}>View Ticket</Text>
+              </TouchableOpacity>
+            )}
+            {!isTaxi && (
+              <TouchableOpacity
+                style={styles.actionBtnBlue}
                 onPress={() => navigation.navigate('HomeStack', { screen: 'BusTracking', params: { tripId: item.bus?._id, busName: item.bus?.name } })}
               >
                 <Ionicons name="navigate-outline" size={14} color={COLORS.primary} />
