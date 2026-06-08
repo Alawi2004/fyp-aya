@@ -1,6 +1,7 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { secureGet, secureSave, secureDelete, secureMultiRemove } from '../utils/secureStorage';
+import { setSessionExpiredHandler } from '../api/apiClient';
 import axios from 'axios';
 
 const AuthContext = createContext();
@@ -43,7 +44,23 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [role, setRole]       = useState(null);
 
-  useEffect(() => { loadStoredAuth(); }, []);
+  // ── Storage-only cleanup — no server call, safe to call from apiClient ──────
+  const _localLogout = useCallback(async () => {
+    await AsyncStorage.multiRemove([K.userRole, K.userData]);
+    await secureDelete('authToken');
+    await secureDelete('refreshToken');
+    setToken(null);
+    setUser(null);
+    setRole(null);
+  }, []);
+
+  useEffect(() => {
+    loadStoredAuth();
+    // Tell apiClient to call _localLogout if both tokens are exhausted mid-session
+    // so the UI resets to the login screen automatically without needing manual logout.
+    setSessionExpiredHandler(_localLogout);
+    return () => setSessionExpiredHandler(null);
+  }, [_localLogout]);
 
   const loadStoredAuth = async () => {
     try {
@@ -53,19 +70,26 @@ export const AuthProvider = ({ children }) => {
 
       // A 'mock-token' session can only have been created while running in
       // FRONTEND_ONLY mode. If the app is now wired to the real backend, that
-      // session is stale (wrong user_id, no valid JWT) — drop it so the user
-      // logs in again and gets real DB-backed data instead of seeing $0/blank.
+      // session is stale (wrong user_id, no valid JWT) — drop it.
       if (!FRONTEND_ONLY && storedToken === 'mock-token') {
         await AsyncStorage.multiRemove([K.userRole, K.userData]);
         await secureDelete('authToken');
         return;
       }
 
-      if (storedRole && storedUser) {
-        setRole(storedRole);
-        setUser(JSON.parse(storedUser));
-        setToken(storedToken ?? null);
+      // Require a token — if tokens were cleared (e.g. expired refresh) but
+      // role/userData were left behind, treat it as a logged-out state so the
+      // user is sent to the login screen rather than seeing a broken UI.
+      if (!storedToken || !storedRole || !storedUser) {
+        if (storedRole || storedUser) {
+          await AsyncStorage.multiRemove([K.userRole, K.userData]);
+        }
+        return;
       }
+
+      setRole(storedRole);
+      setUser(JSON.parse(storedUser));
+      setToken(storedToken);
     } catch (_) {}
     finally { setLoading(false); }
   };
@@ -215,12 +239,7 @@ export const AuthProvider = ({ children }) => {
         await axios.post(`${BASE_URL}/auth/logout`, { refresh_token: refreshToken }, { timeout: 8000 }).catch(() => {});
       }
     }
-    await AsyncStorage.multiRemove([K.userRole, K.userData]);
-    await secureDelete('authToken');
-    await secureDelete('refreshToken');
-    setToken(null);
-    setUser(null);
-    setRole(null);
+    await _localLogout();
   };
 
   return (

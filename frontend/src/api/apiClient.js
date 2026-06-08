@@ -16,6 +16,12 @@ apiClient.interceptors.request.use(async (config) => {
   return config;
 });
 
+// Registered by AuthContext on mount — called when both access + refresh tokens
+// are exhausted so the UI resets to the login screen without the user having to
+// manually log out. Only the storage-clear + state-reset path; no server call.
+let _sessionExpiredHandler = null;
+export const setSessionExpiredHandler = (fn) => { _sessionExpiredHandler = fn; };
+
 const clearSession = async () => {
   await secureDelete('authToken');
   await secureDelete('refreshToken');
@@ -55,7 +61,10 @@ apiClient.interceptors.response.use(
         config.headers.Authorization = `Bearer ${newAccessToken}`;
         return apiClient(config);
       } catch {
+        // Both tokens exhausted — clear storage and notify AuthContext so it
+        // resets state and sends the user back to the login screen automatically.
         await clearSession();
+        _sessionExpiredHandler?.();
         return Promise.reject(error);
       }
     }
