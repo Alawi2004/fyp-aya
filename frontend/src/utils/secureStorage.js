@@ -35,20 +35,28 @@ function isSecure(key) { return SECURE_KEYS.has(key); }
 
 async function _secureGet(key) {
   try {
-    return await SecureStore.getItemAsync(key);
+    const val = await SecureStore.getItemAsync(key);
+    // SecureStore can return null on some Android builds even when the value was
+    // previously saved (Keystore inconsistency between set and get calls).
+    // Always check AsyncStorage as a fallback when SecureStore returns null.
+    if (val !== null) return val;
   } catch {
-    return AsyncStorage.getItem(key); // fallback: Expo Go or unavailable
+    // SecureStore threw — fall through to AsyncStorage
   }
+  return AsyncStorage.getItem(key);
 }
 
 async function _secureSave(key, value) {
   try {
     await SecureStore.setItemAsync(key, value, {
-      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+      // AFTER_FIRST_UNLOCK is safer than WHEN_UNLOCKED: still accessible after
+      // a device cold-boot once the user has unlocked once (covers background ops).
+      keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
     });
-  } catch {
-    await AsyncStorage.setItem(key, value);
-  }
+  } catch { /* SecureStore unavailable — AsyncStorage covers below */ }
+  // Belt-and-suspenders: always mirror to AsyncStorage so _secureGet finds the
+  // value even if SecureStore's get/set calls are inconsistent on this device.
+  await AsyncStorage.setItem(key, value);
 }
 
 async function _secureDelete(key) {
