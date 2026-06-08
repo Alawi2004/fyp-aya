@@ -50,6 +50,17 @@ export const AuthProvider = ({ children }) => {
       const storedRole  = await AsyncStorage.getItem(K.userRole);
       const storedUser  = await AsyncStorage.getItem(K.userData);
       const storedToken = await secureGet('authToken');
+
+      // A 'mock-token' session can only have been created while running in
+      // FRONTEND_ONLY mode. If the app is now wired to the real backend, that
+      // session is stale (wrong user_id, no valid JWT) — drop it so the user
+      // logs in again and gets real DB-backed data instead of seeing $0/blank.
+      if (!FRONTEND_ONLY && storedToken === 'mock-token') {
+        await AsyncStorage.multiRemove([K.userRole, K.userData]);
+        await secureDelete('authToken');
+        return;
+      }
+
       if (storedRole && storedUser) {
         setRole(storedRole);
         setUser(JSON.parse(storedUser));
@@ -67,7 +78,7 @@ export const AuthProvider = ({ children }) => {
   // ── Real API login (email + password) ─────────────────────────────────────
   const _apiLogin = async (email, password) => {
     const res = await axios.post(`${BASE_URL}/auth/login`, { email, password }, { timeout: 15000 });
-    return res.data; // { user, access_token }
+    return res.data; // { user, access_token, refresh_token }
   };
 
   // ── login (email + password for any role) ────────────────────────────────
@@ -77,9 +88,9 @@ export const AuthProvider = ({ children }) => {
       await _saveSession(userRole, mockUser, 'mock-token');
       return mockUser;
     }
-    const { user: rawUser, access_token } = await _apiLogin(email, password);
+    const { user: rawUser, access_token, refresh_token } = await _apiLogin(email, password);
     const userData = normaliseUser(rawUser);
-    await _saveSession(rawUser.role ?? userRole, userData, access_token);
+    await _saveSession(rawUser.role ?? userRole, userData, access_token, refresh_token);
     return userData;
   };
 
@@ -88,16 +99,16 @@ export const AuthProvider = ({ children }) => {
   const verifyCredentials = async (email, password, userRole) => {
     if (FRONTEND_ONLY) {
       const mockUser = userRole === 'driver' ? MOCK_DRIVER : MOCK_PASSENGER;
-      return { userData: mockUser, accessToken: 'mock-token', userRole };
+      return { userData: mockUser, accessToken: 'mock-token', refreshToken: null, userRole };
     }
-    const { user: rawUser, access_token } = await _apiLogin(email, password);
+    const { user: rawUser, access_token, refresh_token } = await _apiLogin(email, password);
     const userData = normaliseUser(rawUser);
-    return { userData, accessToken: access_token, userRole: rawUser.role ?? userRole };
+    return { userData, accessToken: access_token, refreshToken: refresh_token, userRole: rawUser.role ?? userRole };
   };
 
   // ── finalizeLogin — saves session after OTP verification ─────────────────
-  const finalizeLogin = async (userRole, userData, accessToken) => {
-    await _saveSession(userRole, userData, accessToken);
+  const finalizeLogin = async (userRole, userData, accessToken, refreshToken) => {
+    await _saveSession(userRole, userData, accessToken, refreshToken);
     return userData;
   };
 
@@ -114,17 +125,18 @@ export const AuthProvider = ({ children }) => {
       await _saveSession(userRole, mockUser, 'mock-token');
       return mockUser;
     }
-    const { user: rawUser, access_token } = await _apiLogin(phone, pin);
+    const { user: rawUser, access_token, refresh_token } = await _apiLogin(phone, pin);
     const userData = normaliseUser(rawUser);
-    await _saveSession(rawUser.role ?? userRole, userData, access_token);
+    await _saveSession(rawUser.role ?? userRole, userData, access_token, refresh_token);
     return userData;
   };
 
-  const _saveSession = async (userRole, userData, accessToken) => {
+  const _saveSession = async (userRole, userData, accessToken, refreshToken) => {
     await AsyncStorage.setItem(K.userRole, userRole);
     await AsyncStorage.setItem(K.userData, JSON.stringify(userData));
     if (accessToken && accessToken !== 'mock-token') {
       await secureSave('authToken', accessToken);
+      if (refreshToken) await secureSave('refreshToken', refreshToken);
     } else {
       await secureSave('authToken', 'mock-token');
     }
@@ -182,9 +194,9 @@ export const AuthProvider = ({ children }) => {
         birth_date: data.birth_date ?? null,
       }, { timeout: 15000 });
       // After registration, log in to get tokens
-      const { user: rawUser, access_token } = await _apiLogin(data.email, data.password);
+      const { user: rawUser, access_token, refresh_token } = await _apiLogin(data.email, data.password);
       const userData = normaliseUser(rawUser);
-      await _saveSession(rawUser.role ?? userRole ?? 'passenger', userData, access_token);
+      await _saveSession(rawUser.role ?? userRole ?? 'passenger', userData, access_token, refresh_token);
       return userData;
     }
     const mockUser = normaliseUser({
@@ -196,8 +208,16 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
+    if (!FRONTEND_ONLY) {
+      const refreshToken = await secureGet('refreshToken');
+      if (refreshToken) {
+        // Best-effort server-side revocation — don't block logout if it fails
+        await axios.post(`${BASE_URL}/auth/logout`, { refresh_token: refreshToken }, { timeout: 8000 }).catch(() => {});
+      }
+    }
     await AsyncStorage.multiRemove([K.userRole, K.userData]);
     await secureDelete('authToken');
+    await secureDelete('refreshToken');
     setToken(null);
     setUser(null);
     setRole(null);

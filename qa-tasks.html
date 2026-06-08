@@ -395,7 +395,7 @@
           <div class="detail-label">Exact fix</div>
           <div class="fix-box">
             Make <code>expo-crypto</code> a hard dependency in <code>app.json</code>. If it fails to load, <strong>disable QR display entirely</strong> and show:<br><br>
-            <em>"QR generation unavailable on this device. Please update the app or use NFC boarding."</em><br><br>
+            <em>"QR generation unavailable on this device. Please update the app to continue."</em><br><br>
             Never silently degrade to an insecure fallback for a security-critical feature.
           </div>
         </div>
@@ -620,35 +620,6 @@
           <div class="fix-box">This clears the navigation stack so the user cannot swipe/press back into the booking flow after a ticket is confirmed.</div>
         </div>
         <div class="tag-row"><span class="tag">TicketScreen.js</span><span class="tag">navigation</span></div>
-      </div>
-    </div>
-
-    <!-- T-011 -->
-    <div class="task" data-sev="high" data-id="T-011" data-title="NFC Link button dead-ends cross stack">
-      <div class="task-head">
-        <div class="task-checkbox" onclick="toggle(this)"></div>
-        <div class="task-meta">
-          <div class="task-top"><span class="task-id">T-011</span><span class="badge badge-high">High</span></div>
-          <div class="task-title">Fix "Link NFC Card" navigation — NfcCard screen is in ProfileStack, not HomeStack</div>
-          <div class="task-loc">frontend/src/screens/passenger/TicketScreen.js · Line 374</div>
-        </div>
-        <div class="expand-btn" onclick="expand(this)">▼</div>
-      </div>
-      <div class="task-body">
-        <div class="detail-section">
-          <div class="detail-label">Problem</div>
-          <div class="detail-text"><code>navigation.navigate('NfcCard')</code> is called from inside HomeStack. <code>NfcCardScreen</code> is only registered inside <code>ProfileStack</code>. React Navigation will throw a navigation error or silently fail — the screen never opens.</div>
-        </div>
-        <div class="detail-section">
-          <div class="detail-label">Exact fix (choose one)</div>
-          <div class="fix-box">
-            <strong>Option A (Recommended):</strong> Add <code>NfcCardScreen</code> to <code>HomeStack</code> in PassengerNavigator.js:<br>
-            <code>&lt;Stack.Screen name="NfcCard" component={NfcCardScreen} /&gt;</code><br><br>
-            <strong>Option B:</strong> Use root navigator reference:<br>
-            <code>navigation.getParent()?.navigate('ProfileStack', { screen: 'NfcCard' })</code>
-          </div>
-        </div>
-        <div class="tag-row"><span class="tag">TicketScreen.js</span><span class="tag">PassengerNavigator.js</span><span class="tag">navigation</span><span class="tag">NFC</span></div>
       </div>
     </div>
 

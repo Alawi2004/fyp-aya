@@ -31,11 +31,30 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import * as Notifications from 'expo-notifications';
 import { registerPushToken, registerFcmToken } from '../api/apiClient';
+import { getWalletApi } from '../api/walletApi';
+import { getBookingsApi, cancelBookingApi } from '../api/bookingApi';
+import { useAuth } from './AuthContext';
 
 const AppContext = createContext();
 
 
 export const AppProvider = ({ children }) => {
+  const { user, role } = useAuth();
+
+  // Load the real wallet balance from the DB as soon as a passenger is
+  // authenticated — screens like Home/Profile/Booking read walletBalance
+  // from context and never trigger a fetch themselves, so without this
+  // they'd show the stale $0.00 default until the Wallet tab was opened.
+  const [walletBalance, setWalletBalance] = useState(0);
+  useEffect(() => {
+    if (role !== 'passenger' || !user) return;
+    let cancelled = false;
+    getWalletApi()
+      .then((res) => { if (!cancelled) setWalletBalance(res.data?.balance ?? 0); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [role, user]);
+
   // Register push tokens on mount (Expo + raw FCM) — best-effort, no throw
   useEffect(() => {
     (async () => {
@@ -59,7 +78,6 @@ export const AppProvider = ({ children }) => {
     })();
   }, []);
 
-  const [walletBalance, setWalletBalance] = useState(0);
   const [ratings, setRatings] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [activeBooking, setActiveBooking] = useState(null);
@@ -95,26 +113,68 @@ export const AppProvider = ({ children }) => {
     return newRating;
   };
 
+  // Pulls the passenger's real ticket bookings from the DB (joined with
+  // trip/vehicle/route info server-side) and merges them with whatever
+  // taxi reservations are already in state. Taxi bookings have no backend
+  // table — they're a purely local/mock feature — so a DB refresh must
+  // preserve them rather than replace the whole list.
+  const refreshBookings = async () => {
+    if (role !== 'passenger' || !user) return;
+    try {
+      const res = await getBookingsApi();
+      const dbBookings = res.data ?? [];
+      setBookings(prev => {
+        const taxiOnly = prev.filter(b => b.type === 'taxi');
+        return [...dbBookings, ...taxiOnly].sort((a, b) => new Date(b.date) - new Date(a.date));
+      });
+    } catch { /* best-effort — leave whatever's already in state */ }
+  };
+
+  // Reload bookings whenever the passenger session changes, so a fresh
+  // login/app-restart shows real DB-backed "Upcoming Trips" immediately.
+  useEffect(() => { refreshBookings(); }, [role, user]);
+
+  // Used for purely-local entries that have no backend record (taxi
+  // reservations). Real ticket bookings come from refreshBookings() instead.
   const addBooking = (booking) => {
     setBookings(prev => [booking, ...prev]);
   };
 
-  const cancelBooking = (bookingId) => {
-    setBookings(prev =>
-      prev.map(b => b._id === bookingId ? { ...b, status: 'cancelled' } : b)
-    );
-    // Refund wallet
+  const cancelBooking = async (bookingId) => {
     const booking = bookings.find(b => b._id === bookingId);
-    if (booking) {
-      setWalletBalance(prev => prev + parseFloat(booking.price));
+    if (!booking) return { ok: false, error: 'Booking not found' };
+
+    // Taxi reservations are local-only mocks — there's nothing to cancel server-side.
+    if (booking.type === 'taxi') {
+      setBookings(prev => prev.map(b => (b._id === bookingId ? { ...b, status: 'cancelled' } : b)));
       addNotification({
         _id: Date.now().toString(),
         type: 'info',
         title: 'Booking Cancelled',
-        body: `Your booking for ${booking.bus?.name} has been cancelled. $${booking.price} refunded to wallet.`,
+        body: `Your taxi reservation has been cancelled.`,
         time: 'Just now',
         read: false,
       });
+      return { ok: true };
+    }
+
+    try {
+      const res = await cancelBookingApi(bookingId);
+      const { newBalance, refund } = res.data ?? {};
+      setBookings(prev => prev.map(b => (b._id === bookingId ? { ...b, status: 'cancelled' } : b)));
+      if (typeof newBalance === 'number') setWalletBalance(newBalance);
+      const refundAmount = parseFloat(refund ?? booking.price ?? 0);
+      addNotification({
+        _id: Date.now().toString(),
+        type: 'info',
+        title: 'Booking Cancelled',
+        body: `Your booking for ${booking.bus?.name} has been cancelled. $${refundAmount.toFixed(2)} refunded to wallet.`,
+        time: 'Just now',
+        read: false,
+      });
+      return { ok: true, refund: refundAmount };
+    } catch (err) {
+      return { ok: false, error: err?.response?.data?.error || 'Could not cancel this booking. Please try again.' };
     }
   };
 
@@ -145,7 +205,7 @@ export const AppProvider = ({ children }) => {
     <AppContext.Provider value={{
       walletBalance, updateBalance,
       activeBooking, setActiveBooking,
-      bookings, addBooking, cancelBooking,
+      bookings, addBooking, cancelBooking, refreshBookings,
       ratings, addRating, averageRating,
       notifications, addNotification,
       emergencyAlerts, sendEmergencyAlert,

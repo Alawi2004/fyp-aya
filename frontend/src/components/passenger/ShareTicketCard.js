@@ -50,7 +50,7 @@ const DetailCell = ({ label, value, accent, isDark }) => (
 
 // ── Main card ─────────────────────────────────────────────────────────────────
 const ShareTicketCard = React.forwardRef(
-  ({ booking, passengerName, shareUrl, isDark = false }, ref) => {
+  ({ booking, ticket, passengerName, shareUrl, isDark = false }, ref) => {
     const status  = booking?.status ?? 'upcoming';
     const cfg     = STATUS_CFG[status] ?? STATUS_CFG.default;
     const bus     = booking?.bus ?? {};
@@ -141,7 +141,7 @@ const ShareTicketCard = React.forwardRef(
         <View style={[styles.detailSection, { backgroundColor: bg }]}>
           <View style={styles.detailGrid}>
             <DetailCell label="PASSENGER" value={passengerName || 'Passenger'} isDark={isDark} />
-            <DetailCell label="SEAT"      value={booking?.seatId}              isDark={isDark} accent={COLORS.primary} />
+            <DetailCell label="SEAT"      value={ticket?.seat_number ?? booking?.seatId}              isDark={isDark} accent={COLORS.primary} />
             <DetailCell
               label="DATE"
               value={booking?.date
@@ -149,14 +149,14 @@ const ShareTicketCard = React.forwardRef(
                 : '—'}
               isDark={isDark}
             />
-            <DetailCell label="FARE"   value={`$${parseFloat(booking?.price || 0).toFixed(2)}`} isDark={isDark} />
+            <DetailCell label="FARE"   value={`$${parseFloat(ticket?.amount ?? booking?.price ?? 0).toFixed(2)}`} isDark={isDark} />
           </View>
 
-          {/* Booking ID */}
+          {/* Ticket / Booking ID */}
           <View style={[styles.bookingIdRow, { borderColor: bdr }]}>
             <Ionicons name="barcode-outline" size={14} color={txSec} />
-            <Text style={[styles.bookingIdLabel, { color: txSec }]}>BOOKING ID</Text>
-            <Text style={[styles.bookingIdValue, { color: txPri }]}>#{booking?._id ?? 'N/A'}</Text>
+            <Text style={[styles.bookingIdLabel, { color: txSec }]}>TICKET ID</Text>
+            <Text style={[styles.bookingIdValue, { color: txPri }]}>#{ticket?.ticket_id ?? booking?._id ?? 'N/A'}</Text>
           </View>
         </View>
 

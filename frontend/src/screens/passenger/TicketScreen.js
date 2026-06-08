@@ -4,7 +4,6 @@ import {
   StatusBar, TouchableOpacity, Animated,
 } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import QRCode from 'react-native-qrcode-svg';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +19,6 @@ try { Crypto = require('expo-crypto'); } catch (_) {}
 
 const HMAC_SECRET    = 'yalla-transit-qr-secret-2026';
 const QR_WINDOW_SECS = 60;
-const NFC_CARD_KEY   = 'linkedNfcCard';
 
 // ── HMAC helpers ─────────────────────────────────────────────────────────────
 const computeHmac = async (payload) => {
@@ -41,12 +39,13 @@ const currentWindowExp    = () =>
   Math.floor(Date.now() / (QR_WINDOW_SECS * 1000)) * (QR_WINDOW_SECS * 1000) + QR_WINDOW_SECS * 1000;
 
 // ── Static QR payload (offline, no expiry) ───────────────────────────────────
-const buildStaticQr = (booking, userId) =>
+const buildStaticQr = (booking, ticket, userId) =>
   JSON.stringify({
     bid:    booking._id,
+    tid:    ticket.ticket_id,
     uid:    userId ?? 'guest',
-    seat:   booking.seatId,
-    fare:   booking.price,
+    seat:   ticket.seat_number,
+    fare:   ticket.amount,
     mode:   'offline-static',
   });
 
@@ -56,12 +55,20 @@ const TicketScreen = ({ route, navigation }) => {
   const { booking }         = route.params;
   const { user }            = useAuth();
 
-  const [tab, setTab]                   = useState('qr');      // 'qr' | 'nfc'
+  // A booking can hold several seats — each gets its own ticket record,
+  // its own rotating QR, and its own share/PDF. Fall back to a single
+  // synthetic ticket for older mock bookings that only have `seatId`.
+  const tickets = booking.tickets?.length
+    ? booking.tickets
+    : [{ ticket_id: booking._id, seat_number: booking.seatId, amount: booking.price, created_at: booking.date }];
+
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activeTicket = tickets[Math.min(activeIndex, tickets.length - 1)];
+
   const [isOnline, setIsOnline]         = useState(true);
   const [qrToken, setQrToken]           = useState('');
   const [secondsLeft, setSecondsLeft]   = useState(secondsLeftInWindow());
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [linkedCard, setLinkedCard]     = useState(null);
 
   const pulseAnim      = useRef(new Animated.Value(1)).current;
   const flashAnim      = useRef(new Animated.Value(1)).current;
@@ -77,14 +84,7 @@ const TicketScreen = ({ route, navigation }) => {
     return () => unsub();
   }, []);
 
-  // Load linked NFC card
-  useEffect(() => {
-    AsyncStorage.getItem(NFC_CARD_KEY)
-      .then((raw) => { if (raw) setLinkedCard(JSON.parse(raw)); })
-      .catch(() => {});
-  }, []);
-
-  // ── Online: rotating HMAC QR ────────────────────────────────────────────
+  // ── Online: rotating HMAC QR — unique per ticket (includes ticket_id) ───
   const generateToken = useCallback(async () => {
     if (!isOnline) return;
     setIsRefreshing(true);
@@ -94,25 +94,26 @@ const TicketScreen = ({ route, navigation }) => {
     ]).start();
     const payload = {
       bid:  booking._id,
+      tid:  activeTicket.ticket_id,
       uid:  user?._id ?? 'guest',
-      seat: booking.seatId,
-      fare: booking.price,
+      seat: activeTicket.seat_number,
+      fare: activeTicket.amount,
       exp:  currentWindowExp(),
     };
     const sig = await computeHmac(payload);
     setQrToken(JSON.stringify({ ...payload, sig }));
     setIsRefreshing(false);
     lastWindow.current = currentWindowExp();
-  }, [booking, user, isOnline]);
+  }, [booking, activeTicket, user, isOnline]);
 
   // ── Offline: static QR ─────────────────────────────────────────────────
   useEffect(() => {
     if (!isOnline) {
-      setQrToken(buildStaticQr(booking, user?._id));
+      setQrToken(buildStaticQr(booking, activeTicket, user?._id));
     }
-  }, [isOnline, booking, user]);
+  }, [isOnline, booking, activeTicket, user]);
 
-  // Online countdown & token rotation
+  // Online countdown & token rotation — restarts whenever the active ticket changes
   useEffect(() => {
     if (!isOnline) return;
     generateToken();
@@ -161,7 +162,7 @@ const TicketScreen = ({ route, navigation }) => {
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Your Ticket</Text>
-          <Text style={styles.headerSub}>Present QR or NFC card to board</Text>
+          <Text style={styles.headerSub}>Present QR code to board</Text>
         </View>
         <TouchableOpacity style={styles.shareBtn} onPress={shareTicket}>
           <Ionicons name="share-social-outline" size={20} color={COLORS.white} />
@@ -230,10 +231,8 @@ const TicketScreen = ({ route, navigation }) => {
           {/* Details grid */}
           <View style={styles.detailsGrid}>
             {[
-              { label: booking.seats?.length > 1 ? 'SEATS' : 'SEAT',
-                value: booking.seats?.length > 1 ? booking.seats.join(', ') : booking.seatId,
-                highlight: false },
-              { label: 'FARE',   value: `$${booking.price}`,         highlight: true  },
+              { label: 'SEAT',   value: activeTicket.seat_number, highlight: false },
+              { label: 'FARE',   value: `$${parseFloat(activeTicket.amount ?? booking.price).toFixed(2)}`, highlight: true },
               { label: 'DATE',   value: formatDateTime(booking.date), highlight: false },
               { label: 'STATUS', value: 'Confirmed', highlight: true, green: true },
             ].map((d) => (
@@ -250,32 +249,38 @@ const TicketScreen = ({ route, navigation }) => {
             ))}
           </View>
 
+          {/* ── Multi-seat ticket switcher ── */}
+          {tickets.length > 1 && (
+            <View style={styles.seatSwitcherWrap}>
+              <Text style={styles.seatSwitcherLabel}>
+                This booking has {tickets.length} tickets — each has its own boarding QR
+              </Text>
+              <View style={styles.seatSwitcherRow}>
+                {tickets.map((t, i) => (
+                  <TouchableOpacity
+                    key={t.ticket_id ?? i}
+                    style={[styles.seatPill, i === activeIndex && styles.seatPillActive]}
+                    onPress={() => setActiveIndex(i)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.seatPillText, i === activeIndex && styles.seatPillTextActive]}>
+                      {t.seat_number}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+
           {/* Tear line */}
           <TearLine />
 
-          {/* ── Boarding method tabs ── */}
-          <View style={styles.tabRow}>
-            <TouchableOpacity
-              style={[styles.tabBtn, tab === 'qr' && styles.tabBtnActive]}
-              onPress={() => setTab('qr')}
-            >
-              <Ionicons name="qr-code-outline" size={15} color={tab === 'qr' ? COLORS.primary : COLORS.textMuted} />
-              <Text style={[styles.tabText, tab === 'qr' && styles.tabTextActive]}>QR Code</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tabBtn, tab === 'nfc' && styles.tabBtnActive]}
-              onPress={() => setTab('nfc')}
-            >
-              <Ionicons name="card-outline" size={15} color={tab === 'nfc' ? COLORS.primary : COLORS.textMuted} />
-              <Text style={[styles.tabText, tab === 'nfc' && styles.tabTextActive]}>NFC Card</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* ── QR tab ── */}
-          {tab === 'qr' && (
-            <View style={styles.qrSection}>
+          {/* ── QR boarding pass ── */}
+          <View style={styles.qrSection}>
               <Text style={styles.qrLabel}>
-                {isOnline ? 'Scan to board · Rotates every 60s' : 'Offline static QR — driver verifies manually'}
+                {isOnline
+                  ? `Seat ${activeTicket.seat_number} · Scan to board · Rotates every 60s`
+                  : 'Offline static QR — driver verifies manually'}
               </Text>
 
               <Animated.View style={[
@@ -334,55 +339,9 @@ const TicketScreen = ({ route, navigation }) => {
 
               <View style={styles.bookingIdRow}>
                 <Ionicons name="barcode-outline" size={14} color={COLORS.textMuted} />
-                <Text style={styles.bookingId}>#{booking._id}</Text>
+                <Text style={styles.bookingId}>Ticket #{activeTicket.ticket_id} · Booking #{booking._id}</Text>
               </View>
             </View>
-          )}
-
-          {/* ── NFC tab ── */}
-          {tab === 'nfc' && (
-            <View style={styles.nfcSection}>
-              {linkedCard ? (
-                <>
-                  <View style={styles.nfcCardPreview}>
-                    <View style={styles.nfcCardIcon}>
-                      <Ionicons name="radio-outline" size={28} color={COLORS.primary} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.nfcCardNumber}>{linkedCard.cardNumber}</Text>
-                      <Text style={styles.nfcCardUid}>UID: {linkedCard.uid}</Text>
-                    </View>
-                    <View style={styles.nfcActivePill}>
-                      <Text style={styles.nfcActivePillText}>Active</Text>
-                    </View>
-                  </View>
-                  <View style={styles.nfcInstruction}>
-                    <Ionicons name="card-outline" size={40} color={COLORS.primary} style={{ marginBottom: 12 }} />
-                    <Text style={styles.nfcInstructionTitle}>Hold card to reader</Text>
-                    <Text style={styles.nfcInstructionSub}>
-                      Tap your NFC card on the reader at the bus door to board instantly.
-                    </Text>
-                  </View>
-                </>
-              ) : (
-                <View style={styles.nfcNoCard}>
-                  <Ionicons name="card-outline" size={48} color={COLORS.textMuted} />
-                  <Text style={styles.nfcNoCardTitle}>No NFC Card Linked</Text>
-                  <Text style={styles.nfcNoCardSub}>
-                    Link a physical NFC card to your account for contactless boarding.
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.nfcLinkBtn}
-                    onPress={() => navigation.navigate('NfcCard')}
-                    activeOpacity={0.85}
-                  >
-                    <Ionicons name="add-circle-outline" size={18} color={COLORS.white} />
-                    <Text style={styles.nfcLinkBtnText}>Link NFC Card</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          )}
         </View>
 
         {/* Actions */}
@@ -409,11 +368,12 @@ const TicketScreen = ({ route, navigation }) => {
         </View>
       </ScrollView>
 
-      {/* ── Share Ticket Modal ── */}
+      {/* ── Share Ticket Modal — shares the currently active seat's ticket ── */}
       <ShareTicketModal
         visible={showShare}
         onClose={() => setShowShare(false)}
         booking={booking}
+        ticket={activeTicket}
         passengerName={user?.name}
         user={user}
       />
@@ -510,18 +470,17 @@ const styles = StyleSheet.create({
   detailLabel: { fontSize: 10, color: COLORS.textMuted, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 },
   detailValue: { fontSize: 16, fontWeight: '800', color: COLORS.textPrimary, marginTop: 4 },
 
-  /* Tab selector */
-  tabRow: {
-    flexDirection: 'row', margin: 16, marginBottom: 0,
-    backgroundColor: COLORS.background, borderRadius: 12, padding: 4,
+  /* Multi-seat ticket switcher */
+  seatSwitcherWrap: { paddingHorizontal: 20, paddingBottom: 18 },
+  seatSwitcherLabel: { fontSize: 11, color: COLORS.textMuted, fontWeight: '600', marginBottom: 10 },
+  seatSwitcherRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  seatPill: {
+    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999,
+    backgroundColor: COLORS.background, borderWidth: 1.5, borderColor: COLORS.border,
   },
-  tabBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, paddingVertical: 9, borderRadius: 9,
-  },
-  tabBtnActive: { backgroundColor: COLORS.white, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 },
-  tabText: { fontSize: 13, fontWeight: '600', color: COLORS.textMuted },
-  tabTextActive: { color: COLORS.primary },
+  seatPillActive: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primary },
+  seatPillText: { fontSize: 13, fontWeight: '700', color: COLORS.textMuted },
+  seatPillTextActive: { color: COLORS.primary },
 
   /* QR section */
   qrSection: { alignItems: 'center', paddingVertical: 20, paddingHorizontal: 20 },
@@ -552,35 +511,6 @@ const styles = StyleSheet.create({
 
   bookingIdRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   bookingId: { fontSize: 11, color: COLORS.textMuted, letterSpacing: 0.8, fontWeight: '600' },
-
-  /* NFC section */
-  nfcSection: { padding: 20 },
-  nfcCardPreview: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: COLORS.primaryLight, borderRadius: 16, padding: 14, marginBottom: 20,
-    borderWidth: 1.5, borderColor: COLORS.primaryMid,
-  },
-  nfcCardIcon: {
-    width: 48, height: 48, borderRadius: 14,
-    backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center',
-  },
-  nfcCardNumber: { fontSize: 15, fontWeight: '700', color: COLORS.primary },
-  nfcCardUid: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2, fontWeight: '500' },
-  nfcActivePill: { backgroundColor: COLORS.secondary, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  nfcActivePillText: { fontSize: 11, fontWeight: '700', color: COLORS.white },
-  nfcInstruction: { alignItems: 'center', paddingVertical: 12 },
-  nfcInstructionTitle: { fontSize: 17, fontWeight: '800', color: COLORS.textPrimary, marginBottom: 8 },
-  nfcInstructionSub: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 21 },
-
-  nfcNoCard: { alignItems: 'center', paddingVertical: 24, gap: 8 },
-  nfcNoCardTitle: { fontSize: 17, fontWeight: '700', color: COLORS.textPrimary },
-  nfcNoCardSub: { fontSize: 13, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 20 },
-  nfcLinkBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: COLORS.primary, borderRadius: 12,
-    paddingHorizontal: 20, paddingVertical: 12, marginTop: 8,
-  },
-  nfcLinkBtnText: { fontSize: 14, fontWeight: '700', color: COLORS.white },
 
   actions: {},
 });

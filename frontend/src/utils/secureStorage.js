@@ -10,7 +10,8 @@
  *   import { secureGet, secureSave, secureDelete, secureMultiRemove } from '../utils/secureStorage';
  *
  * Sensitive keys (stored in SecureStore):
- *   authToken       — JWT bearer token
+ *   authToken       — JWT bearer token (short-lived access token)
+ *   refreshToken    — long-lived token used to silently mint new access tokens
  *   bio_userRole    — biometric-persistent role (survives logout)
  *   bio_userData    — biometric-persistent user object (survives logout)
  *
@@ -23,6 +24,7 @@ import AsyncStorage    from '@react-native-async-storage/async-storage';
 /** Keys that must be stored in SecureStore (contain credentials or tokens). */
 const SECURE_KEYS = new Set([
   'authToken',
+  'refreshToken',
   'bio_userRole',
   'bio_userData',
 ]);

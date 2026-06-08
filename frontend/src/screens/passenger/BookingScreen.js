@@ -8,11 +8,12 @@ import Button from '../../components/common/Button';
 import Card from '../../components/common/Card';
 import ScreenHeader from '../../components/common/ScreenHeader';
 import { useApp } from '../../context/AppContext';
+import { createBookingApi } from '../../api/bookingApi';
 import { COLORS } from '../../constants/colors';
 
 const BookingScreen = ({ route, navigation }) => {
   const { bus } = route.params;
-  const { walletBalance, updateBalance, addBooking } = useApp();
+  const { walletBalance, updateBalance, addBooking, refreshBookings } = useApp();
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -50,20 +51,25 @@ const BookingScreen = ({ route, navigation }) => {
           onPress: async () => {
             setLoading(true);
             try {
+              const res = await createBookingApi({ trip_id: bus._id, seats: selectedSeats });
+              const { tickets, total, newBalance } = res.data;
               const newBooking = {
-                _id: Date.now().toString(),
+                _id: tickets[0]?.ticket_id?.toString() ?? Date.now().toString(),
                 bus,
-                seatId: selectedSeats[0],
-                seats: selectedSeats,
-                price: totalPrice,
-                date: new Date().toISOString(),
+                tickets,
+                seatId: tickets[0]?.seat_number,
+                seats: tickets.map((t) => t.seat_number),
+                price: total,
+                date: tickets[0]?.created_at ?? new Date().toISOString(),
                 status: 'upcoming',
               };
               addBooking(newBooking);
-              updateBalance(walletBalance - totalPrice);
+              updateBalance(newBalance);
+              refreshBookings(); // sync "Upcoming Trips" with the DB-confirmed booking
               navigation.replace('Ticket', { booking: newBooking });
-            } catch {
-              Alert.alert('Error', 'Something went wrong. Please try again.');
+            } catch (err) {
+              const msg = err?.response?.data?.error || 'Something went wrong. Please try again.';
+              Alert.alert('Booking Failed', msg);
             } finally {
               setLoading(false);
             }

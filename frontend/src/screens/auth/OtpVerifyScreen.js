@@ -82,7 +82,7 @@ const OtpVerifyScreen = ({ navigation, route }) => {
       if (purpose === 'register' && userData) {
         await register(userData, 'passenger');
       } else if (purpose === 'login_verify' && authData) {
-        await finalizeLogin(authData.userRole, authData.userData, authData.accessToken);
+        await finalizeLogin(authData.userRole, authData.userData, authData.accessToken, authData.refreshToken);
       }
     } catch (err) {
       const details = err.response?.data?.details;

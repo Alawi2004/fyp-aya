@@ -25,9 +25,9 @@ const SHARE_BASE = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000/ap
   .replace(/\/api\/?$/, '');
 
 // ── Client-side token fallback (mock / offline) ───────────────────────────────
-const buildClientToken = async (booking, user) => {
+const buildClientToken = async (booking, ticket, user) => {
   const exp = Math.floor(Date.now() / 1000) + 604800;
-  const raw = `${booking._id}.${user?._id ?? 'g'}.${booking.seatId}.${exp}.ticket_share`;
+  const raw = `${ticket.ticket_id}.${user?._id ?? 'g'}.${ticket.seat_number}.${exp}.ticket_share`;
   const b64 = btoa(unescape(encodeURIComponent(raw)))
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
   let sig = 'mocksig0000000000000000000000000';
@@ -41,7 +41,7 @@ const buildClientToken = async (booking, user) => {
   return `${b64}.${sig}`;
 };
 
-const buildShareText = (booking, passengerName, shareUrl) => {
+const buildShareText = (booking, ticket, passengerName, shareUrl) => {
   const bus = booking?.bus ?? {};
   return [
     '🚌 *Yalla Transit Ticket*',
@@ -49,9 +49,9 @@ const buildShareText = (booking, passengerName, shareUrl) => {
     `*${bus.name || 'Bus Service'}*`,
     `📍 ${bus.origin || '—'} → ${bus.destination || '—'}`,
     `📅 ${bus.departureTime || '—'}${bus.arrivalTime ? ` → ${bus.arrivalTime}` : ''}`,
-    `👤 ${passengerName || 'Passenger'}  |  Seat *${booking?.seatId || '—'}*`,
-    `💰 $${parseFloat(booking?.price || 0).toFixed(2)}  |  ✅ ${booking?.status?.toUpperCase() || 'CONFIRMED'}`,
-    `🔖 Booking #${booking?._id || '—'}`,
+    `👤 ${passengerName || 'Passenger'}  |  Seat *${ticket?.seat_number || '—'}*`,
+    `💰 $${parseFloat(ticket?.amount ?? booking?.price ?? 0).toFixed(2)}  |  ✅ ${booking?.status?.toUpperCase() || 'CONFIRMED'}`,
+    `🔖 Ticket #${ticket?.ticket_id || '—'}  ·  Booking #${booking?._id || '—'}`,
     '─────────────────────',
     `🔗 View ticket: ${shareUrl}`,
     '',
@@ -76,7 +76,7 @@ const ActionBtn = ({ icon, label, onPress, color, loading, disabled }) => (
 );
 
 // ── Main modal ────────────────────────────────────────────────────────────────
-const ShareTicketModal = ({ visible, onClose, booking, passengerName, user }) => {
+const ShareTicketModal = ({ visible, onClose, booking, ticket, passengerName, user }) => {
   const insets    = useSafeAreaInsets();
   const scheme    = useColorScheme();
   const isDark    = scheme === 'dark';
@@ -98,16 +98,17 @@ const ShareTicketModal = ({ visible, onClose, booking, passengerName, user }) =>
     }).start();
   }, [visible]);
 
-  // Generate share token when modal opens
+  // Generate share token when modal opens — issued per-ticket so each seat
+  // in a multi-seat booking gets its own distinct, view-only share link.
   useEffect(() => {
-    if (!visible || !booking) return;
+    if (!visible || !booking || !ticket) return;
     let cancelled = false;
     (async () => {
       setTokenLoading(true);
       try {
         const res = await issueShareTokenApi({
-          bookingId: booking._id,
-          seatId:    booking.seatId,
+          bookingId: ticket.ticket_id ?? booking._id,
+          seatId:    ticket.seat_number,
           userId:    user?._id,
         });
         if (!cancelled) {
@@ -116,7 +117,7 @@ const ShareTicketModal = ({ visible, onClose, booking, passengerName, user }) =>
         }
       } catch {
         // API unavailable — generate client-side
-        const t = await buildClientToken(booking, user);
+        const t = await buildClientToken(booking, ticket, user);
         if (!cancelled) {
           setShareToken(t);
           setShareUrl(`${SHARE_BASE}/ticket/share?t=${t}`);
@@ -126,7 +127,7 @@ const ShareTicketModal = ({ visible, onClose, booking, passengerName, user }) =>
       }
     })();
     return () => { cancelled = true; };
-  }, [visible, booking, user]);
+  }, [visible, booking, ticket, user]);
 
   // ── Capture QR card as PNG → native share ────────────────────────────────
   const handleShareImage = useCallback(async () => {
@@ -167,13 +168,13 @@ const ShareTicketModal = ({ visible, onClose, booking, passengerName, user }) =>
       </head><body>
         <div class="card">
           <img src="${imgUri}" />
-          <footer>Yalla Transit — Official Digital Ticket · ${shareUrl}</footer>
+          <footer>Yalla Transit — Official Digital Ticket · Seat ${ticket?.seat_number ?? '—'} · ${shareUrl}</footer>
         </div>
       </body></html>`;
       const { uri } = await Print.printToFileAsync({ html, base64: false, width: 595, height: 842 });
       await Sharing.shareAsync(uri, {
         mimeType: 'application/pdf',
-        dialogTitle: 'Save Ticket PDF',
+        dialogTitle: `Save Ticket PDF — Seat ${ticket?.seat_number ?? ''}`,
         UTI: 'com.adobe.pdf',
       });
     } catch {
@@ -181,7 +182,7 @@ const ShareTicketModal = ({ visible, onClose, booking, passengerName, user }) =>
     } finally {
       setGenerating(null);
     }
-  }, [isDark, shareUrl]);
+  }, [isDark, shareUrl, ticket]);
 
   // ── Copy link ─────────────────────────────────────────────────────────────
   const handleCopyLink = useCallback(async () => {
@@ -196,39 +197,39 @@ const ShareTicketModal = ({ visible, onClose, booking, passengerName, user }) =>
       const { Share } = await import('react-native');
       await Share.share({
         title:   'My Yalla Transit Ticket',
-        message: buildShareText(booking, passengerName, shareUrl),
+        message: buildShareText(booking, ticket, passengerName, shareUrl),
         url:     shareUrl, // iOS uses url for iMessage link preview
       });
     } catch (_) {}
-  }, [booking, passengerName, shareUrl]);
+  }, [booking, ticket, passengerName, shareUrl]);
 
   // ── Platform-specific openers ─────────────────────────────────────────────
   const openWhatsApp = useCallback(() => {
-    const text = encodeURIComponent(buildShareText(booking, passengerName, shareUrl));
+    const text = encodeURIComponent(buildShareText(booking, ticket, passengerName, shareUrl));
     Linking.openURL(`whatsapp://send?text=${text}`).catch(() =>
       Linking.openURL(`https://wa.me/?text=${text}`)
     );
-  }, [booking, passengerName, shareUrl]);
+  }, [booking, ticket, passengerName, shareUrl]);
 
   const openTelegram = useCallback(() => {
-    const text = encodeURIComponent(buildShareText(booking, passengerName, shareUrl));
+    const text = encodeURIComponent(buildShareText(booking, ticket, passengerName, shareUrl));
     Linking.openURL(`tg://msg?text=${text}`).catch(() =>
       Linking.openURL(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent('🚌 My Yalla Transit Ticket')}`)
     );
-  }, [booking, passengerName, shareUrl]);
+  }, [booking, ticket, passengerName, shareUrl]);
 
   const openEmail = useCallback(() => {
     const bus  = booking?.bus ?? {};
-    const subj = encodeURIComponent(`Yalla Transit Ticket — ${bus.name || 'Bus Service'}`);
-    const body = encodeURIComponent(buildShareText(booking, passengerName, shareUrl));
+    const subj = encodeURIComponent(`Yalla Transit Ticket — ${bus.name || 'Bus Service'} (Seat ${ticket?.seat_number ?? ''})`);
+    const body = encodeURIComponent(buildShareText(booking, ticket, passengerName, shareUrl));
     Linking.openURL(`mailto:?subject=${subj}&body=${body}`);
-  }, [booking, passengerName, shareUrl]);
+  }, [booking, ticket, passengerName, shareUrl]);
 
   const openSms = useCallback(() => {
-    const body = encodeURIComponent(buildShareText(booking, passengerName, shareUrl));
+    const body = encodeURIComponent(buildShareText(booking, ticket, passengerName, shareUrl));
     const sep  = Platform.OS === 'ios' ? '&' : '?';
     Linking.openURL(`sms:${sep}body=${body}`);
-  }, [booking, passengerName, shareUrl]);
+  }, [booking, ticket, passengerName, shareUrl]);
 
   // ─────────────────────────────────────────────────────────────────────────
   const bgModal  = isDark ? '#0F172A' : COLORS.white;
@@ -289,6 +290,7 @@ const ShareTicketModal = ({ visible, onClose, booking, passengerName, user }) =>
             <ShareTicketCard
               ref={cardRef}
               booking={booking}
+              ticket={ticket}
               passengerName={passengerName}
               shareUrl={shareUrl}
               isDark={isDark}

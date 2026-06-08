@@ -45,7 +45,6 @@ import rolesRoutes             from "./routes/roles.routes.js";
 import analyticsRoutes         from "./routes/analytics.routes.js";
 import shareTicketRoutes       from "./routes/shareTicket.routes.js";
 import mlRoutes                from "./routes/ml.routes.js";
-import nfcRoutes               from "./routes/nfc.routes.js";
 import { startReportScheduler } from "./services/reportScheduler.js";
 import { poolPromise }          from "./db/db.js";
 import { ensureAuthTables, ensureOperationalTables } from "./db/featureSetup.js";
@@ -155,7 +154,6 @@ app.use("/api/roles",              rolesRoutes);
 app.use("/api/analytics",          analyticsRoutes);
 app.use("/api/share",              shareTicketRoutes);
 app.use("/api/ml",                 mlRoutes);
-app.use("/api/nfc",                nfcRoutes);
 
 // Run DB setup batches at startup so login requests don't pay the cold cost
 poolPromise.then(pool => {

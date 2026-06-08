@@ -381,8 +381,8 @@ export const login = async (req, res) => {
       } catch (_) { safeUser.driver_id = null; }
     }
 
-    // Return access_token in body so mobile clients can store it as Bearer token
-    return res.json({ user: safeUser, access_token });
+    // Return tokens in body so mobile clients (no cookie jar) can store & use them directly
+    return res.json({ user: safeUser, access_token, refresh_token });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Login failed" });
@@ -774,7 +774,9 @@ export const refresh = async (req, res) => {
 
     const access_token = issueAccessToken({ user_id: record.user_id, role: record.role });
     setCookies(res, access_token, new_refresh_token);
-    res.json({ ok: true, access_token });
+    // Return the rotated refresh token in the body too — mobile clients have no
+    // cookie jar, and the old token is now blacklisted, so they need this to refresh again later.
+    res.json({ ok: true, access_token, refresh_token: new_refresh_token });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Token refresh failed" });

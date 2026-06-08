@@ -135,10 +135,14 @@ const TripHistoryScreen = ({ navigation }) => {
         {
           text: 'Cancel',
           style: 'destructive',
-          onPress: () => {
-            cancelBooking(booking._id);
-            if (!isTaxi && booking.price > 0) {
-              Alert.alert('Cancelled', `$${booking.price?.toFixed(2)} refunded to your wallet.`);
+          onPress: async () => {
+            const result = await cancelBooking(booking._id);
+            if (!result?.ok) {
+              Alert.alert('Cancellation Failed', result?.error || 'Could not cancel this booking. Please try again.');
+              return;
+            }
+            if (!isTaxi && result.refund > 0) {
+              Alert.alert('Cancelled', `$${result.refund.toFixed(2)} refunded to your wallet.`);
             } else {
               Alert.alert('Cancelled', 'Reservation has been cancelled.');
             }

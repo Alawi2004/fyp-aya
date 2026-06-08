@@ -138,17 +138,6 @@ const ProfileScreen = ({ navigation }) => {
             />
           </View>
 
-          {/* Boarding */}
-          <Text style={styles.sectionLabel}>Boarding</Text>
-          <View style={styles.menuCard}>
-            <MenuItem
-              icon="card-outline"
-              label="NFC Card"
-              value={user?.nfcCard ? 'Card linked' : 'Link a contactless card'}
-              onPress={() => navigation.navigate('NfcCard')}
-            />
-          </View>
-
           {/* Support */}
           <Text style={styles.sectionLabel}>Support</Text>
           <View style={styles.menuCard}>

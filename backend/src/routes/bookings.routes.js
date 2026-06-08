@@ -6,6 +6,7 @@ import {
   cancelBooking,
   verifyTicket,
 } from "../controllers/bookings.controller.js";
+import { requireAuth } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
@@ -53,8 +54,8 @@ const router = express.Router();
  *       400:
  *         description: Not enough seats or invalid trip
  */
-router.get("/", getBookings);
-router.post("/", createBooking);
+router.get("/", requireAuth, getBookings);
+router.post("/", requireAuth, createBooking);
 
 /**
  * @swagger
@@ -116,6 +117,6 @@ router.post("/verify", verifyTicket);
  *         description: Booking cancelled
  */
 router.get("/:id", getBookingById);
-router.delete("/:id", cancelBooking);
+router.delete("/:id", requireAuth, cancelBooking);
 
 export default router;

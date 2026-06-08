@@ -518,21 +518,6 @@ BEGIN
   CREATE INDEX IX_geofence_events_trip ON geofence_events(trip_id, status);
 END;
 
--- NFC card linking (passengers link physical NFC cards for contactless boarding)
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='nfc_cards')
-BEGIN
-  CREATE TABLE nfc_cards (
-    nfc_id       INT           NOT NULL IDENTITY(1,1) PRIMARY KEY,
-    user_id      INT           NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-    card_uid     NVARCHAR(64)  NOT NULL,
-    status       NVARCHAR(20)  NOT NULL DEFAULT 'active',
-    linked_at    DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
-    unlinked_at  DATETIME2     NULL
-  );
-  CREATE INDEX IX_nfc_cards_user   ON nfc_cards(user_id, status);
-  CREATE INDEX IX_nfc_cards_uid    ON nfc_cards(card_uid);
-END;
-
 -- Favourite routes saved by passengers
 IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='user_favorite_routes')
 BEGIN

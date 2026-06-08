@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { secureGet, secureDelete } from '../utils/secureStorage';
+import { secureGet, secureSave, secureDelete } from '../utils/secureStorage';
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000/api';
 
@@ -16,19 +16,56 @@ apiClient.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Handle 401 + 503 globally
+const clearSession = async () => {
+  await secureDelete('authToken');
+  await secureDelete('refreshToken');
+};
+
+// Silently exchanges the stored refresh token for a new access token.
+// Shared across concurrent 401s so only one refresh request is ever in flight —
+// callers await the same promise and retry once it resolves.
+let refreshInFlight = null;
+const refreshAccessToken = () => {
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      const refreshToken = await secureGet('refreshToken');
+      if (!refreshToken) throw new Error('No refresh token available');
+      // Plain axios call — bypasses apiClient's interceptors to avoid recursion
+      const res = await axios.post(`${BASE_URL}/auth/refresh`, { refresh_token: refreshToken }, { timeout: 15000 });
+      const { access_token, refresh_token: newRefreshToken } = res.data;
+      await secureSave('authToken', access_token);
+      if (newRefreshToken) await secureSave('refreshToken', newRefreshToken);
+      return access_token;
+    })().finally(() => { refreshInFlight = null; });
+  }
+  return refreshInFlight;
+};
+
+// Handle 401 (silent token refresh + retry) and 503 (maintenance mode) globally
 apiClient.interceptors.response.use(
   (res) => res,
   async (error) => {
-    if (error.response?.status === 401) {
-      await secureDelete('authToken');
+    const { config, response } = error;
+
+    if (response?.status === 401 && config && !config._retried && !config.url?.endsWith('/auth/refresh')) {
+      config._retried = true;
+      try {
+        const newAccessToken = await refreshAccessToken();
+        config.headers = config.headers ?? {};
+        config.headers.Authorization = `Bearer ${newAccessToken}`;
+        return apiClient(config);
+      } catch {
+        await clearSession();
+        return Promise.reject(error);
+      }
     }
+
     if (
-      error.response?.status === 503 &&
-      error.response?.data?.code === 'MAINTENANCE_MODE'
+      response?.status === 503 &&
+      response?.data?.code === 'MAINTENANCE_MODE'
     ) {
       const { triggerMaintenance } = await import('../utils/maintenanceState.js');
-      triggerMaintenance(error.response.data);
+      triggerMaintenance(response.data);
     }
     return Promise.reject(error);
   }
@@ -47,11 +84,6 @@ export const registerPushToken = (pushToken) =>
 
 export const registerFcmToken = (fcmToken) =>
   apiClient.put('/auth/fcm-token', { token: fcmToken }).then((r) => r.data);
-
-// NFC card management
-export const getNfcStatus   = ()    => apiClient.get('/nfc/status').then((r) => r.data);
-export const linkNfcCard    = (uid) => apiClient.post('/nfc/link', { uid }).then((r) => r.data);
-export const unlinkNfcCard  = ()    => apiClient.delete('/nfc/unlink').then((r) => r.data);
 
 // Favorite routes
 export const getFavoriteRoutes   = ()               => apiClient.get('/users/me/favorites').then((r) => r.data);

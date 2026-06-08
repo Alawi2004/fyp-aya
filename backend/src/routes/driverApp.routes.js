@@ -12,7 +12,6 @@ import {
   scanPassengerQr,
   markStopArrival,
   reportDelay,
-  scanNfc,
 } from "../controllers/driverApp.controller.js";
 import { requireRole } from "../middleware/permissions.middleware.js";
 
@@ -204,7 +203,6 @@ router.post("/emergency", sendEmergency);
  */
 router.post("/location", updateLocation);
 router.post("/scan-qr",  scanPassengerQr);
-router.post("/nfc-scan", scanNfc);
 router.post("/trips/:id/stops/:stopId/arrive", markStopArrival);
 router.post("/trips/:id/delay", reportDelay);
 
