@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Animated, Platform, StatusBar, ScrollView, Alert,
+  Animated, Platform, StatusBar, ScrollView, Alert, Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -436,7 +436,16 @@ const BusTrackingScreen = ({ route, navigation }) => {
                 <Text style={styles.driverTrips}>· {driverInfo.trips} trips</Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.callBtn}>
+            <TouchableOpacity
+              style={styles.callBtn}
+              onPress={() => {
+                if (!driverInfo.phone) {
+                  Alert.alert('Unavailable', 'No contact number on file for this driver.');
+                  return;
+                }
+                Linking.openURL(`tel:${driverInfo.phone}`);
+              }}
+            >
               <Ionicons name="call" size={18} color={COLORS.white} />
             </TouchableOpacity>
           </View>
