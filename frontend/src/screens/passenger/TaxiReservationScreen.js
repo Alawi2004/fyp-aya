@@ -555,8 +555,8 @@ const TaxiReservationScreen = ({ navigation, route }) => {
         recurrence:   recurr,
         notes,
       };
-      // Refresh from DB (source of truth) instead of adding locally to avoid duplicates
-      refreshBookings();
+      // Refresh from DB so TripHistory is up to date immediately after booking
+      await refreshBookings();
       navigation.replace('Ticket', { booking: newBooking });
     } catch (err) {
       console.error('[handleConfirm taxi]', err);

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Alert, Platform, StatusBar,
@@ -28,10 +28,16 @@ const STATUS_CONFIG = {
 
 const TripHistoryScreen = ({ navigation }) => {
   const headerInsets = useHeaderInsets();
-  const { bookings, cancelBooking } = useApp();
+  const { bookings, cancelBooking, refreshBookings } = useApp();
   const { user } = useAuth();
   const [filter, setFilter]       = useState('all');
   const [exporting, setExporting] = useState(false);
+
+  // Refresh from DB every time this screen comes into focus
+  useEffect(() => {
+    const unsub = navigation.addListener('focus', refreshBookings);
+    return unsub;
+  }, [navigation, refreshBookings]);
 
   const filtered = (bookings || []).filter(b => filter === 'all' || b.status === filter);
 
