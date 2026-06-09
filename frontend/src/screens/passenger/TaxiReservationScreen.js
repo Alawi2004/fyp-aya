@@ -2,13 +2,116 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Modal, FlatList, StatusBar, Alert, TextInput, ActivityIndicator,
+  KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
-import { getPickerResult, clearPickerResult } from '../../utils/locationPickerResult';
+import * as Location from 'expo-location';
 import { useApp } from '../../context/AppContext';
-import { getAvailableDrivers, createTaxiReservation } from '../../api/apiClient';
+import { getAvailableDrivers, createTaxiReservation, expandMapUrl as apiExpandMapUrl } from '../../api/apiClient';
+import { getPickerResult, clearPickerResult } from '../../utils/locationPickerResult';
+
+const NOM = 'https://nominatim.openstreetmap.org';
+const NOM_HEADERS = { 'User-Agent': 'FYP-AYA Transit App (student project)', 'Accept-Language': 'en' };
+
+// ── Extract lat/lng from any text (URL or HTML body) ─────────────────────────
+const parseCoords = (text) => {
+  // @lat,lng — standard share/place URL format
+  const at = text.match(/@(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
+  if (at) return { lat: parseFloat(at[1]), lng: parseFloat(at[2]) };
+  // !3dlat!4dlng — directions / embed format
+  const d = text.match(/!3d(-?\d{1,3}\.\d+)!4d(-?\d{1,3}\.\d+)/);
+  if (d) return { lat: parseFloat(d[1]), lng: parseFloat(d[2]) };
+  // "lat":X,"lng":Y — JSON embedded in HTML
+  const j = text.match(/"lat":(-?\d{1,3}\.\d+),"lng":(-?\d{1,3}\.\d+)/);
+  if (j) return { lat: parseFloat(j[1]), lng: parseFloat(j[2]) };
+  // ?q=lat,lng / ?center= / ?ll=
+  const q = text.match(/[?&](?:q|center|ll)=(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
+  if (q) return { lat: parseFloat(q[1]), lng: parseFloat(q[2]) };
+  return null;
+};
+
+// ── Fetch a Google Maps URL and extract coordinates ───────────────────────────
+// Proxies through backend — server-side Node fetch bypasses Google bot detection
+const extractCoordsFromUrl = async (url) => {
+  // 1. Try parsing the raw URL directly (works for full google.com/maps links)
+  const direct = parseCoords(url);
+  if (direct) return direct;
+
+  // 2. Ask backend to expand and extract — avoids React Native fetch being blocked
+  try {
+    const data = await apiExpandMapUrl(url);
+    if (data?.lat != null && data?.lng != null) return { lat: data.lat, lng: data.lng };
+  } catch {}
+  return null;
+};
+
+// ── Nominatim address search (Lebanon only) ────────────────────────────────────
+const searchNominatim = async (query) => {
+  if (!query || query.trim().length < 3) return [];
+  try {
+    const url = `${NOM}/search?q=${encodeURIComponent(query.trim())}&format=json&limit=6&addressdetails=1&countrycodes=lb`;
+    const res = await fetch(url, { headers: NOM_HEADERS });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.map(p => ({
+      label: p.display_name,
+      lat:   parseFloat(p.lat),
+      lng:   parseFloat(p.lon),
+    }));
+  } catch {
+    return [];
+  }
+};
+
+// ── Nominatim reverse geocode ──────────────────────────────────────────────────
+const reverseGeocode = async (lat, lng) => {
+  try {
+    const url = `${NOM}/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`;
+    const res = await fetch(url, { headers: NOM_HEADERS });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.display_name ?? null;
+  } catch {
+    return null;
+  }
+};
+
+// ── "Or choose another way" buttons shown inside search modal ─────────────────
+const AltOptions = ({ onMap, onCoords }) => (
+  <View style={altStyles.wrap}>
+    <View style={altStyles.dividerRow}>
+      <View style={altStyles.line} />
+      <Text style={altStyles.orText}>or choose another way</Text>
+      <View style={altStyles.line} />
+    </View>
+    <View style={altStyles.btnRow}>
+      <TouchableOpacity style={altStyles.btn} onPress={onMap} activeOpacity={0.8}>
+        <Ionicons name="map-outline" size={18} color={COLORS.primary} />
+        <Text style={altStyles.btnText}>Pick on Map</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={altStyles.btn} onPress={onCoords} activeOpacity={0.8}>
+        <Ionicons name="locate-outline" size={18} color="#EA4335" />
+        <Text style={altStyles.btnText}>Google Maps Link</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+);
+
+const altStyles = StyleSheet.create({
+  wrap:       { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  line:       { flex: 1, height: 1, backgroundColor: COLORS.border },
+  orText:     { fontSize: 11, fontWeight: '600', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  btnRow:     { flexDirection: 'row', gap: 10 },
+  btn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 12, borderRadius: 14,
+    borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.white,
+  },
+  btnText: { fontSize: 13, fontWeight: '700', color: COLORS.textPrimary },
+});
 
 // ── Drum Wheel Picker ──────────────────────────────────────────────────────────
 
@@ -175,10 +278,154 @@ const TaxiReservationScreen = ({ navigation, route }) => {
   const [notes,         setNotes]         = useState('');
   const [timeMod,       setTimeMod]       = useState(false);
   const [vehicleType,       setVehicleType]       = useState('sedan');
-  const [drivers,           setDrivers]           = useState(null); // null = not fetched yet
+  const [drivers,           setDrivers]           = useState(null);
   const [driversLoading,    setDriversLoading]    = useState(false);
-  const [selectedDriverId,  setSelectedDriverId]  = useState(null); // null = any driver
+  const [selectedDriverId,  setSelectedDriverId]  = useState(null);
   const fetchTimerRef = useRef(null);
+
+  // ── Address search modal state ─────────────────────────────────────────────
+  const [searchModal,    setSearchModal]    = useState(false);   // modal open
+  const [searchField,    setSearchField]    = useState(null);    // 'pickup' | 'dest'
+  const [searchQuery,    setSearchQuery]    = useState('');
+  const [suggestions,    setSuggestions]    = useState([]);
+  const [searchLoading,  setSearchLoading]  = useState(false);
+  const searchTimerRef = useRef(null);
+  const searchInputRef = useRef(null);
+
+  const openSearch = (field) => {
+    setSearchField(field);
+    setSearchQuery(field === 'pickup' ? pickup : dest);
+    setSuggestions([]);
+    setSearchModal(true);
+    setTimeout(() => searchInputRef.current?.focus(), 120);
+  };
+
+  const closeSearch = () => {
+    setSearchModal(false);
+    setSearchQuery('');
+    setSuggestions([]);
+    setPastingLink(false);
+    setMapsLink('');
+    clearTimeout(searchTimerRef.current);
+  };
+
+  const onSearchChange = (text) => {
+    setSearchQuery(text);
+    clearTimeout(searchTimerRef.current);
+    if (text.trim().length < 3) { setSuggestions([]); return; }
+    setSearchLoading(true);
+    searchTimerRef.current = setTimeout(async () => {
+      const results = await searchNominatim(text);
+      setSuggestions(results);
+      setSearchLoading(false);
+    }, 500);
+  };
+
+  const selectSuggestion = (item) => {
+    const latLng = { latitude: item.lat, longitude: item.lng };
+    if (searchField === 'pickup') {
+      setPickup(item.label);
+      setPickupLatLng(latLng);
+    } else {
+      setDest(item.label);
+      setDestLatLng(latLng);
+    }
+    closeSearch();
+  };
+
+  // ── "Pick on Map" ─────────────────────────────────────────────────────────
+  const handleOpenMap = () => {
+    const field = searchField;
+    closeSearch();
+    setTimeout(() => {
+      navigation.navigate('MapLocationPicker', {
+        field,
+        title: field === 'pickup' ? 'Set Pickup Location' : 'Set Destination',
+      });
+    }, 300);
+  };
+
+  // Receive result back from MapLocationPickerScreen
+  useEffect(() => {
+    const unsub = navigation.addListener('focus', () => {
+      const r = getPickerResult();
+      if (!r) return;
+      if (r.field === 'pickup') {
+        setPickup(r.address);
+        if (r.latLng) setPickupLatLng(r.latLng);
+      } else {
+        setDest(r.address);
+        if (r.latLng) setDestLatLng(r.latLng);
+      }
+      clearPickerResult();
+    });
+    return unsub;
+  }, [navigation]);
+
+  // ── "Google Maps link or Coordinates" ────────────────────────────────────
+  const [pastingLink,  setPastingLink]  = useState(false);
+  const [mapsLink,     setMapsLink]     = useState('');
+  const [linkLoading,  setLinkLoading]  = useState(false);
+
+  const handlePasteLink = async () => {
+    const raw = mapsLink.trim();
+    if (!raw) return;
+    setLinkLoading(true);
+    try {
+      const coords = await extractCoordsFromUrl(raw);
+      if (!coords) {
+        Alert.alert('Could not read link', 'Could not extract coordinates from this link.\n\nMake sure you copied the "Share" link from Google Maps. You can also use "Pick on Map".');
+        return;
+      }
+      const { lat, lng } = coords;
+
+      const latLng = { latitude: lat, longitude: lng };
+      const address = await reverseGeocode(lat, lng);
+      const label = address ?? `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      if (searchField === 'pickup') { setPickup(label); setPickupLatLng(latLng); }
+      else                          { setDest(label);   setDestLatLng(latLng);   }
+      setMapsLink('');
+      setPastingLink(false);
+      closeSearch();
+    } finally {
+      setLinkLoading(false);
+    }
+  };
+
+  const openPasteLink = () => {
+    setMapsLink('');
+    setPastingLink(true);
+  };
+
+  // ── GPS "Use My Location" ──────────────────────────────────────────────────
+  const [gpsLoading, setGpsLoading] = useState(false);
+
+  const useMyLocation = async (field = 'pickup') => {
+    setGpsLoading(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission denied', 'Location access is required to use this feature. Please enable it in your device settings.');
+        return;
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const { latitude, longitude } = loc.coords;
+      const latLng = { latitude, longitude };
+      const address = await reverseGeocode(latitude, longitude);
+      const label = address ?? `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+      if (field === 'pickup') {
+        setPickup(label);
+        setPickupLatLng(latLng);
+      } else {
+        setDest(label);
+        setDestLatLng(latLng);
+      }
+    } catch {
+      Alert.alert('Error', 'Could not get your location. Make sure GPS is enabled.');
+    } finally {
+      setGpsLoading(false);
+    }
+  };
 
   // Build the ISO datetime string for scheduled mode
   const getScheduledDatetime = useCallback(() => {
@@ -215,30 +462,6 @@ const TaxiReservationScreen = ({ navigation, route }) => {
     fetchTimerRef.current = setTimeout(fetchDrivers, bookNow ? 0 : 600);
     return () => clearTimeout(fetchTimerRef.current);
   }, [bookNow, selDay, hour, minute, ampm]); // eslint-disable-line
-
-  // Receive picked location from MapLocationPickerScreen via module store
-  useEffect(() => {
-    const unsub = navigation.addListener('focus', () => {
-      const r = getPickerResult();
-      if (!r) return;
-      if (r.field === 'pickup') {
-        setPickup(r.address);
-        if (r.latLng) setPickupLatLng(r.latLng);
-      } else {
-        setDest(r.address);
-        if (r.latLng) setDestLatLng(r.latLng);
-      }
-      clearPickerResult();
-    });
-    return unsub;
-  }, [navigation]);
-
-  const openMap = (field) => {
-    navigation.navigate('MapLocationPicker', {
-      field,
-      title: field === 'pickup' ? 'Set Pickup Location' : 'Set Destination',
-    });
-  };
 
   const timeLabel = `${hour.trim()}:${minute} ${ampm}`;
   const canConfirm = pickup.trim() && dest.trim() && (bookNow || minute !== null);
@@ -359,32 +582,47 @@ const TaxiReservationScreen = ({ navigation, route }) => {
           <Text style={styles.cardTitle}>Where are you going?</Text>
 
           {/* Pickup */}
-          <TouchableOpacity style={styles.locRow} onPress={() => openMap('pickup')} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.locRow} onPress={() => openSearch('pickup')} activeOpacity={0.8}>
             <View style={[styles.locDot, { backgroundColor: COLORS.secondary }]} />
             <View style={styles.locTextWrap}>
               <Text style={styles.locLabel}>PICKUP</Text>
               <Text style={[styles.locValue, !pickup && styles.locPlaceholder]} numberOfLines={1}>
-                {pickup || 'Tap to select on map'}
+                {pickup || 'Search pickup location…'}
               </Text>
             </View>
-            <View style={styles.mapBtn}>
-              <Ionicons name="map-outline" size={16} color={COLORS.primary} />
+            <View style={styles.searchBtn}>
+              <Ionicons name="search-outline" size={16} color={COLORS.primary} />
             </View>
+          </TouchableOpacity>
+
+          {/* Use My Location button */}
+          <TouchableOpacity
+            style={styles.gpsBtn}
+            onPress={() => useMyLocation('pickup')}
+            disabled={gpsLoading}
+            activeOpacity={0.8}
+          >
+            {gpsLoading
+              ? <ActivityIndicator size="small" color={COLORS.secondary} />
+              : <Ionicons name="navigate" size={15} color={COLORS.secondary} />}
+            <Text style={styles.gpsBtnText}>
+              {gpsLoading ? 'Getting location…' : 'Use my current location'}
+            </Text>
           </TouchableOpacity>
 
           <View style={styles.locDivider} />
 
           {/* Destination */}
-          <TouchableOpacity style={styles.locRow} onPress={() => openMap('destination')} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.locRow} onPress={() => openSearch('dest')} activeOpacity={0.8}>
             <View style={[styles.locDot, { backgroundColor: COLORS.danger }]} />
             <View style={styles.locTextWrap}>
               <Text style={styles.locLabel}>DESTINATION</Text>
               <Text style={[styles.locValue, !dest && styles.locPlaceholder]} numberOfLines={1}>
-                {dest || 'Tap to select on map'}
+                {dest || 'Search destination…'}
               </Text>
             </View>
-            <View style={styles.mapBtn}>
-              <Ionicons name="map-outline" size={16} color={COLORS.primary} />
+            <View style={styles.searchBtn}>
+              <Ionicons name="search-outline" size={16} color={COLORS.primary} />
             </View>
           </TouchableOpacity>
         </View>
@@ -660,6 +898,131 @@ const TaxiReservationScreen = ({ navigation, route }) => {
         </TouchableOpacity>
       </ScrollView>
 
+      {/* ── Address Search Modal ── */}
+      <Modal
+        visible={searchModal}
+        animationType="slide"
+        onRequestClose={closeSearch}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1, backgroundColor: COLORS.background }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={[styles.searchModalHeader, { paddingTop: insets.top + 8 }]}>
+            <TouchableOpacity onPress={closeSearch} style={styles.searchBackBtn}>
+              <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
+            </TouchableOpacity>
+            <View style={styles.searchInputWrap}>
+              <View style={[styles.searchDotSmall, {
+                backgroundColor: searchField === 'pickup' ? COLORS.secondary : COLORS.danger,
+              }]} />
+              <TextInput
+                ref={searchInputRef}
+                style={styles.searchInput}
+                value={searchQuery}
+                onChangeText={onSearchChange}
+                placeholder={searchField === 'pickup' ? 'Search pickup location…' : 'Search destination…'}
+                placeholderTextColor={COLORS.textMuted}
+                autoCorrect={false}
+                returnKeyType="search"
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => onSearchChange('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {/* ── Results area (flex:1 so it doesn't push alt options off-screen) ── */}
+          <ScrollView
+            style={{ flex: 1 }}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ flexGrow: 1 }}
+          >
+            {searchLoading ? (
+              <View style={styles.searchCenterWrap}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+                <Text style={styles.searchHint}>Searching…</Text>
+              </View>
+            ) : suggestions.length > 0 ? (
+              suggestions.map((item, i) => (
+                <React.Fragment key={i}>
+                  <TouchableOpacity
+                    style={styles.suggRow}
+                    onPress={() => selectSuggestion(item)}
+                    activeOpacity={0.75}
+                  >
+                    <View style={styles.suggIconWrap}>
+                      <Ionicons name="location-outline" size={18} color={COLORS.primary} />
+                    </View>
+                    <Text style={styles.suggText} numberOfLines={2}>{item.label}</Text>
+                  </TouchableOpacity>
+                  {i < suggestions.length - 1 && <View style={styles.suggDivider} />}
+                </React.Fragment>
+              ))
+            ) : searchQuery.length >= 3 ? (
+              <View style={styles.searchCenterWrap}>
+                <Ionicons name="search-outline" size={36} color={COLORS.textMuted} />
+                <Text style={styles.searchHint}>No results found for Lebanon</Text>
+              </View>
+            ) : (
+              <View style={styles.searchCenterWrap}>
+                <Ionicons name="map-outline" size={40} color={COLORS.textMuted} />
+                <Text style={styles.searchHint}>Type at least 3 characters to search</Text>
+              </View>
+            )}
+          </ScrollView>
+
+          {/* ── Alt options — always anchored at the bottom, never overlapping ── */}
+          {!pastingLink && (
+            <AltOptions onMap={handleOpenMap} onCoords={openPasteLink} />
+          )}
+
+          {/* ── Enter coordinates panel — replaces alt options when active ── */}
+          {pastingLink && (
+            <View style={styles.pasteLinkPanel}>
+              <View style={styles.pasteLinkHeader}>
+                <Ionicons name="locate-outline" size={18} color="#EA4335" />
+                <Text style={styles.pasteLinkTitle}>Google Maps Link</Text>
+                <TouchableOpacity onPress={() => setPastingLink(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Ionicons name="close" size={20} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.pasteLinkHint}>
+                In Google Maps, tap a location → Share → Copy link, then paste below.
+              </Text>
+              <View style={styles.pasteLinkInputRow}>
+                <TextInput
+                  style={styles.pasteLinkInput}
+                  value={mapsLink}
+                  onChangeText={setMapsLink}
+                  placeholder="https://maps.app.goo.gl/…"
+                  placeholderTextColor={COLORS.textMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  onSubmitEditing={handlePasteLink}
+                />
+              </View>
+              <TouchableOpacity
+                style={[styles.pasteLinkBtn, (!mapsLink.trim() || linkLoading) && { opacity: 0.5 }]}
+                onPress={handlePasteLink}
+                disabled={!mapsLink.trim() || linkLoading}
+                activeOpacity={0.8}
+              >
+                {linkLoading
+                  ? <ActivityIndicator size="small" color={COLORS.white} />
+                  : <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />}
+                <Text style={styles.pasteLinkBtnText}>
+                  {linkLoading ? 'Looking up location…' : 'Use This Location'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </KeyboardAvoidingView>
+      </Modal>
+
       {/* ── Drum Wheel Time Picker Modal ── */}
       <TimePickerModal
         visible={timeMod}
@@ -720,12 +1083,94 @@ const styles = StyleSheet.create({
   },
   locValue: { fontSize: 15, fontWeight: '600', color: COLORS.textPrimary },
   locPlaceholder: { color: COLORS.textMuted, fontWeight: '400' },
-  mapBtn: {
+  searchBtn: {
     width: 32, height: 32, borderRadius: 9,
     backgroundColor: COLORS.primaryLight,
     alignItems: 'center', justifyContent: 'center',
   },
-  locDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: 8, marginLeft: 24 },
+
+  // ── Search modal ──────────────────────────────────────────────────────────
+  searchModalHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 14, paddingBottom: 12,
+    borderBottomWidth: 1, borderBottomColor: COLORS.border,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, shadowRadius: 6, elevation: 3,
+  },
+  searchBackBtn: {
+    width: 38, height: 38, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  searchInputWrap: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: COLORS.background, borderRadius: 12,
+    borderWidth: 1.5, borderColor: COLORS.primaryMid,
+    paddingHorizontal: 12, paddingVertical: 10,
+  },
+  searchDotSmall: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
+  searchInput: {
+    flex: 1, fontSize: 15, color: COLORS.textPrimary,
+    fontWeight: '500', padding: 0,
+  },
+  searchCenterWrap: {
+    flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10,
+    paddingBottom: 60,
+  },
+  searchHint: { fontSize: 14, color: COLORS.textMuted, fontWeight: '500', textAlign: 'center', paddingHorizontal: 24 },
+  suggRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 16, paddingVertical: 14,
+    backgroundColor: COLORS.white,
+  },
+  suggIconWrap: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  suggText: { flex: 1, fontSize: 14, color: COLORS.textPrimary, fontWeight: '500', lineHeight: 20 },
+  suggDivider: { height: 1, backgroundColor: COLORS.border, marginLeft: 64 },
+
+  // ── Paste Google Maps link panel (slides up from bottom of modal) ──────────
+  pasteLinkPanel: {
+    backgroundColor: COLORS.white,
+    borderTopWidth: 1, borderTopColor: COLORS.border,
+    padding: 16,
+  },
+  pasteLinkHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8,
+  },
+  pasteLinkTitle: { flex: 1, fontSize: 15, fontWeight: '800', color: COLORS.textPrimary },
+  pasteLinkHint: {
+    fontSize: 12, color: COLORS.textMuted, fontWeight: '500',
+    lineHeight: 17, marginBottom: 12,
+  },
+  pasteLinkInputRow: {
+    borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 12,
+    backgroundColor: COLORS.background, paddingHorizontal: 12, paddingVertical: 10,
+    marginBottom: 12,
+  },
+  pasteLinkInput: {
+    fontSize: 13, color: COLORS.textPrimary, fontWeight: '500',
+    minHeight: 42,
+  },
+  pasteLinkBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: COLORS.primary, borderRadius: 14, paddingVertical: 13,
+  },
+  pasteLinkBtnText: { fontSize: 14, fontWeight: '800', color: COLORS.white },
+  locDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: 4, marginLeft: 24 },
+
+  gpsBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    alignSelf: 'flex-start',
+    marginLeft: 24, marginTop: 4, marginBottom: 4,
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: COLORS.secondaryLight,
+    borderWidth: 1, borderColor: COLORS.secondary + '50',
+  },
+  gpsBtnText: { fontSize: 12, fontWeight: '700', color: COLORS.secondary },
 
   // When tabs
   whenTabs: { flexDirection: 'row', gap: 10, marginBottom: 16 },

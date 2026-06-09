@@ -62,6 +62,67 @@ export const createTaxiReservation = async (req, res) => {
   }
 };
 
+const DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
+const parseMapCoords = (text) => {
+  const at = text.match(/@(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
+  if (at) return { lat: parseFloat(at[1]), lng: parseFloat(at[2]) };
+  const d = text.match(/!3d(-?\d{1,3}\.\d+)!4d(-?\d{1,3}\.\d+)/);
+  if (d) return { lat: parseFloat(d[1]), lng: parseFloat(d[2]) };
+  const j = text.match(/"lat":(-?\d{1,3}\.\d+),"lng":(-?\d{1,3}\.\d+)/);
+  if (j) return { lat: parseFloat(j[1]), lng: parseFloat(j[2]) };
+  const q = text.match(/[?&](?:q|center|ll)=(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
+  if (q) return { lat: parseFloat(q[1]), lng: parseFloat(q[2]) };
+  return null;
+};
+
+// GET /api/taxi-reservations/expand-map?url=...
+// Server-side URL expansion so client avoids Google bot-detection blocks.
+export const expandMapUrl = async (req, res) => {
+  const { url } = req.query;
+  if (!url || typeof url !== 'string') {
+    return res.status(400).json({ error: 'url query parameter is required' });
+  }
+
+  // Step 1: parse the raw URL string directly (full google.com/maps links work here)
+  const direct = parseMapCoords(url);
+  if (direct) return res.json(direct);
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent':                DESKTOP_UA,
+        'Accept':                    'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language':           'en-US,en;q=0.9',
+        'Upgrade-Insecure-Requests': '1',
+      },
+      redirect: 'follow',
+    });
+    clearTimeout(timer);
+
+    // Step 2: check the final URL after all redirects
+    const fromFinal = parseMapCoords(response.url ?? '');
+    if (fromFinal) return res.json(fromFinal);
+
+    // Step 3: scan the HTML body for embedded coordinate data
+    const html = await response.text();
+    const fromHtml = parseMapCoords(html);
+    if (fromHtml) return res.json(fromHtml);
+
+    return res.status(422).json({ error: 'Could not extract coordinates from this URL' });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      return res.status(504).json({ error: 'Request timed out expanding URL' });
+    }
+    console.error('[expandMapUrl]', err.message);
+    return res.status(500).json({ error: 'Failed to expand URL', detail: err.message });
+  }
+};
+
 // GET /api/taxi-reservations — passenger's own reservations
 export const getMyTaxiReservations = async (req, res) => {
   const userId = req.user?.user_id;
