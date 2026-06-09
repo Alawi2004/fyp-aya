@@ -10,7 +10,10 @@ import { getSegmentDuration } from '../modules/eta/osrmClient.js';
 
 const SUPPORTED_MODES = new Set(['fastest', 'easiest', 'cheapest']);
 
-const routeDataQuery = `
+// Returns route+stop+trip data; departure_time scopes which trip is matched per route.
+// Routes with no running trip in the ±2 h / +6 h window get trip_id = NULL (still
+// routable, just not bookable until a schedule is published for that time slot).
+const buildRouteDataQuery = () => `
   SELECT
     r.*,
     rs.stop_id,
@@ -18,19 +21,24 @@ const routeDataQuery = `
     s.stop_name,
     s.latitude,
     s.longitude,
-    vehicle_pick.vehicle_type
+    vehicle_pick.vehicle_type,
+    vehicle_pick.trip_id
   FROM routes r
   JOIN route_stops rs ON r.route_id = rs.route_id
   JOIN stops s ON rs.stop_id = s.stop_id
   OUTER APPLY (
-    SELECT TOP 1 v.vehicle_type
+    SELECT TOP 1 v.vehicle_type, t.trip_id
     FROM trips t
     JOIN vehicles v ON t.vehicle_id = v.vehicle_id
     WHERE t.route_id = r.route_id
       AND ISNULL(t.status, 'scheduled') <> 'cancelled'
+      AND t.start_time >= DATEADD(hour, -2, @dep_time)
+      AND t.start_time <= DATEADD(hour,  6, @dep_time)
     ORDER BY
-      CASE WHEN t.status = 'ongoing' THEN 0 WHEN t.status = 'scheduled' THEN 1 ELSE 2 END,
-      t.start_time DESC
+      CASE WHEN t.status = 'ongoing'   THEN 0
+           WHEN t.status = 'scheduled' THEN 1
+           ELSE 2 END,
+      ABS(DATEDIFF(minute, t.start_time, @dep_time))
   ) vehicle_pick
   ORDER BY r.route_id, rs.stop_order;
 `;
@@ -131,6 +139,12 @@ export const getMultiTripRoute = async (req, res) => {
         .json({ error: 'Unsupported mode. Use fastest, easiest, or cheapest.' });
     }
 
+    // Parse departure time early — used for both trip matching and traffic enrichment
+    const depDate = departure_time ? new Date(departure_time) : new Date();
+    if (isNaN(depDate.getTime())) {
+      return res.status(400).json({ error: 'Invalid departure_time format. Use ISO 8601.' });
+    }
+
     const pool = await poolPromise;
     const exists = await pool
       .request()
@@ -142,7 +156,12 @@ export const getMultiTripRoute = async (req, res) => {
       return res.status(404).json({ error: 'One or both stops were not found.' });
     }
 
-    const routeData = await pool.request().query(routeDataQuery);
+    // Fetch route+stop data with trip_id scoped to the requested departure window
+    const routeData = await pool
+      .request()
+      .input('dep_time', sql.DateTime, depDate)
+      .query(buildRouteDataQuery());
+
     const stopMap = buildStopMap(routeData.recordset);
 
     const result = findMultiTripRoutes(routeData.recordset, start_id, end_id, rankingMode, {
@@ -156,12 +175,6 @@ export const getMultiTripRoute = async (req, res) => {
         message: result.reason || 'No route found.',
         alternatives: [],
       });
-    }
-
-    // Always enrich with traffic — default departure = now
-    const depDate = departure_time ? new Date(departure_time) : new Date();
-    if (isNaN(depDate.getTime())) {
-      return res.status(400).json({ error: 'Invalid departure_time format. Use ISO 8601.' });
     }
 
     const [primary, ...altEnriched] = await Promise.all([

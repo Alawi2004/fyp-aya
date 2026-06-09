@@ -96,6 +96,7 @@ const loadRouteGraph = (rows) => {
         fare: row.fare,
         base_fare: row.base_fare,
         price: row.price,
+        trip_id: row.trip_id ?? null,
         stops: [],
       });
     }
@@ -132,6 +133,7 @@ const makeRideSegment = (route, fromStop, toStop, fromIndex, toIndex, transferMi
     type,
     line: lineCodeForRoute(route),
     route_id: route.route_id,
+    trip_id: route.trip_id ?? null,
     route_name: route.route_name,
     from: fromStop.stop_name,
     to: toStop.stop_name,
