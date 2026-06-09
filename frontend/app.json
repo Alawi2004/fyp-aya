@@ -70,6 +70,9 @@
         "android.permission.USE_FINGERPRINT"
       ]
     },
+    "updates": {
+      "enabled": false
+    },
     "web": {
       "favicon": "./assets/favicon.png"
     },
