@@ -1,22 +1,169 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  KeyboardAvoidingView, Platform, StatusBar, Alert,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
+  KeyboardAvoidingView, Platform, StatusBar, Alert, Animated, Easing,
+  ActivityIndicator, Pressable, Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Button from '../../components/common/Button';
-import Input from '../../components/common/Input';
+import Svg, { Defs, LinearGradient as SvgGradient, Stop, Rect } from 'react-native-svg';
 import { COLORS } from '../../constants/colors';
 import { sendOtpApi } from '../../api/authApi';
+
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const BRAND = ['#1E3A8A', '#4338CA', '#7C3AED'];
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
-
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 100 }, (_, i) => String(currentYear - i));
+
+// ── SVG gradient fill that measures its own box (reliable on iOS) ─────────────
+const GradientFill = ({ id, colors, radius = 0, vertical = false }) => {
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  return (
+    <View
+      style={StyleSheet.absoluteFill}
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        setBox((p) => (p.w === width && p.h === height ? p : { w: width, h: height }));
+      }}
+    >
+      {box.w > 0 && box.h > 0 && (
+        <Svg width={box.w} height={box.h}>
+          <Defs>
+            <SvgGradient id={id} x1="0" y1="0" x2={vertical ? '0' : box.w} y2={vertical ? box.h : box.h} gradientUnits="userSpaceOnUse">
+              {colors.map((c, i) => (
+                <Stop key={i} offset={`${i / (colors.length - 1)}`} stopColor={c} />
+              ))}
+            </SvgGradient>
+          </Defs>
+          <Rect x="0" y="0" width={box.w} height={box.h} rx={radius} ry={radius} fill={`url(#${id})`} />
+        </Svg>
+      )}
+    </View>
+  );
+};
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+// ── Floating-label animated input ────────────────────────────────────────────
+const Field = ({
+  icon, label, value, onChangeText, secure, keyboardType,
+  error, autoCapitalize = 'none', maxLength,
+}) => {
+  const [focused, setFocused] = useState(false);
+  const [show, setShow] = useState(false);
+  const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: focused || value ? 1 : 0,
+      duration: 150, easing: Easing.out(Easing.quad), useNativeDriver: false,
+    }).start();
+  }, [focused, value]);
+
+  const borderColor = error ? COLORS.danger : focused ? COLORS.primary : COLORS.border;
+  const tint = error ? COLORS.danger : focused ? COLORS.primary : COLORS.textMuted;
+  const labelLeft = icon ? 44 : 14;
+
+  return (
+    <View style={{ marginBottom: error ? 6 : 16 }}>
+      <View style={[styles.fieldWrap, { borderColor }]}>
+        {icon ? (
+          <View style={styles.fieldIcon}>
+            <Ionicons name={icon} size={19} color={tint} />
+          </View>
+        ) : null}
+        <Animated.Text
+          pointerEvents="none"
+          style={[styles.floatLabel, {
+            left: labelLeft,
+            color: tint,
+            top: anim.interpolate({ inputRange: [0, 1], outputRange: [18, 8] }),
+            fontSize: anim.interpolate({ inputRange: [0, 1], outputRange: [15, 11] }),
+          }]}
+        >
+          {label}
+        </Animated.Text>
+        <TextInput
+          style={[styles.fieldInput, !icon && { paddingLeft: 12 }]}
+          value={value}
+          onChangeText={onChangeText}
+          secureTextEntry={secure && !show}
+          keyboardType={keyboardType}
+          autoCapitalize={autoCapitalize}
+          autoCorrect={false}
+          maxLength={maxLength}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+        />
+        {secure ? (
+          <TouchableOpacity style={styles.eyeBtn} onPress={() => setShow((s) => !s)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name={show ? 'eye-off-outline' : 'eye-outline'} size={19} color={COLORS.textMuted} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+      {error ? (
+        <View style={styles.errRow}>
+          <Ionicons name="alert-circle" size={13} color={COLORS.danger} />
+          <Text style={styles.errText}>{error}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+};
+
+// ── Picker field (matches Field look, opens a dropdown on tap) ────────────────
+const PickerField = ({ icon, label, value, onPress, error, active }) => {
+  const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: value || active ? 1 : 0,
+      duration: 150, easing: Easing.out(Easing.quad), useNativeDriver: false,
+    }).start();
+  }, [value, active]);
+
+  const borderColor = error ? COLORS.danger : active ? COLORS.primary : COLORS.border;
+  const tint = error ? COLORS.danger : active ? COLORS.primary : COLORS.textMuted;
+  const labelLeft = icon ? 44 : 14;
+
+  return (
+    <View style={{ marginBottom: error ? 6 : 16 }}>
+      <TouchableOpacity activeOpacity={0.8} onPress={onPress} style={[styles.fieldWrap, { borderColor }]}>
+        {icon ? (
+          <View style={styles.fieldIcon}>
+            <Ionicons name={icon} size={19} color={tint} />
+          </View>
+        ) : null}
+        <Animated.Text
+          pointerEvents="none"
+          style={[styles.floatLabel, {
+            left: labelLeft,
+            color: tint,
+            top: anim.interpolate({ inputRange: [0, 1], outputRange: [18, 8] }),
+            fontSize: anim.interpolate({ inputRange: [0, 1], outputRange: [15, 11] }),
+          }]}
+        >
+          {label}
+        </Animated.Text>
+        <Text style={[styles.pickerValue, { paddingLeft: icon ? 2 : 12 }]} numberOfLines={1}>
+          {value || ''}
+        </Text>
+        <Ionicons name="chevron-down" size={17} color={tint} style={{ marginRight: 4 }} />
+      </TouchableOpacity>
+      {error ? (
+        <View style={styles.errRow}>
+          <Ionicons name="alert-circle" size={13} color={COLORS.danger} />
+          <Text style={styles.errText}>{error}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+};
 
 const PassengerRegisterScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -35,7 +182,36 @@ const PassengerRegisterScreen = ({ navigation }) => {
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [showYearPicker, setShowYearPicker] = useState(false);
 
-  const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+  const set = (k, v) => {
+    setForm((p) => ({ ...p, [k]: v }));
+    if (errors[k]) setErrors((e) => ({ ...e, [k]: null }));
+  };
+
+  // ── Animations ─────────────────────────────────────────────────────────────
+  const intro = useRef([...Array(5)].map(() => new Animated.Value(0))).current;
+  const blobA = useRef(new Animated.Value(0)).current;
+  const blobB = useRef(new Animated.Value(0)).current;
+  const btnScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.stagger(110, intro.map((a) =>
+      Animated.spring(a, { toValue: 1, useNativeDriver: true, friction: 9, tension: 55 })
+    )).start();
+
+    const loop = (val, dur) => Animated.loop(
+      Animated.sequence([
+        Animated.timing(val, { toValue: 1, duration: dur, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(val, { toValue: 0, duration: dur, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    );
+    loop(blobA, 6000).start();
+    loop(blobB, 8000).start();
+  }, []);
+
+  const sect = (i) => ({
+    opacity: intro[i],
+    transform: [{ translateY: intro[i].interpolate({ inputRange: [0, 1], outputRange: [26, 0] }) }],
+  });
 
   const validate = () => {
     const e = {};
@@ -107,195 +283,236 @@ const PassengerRegisterScreen = ({ navigation }) => {
     }
   };
 
+  const blobAStyle = {
+    transform: [
+      { translateX: blobA.interpolate({ inputRange: [0, 1], outputRange: [-20, 30] }) },
+      { translateY: blobA.interpolate({ inputRange: [0, 1], outputRange: [0, 40] }) },
+      { scale: blobA.interpolate({ inputRange: [0, 1], outputRange: [1, 1.15] }) },
+    ],
+  };
+  const blobBStyle = {
+    transform: [
+      { translateX: blobB.interpolate({ inputRange: [0, 1], outputRange: [20, -30] }) },
+      { translateY: blobB.interpolate({ inputRange: [0, 1], outputRange: [10, -30] }) },
+      { scale: blobB.interpolate({ inputRange: [0, 1], outputRange: [1.1, 0.9] }) },
+    ],
+  };
+
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <StatusBar barStyle="light-content" backgroundColor={BRAND[0]} />
+
+      {/* Animated gradient background */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <GradientFill id="regBgGrad" colors={BRAND} vertical />
+        <Animated.View style={[styles.blob, styles.blobA, blobAStyle]} />
+        <Animated.View style={[styles.blob, styles.blobB, blobBStyle]} />
+        <View style={styles.blobC} />
+      </View>
+
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
-          bounces={false}
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          bounces={false}
         >
           {/* Hero */}
           <View style={[styles.hero, { paddingTop: insets.top + 16 }]}>
             <TouchableOpacity
-              style={[styles.backBtn, { top: insets.top + 16 }]}
+              style={[styles.backBtn, { top: insets.top + 12 }]}
               onPress={() => navigation.goBack()}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Ionicons name="arrow-back" size={22} color={COLORS.white} />
             </TouchableOpacity>
 
-            <View style={styles.logoCircle}>
-              <Ionicons name="person-add-outline" size={36} color={COLORS.primary} />
-            </View>
-            <Text style={styles.heroTitle}>Create Account</Text>
-            <Text style={styles.heroSub}>Join Yalla Transit as a Passenger</Text>
+            <Animated.View style={[styles.logoWrap, {
+              opacity: intro[0],
+              transform: [{ scale: intro[0].interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
+            }]}>
+              <View style={styles.logoCircle}>
+                <Ionicons name="person-add" size={34} color={COLORS.primary} />
+              </View>
+            </Animated.View>
+            <Animated.Text style={[styles.brand, sect(1)]}>Create Account</Animated.Text>
+            <Animated.Text style={[styles.tagline, sect(1)]}>Join Yalla Transit as a passenger</Animated.Text>
           </View>
 
-          {/* Form sheet */}
-          <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Your Details</Text>
-            <Text style={styles.sheetSubtitle}>
-              We'll send a verification code to your email
-            </Text>
+          {/* Card */}
+          <Animated.View style={[styles.card, sect(2), { paddingBottom: insets.bottom + 24 }]}>
+            <View style={styles.handle} />
+            <Text style={styles.title}>Your details</Text>
+            <Text style={styles.subtitle}>We'll send a verification code to your email</Text>
 
-            <Input
-              label="Full Name"
-              value={form.name}
-              onChangeText={(v) => set('name', v)}
-              placeholder="e.g. Sarah Ahmed"
-              error={errors.name}
-              icon={<Ionicons name="person-outline" size={18} color={COLORS.textMuted} />}
-            />
+            <Animated.View style={sect(3)}>
+              <Field
+                icon="person-outline"
+                label="Full name"
+                value={form.name}
+                onChangeText={(v) => set('name', v)}
+                autoCapitalize="words"
+                error={errors.name}
+              />
+              <Field
+                icon="mail-outline"
+                label="Email address"
+                value={form.email}
+                onChangeText={(v) => set('email', v)}
+                keyboardType="email-address"
+                error={errors.email}
+              />
+              <Field
+                icon="call-outline"
+                label="Phone number (optional)"
+                value={form.phone}
+                onChangeText={(v) => set('phone', v)}
+                keyboardType="phone-pad"
+                error={errors.phone}
+              />
+              <Field
+                icon="lock-closed-outline"
+                label="Password"
+                value={form.password}
+                onChangeText={(v) => set('password', v)}
+                secure
+                error={errors.password}
+              />
+              <Field
+                icon="shield-checkmark-outline"
+                label="Confirm password"
+                value={form.confirmPassword}
+                onChangeText={(v) => set('confirmPassword', v)}
+                secure
+                error={errors.confirmPassword}
+              />
 
-            <Input
-              label="Email Address"
-              value={form.email}
-              onChangeText={(v) => set('email', v)}
-              placeholder="your@email.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              error={errors.email}
-              icon={<Ionicons name="mail-outline" size={18} color={COLORS.textMuted} />}
-            />
-
-            <Input
-              label="Phone Number"
-              value={form.phone}
-              onChangeText={(v) => set('phone', v)}
-              placeholder="+974 5555 1234"
-              keyboardType="phone-pad"
-              error={errors.phone}
-              icon={<Ionicons name="call-outline" size={18} color={COLORS.textMuted} />}
-            />
-
-            <Input
-              label="Password"
-              value={form.password}
-              onChangeText={(v) => set('password', v)}
-              placeholder="Min 8 chars, uppercase, number, symbol"
-              secureTextEntry
-              error={errors.password}
-              icon={<Ionicons name="lock-closed-outline" size={18} color={COLORS.textMuted} />}
-            />
-
-            <Input
-              label="Confirm Password"
-              value={form.confirmPassword}
-              onChangeText={(v) => set('confirmPassword', v)}
-              placeholder="Repeat your password"
-              secureTextEntry
-              error={errors.confirmPassword}
-              icon={<Ionicons name="shield-checkmark-outline" size={18} color={COLORS.textMuted} />}
-            />
-
-            {/* Birthday section */}
-            <Text style={styles.sectionLabel}>Date of Birth</Text>
-
-            <View style={styles.birthdayRow}>
-              {/* Day */}
-              <View style={[styles.birthdayField, { flex: 1 }]}>
-                <Input
-                  label="Day"
-                  value={form.birthDay}
-                  onChangeText={(v) => set('birthDay', v.replace(/[^0-9]/g, '').slice(0, 2))}
-                  placeholder="DD"
-                  keyboardType="number-pad"
-                  error={errors.birthDay}
-                  icon={null}
-                />
+              {/* Date of birth */}
+              <Text style={styles.sectionLabel}>Date of birth</Text>
+              <View style={styles.birthRow}>
+                <View style={{ flex: 1 }}>
+                  <Field
+                    label="DD"
+                    value={form.birthDay}
+                    onChangeText={(v) => set('birthDay', v.replace(/[^0-9]/g, '').slice(0, 2))}
+                    keyboardType="number-pad"
+                    maxLength={2}
+                    error={errors.birthDay ? ' ' : null}
+                  />
+                </View>
+                <View style={{ flex: 1.5 }}>
+                  <PickerField
+                    label="Month"
+                    value={form.birthMonth}
+                    active={showMonthPicker}
+                    error={errors.birthMonth ? ' ' : null}
+                    onPress={() => { setShowMonthPicker((s) => !s); setShowYearPicker(false); }}
+                  />
+                </View>
+                <View style={{ flex: 1.2 }}>
+                  <PickerField
+                    label="Year"
+                    value={form.birthYear}
+                    active={showYearPicker}
+                    error={errors.birthYear ? ' ' : null}
+                    onPress={() => { setShowYearPicker((s) => !s); setShowMonthPicker(false); }}
+                  />
+                </View>
               </View>
-
-              {/* Month */}
-              <View style={[styles.birthdayField, { flex: 2 }]}>
-                <Text style={styles.fieldLabel}>Month</Text>
-                <TouchableOpacity
-                  style={[styles.pickerBtn, errors.birthMonth && styles.pickerBtnError]}
-                  onPress={() => { setShowMonthPicker(true); setShowYearPicker(false); }}
-                  activeOpacity={0.75}
-                >
-                  <Text style={[styles.pickerBtnText, !form.birthMonth && styles.pickerBtnPlaceholder]}>
-                    {form.birthMonth || 'Month'}
+              {(errors.birthDay || errors.birthMonth || errors.birthYear) ? (
+                <View style={styles.errRow}>
+                  <Ionicons name="alert-circle" size={13} color={COLORS.danger} />
+                  <Text style={styles.errText}>
+                    {errors.birthDay || errors.birthMonth || errors.birthYear}
                   </Text>
-                  <Ionicons name="chevron-down" size={15} color={COLORS.textMuted} />
-                </TouchableOpacity>
-                {errors.birthMonth ? <Text style={styles.errorText}>{errors.birthMonth}</Text> : null}
+                </View>
+              ) : null}
+
+              {/* Month picker dropdown */}
+              {showMonthPicker && (
+                <View style={styles.dropdownList}>
+                  <ScrollView nestedScrollEnabled style={{ maxHeight: 220 }} keyboardShouldPersistTaps="handled">
+                    {MONTHS.map((m) => (
+                      <TouchableOpacity
+                        key={m}
+                        style={[styles.dropdownItem, form.birthMonth === m && styles.dropdownItemActive]}
+                        onPress={() => { set('birthMonth', m); setShowMonthPicker(false); }}
+                      >
+                        <Text style={[styles.dropdownItemText, form.birthMonth === m && styles.dropdownItemTextActive]}>
+                          {m}
+                        </Text>
+                        {form.birthMonth === m ? <Ionicons name="checkmark" size={17} color={COLORS.primary} /> : null}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Year picker dropdown */}
+              {showYearPicker && (
+                <View style={styles.dropdownList}>
+                  <ScrollView nestedScrollEnabled style={{ maxHeight: 220 }} keyboardShouldPersistTaps="handled">
+                    {YEARS.map((y) => (
+                      <TouchableOpacity
+                        key={y}
+                        style={[styles.dropdownItem, form.birthYear === y && styles.dropdownItemActive]}
+                        onPress={() => { set('birthYear', y); setShowYearPicker(false); }}
+                      >
+                        <Text style={[styles.dropdownItemText, form.birthYear === y && styles.dropdownItemTextActive]}>
+                          {y}
+                        </Text>
+                        {form.birthYear === y ? <Ionicons name="checkmark" size={17} color={COLORS.primary} /> : null}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Submit button */}
+              <AnimatedPressable
+                onPress={handleSendOtp}
+                disabled={loading}
+                onPressIn={() => Animated.spring(btnScale, { toValue: 0.97, useNativeDriver: true, speed: 50, bounciness: 0 }).start()}
+                onPressOut={() => Animated.spring(btnScale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 8 }).start()}
+                style={[styles.signInBtn, { marginTop: 8, transform: [{ scale: btnScale }], opacity: loading ? 0.85 : 1 }]}
+              >
+                <View style={styles.signInBg} pointerEvents="none">
+                  <GradientFill id="regBtnGrad" colors={['#2563EB', '#7C3AED']} radius={16} />
+                </View>
+                {loading ? (
+                  <ActivityIndicator color={COLORS.white} />
+                ) : (
+                  <>
+                    <Text style={styles.signInText}>Send Verification Code</Text>
+                    <Ionicons name="arrow-forward" size={19} color={COLORS.white} />
+                  </>
+                )}
+              </AnimatedPressable>
+            </Animated.View>
+
+            {/* Footer */}
+            <Animated.View style={sect(4)}>
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>Already a member?</Text>
+                <View style={styles.dividerLine} />
               </View>
 
-              {/* Year */}
-              <View style={[styles.birthdayField, { flex: 1.5 }]}>
-                <Text style={styles.fieldLabel}>Year</Text>
-                <TouchableOpacity
-                  style={[styles.pickerBtn, errors.birthYear && styles.pickerBtnError]}
-                  onPress={() => { setShowYearPicker(true); setShowMonthPicker(false); }}
-                  activeOpacity={0.75}
-                >
-                  <Text style={[styles.pickerBtnText, !form.birthYear && styles.pickerBtnPlaceholder]}>
-                    {form.birthYear || 'Year'}
-                  </Text>
-                  <Ionicons name="chevron-down" size={15} color={COLORS.textMuted} />
-                </TouchableOpacity>
-                {errors.birthYear ? <Text style={styles.errorText}>{errors.birthYear}</Text> : null}
-              </View>
-            </View>
-
-            {/* Month picker dropdown */}
-            {showMonthPicker && (
-              <View style={styles.dropdownList}>
-                <ScrollView nestedScrollEnabled style={{ maxHeight: 200 }}>
-                  {MONTHS.map((m) => (
-                    <TouchableOpacity
-                      key={m}
-                      style={[styles.dropdownItem, form.birthMonth === m && styles.dropdownItemActive]}
-                      onPress={() => { set('birthMonth', m); setShowMonthPicker(false); }}
-                    >
-                      <Text style={[styles.dropdownItemText, form.birthMonth === m && styles.dropdownItemTextActive]}>
-                        {m}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-
-            {/* Year picker dropdown */}
-            {showYearPicker && (
-              <View style={styles.dropdownList}>
-                <ScrollView nestedScrollEnabled style={{ maxHeight: 200 }}>
-                  {YEARS.map((y) => (
-                    <TouchableOpacity
-                      key={y}
-                      style={[styles.dropdownItem, form.birthYear === y && styles.dropdownItemActive]}
-                      onPress={() => { set('birthYear', y); setShowYearPicker(false); }}
-                    >
-                      <Text style={[styles.dropdownItemText, form.birthYear === y && styles.dropdownItemTextActive]}>
-                        {y}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-
-            <Button
-              title="Send Verification Code"
-              onPress={handleSendOtp}
-              loading={loading}
-              size="lg"
-              style={{ marginTop: 20 }}
-            />
-
-            <View style={styles.loginRow}>
-              <Text style={styles.loginText}>Already have an account? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-                <Text style={styles.loginLink}>Sign In</Text>
+              <TouchableOpacity
+                style={styles.signupBtn}
+                onPress={() => navigation.navigate('Login')}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.signupText}>Sign in instead</Text>
+                <Ionicons name="log-in-outline" size={17} color={COLORS.primary} />
               </TouchableOpacity>
-            </View>
-          </View>
+
+              <View style={styles.secureRow}>
+                <Ionicons name="shield-checkmark" size={13} color={COLORS.textMuted} />
+                <Text style={styles.secureText}>Protected with end-to-end encryption</Text>
+              </View>
+            </Animated.View>
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -303,116 +520,111 @@ const PassengerRegisterScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.primary },
+  root: { flex: 1, backgroundColor: BRAND[0] },
 
-  hero: {
-    alignItems: 'center',
-    paddingBottom: 32,
-    paddingHorizontal: 24,
-  },
+  /* Background blobs */
+  blob: { position: 'absolute', borderRadius: 9999 },
+  blobA: { width: 280, height: 280, top: -60, right: -80, backgroundColor: 'rgba(124,58,237,0.45)' },
+  blobB: { width: 240, height: 240, top: SCREEN_H * 0.22, left: -90, backgroundColor: 'rgba(37,99,235,0.40)' },
+  blobC: { position: 'absolute', width: 180, height: 180, borderRadius: 90, top: -30, left: SCREEN_W * 0.3, backgroundColor: 'rgba(255,255,255,0.06)' },
+
+  /* Hero */
+  hero: { alignItems: 'center', paddingHorizontal: 24, paddingBottom: 28 },
   backBtn: {
-    position: 'absolute',
-    left: 24,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: 'absolute', left: 24, width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', zIndex: 2,
+  },
+  logoWrap: {
+    marginBottom: 14,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25, shadowRadius: 18, elevation: 10,
   },
   logoCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 72, height: 72, borderRadius: 36, backgroundColor: COLORS.white,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  brand: { fontSize: 28, fontWeight: '900', color: COLORS.white, letterSpacing: 0.3 },
+  tagline: { fontSize: 14, color: 'rgba(255,255,255,0.78)', marginTop: 5 },
+
+  /* Card */
+  card: {
     backgroundColor: COLORS.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
+    borderTopLeftRadius: 34, borderTopRightRadius: 34,
+    paddingHorizontal: 24, paddingTop: 14,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.12, shadowRadius: 24, elevation: 20,
   },
-  heroTitle: { fontSize: 26, fontWeight: '800', color: COLORS.white, letterSpacing: 0.3 },
-  heroSub: { fontSize: 14, color: 'rgba(255,255,255,0.75)', marginTop: 4 },
+  handle: { width: 44, height: 5, borderRadius: 3, backgroundColor: COLORS.border, alignSelf: 'center', marginBottom: 18 },
+  title: { fontSize: 26, fontWeight: '900', color: COLORS.textPrimary, letterSpacing: -0.4 },
+  subtitle: { fontSize: 14, color: COLORS.textSecondary, marginTop: 4, marginBottom: 24 },
 
-  sheet: {
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    paddingHorizontal: 24,
-    paddingTop: 32,
-    paddingBottom: 52,
-  },
-  sheetTitle: { fontSize: 22, fontWeight: '800', color: COLORS.textPrimary, marginBottom: 4 },
-  sheetSubtitle: { fontSize: 14, color: COLORS.textSecondary, marginBottom: 24, lineHeight: 20 },
-
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginBottom: 10,
-    marginTop: 4,
-  },
-
-  birthdayRow: {
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'flex-start',
-    marginBottom: 4,
-  },
-  birthdayField: {},
-
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    marginBottom: 6,
-  },
-  pickerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 13,
+  /* Field */
+  fieldWrap: {
+    flexDirection: 'row', alignItems: 'center',
+    height: 58, borderRadius: 16, borderWidth: 1.5,
     backgroundColor: COLORS.background,
-    minHeight: 48,
+    paddingHorizontal: 12,
   },
-  pickerBtnError: { borderColor: COLORS.error ?? '#EF4444' },
-  pickerBtnText: { fontSize: 14, color: COLORS.textPrimary, flex: 1 },
-  pickerBtnPlaceholder: { color: COLORS.textMuted },
+  // NOTE: focus highlight only changes borderColor (applied inline). Do NOT
+  // toggle backgroundColor / shadow / elevation on focus — on the New
+  // Architecture (Fabric) those heavy parent redraws during the onFocus event
+  // make the native field drop focus instantly (keyboard never opens).
+  fieldIcon: { width: 30, alignItems: 'center', justifyContent: 'center' },
+  floatLabel: { position: 'absolute', fontWeight: '600' },
+  fieldInput: {
+    flex: 1, fontSize: 15, fontWeight: '600', color: COLORS.textPrimary,
+    paddingTop: 18, paddingLeft: 2, paddingRight: 6,
+  },
+  pickerValue: {
+    flex: 1, fontSize: 15, fontWeight: '600', color: COLORS.textPrimary, paddingTop: 14,
+  },
+  eyeBtn: { paddingHorizontal: 4 },
+  errRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6, marginBottom: 10, marginLeft: 4 },
+  errText: { fontSize: 12, color: COLORS.danger, fontWeight: '600' },
 
+  /* Date of birth */
+  sectionLabel: { fontSize: 13, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 10, marginTop: 2 },
+  birthRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+
+  /* Dropdowns */
   dropdownList: {
     backgroundColor: COLORS.white,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
+    borderRadius: 14, borderWidth: 1.5, borderColor: COLORS.border,
+    marginBottom: 16, overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1, shadowRadius: 10, elevation: 4,
   },
   dropdownItem: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.background,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 13, paddingHorizontal: 16,
+    borderBottomWidth: 1, borderBottomColor: COLORS.background,
   },
   dropdownItemActive: { backgroundColor: COLORS.primaryLight },
-  dropdownItemText: { fontSize: 14, color: COLORS.textPrimary },
-  dropdownItemTextActive: { color: COLORS.primary, fontWeight: '700' },
+  dropdownItemText: { fontSize: 15, color: COLORS.textPrimary, fontWeight: '600' },
+  dropdownItemTextActive: { color: COLORS.primary, fontWeight: '800' },
 
-  errorText: { fontSize: 12, color: COLORS.error ?? '#EF4444', marginTop: 4 },
+  /* Submit button */
+  signInBtn: {
+    height: 56, borderRadius: 16, overflow: 'hidden',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    shadowColor: '#4F46E5', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.32, shadowRadius: 14, elevation: 8,
+  },
+  signInBg: { ...StyleSheet.absoluteFillObject, borderRadius: 16, overflow: 'hidden' },
+  signInText: { fontSize: 16, fontWeight: '800', color: COLORS.white, letterSpacing: 0.3 },
 
-  loginRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 22 },
-  loginText: { fontSize: 14, color: COLORS.textSecondary },
-  loginLink: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
+  /* Footer */
+  divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 22 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: COLORS.border },
+  dividerText: { fontSize: 12, color: COLORS.textMuted, fontWeight: '600' },
+  signupBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    height: 54, borderRadius: 16, borderWidth: 1.5, borderColor: COLORS.primaryMid,
+    backgroundColor: COLORS.primaryLight,
+  },
+  signupText: { fontSize: 15, fontWeight: '800', color: COLORS.primary },
+  secureRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 18 },
+  secureText: { fontSize: 12, color: COLORS.textMuted, fontWeight: '500' },
 });
 
 export default PassengerRegisterScreen;

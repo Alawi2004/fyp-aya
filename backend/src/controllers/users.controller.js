@@ -517,7 +517,7 @@ export const getMe = async (req, res) => {
     const result = await pool.request()
       .input("id", sql.Int, req.user.user_id)
       .query(`
-        SELECT user_id, full_name, email, phone, role, status, birth_date, created_at
+        SELECT user_id, full_name, email, phone, role, category, status, birth_date, created_at
         FROM   users
         WHERE  user_id = @id
       `);
@@ -549,7 +549,7 @@ export const updateMe = async (req, res) => {
         UPDATE users
         SET full_name = @full_name, phone = @phone, birth_date = @birth_date
         OUTPUT INSERTED.user_id, INSERTED.full_name, INSERTED.email, INSERTED.phone,
-               INSERTED.role, INSERTED.status, INSERTED.birth_date, INSERTED.created_at
+               INSERTED.role, INSERTED.category, INSERTED.status, INSERTED.birth_date, INSERTED.created_at
         WHERE  user_id = @id
       `);
     if (!result.recordset[0]) return res.status(404).json({ error: "User not found" });
