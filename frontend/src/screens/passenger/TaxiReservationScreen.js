@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Modal, FlatList, StatusBar, Alert, Animated,
+  Modal, FlatList, StatusBar, Alert, TextInput, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { getPickerResult, clearPickerResult } from '../../utils/locationPickerResult';
 import { useApp } from '../../context/AppContext';
+import { getAvailableDrivers, createTaxiReservation } from '../../api/apiClient';
 
 // ── Drum Wheel Picker ──────────────────────────────────────────────────────────
 
@@ -147,6 +148,13 @@ const RECURRENCE = [
   { key: 'weekly',   label: 'Weekly',    icon: 'sync-outline'             },
 ];
 
+const VEHICLE_TYPES = [
+  { key: 'sedan',  label: 'Sedan',    icon: 'car-outline',       base: 5.00,  perKm: 1.50, seats: 4, color: '#3B82F6' },
+  { key: 'suv',    label: 'SUV',      icon: 'car-sport-outline',  base: 8.00,  perKm: 2.00, seats: 6, color: '#7C3AED' },
+  { key: 'van',    label: 'Van / XL', icon: 'bus-outline',        base: 12.00, perKm: 2.50, seats: 8, color: '#EA580C' },
+  { key: 'tuktuk', label: 'Tuk-Tuk', icon: 'bicycle-outline',    base: 3.00,  perKm: 1.00, seats: 3, color: '#16A34A' },
+];
+
 // ── Main Screen ────────────────────────────────────────────────────────────────
 
 const TaxiReservationScreen = ({ navigation, route }) => {
@@ -154,24 +162,72 @@ const TaxiReservationScreen = ({ navigation, route }) => {
   const { addBooking } = useApp();
   const { fromStop, toStop, tripSummary } = route?.params ?? {};
 
-  const [pickup,    setPickup]  = useState(fromStop?.stop_name ?? '');
-  const [dest,      setDest]    = useState(toStop?.stop_name   ?? '');
-  const [bookNow,   setBookNow] = useState(true);
-  const [selDay,    setSelDay]  = useState(DAYS[0].key);
-  const [hour,      setHour]    = useState('08');
-  const [minute,    setMinute]  = useState('00');
-  const [ampm,      setAmpm]    = useState('AM');
-  const [recurr,    setRecurr]  = useState('once');
-  const [notes,     setNotes]   = useState('');
-  const [timeMod,   setTimeMod] = useState(false);
+  const [pickup,        setPickup]        = useState(fromStop?.stop_name ?? '');
+  const [dest,          setDest]          = useState(toStop?.stop_name   ?? '');
+  const [pickupLatLng,  setPickupLatLng]  = useState(null);
+  const [destLatLng,    setDestLatLng]    = useState(null);
+  const [bookNow,       setBookNow]       = useState(true);
+  const [selDay,        setSelDay]        = useState(DAYS[0].key);
+  const [hour,          setHour]          = useState('08');
+  const [minute,        setMinute]        = useState('00');
+  const [ampm,          setAmpm]          = useState('AM');
+  const [recurr,        setRecurr]        = useState('once');
+  const [notes,         setNotes]         = useState('');
+  const [timeMod,       setTimeMod]       = useState(false);
+  const [vehicleType,       setVehicleType]       = useState('sedan');
+  const [drivers,           setDrivers]           = useState(null); // null = not fetched yet
+  const [driversLoading,    setDriversLoading]    = useState(false);
+  const [selectedDriverId,  setSelectedDriverId]  = useState(null); // null = any driver
+  const fetchTimerRef = useRef(null);
+
+  // Build the ISO datetime string for scheduled mode
+  const getScheduledDatetime = useCallback(() => {
+    const selDayObj = DAYS.find(d => d.key === selDay);
+    if (!selDayObj) return null;
+    let h = parseInt(hour.trim(), 10);
+    if (ampm === 'PM' && h !== 12) h += 12;
+    if (ampm === 'AM' && h === 12) h = 0;
+    return `${selDay}T${String(h).padStart(2, '0')}:${minute}:00`;
+  }, [selDay, hour, minute, ampm]);
+
+  const fetchDrivers = useCallback(async () => {
+    setDriversLoading(true);
+    try {
+      const mode = bookNow ? 'now' : 'scheduled';
+      const datetime = bookNow ? undefined : getScheduledDatetime();
+      const res = await getAvailableDrivers(mode, datetime);
+      const list = res.drivers || [];
+      setDrivers(list);
+      // Clear selection if chosen driver is no longer in the list
+      if (selectedDriverId && !list.find(d => d.driver_id === selectedDriverId)) {
+        setSelectedDriverId(null);
+      }
+    } catch {
+      setDrivers([]);
+    } finally {
+      setDriversLoading(false);
+    }
+  }, [bookNow, getScheduledDatetime, selectedDriverId]);
+
+  // Re-fetch when mode or scheduled time changes (debounced 600 ms for schedule changes)
+  useEffect(() => {
+    clearTimeout(fetchTimerRef.current);
+    fetchTimerRef.current = setTimeout(fetchDrivers, bookNow ? 0 : 600);
+    return () => clearTimeout(fetchTimerRef.current);
+  }, [bookNow, selDay, hour, minute, ampm]); // eslint-disable-line
 
   // Receive picked location from MapLocationPickerScreen via module store
   useEffect(() => {
     const unsub = navigation.addListener('focus', () => {
       const r = getPickerResult();
       if (!r) return;
-      if (r.field === 'pickup') setPickup(r.address);
-      else setDest(r.address);
+      if (r.field === 'pickup') {
+        setPickup(r.address);
+        if (r.latLng) setPickupLatLng(r.latLng);
+      } else {
+        setDest(r.address);
+        if (r.latLng) setDestLatLng(r.latLng);
+      }
       clearPickerResult();
     });
     return unsub;
@@ -187,7 +243,27 @@ const TaxiReservationScreen = ({ navigation, route }) => {
   const timeLabel = `${hour.trim()}:${minute} ${ampm}`;
   const canConfirm = pickup.trim() && dest.trim() && (bookNow || minute !== null);
 
-  const handleConfirm = () => {
+  const selVehicle = VEHICLE_TYPES.find(v => v.key === vehicleType) ?? VEHICLE_TYPES[0];
+
+  // Haversine distance in km between two lat/lng points
+  const haversineKm = (a, b) => {
+    if (!a || !b) return null;
+    const R = 6371;
+    const dLat = (b.latitude  - a.latitude)  * Math.PI / 180;
+    const dLon = (b.longitude - a.longitude) * Math.PI / 180;
+    const s = Math.sin(dLat / 2) ** 2
+      + Math.cos(a.latitude * Math.PI / 180) * Math.cos(b.latitude * Math.PI / 180)
+      * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+  };
+  const distanceKm   = haversineKm(pickupLatLng, destLatLng);
+  const estimatedFare = distanceKm != null
+    ? selVehicle.base + selVehicle.perKm * distanceKm
+    : null;
+
+  const [confirming, setConfirming] = useState(false);
+
+  const handleConfirm = async () => {
     if (!canConfirm) {
       Alert.alert('Missing info', 'Please fill in pickup and destination' + (!bookNow ? ', and select a time' : '') + '.');
       return;
@@ -196,21 +272,59 @@ const TaxiReservationScreen = ({ navigation, route }) => {
     const when = bookNow
       ? 'Now'
       : `${selDayObjNow?.short ?? selDayObjNow?.day} ${selDayObjNow?.date} ${selDayObjNow?.month} at ${hour.trim()}:${minute} ${ampm}`;
-    const newBooking = {
-      _id: Date.now().toString(),
-      type: 'taxi',
-      bus: { name: 'Taxi Reservation', origin: pickup, destination: dest },
-      seatId: null,
-      seats: [],
-      price: 0,
-      date: new Date().toISOString(),
-      status: 'upcoming',
-      scheduledFor: when,
-      recurrence: recurr,
-      notes,
-    };
-    addBooking(newBooking);
-    navigation.replace('Ticket', { booking: newBooking });
+    const selDriver = drivers?.find(d => d.driver_id === selectedDriverId) ?? null;
+    const fare = estimatedFare ?? selVehicle.base;
+
+    setConfirming(true);
+    try {
+      const data = await createTaxiReservation({
+        vehicle_type:    selVehicle.key,
+        pickup_address:  pickup,
+        pickup_lat:      pickupLatLng?.latitude  ?? null,
+        pickup_lng:      pickupLatLng?.longitude ?? null,
+        dest_address:    dest,
+        dest_lat:        destLatLng?.latitude    ?? null,
+        dest_lng:        destLatLng?.longitude   ?? null,
+        distance_km:     distanceKm              ?? null,
+        estimated_fare:  fare,
+        driver_id:       selectedDriverId        ?? null,
+        driver_name:     selDriver?.name         ?? null,
+        scheduled_for:   when,
+        recurrence:      recurr,
+        notes:           notes || null,
+      });
+
+      const newBooking = {
+        _id:          `taxi_${data.reservation?.reservation_id ?? Date.now()}`,
+        type:         'taxi',
+        bus:          { name: `${selVehicle.label} Taxi`, origin: pickup, destination: dest },
+        seatId:       null,
+        seats:        [],
+        vehicleType:  selVehicle.key,
+        vehicleLabel: selVehicle.label,
+        price:        fare,
+        distanceKm,
+        perKm:        selVehicle.perKm,
+        driverRequest: selectedDriverId,
+        driverName:   selDriver?.name        ?? null,
+        driverRating: selDriver?.avg_rating  ?? null,
+        vehiclePlate: selDriver?.plate_number ?? null,
+        vehicleColor: selDriver?.color        ?? null,
+        vehicleModel: selDriver?.model        ?? null,
+        date:         new Date().toISOString(),
+        status:       'upcoming',
+        scheduledFor: when,
+        recurrence:   recurr,
+        notes,
+      };
+      addBooking(newBooking);
+      navigation.replace('Ticket', { booking: newBooking });
+    } catch (err) {
+      console.error('[handleConfirm taxi]', err);
+      Alert.alert('Error', 'Could not save your reservation. Please try again.');
+    } finally {
+      setConfirming(false);
+    }
   };
 
   // ── Booking form ──────────────────────────────────────────────────────────────
@@ -273,6 +387,68 @@ const TaxiReservationScreen = ({ navigation, route }) => {
               <Ionicons name="map-outline" size={16} color={COLORS.primary} />
             </View>
           </TouchableOpacity>
+        </View>
+
+        {/* ── Vehicle Type Card ── */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Choose your ride</Text>
+          {VEHICLE_TYPES.map(v => {
+            const active = vehicleType === v.key;
+            return (
+              <TouchableOpacity
+                key={v.key}
+                style={[styles.vehicleRow, active && styles.vehicleRowActive]}
+                onPress={() => setVehicleType(v.key)}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.vehicleIconWrap, { backgroundColor: active ? v.color : COLORS.background }]}>
+                  <Ionicons name={v.icon} size={20} color={active ? '#fff' : v.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.vehicleLabel, active && { color: v.color }]}>{v.label}</Text>
+                  <Text style={styles.vehicleSeats}>Up to {v.seats} passengers</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={[styles.vehiclePrice, active && { color: v.color }]}>
+                    from ${v.base.toFixed(2)}
+                  </Text>
+                  <Text style={styles.vehiclePerKm}>${v.perKm.toFixed(2)}/km</Text>
+                </View>
+                {active && (
+                  <View style={[styles.vehicleCheck, { backgroundColor: v.color }]}>
+                    <Ionicons name="checkmark" size={12} color="#fff" />
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* ── Fare Estimate Card ── */}
+        <View style={[styles.fareCard, { borderColor: selVehicle.color + '40' }]}>
+          <View style={[styles.fareIconWrap, { backgroundColor: selVehicle.color + '18' }]}>
+            <Ionicons name="wallet-outline" size={20} color={selVehicle.color} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.fareLabel}>
+              {estimatedFare != null ? 'Estimated Fare' : 'Starting Fare'}
+            </Text>
+            <Text style={[styles.fareValue, { color: selVehicle.color }]}>
+              {estimatedFare != null
+                ? `$${estimatedFare.toFixed(2)}`
+                : `$${selVehicle.base.toFixed(2)} + $${selVehicle.perKm.toFixed(2)}/km`}
+            </Text>
+            {distanceKm != null && (
+              <Text style={styles.fareDistance}>
+                {distanceKm.toFixed(1)} km · ${selVehicle.base.toFixed(2)} base + ${(selVehicle.perKm * distanceKm).toFixed(2)}
+              </Text>
+            )}
+          </View>
+          <View style={styles.fareNote}>
+            <Text style={styles.fareNoteText}>
+              {distanceKm != null ? 'Pick both points for exact fare' : 'Select locations to calculate'}
+            </Text>
+          </View>
         </View>
 
         {/* ── When Card ── */}
@@ -359,27 +535,127 @@ const TaxiReservationScreen = ({ navigation, route }) => {
           )}
         </View>
 
+        {/* ── Driver Selection Card ── */}
+        <View style={styles.card}>
+          <View style={styles.driverCardHeader}>
+            <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Choose a driver</Text>
+            {driversLoading && <ActivityIndicator size="small" color={COLORS.primary} />}
+          </View>
+
+          {!driversLoading && drivers === null ? null : driversLoading && drivers === null ? (
+            <View style={styles.driverLoadingWrap}>
+              <ActivityIndicator size="large" color={COLORS.primary} />
+              <Text style={styles.driverLoadingText}>Finding available drivers…</Text>
+            </View>
+          ) : drivers?.length === 0 ? (
+            <View style={styles.driverEmpty}>
+              <Ionicons name="car-outline" size={32} color={COLORS.textMuted} />
+              <Text style={styles.driverEmptyTitle}>No drivers available</Text>
+              <Text style={styles.driverEmptyHint}>
+                {bookNow
+                  ? 'All drivers are currently on a trip. Try scheduling for later.'
+                  : 'No drivers are free at that time. Try a different slot.'}
+              </Text>
+              <TouchableOpacity style={styles.driverRetryBtn} onPress={fetchDrivers}>
+                <Ionicons name="refresh-outline" size={14} color={COLORS.primary} />
+                <Text style={styles.driverRetryText}>Refresh</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              {/* Any driver — default option */}
+              <TouchableOpacity
+                style={[styles.driverRow, selectedDriverId === null && styles.driverRowSelected]}
+                onPress={() => setSelectedDriverId(null)}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.driverAvatar, styles.driverAvatarAny]}>
+                  <Ionicons name="shuffle-outline" size={18} color={COLORS.textMuted} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.driverName}>Any available driver</Text>
+                  <Text style={styles.driverSub}>We'll assign the nearest driver</Text>
+                </View>
+                {selectedDriverId === null && (
+                  <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />
+                )}
+              </TouchableOpacity>
+
+              {(drivers ?? []).map(d => {
+                const initials = d.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+                const isSelected = selectedDriverId === d.driver_id;
+                return (
+                  <TouchableOpacity
+                    key={d.driver_id}
+                    style={[styles.driverRow, isSelected && styles.driverRowSelected]}
+                    onPress={() => setSelectedDriverId(d.driver_id)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.driverAvatar, isSelected && styles.driverAvatarSelected]}>
+                      <Text style={[styles.driverInitials, isSelected && { color: COLORS.white }]}>
+                        {initials}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.driverName}>{d.name}</Text>
+                      <View style={styles.driverMeta}>
+                        {d.avg_rating > 0 ? (
+                          <>
+                            <Ionicons name="star" size={11} color="#D97706" />
+                            <Text style={styles.driverRating}>{Number(d.avg_rating).toFixed(1)}</Text>
+                            <Text style={styles.driverRatingCount}>({d.total_ratings} trips)</Text>
+                          </>
+                        ) : (
+                          <Text style={styles.driverRating}>New driver</Text>
+                        )}
+                        {d.plate_number ? (
+                          <>
+                            <Text style={styles.driverRatingCount}> · </Text>
+                            {d.color ? (
+                              <View style={[styles.colorDot, { backgroundColor: d.color }]} />
+                            ) : null}
+                            <Text style={styles.driverPlate}>{d.plate_number}</Text>
+                          </>
+                        ) : null}
+                      </View>
+                    </View>
+                    {isSelected
+                      ? <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />
+                      : <View style={styles.driverAvailDot} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </>
+          )}
+        </View>
+
         {/* ── Notes Card ── */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Notes for driver</Text>
-          <TouchableOpacity style={styles.notesInput} activeOpacity={1}>
-            <Ionicons name="chatbubble-outline" size={16} color={COLORS.textMuted} style={{ marginTop: 2 }} />
-            <Text style={[styles.notesText, !notes && styles.notesPlaceholder]}>
-              {notes || 'e.g. I have luggage, please wait at gate 2…'}
-            </Text>
-          </TouchableOpacity>
+          <TextInput
+            style={styles.notesInput}
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="e.g. I have luggage, please wait at gate 2…"
+            placeholderTextColor={COLORS.textMuted}
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+          />
         </View>
 
         {/* ── Confirm ── */}
         <TouchableOpacity
-          style={[styles.confirmBtn, !canConfirm && styles.confirmBtnDisabled]}
+          style={[styles.confirmBtn, (!canConfirm || confirming) && styles.confirmBtnDisabled]}
           onPress={handleConfirm}
-          disabled={!canConfirm}
+          disabled={!canConfirm || confirming}
           activeOpacity={0.85}
         >
-          <Ionicons name="checkmark-circle" size={20} color={COLORS.white} />
+          {confirming
+            ? <ActivityIndicator size="small" color={COLORS.white} />
+            : <Ionicons name="checkmark-circle" size={20} color={COLORS.white} />}
           <Text style={styles.confirmBtnText}>
-            {bookNow ? 'Confirm Booking' : 'Confirm Reservation'}
+            {confirming ? 'Saving…' : (bookNow ? 'Confirm Booking' : 'Confirm Reservation')}
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -501,15 +777,94 @@ const styles = StyleSheet.create({
   recurrText:        { fontSize: 12, fontWeight: '700', color: COLORS.textMuted },
   recurrTextActive:  { color: COLORS.primary },
 
+  // Vehicle type
+  vehicleRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 14,
+    padding: 12, marginBottom: 10, backgroundColor: COLORS.background,
+    position: 'relative',
+  },
+  vehicleRowActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
+  vehicleIconWrap: {
+    width: 42, height: 42, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  vehicleLabel: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary },
+  vehicleSeats: { fontSize: 11, color: COLORS.textMuted, fontWeight: '500', marginTop: 1 },
+  vehiclePrice: { fontSize: 15, fontWeight: '800', color: COLORS.textPrimary },
+  vehiclePerKm: { fontSize: 11, color: COLORS.textMuted, fontWeight: '500', marginTop: 1 },
+  vehicleCheck: {
+    position: 'absolute', top: -6, right: -6,
+    width: 20, height: 20, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: COLORS.white,
+  },
+
+  // Fare estimate
+  fareCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: COLORS.white, borderRadius: 16, padding: 14,
+    borderWidth: 1.5,
+    shadowColor: '#1E293B', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+  },
+  fareIconWrap: {
+    width: 40, height: 40, borderRadius: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  fareLabel: { fontSize: 11, fontWeight: '700', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  fareValue: { fontSize: 17, fontWeight: '800', marginTop: 2 },
+  fareDistance: { fontSize: 11, color: COLORS.textMuted, fontWeight: '500', marginTop: 2 },
+  fareNote: { alignItems: 'flex-end' },
+  fareNoteText: { fontSize: 10, color: COLORS.textMuted, fontWeight: '500', textAlign: 'right', maxWidth: 90 },
+
+  // Driver selection
+  driverCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  driverLoadingWrap: { alignItems: 'center', paddingVertical: 24, gap: 10 },
+  driverLoadingText: { fontSize: 13, color: COLORS.textMuted, fontWeight: '500' },
+  driverEmpty: { alignItems: 'center', paddingVertical: 24, gap: 6 },
+  driverEmptyTitle: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary, marginTop: 4 },
+  driverEmptyHint: { fontSize: 12, color: COLORS.textMuted, fontWeight: '500', textAlign: 'center', paddingHorizontal: 12 },
+  driverRetryBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: 10, paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 10, borderWidth: 1.5, borderColor: COLORS.primaryMid,
+    backgroundColor: COLORS.primaryLight,
+  },
+  driverRetryText: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
+  driverRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 12, paddingHorizontal: 10, borderRadius: 14,
+    borderWidth: 1.5, borderColor: COLORS.border,
+    backgroundColor: COLORS.background, marginBottom: 8,
+  },
+  driverRowSelected: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
+  driverAvatar: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: COLORS.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  driverAvatarAny:      { backgroundColor: COLORS.background, borderWidth: 1.5, borderColor: COLORS.border },
+  driverAvatarSelected: { backgroundColor: COLORS.primary },
+  driverInitials:       { fontSize: 14, fontWeight: '800', color: COLORS.textPrimary },
+  driverName:           { fontSize: 14, fontWeight: '700', color: COLORS.textPrimary },
+  driverSub:            { fontSize: 11, color: COLORS.textMuted, fontWeight: '500', marginTop: 1 },
+  driverMeta:           { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+  driverRating:         { fontSize: 11, fontWeight: '700', color: '#D97706' },
+  driverRatingCount:    { fontSize: 11, color: COLORS.textMuted, fontWeight: '500' },
+  colorDot: { width: 8, height: 8, borderRadius: 4, marginRight: 2 },
+  driverPlate: { fontSize: 11, fontWeight: '700', color: COLORS.textSecondary, letterSpacing: 0.5 },
+  driverAvailDot: {
+    width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.secondary,
+  },
+
   // Notes
   notesInput: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
     borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 12,
     paddingHorizontal: 14, paddingVertical: 12,
     backgroundColor: COLORS.background, minHeight: 70,
+    fontSize: 14, color: COLORS.textPrimary, lineHeight: 20,
   },
-  notesText:        { flex: 1, fontSize: 14, color: COLORS.textPrimary, lineHeight: 20 },
-  notesPlaceholder: { color: COLORS.textMuted },
 
   // Confirm
   confirmBtn: {

@@ -5,15 +5,16 @@ import { UPLOAD_BASE_URL, UPLOAD_ABS_DIR } from "../middleware/upload.middleware
 
 export const createVehicle = async (req, res) => {
   try {
-    const { plate_number, vehicle_type, capacity, model, status } = req.body;
+    const { plate_number, vehicle_type, capacity, model, status, color } = req.body;
     const pool = await poolPromise;
     await pool.request()
-      .input("plate",    sql.VarChar, plate_number)
-      .input("type",     sql.VarChar, vehicle_type)
-      .input("capacity", sql.Int,     capacity)
-      .input("model",    sql.VarChar, model)
-      .input("status",   sql.VarChar, status)
-      .query("INSERT INTO vehicles(plate_number,vehicle_type,capacity,model,status) VALUES(@plate,@type,@capacity,@model,@status)");
+      .input("plate",    sql.VarChar(30),  plate_number)
+      .input("type",     sql.VarChar(50),  vehicle_type)
+      .input("capacity", sql.Int,          capacity)
+      .input("model",    sql.VarChar(100), model)
+      .input("status",   sql.VarChar(30),  status)
+      .input("color",    sql.NVarChar(30), color ?? null)
+      .query("INSERT INTO vehicles(plate_number,vehicle_type,capacity,model,status,color) VALUES(@plate,@type,@capacity,@model,@status,@color)");
     res.status(201).json({ message: "Vehicle created" });
   } catch (err) {
     console.error(err);
@@ -109,18 +110,19 @@ export const getVehicleById = async (req, res) => {
 
 export const updateVehicle = async (req, res) => {
   try {
-    const { plate_number, vehicle_type, capacity, model, status } = req.body;
+    const { plate_number, vehicle_type, capacity, model, status, color } = req.body;
     const pool = await poolPromise;
     await pool
       .request()
-      .input("id", sql.Int, req.params.id)
-      .input("plate", sql.VarChar, plate_number)
-      .input("type", sql.VarChar, vehicle_type)
-      .input("capacity", sql.Int, capacity)
-      .input("model", sql.VarChar, model)
-      .input("status", sql.VarChar, status)
+      .input("id",       sql.Int,          req.params.id)
+      .input("plate",    sql.VarChar(30),  plate_number)
+      .input("type",     sql.VarChar(50),  vehicle_type)
+      .input("capacity", sql.Int,          capacity)
+      .input("model",    sql.VarChar(100), model)
+      .input("status",   sql.VarChar(30),  status)
+      .input("color",    sql.NVarChar(30), color ?? null)
       .query(
-        "UPDATE vehicles SET plate_number=@plate, vehicle_type=@type, capacity=@capacity, model=@model, status=@status WHERE vehicle_id=@id"
+        "UPDATE vehicles SET plate_number=@plate, vehicle_type=@type, capacity=@capacity, model=@model, status=@status, color=COALESCE(@color,color) WHERE vehicle_id=@id"
       );
     res.json({ message: "Vehicle updated" });
   } catch (err) {

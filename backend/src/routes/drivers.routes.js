@@ -8,8 +8,10 @@ import {
   getDriverPerformance,
   getDriverSchedules,
   updateDriverSchedule,
+  getAvailableDrivers,
 } from "../controllers/drivers.controller.js";
 import { requirePermission } from "../middleware/permissions.middleware.js";
+import { requireAuth } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
@@ -61,6 +63,7 @@ router.post("/",              requirePermission("drivers", "create"), createDriv
 router.get("/",               requirePermission("drivers", "view"),   getDrivers);
 router.get("/performance",    requirePermission("drivers", "view"),   getDriverPerformance);
 router.get("/schedules",      requirePermission("drivers", "view"),   getDriverSchedules);
+router.get("/available",      requireAuth,                            getAvailableDrivers);
 router.put("/:id/schedule",   requirePermission("drivers", "edit"),   updateDriverSchedule);
 
 /**

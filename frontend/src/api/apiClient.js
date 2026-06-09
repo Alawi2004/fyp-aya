@@ -105,6 +105,13 @@ export const requestAccountDeletion = () => apiClient.delete('/users/me').then((
 // Ratings
 export const submitRating = (payload) => apiClient.post('/ratings', payload).then((r) => r.data);
 
+// Drivers
+export const getAvailableDrivers = (mode, datetime) => {
+  const params = { mode: mode || 'now' };
+  if (datetime) params.datetime = datetime;
+  return apiClient.get('/drivers/available', { params }).then((r) => r.data);
+};
+
 // Complaints
 export const submitComplaint = ({ category, description, priority, trip_id, photoUri }) => {
   const form = new FormData();
@@ -125,5 +132,8 @@ export const submitComplaint = ({ category, description, priority, trip_id, phot
 export const getMyComplaints   = ()              => apiClient.get('/complaints').then((r) => r.data);
 export const updateMyComplaint = (id, payload)   => apiClient.put(`/complaints/${id}`, payload).then((r) => r.data);
 export const deleteMyComplaint = (id)            => apiClient.delete(`/complaints/${id}`).then((r) => r.data);
+
+export const createTaxiReservation = (payload)   => apiClient.post('/taxi-reservations', payload).then((r) => r.data);
+export const getMyTaxiReservations  = ()          => apiClient.get('/taxi-reservations').then((r) => r.data);
 
 export default apiClient;

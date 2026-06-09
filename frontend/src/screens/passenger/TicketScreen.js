@@ -152,11 +152,15 @@ const TicketScreen = ({ route, navigation }) => {
 
           {/* Route info */}
           <View style={styles.ticketTop}>
-            <View style={styles.busIconWrap}>
-              <Ionicons name="bus" size={26} color={COLORS.primary} />
+            <View style={[styles.busIconWrap, booking.type === 'taxi' && styles.taxiIconWrap]}>
+              <Ionicons
+                name={booking.type === 'taxi' ? 'car-sport' : 'bus'}
+                size={26}
+                color={booking.type === 'taxi' ? '#D97706' : COLORS.primary}
+              />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.busName}>{booking.bus?.name || 'Bus'}</Text>
+              <Text style={styles.busName}>{booking.bus?.name || (booking.type === 'taxi' ? 'Taxi' : 'Bus')}</Text>
               <View style={styles.routePill}>
                 <Text style={styles.routeText}>{booking.bus?.origin}</Text>
                 <Ionicons name="arrow-forward" size={11} color={COLORS.textMuted} />
@@ -191,7 +195,9 @@ const TicketScreen = ({ route, navigation }) => {
           {/* Details grid */}
           <View style={styles.detailsGrid}>
             {[
-              { label: 'SEAT',   value: activeTicket.seat_number, highlight: false },
+              booking.type === 'taxi'
+                ? { label: 'VEHICLE', value: booking.vehicleLabel ?? 'Taxi', highlight: false }
+                : { label: 'SEAT',    value: activeTicket.seat_number,        highlight: false },
               { label: 'FARE',   value: `$${parseFloat(activeTicket.amount ?? booking.price).toFixed(2)}`, highlight: true },
               { label: 'DATE',   value: formatDateTime(booking.date), highlight: false },
               { label: 'STATUS', value: 'Confirmed', highlight: true, green: true },
@@ -208,6 +214,40 @@ const TicketScreen = ({ route, navigation }) => {
               </View>
             ))}
           </View>
+
+          {/* Driver row — taxi only */}
+          {booking.type === 'taxi' && (
+            <View style={styles.driverRow}>
+              <View style={styles.driverAvatar}>
+                <Ionicons name="person" size={18} color={COLORS.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.driverLabel}>DRIVER</Text>
+                <Text style={styles.driverName}>
+                  {booking.driverName ?? 'Nearest available driver'}
+                </Text>
+                {(booking.vehiclePlate || booking.vehicleColor) && (
+                  <View style={styles.vehicleInfoRow}>
+                    {booking.vehicleColor ? (
+                      <View style={[styles.vehicleColorDot, { backgroundColor: booking.vehicleColor }]} />
+                    ) : null}
+                    {booking.vehicleModel ? (
+                      <Text style={styles.vehicleInfoText}>{booking.vehicleModel}</Text>
+                    ) : null}
+                    {booking.vehiclePlate ? (
+                      <Text style={styles.vehiclePlateText}>{booking.vehiclePlate}</Text>
+                    ) : null}
+                  </View>
+                )}
+              </View>
+              {booking.driverRating > 0 && (
+                <View style={styles.driverBadge}>
+                  <Ionicons name="star" size={11} color="#D97706" />
+                  <Text style={styles.driverBadgeText}>{Number(booking.driverRating).toFixed(1)}</Text>
+                </View>
+              )}
+            </View>
+          )}
 
           {/* ── Multi-seat ticket switcher ── */}
           {tickets.length > 1 && (
@@ -239,7 +279,9 @@ const TicketScreen = ({ route, navigation }) => {
           <View style={styles.qrSection}>
               <Text style={styles.qrLabel}>
                 {isOnline
-                  ? `Seat ${activeTicket.seat_number} · Scan to board`
+                  ? booking.type === 'taxi'
+                    ? 'Taxi booking confirmed · Show to driver'
+                    : `Seat ${activeTicket.seat_number} · Scan to board`
                   : 'Offline static QR — driver verifies manually'}
               </Text>
 
@@ -281,8 +323,8 @@ const TicketScreen = ({ route, navigation }) => {
         {/* Actions */}
         <View style={styles.actions}>
           <Button
-            title="Track My Bus"
-            onPress={() => navigation.navigate('BusTracking', { tripId: booking.bus?._id, busName: booking.bus?.name })}
+            title={booking.type === 'taxi' ? 'Track My Taxi' : 'Track My Bus'}
+            onPress={() => navigation.navigate('BusTracking', { tripId: booking.bus?._id, busName: booking.bus?.name, booking })}
             icon={<Ionicons name="navigate-outline" size={18} color={COLORS.white} />}
             size="lg"
           />
@@ -379,6 +421,34 @@ const styles = StyleSheet.create({
     width: 52, height: 52, borderRadius: 16,
     backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
   },
+  taxiIconWrap: { backgroundColor: '#FEF3C7' },
+
+  driverRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 20, paddingBottom: 16,
+  },
+  driverAvatar: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  driverLabel: { fontSize: 9, fontWeight: '700', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: 0.6 },
+  driverName: { fontSize: 14, fontWeight: '700', color: COLORS.textPrimary, marginTop: 2 },
+  vehicleInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
+  vehicleColorDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 1, borderColor: 'rgba(0,0,0,0.12)' },
+  vehicleInfoText: { fontSize: 11, color: COLORS.textMuted, fontWeight: '500' },
+  vehiclePlateText: {
+    fontSize: 11, fontWeight: '800', color: COLORS.textPrimary,
+    backgroundColor: COLORS.background, borderRadius: 4,
+    paddingHorizontal: 6, paddingVertical: 2,
+    borderWidth: 1, borderColor: COLORS.border, letterSpacing: 1,
+  },
+  driverBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: '#FEF3C7', borderRadius: 20,
+    paddingHorizontal: 10, paddingVertical: 4,
+  },
+  driverBadgeText: { fontSize: 12, fontWeight: '700', color: '#D97706' },
   busName: { fontSize: 17, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.2 },
   routePill: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
   routeText: { fontSize: 12, color: COLORS.textSecondary, fontWeight: '600' },
