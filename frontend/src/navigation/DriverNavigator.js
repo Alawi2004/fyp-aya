@@ -21,6 +21,8 @@ import TripChecklistScreen     from '../screens/driver/TripChecklistScreen';
 import DelayReportScreen              from '../screens/driver/DelayReportScreen';
 import WeeklyScheduleScreen           from '../screens/driver/WeeklyScheduleScreen';
 import DriverNotificationsScreen      from '../screens/driver/DriverNotificationsScreen';
+import DriverHelpSupportScreen        from '../screens/driver/DriverHelpSupportScreen';
+import ScheduleServiceScreen          from '../screens/driver/ScheduleServiceScreen';
 
 const Tab   = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -43,6 +45,8 @@ const DashboardStack = () => (
     <Stack.Screen name="DriverMap"         component={DriverMapScreen}        />
     <Stack.Screen name="DelayReport"       component={DelayReportScreen}      />
     <Stack.Screen name="WeeklySchedule"   component={WeeklyScheduleScreen}   />
+    <Stack.Screen name="DriverHelpSupport"  component={DriverHelpSupportScreen} />
+    <Stack.Screen name="ScheduleService"    component={ScheduleServiceScreen}   />
   </Stack.Navigator>
 );
 
@@ -65,6 +69,7 @@ const VehicleStack = () => (
     <Stack.Screen name="VehicleStatusMain" component={VehicleStatusScreen}    />
     <Stack.Screen name="IssueReport"       component={IssueReportScreen}      />
     <Stack.Screen name="Emergency"         component={EmergencyScreen}        />
+    <Stack.Screen name="ScheduleService"   component={ScheduleServiceScreen}  />
   </Stack.Navigator>
 );
 

@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Platform, StatusBar, Animated,
+  Platform, StatusBar, Animated, Alert, ActivityIndicator,
 } from 'react-native';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 
 const PERIODS = ['Today', 'Week', 'Month', 'All Time'];
 
@@ -25,7 +27,8 @@ const TRANSACTIONS = [
 
 const EarningsScreen = ({ navigation }) => {
   const headerInsets = useHeaderInsets();
-  const [period, setPeriod] = useState('Week');
+  const [period,      setPeriod]      = useState('Week');
+  const [exporting,   setExporting]   = useState(false);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const data = DATA[period];
@@ -42,6 +45,91 @@ const EarningsScreen = ({ navigation }) => {
     ]).start();
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const txRows = TRANSACTIONS.map(tx => `
+        <tr>
+          <td>${tx.route}</td>
+          <td>${tx.time}</td>
+          <td>${tx.pax}</td>
+          <td>${tx.duration}</td>
+          <td style="color:#10B981;font-weight:700">+$${tx.amount.toFixed(2)}</td>
+        </tr>`).join('');
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8"/>
+          <style>
+            body { font-family: -apple-system, Arial, sans-serif; margin: 0; padding: 32px; color: #1E293B; }
+            .header { background: #1E3A5F; color: white; padding: 24px 32px; margin: -32px -32px 32px; }
+            .header h1 { margin: 0 0 4px; font-size: 22px; }
+            .header p  { margin: 0; font-size: 12px; opacity: 0.7; }
+            .period-badge { display:inline-block; background:rgba(255,255,255,0.2); border-radius:999px; padding:4px 12px; font-size:12px; margin-top:10px; }
+            .total-block { text-align:center; margin: 24px 0; }
+            .total-block .amt { font-size: 48px; font-weight: 900; color: #1E3A5F; }
+            .total-block .lbl { font-size: 12px; color: #94A3B8; text-transform: uppercase; letter-spacing: 1px; }
+            .stats { display:flex; gap:16px; margin-bottom:28px; }
+            .stat-card { flex:1; background:#F8FAFC; border-radius:12px; padding:16px; text-align:center; }
+            .stat-card .val { font-size:22px; font-weight:800; color:#1E3A5F; }
+            .stat-card .lbl { font-size:11px; color:#94A3B8; margin-top:4px; text-transform:uppercase; }
+            h2 { font-size:15px; color:#1E3A5F; border-bottom:2px solid #E2E8F0; padding-bottom:8px; margin-bottom:12px; }
+            table { width:100%; border-collapse:collapse; font-size:13px; }
+            thead tr { background:#F1F5F9; }
+            th { padding:10px 12px; text-align:left; font-size:11px; color:#64748B; text-transform:uppercase; letter-spacing:0.5px; }
+            td { padding:10px 12px; border-bottom:1px solid #F1F5F9; }
+            .footer { margin-top:32px; text-align:center; font-size:11px; color:#94A3B8; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Earnings Report</h1>
+            <p>Generated on ${new Date().toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' })}</p>
+            <div class="period-badge">${period}</div>
+          </div>
+
+          <div class="total-block">
+            <div class="lbl">Total Earned</div>
+            <div class="amt">$${data.total.toLocaleString('en', { minimumFractionDigits: 2 })}</div>
+            <div style="color:#10B981;font-size:13px;margin-top:6px">${data.growth} vs last period</div>
+          </div>
+
+          <div class="stats">
+            <div class="stat-card"><div class="val">${data.trips}</div><div class="lbl">Trips</div></div>
+            <div class="stat-card"><div class="val">${data.rating}</div><div class="lbl">Avg Rating</div></div>
+            <div class="stat-card"><div class="val">${data.onTime}</div><div class="lbl">On Time</div></div>
+            <div class="stat-card"><div class="val">$${data.perTrip.toFixed(2)}</div><div class="lbl">Per Trip</div></div>
+          </div>
+
+          <h2>Trip Earnings</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Route</th><th>Date / Time</th><th>Passengers</th><th>Duration</th><th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>${txRows}</tbody>
+          </table>
+
+          <div class="footer">BusApp Driver Portal &bull; Confidential &bull; ${new Date().getFullYear()}</div>
+        </body>
+        </html>`;
+
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `Earnings Report — ${period}` });
+      } else {
+        Alert.alert('Saved', `PDF saved to:\n${uri}`);
+      }
+    } catch (err) {
+      Alert.alert('Export Failed', err?.message || 'Could not generate PDF.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
@@ -56,8 +144,11 @@ const EarningsScreen = ({ navigation }) => {
             <Ionicons name="arrow-back" size={20} color={COLORS.white} />
           </TouchableOpacity>
           <Text style={styles.heroTitle}>Earnings</Text>
-          <TouchableOpacity style={styles.exportBtn}>
-            <Ionicons name="download-outline" size={18} color={COLORS.white} />
+          <TouchableOpacity style={styles.exportBtn} onPress={handleExport} disabled={exporting}>
+            {exporting
+              ? <ActivityIndicator size="small" color={COLORS.white} />
+              : <Ionicons name="download-outline" size={18} color={COLORS.white} />
+            }
           </TouchableOpacity>
         </View>
 

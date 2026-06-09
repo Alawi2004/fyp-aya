@@ -28,8 +28,8 @@ const MENU_SECTIONS = [
   {
     title: 'Account',
     items: [
-      { icon: 'notifications-outline', label: 'Notifications', screen: null,                color: COLORS.primary   },
-      { icon: 'help-circle-outline', label: 'Help & Support',  screen: null,                color: COLORS.secondary },
+      { icon: 'notifications-outline', label: 'Notifications', screen: 'NotificationsStack',  color: COLORS.primary   },
+      { icon: 'help-circle-outline', label: 'Help & Support',  screen: 'DriverHelpSupport',  color: COLORS.secondary },
       { icon: 'log-out-outline',    label: 'Sign Out',         screen: '__logout__',        color: COLORS.danger    },
     ],
   },

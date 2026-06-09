@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
   Platform, StatusBar, Animated,
 } from 'react-native';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
@@ -21,9 +21,9 @@ const VEHICLE = {
 };
 
 const ALERTS = [
-  { id: '1', level: 'info',    title: 'Scheduled Service',  desc: 'Next service due on 01 Jun 2025',            icon: 'construct-outline',   color: COLORS.primary,   bg: COLORS.primaryLight  },
-  { id: '2', level: 'warning', title: 'Tyre Check Required', desc: 'Front-right tyre pressure is low',          icon: 'ellipse-outline',     color: COLORS.warning,   bg: COLORS.warningLight  },
-  { id: '3', level: 'info',    title: 'AC System OK',        desc: 'Air conditioning serviced last week',        icon: 'snow-outline',        color: COLORS.secondary, bg: COLORS.secondaryLight },
+  { id: '1', level: 'info',    title: 'Scheduled Service',  desc: 'Next service due on 01 Jun 2025',     icon: 'construct-outline', color: COLORS.primary,    bg: COLORS.primaryLight,   navigate: 'ScheduleService' },
+  { id: '2', level: 'warning', title: 'Tyre Check Required', desc: 'Front-right tyre pressure is low',   icon: 'ellipse-outline',   color: COLORS.warning,    bg: COLORS.warningLight,   navigate: null },
+  { id: '3', level: 'info',    title: 'AC System OK',        desc: 'Air conditioning serviced last week', icon: 'snow-outline',      color: COLORS.secondary,  bg: COLORS.secondaryLight, navigate: null },
 ];
 
 const SPECS = [
@@ -152,18 +152,29 @@ const VehicleStatusScreen = ({ navigation }) => {
 
         {/* Maintenance alerts */}
         <Text style={styles.sectionTitle}>Maintenance Alerts</Text>
-        {ALERTS.map(alert => (
-          <View key={alert.id} style={[styles.alertCard, { borderLeftColor: alert.color }]}>
-            <View style={[styles.alertIcon, { backgroundColor: alert.bg }]}>
-              <Ionicons name={alert.icon} size={16} color={alert.color} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.alertTitle}>{alert.title}</Text>
-              <Text style={styles.alertDesc}>{alert.desc}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={14} color={COLORS.textMuted} />
-          </View>
-        ))}
+        {ALERTS.map(alert => {
+          const Wrapper = alert.navigate ? TouchableOpacity : View;
+          return (
+            <Wrapper
+              key={alert.id}
+              style={[styles.alertCard, { borderLeftColor: alert.color }]}
+              {...(alert.navigate ? { onPress: () => navigation.navigate(alert.navigate), activeOpacity: 0.8 } : {})}
+            >
+              <View style={[styles.alertIcon, { backgroundColor: alert.bg }]}>
+                <Ionicons name={alert.icon} size={16} color={alert.color} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.alertTitle}>{alert.title}</Text>
+                <Text style={styles.alertDesc}>{alert.desc}</Text>
+              </View>
+              <Ionicons
+                name="chevron-forward"
+                size={14}
+                color={alert.navigate ? alert.color : COLORS.textMuted}
+              />
+            </Wrapper>
+          );
+        })}
 
         {/* Vehicle specs */}
         <Text style={styles.sectionTitle}>Vehicle Specifications</Text>

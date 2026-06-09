@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal,
   Alert, Platform, StatusBar, Animated, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS } from '../../constants/colors';
-import { getDriverTripsApi } from '../../api/driverApi';
+import { getDriverTripsApi, startTripApi, completeTripApi } from '../../api/driverApi';
 
 const TRIP_STATUS = [
   { key: 'idle',       label: 'Not Started', icon: 'ellipse-outline',    color: COLORS.textMuted   },
@@ -43,11 +43,265 @@ function normaliseTrip(t) {
 }
 
 const STATUS_CFG = {
-  active:    { label: 'Active',    bg: COLORS.secondaryLight, text: COLORS.secondary, dot: COLORS.secondary },
-  upcoming:  { label: 'Upcoming',  bg: COLORS.primaryLight,   text: COLORS.primary,   dot: COLORS.primary   },
+  // real backend values
+  confirmed: { label: 'Upcoming',  bg: COLORS.primaryLight,   text: COLORS.primary,   dot: COLORS.primary   },
+  boarded:   { label: 'Boarding',  bg: COLORS.primaryLight,   text: COLORS.primary,   dot: COLORS.primary   },
+  ongoing:   { label: 'Active',    bg: COLORS.secondaryLight, text: COLORS.secondary, dot: COLORS.secondary },
   completed: { label: 'Completed', bg: COLORS.surfaceAlt,     text: COLORS.textMuted, dot: COLORS.textMuted },
   cancelled: { label: 'Cancelled', bg: COLORS.dangerLight,    text: COLORS.danger,    dot: COLORS.danger    },
+  // legacy / fallback values
+  upcoming:  { label: 'Upcoming',  bg: COLORS.primaryLight,   text: COLORS.primary,   dot: COLORS.primary   },
+  active:    { label: 'Active',    bg: COLORS.secondaryLight, text: COLORS.secondary, dot: COLORS.secondary },
 };
+
+// Status classification helpers
+const isActiveStatus    = (s) => ['ongoing', 'active', 'in_progress'].includes(s);
+const isDoneStatus      = (s) => ['completed', 'cancelled', 'closed'].includes(s);
+// anything else (confirmed, boarded, upcoming, pending, scheduled) → can be started
+
+// ── Trip Detail Modal ────────────────────────────────────────────────────────
+const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd, onOpenMap }) => {
+  if (!trip) return null;
+
+  const isLoading = actionLoading === trip.trip_id;
+  const cfg       = STATUS_CFG[trip.status] || STATUS_CFG.upcoming;
+  const fill      = Math.min(trip.passengers / (trip.totalSeats || 1), 1);
+  const barColor  = fill >= 0.9 ? COLORS.danger : fill >= 0.6 ? COLORS.warning : COLORS.secondary;
+  const done      = isDoneStatus(trip.status);
+  const active    = isActiveStatus(trip.status);
+
+  return (
+    <Modal
+      visible
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      {/* Full-screen flex column: overlay (flex:1) + sheet at bottom */}
+      <View style={{ flex: 1, backgroundColor: 'transparent' }}>
+
+        {/* Dim overlay — takes all space above the sheet */}
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }}
+          activeOpacity={1}
+          onPress={onClose}
+        />
+
+        {/* Bottom sheet */}
+        <View style={[modalStyles.sheet, { paddingBottom: (insets?.bottom ?? 0) + 20 }]}>
+          <View style={modalStyles.handle} />
+
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+          >
+
+            {/* Header row */}
+            <View style={modalStyles.header}>
+              <View style={modalStyles.busIcon}>
+                <Ionicons name="bus" size={20} color={COLORS.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={modalStyles.routeName}>{trip.routeName}</Text>
+                <Text style={modalStyles.busNum}>{trip.busNumber} · {trip.stops} stops</Text>
+              </View>
+              <View style={[modalStyles.statusBadge, { backgroundColor: cfg.bg }]}>
+                <View style={[modalStyles.statusDot, { backgroundColor: cfg.dot }]} />
+                <Text style={[modalStyles.statusText, { color: cfg.text }]}>{cfg.label}</Text>
+              </View>
+            </View>
+
+            {/* Journey */}
+            <View style={modalStyles.journeyRow}>
+              <View style={modalStyles.journeyStop}>
+                <View style={[modalStyles.journeyDot, { backgroundColor: COLORS.secondary }]} />
+                <View>
+                  <Text style={modalStyles.journeyLbl}>FROM</Text>
+                  <Text style={modalStyles.journeyPlace}>{trip.origin}</Text>
+                  <Text style={modalStyles.journeyTime}>{trip.departureTime}</Text>
+                </View>
+              </View>
+              <View style={modalStyles.journeyMid}>
+                <View style={modalStyles.jLine} />
+                <View style={modalStyles.jChip}>
+                  <Ionicons name="bus-outline" size={11} color={COLORS.primary} />
+                </View>
+                <View style={modalStyles.jLine} />
+              </View>
+              <View style={[modalStyles.journeyStop, { alignItems: 'flex-end' }]}>
+                <View style={[modalStyles.journeyDot, { backgroundColor: COLORS.danger }]} />
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={modalStyles.journeyLbl}>TO</Text>
+                  <Text style={modalStyles.journeyPlace}>{trip.destination}</Text>
+                  <Text style={modalStyles.journeyTime}>{trip.arrivalTime}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Stats */}
+            <View style={modalStyles.statRow}>
+              <View style={modalStyles.stat}>
+                <Ionicons name="people-outline" size={14} color={COLORS.textMuted} />
+                <Text style={modalStyles.statLbl}>Passengers</Text>
+                <Text style={modalStyles.statVal}>{trip.passengers} / {trip.totalSeats}</Text>
+              </View>
+              <View style={modalStyles.stat}>
+                <Ionicons name="cash-outline" size={14} color={COLORS.secondary} />
+                <Text style={modalStyles.statLbl}>Earnings</Text>
+                <Text style={[modalStyles.statVal, { color: COLORS.secondary }]}>${trip.earnings.toFixed(2)}</Text>
+              </View>
+              <View style={modalStyles.stat}>
+                <Ionicons name="map-outline" size={14} color={COLORS.primary} />
+                <Text style={modalStyles.statLbl}>Stops</Text>
+                <Text style={modalStyles.statVal}>{trip.stops}</Text>
+              </View>
+            </View>
+
+            {/* Passenger fill bar */}
+            <View style={modalStyles.fillBarTrack}>
+              <View style={[modalStyles.fillBarFill, { width: `${fill * 100}%`, backgroundColor: barColor }]} />
+            </View>
+
+            {/* ── Action buttons ── */}
+            {done && (
+              <View style={modalStyles.doneNote}>
+                <Ionicons name="checkmark-done-circle" size={16} color={COLORS.textMuted} />
+                <Text style={modalStyles.doneNoteText}>
+                  Trip {trip.status}. No further actions available.
+                </Text>
+              </View>
+            )}
+
+            {active && !done && (
+              <View style={modalStyles.actionRow}>
+                <TouchableOpacity
+                  style={modalStyles.mapBtn}
+                  onPress={() => onOpenMap(trip)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="navigate" size={16} color={COLORS.primary} />
+                  <Text style={modalStyles.mapBtnText}>Open Map</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[modalStyles.endBtn, isLoading && { opacity: 0.6 }]}
+                  onPress={() => onEnd(trip)}
+                  disabled={isLoading}
+                  activeOpacity={0.85}
+                >
+                  {isLoading
+                    ? <ActivityIndicator size="small" color={COLORS.white} />
+                    : <Ionicons name="stop-circle" size={20} color={COLORS.white} />
+                  }
+                  <Text style={modalStyles.endBtnText}>{isLoading ? 'Ending…' : 'End Trip'}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {!active && !done && (
+              <TouchableOpacity
+                style={[modalStyles.startBtn, isLoading && { opacity: 0.6 }]}
+                onPress={() => onStart(trip)}
+                disabled={isLoading}
+                activeOpacity={0.85}
+              >
+                {isLoading
+                  ? <ActivityIndicator size="small" color={COLORS.white} />
+                  : <Ionicons name="play-circle" size={20} color={COLORS.white} />
+                }
+                <Text style={modalStyles.startBtnText}>{isLoading ? 'Starting…' : 'Start Trip'}</Text>
+              </TouchableOpacity>
+            )}
+
+            <View style={{ height: 8 }} />
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+const modalStyles = StyleSheet.create({
+  sheet: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingTop: 16, paddingHorizontal: 20,
+    maxHeight: '85%',
+  },
+  handle: {
+    width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.border,
+    alignSelf: 'center', marginBottom: 16,
+  },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
+  busIcon: {
+    width: 44, height: 44, borderRadius: 13,
+    backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
+  },
+  routeName: { fontSize: 15, fontWeight: '800', color: COLORS.textPrimary },
+  busNum:    { fontSize: 12, color: COLORS.textMuted, fontWeight: '600', marginTop: 2 },
+  statusBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5,
+  },
+  statusDot:  { width: 6, height: 6, borderRadius: 3 },
+  statusText: { fontSize: 11, fontWeight: '700' },
+
+  journeyRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 14, marginBottom: 14,
+    borderTopWidth: 1, borderBottomWidth: 1, borderColor: COLORS.border,
+  },
+  journeyStop: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  journeyDot:  { width: 8, height: 8, borderRadius: 4, marginTop: 13 },
+  journeyLbl:  { fontSize: 9, fontWeight: '700', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  journeyPlace:{ fontSize: 13, fontWeight: '800', color: COLORS.textPrimary, marginTop: 2 },
+  journeyTime: { fontSize: 11, color: COLORS.textSecondary, fontWeight: '500', marginTop: 1 },
+  journeyMid:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6 },
+  jLine:  { width: 14, height: 1.5, backgroundColor: COLORS.border },
+  jChip:  {
+    width: 24, height: 24, borderRadius: 8,
+    backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
+  },
+
+  statRow: { flexDirection: 'row', marginBottom: 12 },
+  stat:    { flex: 1, alignItems: 'center', gap: 4 },
+  statLbl: { fontSize: 10, color: COLORS.textMuted, fontWeight: '600', textTransform: 'uppercase' },
+  statVal: { fontSize: 15, fontWeight: '800', color: COLORS.textPrimary },
+
+  fillBarTrack: { height: 6, backgroundColor: COLORS.border, borderRadius: 99, overflow: 'hidden', marginBottom: 20 },
+  fillBarFill:  { height: '100%', borderRadius: 99 },
+
+  startBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: COLORS.secondary, borderRadius: 14, paddingVertical: 16,
+    shadowColor: COLORS.secondary, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
+  },
+  startBtnText: { fontSize: 16, fontWeight: '800', color: COLORS.white },
+
+  actionRow: { flexDirection: 'row', gap: 10 },
+  mapBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: COLORS.primaryLight, borderRadius: 14, paddingVertical: 15,
+    borderWidth: 1.5, borderColor: COLORS.primary,
+  },
+  mapBtnText: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
+  endBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: COLORS.danger, borderRadius: 14, paddingVertical: 15,
+    shadowColor: COLORS.danger, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25, shadowRadius: 8, elevation: 5,
+  },
+  endBtnText: { fontSize: 14, fontWeight: '700', color: COLORS.white },
+
+  doneNote: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: COLORS.background, borderRadius: 12, padding: 14,
+  },
+  doneNoteText: { flex: 1, fontSize: 13, color: COLORS.textMuted, fontWeight: '500' },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const DriverDashboardScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -57,9 +311,11 @@ const DriverDashboardScreen = ({ navigation }) => {
   const pulseAnim  = useRef(new Animated.Value(1)).current;
   const timerRef   = useRef(null);
   const [tripStatus, setTripStatus] = useState('active');
-  const [trips,      setTrips]      = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [trips,         setTrips]         = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [refreshing,    setRefreshing]    = useState(false);
+  const [actionLoading, setActionLoading] = useState(null);
+  const [selectedTrip,  setSelectedTrip]  = useState(null);
 
   const loadTrips = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -74,6 +330,46 @@ const DriverDashboardScreen = ({ navigation }) => {
       setRefreshing(false);
     }
   }, []);
+
+  const handleStartTrip = (trip) => {
+    Alert.alert('Start Trip', `Start ${trip.routeName}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Start', onPress: async () => {
+          setActionLoading(trip.trip_id);
+          try {
+            await startTripApi(trip.trip_id);
+            setSelectedTrip(null);
+            loadTrips(true);
+          } catch (err) {
+            Alert.alert('Error', err?.response?.data?.error || 'Could not start trip.');
+          } finally {
+            setActionLoading(null);
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleEndTrip = (trip) => {
+    Alert.alert('End Trip', `Mark ${trip.routeName} as completed?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'End Trip', style: 'destructive', onPress: async () => {
+          setActionLoading(trip.trip_id);
+          try {
+            await completeTripApi(trip.trip_id);
+            setSelectedTrip(null);
+            loadTrips(true);
+          } catch (err) {
+            Alert.alert('Error', err?.response?.data?.error || 'Could not complete trip.');
+          } finally {
+            setActionLoading(null);
+          }
+        },
+      },
+    ]);
+  };
 
   useEffect(() => {
     Animated.parallel([
@@ -95,10 +391,10 @@ const DriverDashboardScreen = ({ navigation }) => {
     return () => { pulse.stop(); clearInterval(timerRef.current); };
   }, [loadTrips]);
 
-  const activeTrip    = trips.find(t => t.status === 'active');
-  const upcomingCount = trips.filter(t => t.status === 'upcoming').length;
-  const doneToday     = trips.filter(t => t.status === 'completed').length;
-  const earnedToday   = trips.filter(t => t.status === 'completed').reduce((s, t) => s + t.earnings, 0);
+  const activeTrip    = trips.find(t => isActiveStatus(t.status));
+  const upcomingCount = trips.filter(t => !isActiveStatus(t.status) && !isDoneStatus(t.status)).length;
+  const doneToday     = trips.filter(t => isDoneStatus(t.status)).length;
+  const earnedToday   = trips.filter(t => isDoneStatus(t.status)).reduce((s, t) => s + t.earnings, 0);
 
   const initials = user?.name
     ? user.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
@@ -260,7 +556,7 @@ const DriverDashboardScreen = ({ navigation }) => {
 
           {trips.map(trip => {
             const cfg  = STATUS_CFG[trip.status] || STATUS_CFG.upcoming;
-            const fill = trip.passengers / trip.totalSeats;
+            const fill = Math.min(trip.passengers / trip.totalSeats, 1);
             const barColor = fill >= 0.9 ? COLORS.danger : fill >= 0.6 ? COLORS.warning : COLORS.secondary;
 
             return (
@@ -268,10 +564,7 @@ const DriverDashboardScreen = ({ navigation }) => {
                 key={trip._id}
                 style={styles.tripCard}
                 activeOpacity={0.85}
-                onPress={() => {
-                  if (trip.status === 'active') navigation.navigate('DriverMap', { tripId: trip._id });
-                  else if (trip.status === 'upcoming') navigation.navigate('TripChecklist', { tripId: trip._id, tripInfo: trip });
-                }}
+                onPress={() => setSelectedTrip(trip)}
               >
                 {/* Card header */}
                 <View style={styles.tripCardHeader}>
@@ -332,12 +625,11 @@ const DriverDashboardScreen = ({ navigation }) => {
                   </View>
                 </View>
 
-                {trip.status === 'active' && (
-                  <View style={styles.openMapRow}>
-                    <Ionicons name="navigate-circle" size={13} color={COLORS.primary} />
-                    <Text style={styles.openMapText}>Tap to open live navigation</Text>
-                  </View>
-                )}
+                {/* Tap hint */}
+                <View style={styles.tripTapHint}>
+                  <Ionicons name="information-circle-outline" size={12} color={COLORS.textMuted} />
+                  <Text style={styles.tripTapHintText}>Tap to view details & actions</Text>
+                </View>
               </TouchableOpacity>
             );
           })}
@@ -357,6 +649,17 @@ const DriverDashboardScreen = ({ navigation }) => {
           <View style={{ height: 32 }} />
         </Animated.View>
       </ScrollView>
+
+      {/* ─── Trip Detail Modal ─── */}
+      <TripDetailModal
+        trip={selectedTrip}
+        actionLoading={actionLoading}
+        insets={insets}
+        onClose={() => setSelectedTrip(null)}
+        onStart={handleStartTrip}
+        onEnd={handleEndTrip}
+        onOpenMap={(trip) => { setSelectedTrip(null); navigation.navigate('DriverMap', { tripId: trip._id }); }}
+      />
     </View>
   );
 };
@@ -526,11 +829,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 6,
   },
   earningsText: { fontSize: 13, fontWeight: '800', color: COLORS.secondary },
-  openMapRow: {
+  tripTapHint: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: COLORS.border,
+    marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border,
   },
-  openMapText: { fontSize: 11, color: COLORS.primary, fontWeight: '700' },
+  tripTapHintText: { fontSize: 11, color: COLORS.textMuted, fontWeight: '500' },
 
   /* Sign out */
   signOutBtn: {
