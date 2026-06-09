@@ -226,18 +226,21 @@ export const staffTopUpWallet = async (req, res) => {
 
     const topUpId = topUpRes.recordset[0].top_up_id;
 
-    // 6. Insert user-visible wallet_transactions ledger row
+    // 6. Insert user-visible wallet_transactions ledger row, linked back to the
+    //    staff_top_ups audit row so the passenger app can show structured
+    //    location / reference / processed-by details.
     await tx
       .request()
-      .input("uid",    sql.Int,            parseInt(user_id, 10))
-      .input("amount", sql.Decimal(10, 2), parsedAmount)
-      .input("loc",    sql.NVarChar(255),  recharge_location.trim())
-      .input("txref",  sql.NVarChar(100),  transaction_reference.trim())
+      .input("uid",     sql.Int,            parseInt(user_id, 10))
+      .input("topUpId", sql.Int,            topUpId)
+      .input("amount",  sql.Decimal(10, 2), parsedAmount)
+      .input("loc",     sql.NVarChar(255),  recharge_location.trim())
+      .input("txref",   sql.NVarChar(100),  transaction_reference.trim())
       .query(`
         INSERT INTO wallet_transactions
-          (user_id, type, amount, description, created_at)
+          (user_id, staff_top_up_id, type, amount, description, created_at)
         VALUES
-          (@uid, 'credit', @amount,
+          (@uid, @topUpId, 'credit', @amount,
            CONCAT('In-person recharge at ', @loc, ' — Ref: ', @txref),
            GETUTCDATE())
       `);

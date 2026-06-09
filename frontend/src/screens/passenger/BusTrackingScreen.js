@@ -48,18 +48,18 @@ const requestNotifPermission = async () => {
   return status === 'granted';
 };
 
-const sendApproachingAlert = async (busName, etaMin, stopsAway) => {
+const sendApproachingAlert = async (busName, etaMin, stopsAway, isTaxi = false) => {
   const body = stopsAway <= 2
     ? `${busName} is ${stopsAway} stop${stopsAway === 1 ? '' : 's'} away — get ready to board!`
     : `${busName} arrives in ~${Math.round(etaMin)} min — time to head to the stop.`;
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: '🚌 Bus Approaching',
+      title: isTaxi ? '🚕 Taxi Approaching' : '🚌 Bus Approaching',
       body,
       sound: true,
       data: { busName, etaMin, stopsAway },
     },
-    trigger: null, // immediate
+    trigger: null,
   });
 };
 
@@ -74,7 +74,8 @@ const deriveConfidence = (isLive, timeSinceUpdate, hasEtaData) => {
 // ── Component ─────────────────────────────────────────────────────────────────
 const BusTrackingScreen = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
-  const { tripId, busName = 'Bus' } = route.params || {};
+  const { tripId, busName = 'Bus', booking } = route.params || {};
+  const isTaxi    = booking?.type === 'taxi';
   const vehicleId = String(tripId ?? '');
   const mapRef      = useRef(null);
   const pulseAnim   = useRef(new Animated.Value(1)).current;
@@ -103,8 +104,25 @@ const BusTrackingScreen = ({ route, navigation }) => {
   const [seatInfo, setSeatInfo]         = useState({ capacity: 40, occupied: 0, available: 40 });
   const seatInterval                    = useRef(null);
 
-  // Load driver info and real capacity for the trip
+  // Load driver info — from booking directly for taxi, from API for bus
   useEffect(() => {
+    if (isTaxi) {
+      if (booking?.driverName) {
+        const initials = booking.driverName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+        const vehicleParts = [booking.vehicleColor, booking.vehicleModel, booking.vehiclePlate].filter(Boolean);
+        setDriverInfo({
+          name:     booking.driverName,
+          initials,
+          vehicle:  vehicleParts.join(' · ') || 'Taxi',
+          rating:   booking.driverRating ? Number(booking.driverRating).toFixed(1) : null,
+          trips:    null,
+          phone:    null,
+          plate:    booking.vehiclePlate ?? null,
+          color:    booking.vehicleColor ?? null,
+        });
+      }
+      return;
+    }
     if (!tripId) return;
     apiClient.get(`/buses/${tripId}`).then(r => {
       const d = r.data;
@@ -118,6 +136,8 @@ const BusTrackingScreen = ({ route, navigation }) => {
           rating:   parseFloat(d.driver_rating ?? 0).toFixed(1),
           trips:    d.driver_trips ?? 0,
           phone:    d.driver_phone ?? null,
+          plate:    d.plate_number ?? null,
+          color:    null,
         });
       }
       if (d.totalSeats) {
@@ -126,7 +146,7 @@ const BusTrackingScreen = ({ route, navigation }) => {
         setSeatInfo(s => ({ ...s, capacity: cap, available: Math.max(0, cap - s.occupied) }));
       }
     }).catch(() => {});
-  }, [tripId]);
+  }, [tripId, isTaxi]);
 
   // ── Derived stop list (real or empty) ────────────────────────────────────
   const stopsList = useMemo(() => {
@@ -158,11 +178,10 @@ const BusTrackingScreen = ({ route, navigation }) => {
     if (shouldAlert) {
       alertSent.current = true;
       if (notifGranted.current) {
-        sendApproachingAlert(busName, nextStop.eta_min, stopsAway);
+        sendApproachingAlert(busName, nextStop.eta_min, stopsAway, isTaxi);
       } else {
-        // In-app fallback if notification permission not granted
         Alert.alert(
-          '🚌 Bus Approaching',
+          isTaxi ? '🚕 Taxi Approaching' : '🚌 Bus Approaching',
           stopsAway <= 2
             ? `${busName} is ${stopsAway} stop${stopsAway === 1 ? '' : 's'} away!`
             : `${busName} arrives in ~${Math.round(nextStop.eta_min)} min.`
@@ -253,9 +272,13 @@ const BusTrackingScreen = ({ route, navigation }) => {
       >
         <Marker coordinate={busLocation} title={busName} anchor={{ x: 0.5, y: 0.5 }}>
           <View style={styles.busMarkerWrap}>
-            <Animated.View style={[styles.busPulse, { transform: [{ scale: pulseAnim }] }]} />
-            <View style={styles.busMarker}>
-              <Ionicons name="bus" size={18} color={COLORS.white} />
+            <Animated.View style={[
+              styles.busPulse,
+              isTaxi && styles.taxiPulse,
+              { transform: [{ scale: pulseAnim }] },
+            ]} />
+            <View style={[styles.busMarker, isTaxi && styles.taxiMarker]}>
+              <Ionicons name={isTaxi ? 'car-sport' : 'bus'} size={18} color={COLORS.white} />
             </View>
           </View>
         </Marker>
@@ -373,8 +396,18 @@ const BusTrackingScreen = ({ route, navigation }) => {
           </View>
         )}
 
-        {/* Seat Availability */}
-        {(() => {
+        {/* Taxi waiting banner — shown when no live GPS yet */}
+        {isTaxi && !isLive && (
+          <View style={styles.taxiWaitBanner}>
+            <Ionicons name="car-sport-outline" size={16} color="#D97706" />
+            <Text style={styles.taxiWaitText}>
+              Waiting for driver to accept · Live tracking starts when driver is en route
+            </Text>
+          </View>
+        )}
+
+        {/* Seat Availability — bus only */}
+        {!isTaxi && (() => {
           const pct       = Math.round((seatInfo.occupied / seatInfo.capacity) * 100);
           const seatColor = pct > 90 ? '#EF4444' : pct > 70 ? '#F59E0B' : '#10B981';
           const seatLabel = seatInfo.available === 0 ? 'Full' : pct > 90 ? 'Almost full' : pct > 70 ? 'Getting busy' : 'Seats available';
@@ -398,8 +431,8 @@ const BusTrackingScreen = ({ route, navigation }) => {
           );
         })()}
 
-        {/* Upcoming stops */}
-        {stopsList.length > 0 && (
+        {/* Upcoming stops — bus only */}
+        {!isTaxi && stopsList.length > 0 && (
           <View style={styles.stopsSection}>
             <Text style={styles.stopsSectionTitle}>Upcoming Stops</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.stopsScroll}>
@@ -423,21 +456,38 @@ const BusTrackingScreen = ({ route, navigation }) => {
 
         {/* Driver Card */}
         {driverInfo && (
-          <View style={styles.driverCard}>
-            <View style={styles.driverAvatar}>
-              <Text style={styles.driverAvatarText}>{driverInfo.initials}</Text>
+          <View style={[styles.driverCard, isTaxi && styles.taxiDriverCard]}>
+            <View style={[styles.driverAvatar, isTaxi && styles.taxiDriverAvatar]}>
+              <Text style={[styles.driverAvatarText, isTaxi && styles.taxiDriverAvatarText]}>
+                {driverInfo.initials}
+              </Text>
             </View>
             <View style={styles.driverInfo}>
               <Text style={styles.driverName}>{driverInfo.name}</Text>
-              <Text style={styles.driverVehicle}>{driverInfo.vehicle}</Text>
+              {/* Vehicle info row with color swatch for taxi */}
+              <View style={styles.driverVehicleRow}>
+                {driverInfo.color ? (
+                  <View style={[styles.vehicleColorSwatch, { backgroundColor: driverInfo.color }]} />
+                ) : null}
+                <Text style={styles.driverVehicle}>{driverInfo.vehicle}</Text>
+              </View>
+              {driverInfo.plate ? (
+                <Text style={styles.driverPlate}>{driverInfo.plate}</Text>
+              ) : null}
               <View style={styles.driverRatingRow}>
-                <Ionicons name="star" size={13} color={COLORS.warning} />
-                <Text style={styles.driverRating}>{driverInfo.rating}</Text>
-                <Text style={styles.driverTrips}>· {driverInfo.trips} trips</Text>
+                {driverInfo.rating ? (
+                  <>
+                    <Ionicons name="star" size={13} color={COLORS.warning} />
+                    <Text style={styles.driverRating}>{driverInfo.rating}</Text>
+                  </>
+                ) : null}
+                {driverInfo.trips != null ? (
+                  <Text style={styles.driverTrips}>· {driverInfo.trips} trips</Text>
+                ) : null}
               </View>
             </View>
             <TouchableOpacity
-              style={styles.callBtn}
+              style={[styles.callBtn, isTaxi && styles.taxiCallBtn]}
               onPress={() => {
                 if (!driverInfo.phone) {
                   Alert.alert('Unavailable', 'No contact number on file for this driver.');
@@ -469,6 +519,7 @@ const styles = StyleSheet.create({
     position: 'absolute', width: 52, height: 52, borderRadius: 26,
     backgroundColor: 'rgba(37,99,235,0.2)',
   },
+  taxiPulse: { backgroundColor: 'rgba(217,119,6,0.2)' },
   busMarker: {
     width: 42, height: 42, borderRadius: 21,
     backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center',
@@ -476,6 +527,7 @@ const styles = StyleSheet.create({
     shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4, shadowRadius: 8, elevation: 6,
   },
+  taxiMarker: { backgroundColor: '#D97706', shadowColor: '#D97706' },
   stopMarker: { alignItems: 'center', justifyContent: 'center' },
   stopDot: {
     width: 14, height: 14, borderRadius: 7,
@@ -593,14 +645,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 12,
     backgroundColor: COLORS.background, borderRadius: 16, padding: 14, marginBottom: 12,
   },
+  taxiDriverCard: { backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A' },
   driverAvatar: {
     width: 48, height: 48, borderRadius: 15,
     backgroundColor: COLORS.primaryMid, alignItems: 'center', justifyContent: 'center',
   },
+  taxiDriverAvatar: { backgroundColor: '#FEF3C7' },
   driverAvatarText: { fontSize: 16, fontWeight: '800', color: COLORS.primary },
+  taxiDriverAvatarText: { color: '#D97706' },
   driverInfo: { flex: 1 },
   driverName: { fontSize: 15, fontWeight: '800', color: COLORS.textPrimary },
-  driverVehicle: { fontSize: 12, color: COLORS.textMuted, marginTop: 1, fontWeight: '500' },
+  driverVehicleRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  vehicleColorSwatch: {
+    width: 10, height: 10, borderRadius: 5,
+    borderWidth: 1, borderColor: 'rgba(0,0,0,0.15)',
+  },
+  driverVehicle: { fontSize: 12, color: COLORS.textMuted, fontWeight: '500' },
+  driverPlate: {
+    fontSize: 11, fontWeight: '800', color: COLORS.textPrimary,
+    letterSpacing: 1, marginTop: 2,
+    backgroundColor: COLORS.white, borderRadius: 4,
+    paddingHorizontal: 6, paddingVertical: 1,
+    borderWidth: 1, borderColor: COLORS.border,
+    alignSelf: 'flex-start',
+  },
   driverRatingRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 },
   driverRating: { fontSize: 13, fontWeight: '700', color: COLORS.textPrimary },
   driverTrips: { fontSize: 12, color: COLORS.textMuted, fontWeight: '500' },
@@ -610,6 +678,16 @@ const styles = StyleSheet.create({
     shadowColor: COLORS.secondary, shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35, shadowRadius: 8, elevation: 4,
   },
+  taxiCallBtn: { backgroundColor: '#D97706', shadowColor: '#D97706' },
+
+  /* Taxi waiting banner */
+  taxiWaitBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: '#FFFBEB', borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12,
+    borderWidth: 1, borderColor: '#FDE68A',
+  },
+  taxiWaitText: { flex: 1, fontSize: 12, fontWeight: '600', color: '#92400E', lineHeight: 17 },
 
   emergencyBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,

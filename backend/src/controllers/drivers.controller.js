@@ -179,6 +179,83 @@ export const getDriverSchedules = async (req, res) => {
   }
 };
 
+// GET /api/drivers/available
+// Passenger-accessible — no admin permission required.
+// ?mode=now          → drivers not currently on an active trip
+// ?mode=scheduled&datetime=2026-06-09T10:00:00  → drivers free during that slot
+export const getAvailableDrivers = async (req, res) => {
+  try {
+    const { mode, datetime } = req.query;
+    const pool = await poolPromise;
+
+    let requestedAt;
+    if (mode === 'scheduled' && datetime) {
+      requestedAt = new Date(datetime);
+      if (isNaN(requestedAt.getTime())) {
+        return res.status(400).json({ error: 'Invalid datetime' });
+      }
+    } else {
+      requestedAt = new Date();
+    }
+
+    // "now" mode: driver is busy if they have an ACTIVE trip right now (ongoing/in_progress only).
+    // "scheduled" mode: driver is busy if any non-completed trip overlaps the requested 2-hour slot.
+    // Note: 'scheduled' status is intentionally excluded from the "now" check — a scheduled trip
+    // with a past start_time and no end_time (stale/never-started) must not block a driver now.
+    const busyWhere = mode === 'now'
+      ? `ct.status IN ('ongoing', 'in_progress')`
+      : `ct.status NOT IN ('completed', 'cancelled')
+         AND ct.start_time < DATEADD(HOUR, 2, @requestedAt)
+         AND ISNULL(ct.end_time, DATEADD(HOUR, 2, ct.start_time)) > DATEADD(MINUTE, -30, @requestedAt)`;
+
+    const result = await pool.request()
+      .input('requestedAt', sql.DateTime2, requestedAt)
+      .query(`
+        SELECT
+          d.driver_id,
+          u.full_name                   AS name,
+          u.phone,
+          ISNULL(rs.avg_rating,    0.0) AS avg_rating,
+          ISNULL(rs.total_ratings, 0)   AS total_ratings,
+          veh.plate_number,
+          veh.color,
+          veh.model
+        FROM drivers d
+        JOIN users u ON d.user_id = u.user_id
+        -- latest vehicle assigned to this driver (via most recent trip)
+        LEFT JOIN (
+          SELECT driver_id, MAX(vehicle_id) AS vehicle_id
+          FROM trips
+          WHERE driver_id IS NOT NULL AND vehicle_id IS NOT NULL
+          GROUP BY driver_id
+        ) lv ON lv.driver_id = d.driver_id
+        LEFT JOIN vehicles veh ON veh.vehicle_id = lv.vehicle_id
+        -- aggregate rating stats across all trips
+        LEFT JOIN (
+          SELECT t.driver_id,
+                 ROUND(AVG(CAST(r.rating AS FLOAT)), 1) AS avg_rating,
+                 COUNT(r.rating_id)                      AS total_ratings
+          FROM trips t
+          JOIN ratings r ON r.trip_id = t.trip_id
+          WHERE t.driver_id IS NOT NULL
+          GROUP BY t.driver_id
+        ) rs ON rs.driver_id = d.driver_id
+        WHERE ISNULL(d.is_deleted, 0) = 0
+          AND NOT EXISTS (
+            SELECT 1 FROM trips ct
+            WHERE ct.driver_id = d.driver_id
+              AND ${busyWhere}
+          )
+        ORDER BY ISNULL(rs.avg_rating, 0) DESC, u.full_name
+      `);
+
+    res.json({ drivers: result.recordset, mode, requestedAt: requestedAt.toISOString() });
+  } catch (err) {
+    console.error('[getAvailableDrivers]', err);
+    res.status(500).json({ error: 'Failed to fetch available drivers' });
+  }
+};
+
 // DELETE /api/drivers/:id
 export const deleteDriver = async (req, res) => {
   try {

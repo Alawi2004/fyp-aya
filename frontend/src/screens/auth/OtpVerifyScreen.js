@@ -1,16 +1,47 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, TouchableOpacity,
-  StatusBar, Alert, KeyboardAvoidingView, Platform,
+  View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView,
+  StatusBar, Alert, KeyboardAvoidingView, Platform, Animated, Easing,
+  ActivityIndicator, Pressable, Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Defs, LinearGradient as SvgGradient, Stop, Rect } from 'react-native-svg';
 import { useAuth } from '../../context/AuthContext';
 import { verifyOtpApi, sendOtpApi } from '../../api/authApi';
 import { COLORS } from '../../constants/colors';
 
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const BRAND = ['#1E3A8A', '#4338CA', '#7C3AED'];
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 60;
+
+// ── SVG gradient fill that measures its own box ──────────────────────────────
+const GradientFill = ({ id, colors, radius = 0, vertical = false }) => {
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  return (
+    <View
+      style={StyleSheet.absoluteFill}
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        setBox((p) => (p.w === width && p.h === height ? p : { w: width, h: height }));
+      }}
+    >
+      {box.w > 0 && box.h > 0 && (
+        <Svg width={box.w} height={box.h}>
+          <Defs>
+            <SvgGradient id={id} x1="0" y1="0" x2={vertical ? '0' : box.w} y2={box.h} gradientUnits="userSpaceOnUse">
+              {colors.map((c, i) => <Stop key={i} offset={`${i / (colors.length - 1)}`} stopColor={c} />)}
+            </SvgGradient>
+          </Defs>
+          <Rect x="0" y="0" width={box.w} height={box.h} rx={radius} ry={radius} fill={`url(#${id})`} />
+        </Svg>
+      )}
+    </View>
+  );
+};
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 const OtpVerifyScreen = ({ navigation, route }) => {
   const { email, purpose, userData, authData, devCode } = route.params ?? {};
@@ -18,12 +49,37 @@ const OtpVerifyScreen = ({ navigation, route }) => {
   const { register, finalizeLogin } = useAuth();
 
   const [digits, setDigits] = useState(Array(OTP_LENGTH).fill(''));
+  const [focusedIdx, setFocusedIdx] = useState(0);
   const [timer, setTimer] = useState(RESEND_SECONDS);
   const [loading, setLoading] = useState(false);
   const inputs = useRef([]);
 
+  // Animations
+  const intro = useRef([...Array(5)].map(() => new Animated.Value(0))).current;
+  const blobA = useRef(new Animated.Value(0)).current;
+  const blobB = useRef(new Animated.Value(0)).current;
+  const btnScale = useRef(new Animated.Value(1)).current;
+
+  const maskedEmail = email
+    ? email.replace(/(.{2})(.*)(@.*)/, (_, a, b, c) => a + '*'.repeat(Math.max(b.length, 4)) + c)
+    : '••••••••';
+
   useEffect(() => {
-    inputs.current[0]?.focus();
+    Animated.stagger(110, intro.map((a) =>
+      Animated.spring(a, { toValue: 1, useNativeDriver: true, friction: 9, tension: 55 })
+    )).start();
+
+    const loop = (val, dur) => Animated.loop(
+      Animated.sequence([
+        Animated.timing(val, { toValue: 1, duration: dur, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(val, { toValue: 0, duration: dur, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    );
+    loop(blobA, 6000).start();
+    loop(blobB, 8000).start();
+
+    const t = setTimeout(() => inputs.current[0]?.focus(), 350);
+    return () => clearTimeout(t);
   }, []);
 
   useEffect(() => {
@@ -31,6 +87,11 @@ const OtpVerifyScreen = ({ navigation, route }) => {
     const id = setInterval(() => setTimer((t) => t - 1), 1000);
     return () => clearInterval(id);
   }, [timer]);
+
+  const sect = (i) => ({
+    opacity: intro[i],
+    transform: [{ translateY: intro[i].interpolate({ inputRange: [0, 1], outputRange: [26, 0] }) }],
+  });
 
   const handleDigit = (text, idx) => {
     const d = [...digits];
@@ -106,169 +167,228 @@ const OtpVerifyScreen = ({ navigation, route }) => {
     }
   };
 
-  const maskedEmail = email
-    ? email.replace(/(.{2})(.*)(@.*)/, (_, a, b, c) => a + '*'.repeat(Math.max(b.length, 4)) + c)
-    : '••••••••';
+  const headingText = purpose === 'login_verify' ? 'Verify your login' : 'Verify your account';
 
-  const headingText = purpose === 'login_verify' ? 'Verify Your Login' : 'Verify Your Account';
+  const blobAStyle = {
+    transform: [
+      { translateX: blobA.interpolate({ inputRange: [0, 1], outputRange: [-20, 30] }) },
+      { translateY: blobA.interpolate({ inputRange: [0, 1], outputRange: [0, 40] }) },
+      { scale: blobA.interpolate({ inputRange: [0, 1], outputRange: [1, 1.15] }) },
+    ],
+  };
+  const blobBStyle = {
+    transform: [
+      { translateX: blobB.interpolate({ inputRange: [0, 1], outputRange: [20, -30] }) },
+      { translateY: blobB.interpolate({ inputRange: [0, 1], outputRange: [10, -30] }) },
+      { scale: blobB.interpolate({ inputRange: [0, 1], outputRange: [1.1, 0.9] }) },
+    ],
+  };
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
-        </TouchableOpacity>
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor={BRAND[0]} />
 
-        <View style={styles.content}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="mail-outline" size={36} color={COLORS.primary} />
+      {/* Animated gradient background */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <GradientFill id="otpBgGrad" colors={BRAND} vertical />
+        <Animated.View style={[styles.blob, styles.blobA, blobAStyle]} />
+        <Animated.View style={[styles.blob, styles.blobB, blobBStyle]} />
+        <View style={styles.blobC} />
+      </View>
+
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          {/* Hero */}
+          <View style={[styles.hero, { paddingTop: insets.top + 24 }]}>
+            <TouchableOpacity
+              style={[styles.backBtn, { top: insets.top + 20 }]}
+              onPress={() => navigation.goBack()}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="arrow-back" size={22} color={COLORS.white} />
+            </TouchableOpacity>
+
+            <Animated.View style={[styles.logoWrap, {
+              opacity: intro[0],
+              transform: [{ scale: intro[0].interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
+            }]}>
+              <View style={styles.logoCircle}>
+                <Ionicons name="shield-checkmark" size={34} color={COLORS.primary} />
+              </View>
+            </Animated.View>
+            <Animated.Text style={[styles.brand, sect(1)]}>{headingText}</Animated.Text>
+            <Animated.Text style={[styles.tagline, sect(1)]}>
+              Enter the 6-digit code we sent you
+            </Animated.Text>
           </View>
 
-          <Text style={styles.heading}>{headingText}</Text>
-          <Text style={styles.subtext}>
-            We sent a 6-digit code to{'\n'}
-            <Text style={styles.emailHighlight}>{maskedEmail}</Text>
-          </Text>
+          {/* Card */}
+          <Animated.View style={[styles.card, sect(2), { paddingBottom: insets.bottom + 24 }]}>
+            <View style={styles.handle} />
+            <Text style={styles.title}>Enter code</Text>
+            <Text style={styles.subtitle}>
+              Sent to <Text style={styles.emailHighlight}>{maskedEmail}</Text>
+            </Text>
 
-          {/* OTP boxes */}
-          <View style={styles.otpRow}>
-            {digits.map((d, i) => (
-              <TextInput
-                key={i}
-                ref={(r) => (inputs.current[i] = r)}
-                style={[styles.otpBox, d ? styles.otpBoxFilled : null]}
-                value={d}
-                onChangeText={(t) => handleDigit(t, i)}
-                onKeyPress={(e) => handleKeyPress(e, i)}
-                keyboardType="number-pad"
-                maxLength={1}
-                selectTextOnFocus
-                caretHidden
-              />
-            ))}
-          </View>
+            {devCode ? (
+              <View style={styles.devNote}>
+                <Ionicons name="construct" size={15} color={COLORS.primary} />
+                <Text style={styles.devNoteText}>Dev code: <Text style={{ fontWeight: '800' }}>{devCode}</Text></Text>
+              </View>
+            ) : null}
 
-          <TouchableOpacity
-            style={[styles.verifyBtn, loading && { opacity: 0.7 }]}
-            onPress={verify}
-            activeOpacity={0.85}
-            disabled={loading}
-          >
-            <Text style={styles.verifyBtnText}>{loading ? 'Verifying…' : 'Verify Code'}</Text>
-          </TouchableOpacity>
+            <Animated.View style={sect(3)}>
+              {/* OTP boxes */}
+              <View style={styles.otpRow}>
+                {digits.map((d, i) => {
+                  const active = focusedIdx === i;
+                  return (
+                    <TextInput
+                      key={i}
+                      ref={(r) => (inputs.current[i] = r)}
+                      style={[
+                        styles.otpBox,
+                        d ? styles.otpBoxFilled : null,
+                        active ? styles.otpBoxActive : null,
+                      ]}
+                      value={d}
+                      onChangeText={(t) => handleDigit(t, i)}
+                      onKeyPress={(e) => handleKeyPress(e, i)}
+                      onFocus={() => setFocusedIdx(i)}
+                      keyboardType="number-pad"
+                      maxLength={1}
+                      selectTextOnFocus
+                    />
+                  );
+                })}
+              </View>
 
-          <View style={styles.resendRow}>
-            {timer > 0 ? (
-              <Text style={styles.timerText}>
-                Resend code in{' '}
-                <Text style={{ color: COLORS.primary, fontWeight: '700' }}>{timer}s</Text>
-              </Text>
-            ) : (
-              <TouchableOpacity onPress={resend}>
-                <Text style={styles.resendLink}>Resend Code</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+              {/* Verify button */}
+              <AnimatedPressable
+                onPress={verify}
+                disabled={loading}
+                onPressIn={() => Animated.spring(btnScale, { toValue: 0.97, useNativeDriver: true, speed: 50, bounciness: 0 }).start()}
+                onPressOut={() => Animated.spring(btnScale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 8 }).start()}
+                style={[styles.primaryBtn, { transform: [{ scale: btnScale }], opacity: loading ? 0.85 : 1 }]}
+              >
+                <View style={styles.primaryBg} pointerEvents="none">
+                  <GradientFill id="otpBtnGrad" colors={['#2563EB', '#7C3AED']} radius={16} />
+                </View>
+                {loading ? (
+                  <ActivityIndicator color={COLORS.white} />
+                ) : (
+                  <>
+                    <Text style={styles.primaryText}>Verify Code</Text>
+                    <Ionicons name="checkmark-circle" size={19} color={COLORS.white} />
+                  </>
+                )}
+              </AnimatedPressable>
 
-        </View>
+              {/* Resend */}
+              <View style={styles.resendRow}>
+                {timer > 0 ? (
+                  <Text style={styles.timerText}>
+                    Resend code in <Text style={{ color: COLORS.primary, fontWeight: '800' }}>{timer}s</Text>
+                  </Text>
+                ) : (
+                  <TouchableOpacity onPress={resend} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={styles.resendLink}>Resend Code</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </Animated.View>
+
+            <View style={styles.secureRow}>
+              <Ionicons name="shield-checkmark" size={13} color={COLORS.textMuted} />
+              <Text style={styles.secureText}>Protected with end-to-end encryption</Text>
+            </View>
+          </Animated.View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.white },
+  root: { flex: 1, backgroundColor: BRAND[0] },
 
-  back: {
-    marginTop: 8,
-    marginLeft: 20,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  /* Background blobs */
+  blob: { position: 'absolute', borderRadius: 9999 },
+  blobA: { width: 280, height: 280, top: -60, right: -80, backgroundColor: 'rgba(124,58,237,0.45)' },
+  blobB: { width: 240, height: 240, top: SCREEN_H * 0.22, left: -90, backgroundColor: 'rgba(37,99,235,0.40)' },
+  blobC: { position: 'absolute', width: 180, height: 180, borderRadius: 90, top: -30, left: SCREEN_W * 0.3, backgroundColor: 'rgba(255,255,255,0.06)' },
 
-  content: {
-    flex: 1,
-    alignItems: 'center',
-    paddingHorizontal: 32,
-    paddingTop: 28,
+  /* Hero */
+  hero: { alignItems: 'center', paddingHorizontal: 24, paddingBottom: 34 },
+  backBtn: {
+    position: 'absolute', left: 24, width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', zIndex: 2,
   },
+  logoWrap: {
+    marginBottom: 16,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25, shadowRadius: 18, elevation: 10,
+  },
+  logoCircle: {
+    width: 76, height: 76, borderRadius: 38, backgroundColor: COLORS.white,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  brand: { fontSize: 27, fontWeight: '900', color: COLORS.white, letterSpacing: 0.2, textAlign: 'center' },
+  tagline: { fontSize: 14, color: 'rgba(255,255,255,0.78)', marginTop: 5, textAlign: 'center' },
 
-  iconCircle: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: COLORS.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 28,
+  /* Card */
+  card: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 34, borderTopRightRadius: 34,
+    paddingHorizontal: 24, paddingTop: 14,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.12, shadowRadius: 24, elevation: 20,
   },
+  handle: { width: 44, height: 5, borderRadius: 3, backgroundColor: COLORS.border, alignSelf: 'center', marginBottom: 18 },
+  title: { fontSize: 26, fontWeight: '900', color: COLORS.textPrimary, letterSpacing: -0.4 },
+  subtitle: { fontSize: 14, color: COLORS.textSecondary, marginTop: 4, marginBottom: 22 },
+  emailHighlight: { fontWeight: '800', color: COLORS.textPrimary },
 
-  heading: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: COLORS.textPrimary,
-    marginBottom: 12,
-    textAlign: 'center',
+  devNote: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
+    backgroundColor: COLORS.primaryLight, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10, marginBottom: 18,
   },
-  subtext: {
-    fontSize: 15,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 36,
-  },
-  emailHighlight: { fontWeight: '700', color: COLORS.textPrimary },
+  devNoteText: { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
 
-  otpRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 36,
-  },
+  /* OTP boxes */
+  otpRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 26 },
   otpBox: {
-    width: 46,
-    height: 58,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: COLORS.border,
-    fontSize: 24,
-    fontWeight: '700',
-    textAlign: 'center',
-    color: COLORS.textPrimary,
-    backgroundColor: COLORS.background,
+    width: 48, height: 60, borderRadius: 14, borderWidth: 1.5,
+    borderColor: COLORS.border, backgroundColor: COLORS.background,
+    fontSize: 24, fontWeight: '800', textAlign: 'center', color: COLORS.textPrimary,
   },
-  otpBoxFilled: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primaryLight,
-    color: COLORS.primary,
+  // value-based + focus highlight only change border/colour (focus-safe, no
+  // backgroundColor/shadow toggling that would drop native focus on Fabric).
+  otpBoxFilled: { borderColor: COLORS.primaryMid, color: COLORS.primary },
+  otpBoxActive: { borderColor: COLORS.primary },
+
+  /* Primary gradient button */
+  primaryBtn: {
+    height: 56, borderRadius: 16, overflow: 'hidden',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    shadowColor: '#4F46E5', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.32, shadowRadius: 14, elevation: 8,
   },
+  primaryBg: { ...StyleSheet.absoluteFillObject, borderRadius: 16, overflow: 'hidden' },
+  primaryText: { fontSize: 16, fontWeight: '800', color: COLORS.white, letterSpacing: 0.3 },
 
-  verifyBtn: {
-    width: '100%',
-    paddingVertical: 16,
-    borderRadius: 14,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    marginBottom: 20,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  verifyBtnText: { fontSize: 16, fontWeight: '700', color: COLORS.white },
+  /* Resend */
+  resendRow: { alignItems: 'center', marginTop: 18 },
+  timerText: { fontSize: 14, color: COLORS.textSecondary, fontWeight: '500' },
+  resendLink: { fontSize: 14, fontWeight: '800', color: COLORS.primary },
 
-  resendRow: { marginBottom: 20 },
-  timerText: { fontSize: 14, color: COLORS.textSecondary },
-  resendLink: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
-
+  secureRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 22 },
+  secureText: { fontSize: 12, color: COLORS.textMuted, fontWeight: '500' },
 });
 
 export default OtpVerifyScreen;

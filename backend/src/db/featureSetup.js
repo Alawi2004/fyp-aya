@@ -322,6 +322,50 @@ BEGIN
     created_at    DATETIME2      NOT NULL DEFAULT GETUTCDATE()
   );
 END;
+
+-- Add color column to vehicles for taxi display (plate + color shown to passenger)
+IF NOT EXISTS (
+  SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_NAME = 'vehicles' AND COLUMN_NAME = 'color'
+)
+BEGIN
+  ALTER TABLE vehicles ADD color NVARCHAR(30) NULL;
+END;
+
+-- Ensure drivers.is_deleted has a default so NULLs don't hide drivers from queries
+IF NOT EXISTS (
+  SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_NAME = 'drivers' AND COLUMN_NAME = 'is_deleted'
+)
+BEGIN
+  ALTER TABLE drivers ADD is_deleted BIT NOT NULL DEFAULT 0;
+END;
+
+-- Taxi / tuktuk reservations (passenger-facing; separate from bus ticket bookings)
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'taxi_reservations')
+BEGIN
+  CREATE TABLE taxi_reservations (
+    reservation_id   INT            NOT NULL IDENTITY(1,1) PRIMARY KEY,
+    user_id          INT            NOT NULL REFERENCES users(user_id),
+    vehicle_type     NVARCHAR(20)   NOT NULL,
+    pickup_address   NVARCHAR(300)  NOT NULL,
+    pickup_lat       FLOAT          NULL,
+    pickup_lng       FLOAT          NULL,
+    dest_address     NVARCHAR(300)  NOT NULL,
+    dest_lat         FLOAT          NULL,
+    dest_lng         FLOAT          NULL,
+    distance_km      FLOAT          NULL,
+    estimated_fare   DECIMAL(10,2)  NOT NULL DEFAULT 0,
+    driver_id        INT            NULL REFERENCES drivers(driver_id),
+    driver_name      NVARCHAR(100)  NULL,
+    scheduled_for    NVARCHAR(100)  NULL DEFAULT 'Now',
+    recurrence       NVARCHAR(20)   NOT NULL DEFAULT 'once',
+    notes            NVARCHAR(500)  NULL,
+    status           NVARCHAR(20)   NOT NULL DEFAULT 'pending',
+    created_at       DATETIME2      NOT NULL DEFAULT GETUTCDATE()
+  );
+  CREATE INDEX IX_taxi_reservations_user ON taxi_reservations(user_id, created_at DESC);
+END;
 `;
 
 export const ensureOperationalTables = async (pool) => {

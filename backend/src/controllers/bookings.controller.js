@@ -132,14 +132,16 @@ export const getBookings = async (req, res) => {
     if (!userId) return res.status(401).json({ error: "Authentication required" });
 
     const pool = await poolPromise;
+    await ensureOperationalTables(pool);
     const result = await pool.request()
       .input("id", sql.Int, userId)
       .query(`
         SELECT
-          tk.ticket_id,
+          tk.ticket_id                                                         AS booking_id,
+          'bus'                                                                AS booking_source,
           tk.trip_id,
           tk.seat_number,
-          tk.amount,
+          CAST(tk.amount AS FLOAT)                                             AS amount,
           tk.created_at,
           v.model                                                              AS bus_name,
           LOWER(ISNULL(v.vehicle_type, 'bus'))                                 AS bus_type,
@@ -152,32 +154,89 @@ export const getBookings = async (req, res) => {
             WHEN tk.status = 'cancelled' THEN 'cancelled'
             WHEN t.status  = 'completed' THEN 'completed'
             ELSE 'upcoming'
-          END                                                                  AS ui_status
+          END                                                                  AS ui_status,
+          NULL AS vehicle_type,
+          NULL AS driver_name,
+          NULL AS scheduled_for
         FROM tickets  tk
         JOIN trips    t ON t.trip_id    = tk.trip_id
         JOIN vehicles v ON v.vehicle_id = t.vehicle_id
         JOIN routes   r ON r.route_id   = t.route_id
         WHERE tk.user_id = @id
-        ORDER BY tk.ticket_id DESC
+
+        UNION ALL
+
+        SELECT
+          tr.reservation_id                                                    AS booking_id,
+          'taxi'                                                               AS booking_source,
+          NULL                                                                 AS trip_id,
+          NULL                                                                 AS seat_number,
+          CAST(tr.estimated_fare AS FLOAT)                                     AS amount,
+          tr.created_at,
+          tr.vehicle_type                                                      AS bus_name,
+          tr.vehicle_type                                                      AS bus_type,
+          tr.pickup_address                                                    AS origin,
+          tr.dest_address                                                      AS destination,
+          CASE
+            WHEN tr.distance_km IS NOT NULL
+            THEN CAST(CAST(tr.distance_km AS DECIMAL(8,1)) AS VARCHAR) + ' km'
+            ELSE NULL
+          END                                                                  AS duration,
+          CASE
+            WHEN tr.status = 'cancelled' THEN 'cancelled'
+            WHEN tr.status = 'completed' THEN 'completed'
+            ELSE 'upcoming'
+          END                                                                  AS ui_status,
+          tr.vehicle_type                                                      AS vehicle_type,
+          tr.driver_name                                                       AS driver_name,
+          tr.scheduled_for                                                     AS scheduled_for
+        FROM taxi_reservations tr
+        WHERE tr.user_id = @id
+
+        ORDER BY created_at DESC
       `);
 
-    const bookings = result.recordset.map((row) => ({
-      _id:    String(row.ticket_id),
-      type:   "bus",
-      status: row.ui_status,
-      bus: {
-        _id:         row.trip_id,
-        name:        row.bus_name,
-        type:        row.bus_type,
-        origin:      row.origin,
-        destination: row.destination,
-        duration:    row.duration,
-      },
-      seatId: row.seat_number,
-      seats:  [row.seat_number],
-      price:  parseFloat(row.amount),
-      date:   row.created_at,
-    }));
+    const bookings = result.recordset.map((row) => {
+      if (row.booking_source === 'taxi') {
+        return {
+          _id:         `taxi_${row.booking_id}`,
+          type:        'taxi',
+          status:      row.ui_status,
+          vehicleType: row.vehicle_type,
+          driverName:  row.driver_name,
+          scheduledFor: row.scheduled_for,
+          bus: {
+            _id:         row.booking_id,
+            name:        row.bus_name,
+            type:        row.bus_type,
+            origin:      row.origin,
+            destination: row.destination,
+            duration:    row.duration,
+          },
+          seatId: null,
+          seats:  [],
+          price:  parseFloat(row.amount ?? 0),
+          date:   row.created_at,
+        };
+      }
+      return {
+        _id:    String(row.booking_id),
+        type:   "bus",
+        status: row.ui_status,
+        bus: {
+          _id:         row.trip_id,
+          name:        row.bus_name,
+          type:        row.bus_type,
+          origin:      row.origin,
+          destination: row.destination,
+          duration:    row.duration,
+        },
+        seatId: row.seat_number,
+        seats:  [row.seat_number],
+        price:  parseFloat(row.amount ?? 0),
+        date:   row.created_at,
+      };
+    });
 
     res.json(bookings);
   } catch (err) {

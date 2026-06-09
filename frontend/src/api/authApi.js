@@ -5,5 +5,6 @@ export const forgotPasswordApi = (email) => apiClient.post('/auth/forgot-passwor
 export const logoutApi = () => apiClient.post('/auth/logout');
 export const getProfileApi = () => apiClient.get('/users/me').then(r => r.data);
 export const updateProfileApi = (data) => apiClient.put('/users/me', data).then(r => r.data);
+export const getMyRatingsApi = () => apiClient.get('/ratings/me').then(r => r.data);
 export const sendOtpApi = (email, purpose) => apiClient.post('/auth/send-otp', { email, purpose });
 export const verifyOtpApi = (email, code) => apiClient.post('/auth/verify-otp', { email, code });

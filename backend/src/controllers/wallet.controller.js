@@ -12,10 +12,15 @@ export const getWallet = async (req, res) => {
     const result = await pool
       .request()
       .input("id", sql.Int, userId)
-      .query("SELECT balance FROM wallets WHERE user_id = @id");
+      .query("SELECT wallet_id, balance, is_frozen, freeze_reason FROM wallets WHERE user_id = @id");
 
     const row = result.recordset[0];
-    res.json({ balance: row ? parseFloat(row.balance) : 0 });
+    res.json({
+      wallet_id:     row?.wallet_id ?? null,
+      balance:       row ? parseFloat(row.balance) : 0,
+      is_frozen:     row ? !!row.is_frozen : false,
+      freeze_reason: row?.freeze_reason ?? null,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch wallet" });
@@ -41,12 +46,14 @@ export const getTransactions = async (req, res) => {
           wt.amount,
           wt.description,
           wt.created_at,
-          wr.location_name,
-          wr.tx_ref,
-          u.full_name AS processed_by
+          COALESCE(wr.location_name, st.recharge_location)     AS location_name,
+          COALESCE(wr.tx_ref,        st.transaction_reference) AS tx_ref,
+          COALESCE(ru.full_name,     su.full_name)             AS processed_by
         FROM wallet_transactions wt
-        LEFT JOIN wallet_recharges wr ON wt.recharge_id = wr.recharge_id
-        LEFT JOIN users           u  ON wr.staff_id    = u.user_id
+        LEFT JOIN wallet_recharges wr ON wt.recharge_id     = wr.recharge_id
+        LEFT JOIN users           ru ON wr.staff_id         = ru.user_id
+        LEFT JOIN staff_top_ups   st ON wt.staff_top_up_id  = st.top_up_id
+        LEFT JOIN users           su ON st.processed_by_staff_id = su.user_id
         WHERE wt.user_id = @id
         ORDER BY wt.created_at DESC
       `);

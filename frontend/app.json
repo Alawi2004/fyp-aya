@@ -27,7 +27,8 @@
           "photosPermission": "Allow Yalla Transit to access your photos so you can attach images to complaints.",
           "cameraPermission": "Allow Yalla Transit to use your camera to attach photos to complaints."
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "ios": {
       "supportsTablet": true,
