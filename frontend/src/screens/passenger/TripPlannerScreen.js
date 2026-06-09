@@ -404,8 +404,10 @@ const TripPlannerScreen = ({ navigation, route }) => {
   const [departureTime, setDepartureTime] = useState(new Date());
   const [showDTPicker,  setShowDTPicker]  = useState(false);
   const [dtPickerMode,  setDtPickerMode]  = useState('date'); // 'date' | 'time' (Android only)
+  const dtPendingDate   = useRef(null);  // holds chosen date while waiting for time step (Android)
 
-  const isLeaveNow = Date.now() - departureTime.getTime() < 120_000;
+  // departureTime - now > 2 min means user explicitly chose a future time
+  const isLeaveNow = departureTime.getTime() - Date.now() < 120_000;
 
   const formatDepTime = (d) => {
     const now      = new Date();
@@ -420,19 +422,29 @@ const TripPlannerScreen = ({ navigation, route }) => {
 
   const onDTChange = (event, selected) => {
     if (event.type === 'dismissed' || !selected) {
+      // On Android, dismissing the date step should abort; dismissing time step should still
+      // keep any previously confirmed date so we don't reset back to "now".
       setShowDTPicker(false);
       setDtPickerMode('date');
+      dtPendingDate.current = null;
       return;
     }
     if (Platform.OS === 'android') {
       if (dtPickerMode === 'date') {
-        const next = new Date(selected);
-        next.setHours(departureTime.getHours(), departureTime.getMinutes(), 0, 0);
-        setDepartureTime(next);
-        setDtPickerMode('time'); // show time picker next
+        // Save the chosen date and immediately close this dialog.
+        // Reopen as time picker on the next tick so Android can mount a fresh dialog.
+        dtPendingDate.current = selected;
+        setShowDTPicker(false);
+        setTimeout(() => {
+          setDtPickerMode('time');
+          setShowDTPicker(true);
+        }, 50);
       } else {
-        const next = new Date(departureTime);
+        // Time step confirmed: merge saved date + selected time into one Date.
+        const base = dtPendingDate.current ?? departureTime;
+        const next = new Date(base);
         next.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
+        dtPendingDate.current = null;
         setDepartureTime(next);
         setShowDTPicker(false);
         setDtPickerMode('date');
@@ -441,7 +453,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
         }
       }
     } else {
-      // iOS: datetime spinner updates live; commit on "Done"
+      // iOS: datetime spinner fires onChange on every scroll; commit on "Done"
       setDepartureTime(selected);
     }
   };
@@ -816,11 +828,12 @@ const TripPlannerScreen = ({ navigation, route }) => {
         {/* ── Android datetime picker (shows as dialog) ── */}
         {showDTPicker && Platform.OS === 'android' && (
           <DateTimePicker
-            value={departureTime}
+            key={`android-${dtPickerMode}`}
+            value={dtPickerMode === 'time' ? (dtPendingDate.current ?? departureTime) : departureTime}
             mode={dtPickerMode}
             display="default"
             onChange={onDTChange}
-            minimumDate={new Date()}
+            minimumDate={dtPickerMode === 'date' ? new Date() : undefined}
           />
         )}
 
@@ -860,7 +873,21 @@ const TripPlannerScreen = ({ navigation, route }) => {
         {error ? (
           <View style={styles.errorCard}>
             <Ionicons name="alert-circle-outline" size={20} color={COLORS.danger} />
-            <Text style={styles.errorText}>{error}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.errorText}>{error}</Text>
+              {error.toLowerCase().includes('no connected') || error.toLowerCase().includes('no route') ? (
+                <View style={styles.errorHints}>
+                  <Text style={styles.errorHintTitle}>Try:</Text>
+                  {[
+                    'Pick a stop closer to your actual origin / destination',
+                    'These two stops may not be linked by any route in the network',
+                    'Swap the stops — routes only run in one direction',
+                  ].map((hint, i) => (
+                    <Text key={i} style={styles.errorHintLine}>· {hint}</Text>
+                  ))}
+                </View>
+              ) : null}
+            </View>
           </View>
         ) : null}
 
@@ -1230,7 +1257,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.dangerLight, borderRadius: 14,
     borderWidth: 1, borderColor: COLORS.dangerMid, padding: 14,
   },
-  errorText: { flex: 1, fontSize: 14, color: COLORS.dangerDark, fontWeight: '600', lineHeight: 20 },
+  errorText:      { fontSize: 14, color: COLORS.dangerDark, fontWeight: '600', lineHeight: 20 },
+  errorHints:     { marginTop: 8, gap: 3 },
+  errorHintTitle: { fontSize: 12, fontWeight: '800', color: COLORS.dangerDark, marginBottom: 2 },
+  errorHintLine:  { fontSize: 12, color: COLORS.danger, lineHeight: 18 },
 
   routeBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   routeBadge: {
