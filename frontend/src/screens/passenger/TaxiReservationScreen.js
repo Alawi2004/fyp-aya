@@ -262,7 +262,7 @@ const VEHICLE_TYPES = [
 
 const TaxiReservationScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
-  const { refreshBookings } = useApp();
+  const { refreshBookings, updateBalance, walletBalance } = useApp();
   const { fromStop, toStop, tripSummary } = route?.params ?? {};
 
   const [pickup,        setPickup]        = useState(fromStop?.stop_name ?? '');
@@ -530,10 +530,15 @@ const TaxiReservationScreen = ({ navigation, route }) => {
         })),
       });
 
+      // Update wallet balance in context from the server's authoritative value
+      if (typeof data.newBalance === 'number') {
+        updateBalance(data.newBalance);
+      }
+
       // Build the booking object for the Ticket screen from the server response
-      const res = data.reservation ?? {};
+      const resData = data.reservation ?? {};
       const newBooking = {
-        _id:          `taxi_${res.reservation_id}`,
+        _id:          `taxi_${resData.reservation_id}`,
         type:         'taxi',
         bus:          { name: `${selVehicle.label} Taxi`, origin: pickup, destination: dest },
         seatId:       null,
@@ -560,7 +565,15 @@ const TaxiReservationScreen = ({ navigation, route }) => {
       navigation.replace('Ticket', { booking: newBooking });
     } catch (err) {
       console.error('[handleConfirm taxi]', err);
-      Alert.alert('Error', 'Could not save your reservation. Please try again.');
+      const serverMsg = err?.response?.data?.error;
+      // Surface specific backend errors (insufficient balance, frozen wallet) clearly
+      if (err?.response?.status === 402 || err?.response?.status === 403) {
+        Alert.alert('Booking Failed', serverMsg);
+      } else if (err?.response?.status === 400) {
+        Alert.alert('Booking Failed', serverMsg ?? 'Could not save your reservation.');
+      } else {
+        Alert.alert('Error', 'Could not save your reservation. Please try again.');
+      }
     } finally {
       setConfirming(false);
     }
@@ -720,31 +733,44 @@ const TaxiReservationScreen = ({ navigation, route }) => {
         </View>
 
         {/* ── Fare Estimate Card ── */}
-        <View style={[styles.fareCard, { borderColor: selVehicle.color + '40' }]}>
-          <View style={[styles.fareIconWrap, { backgroundColor: selVehicle.color + '18' }]}>
-            <Ionicons name="wallet-outline" size={20} color={selVehicle.color} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.fareLabel}>
-              {estimatedFare != null ? 'Estimated Fare' : 'Starting Fare'}
-            </Text>
-            <Text style={[styles.fareValue, { color: selVehicle.color }]}>
-              {estimatedFare != null
-                ? `$${estimatedFare.toFixed(2)}`
-                : `$${selVehicle.base.toFixed(2)} + $${selVehicle.perKm.toFixed(2)}/km`}
-            </Text>
-            {distanceKm != null && (
-              <Text style={styles.fareDistance}>
-                {distanceKm.toFixed(1)} km · ${selVehicle.base.toFixed(2)} base + ${(selVehicle.perKm * distanceKm).toFixed(2)}
-              </Text>
-            )}
-          </View>
-          <View style={styles.fareNote}>
-            <Text style={styles.fareNoteText}>
-              {distanceKm != null ? 'Pick both points for exact fare' : 'Select locations to calculate'}
-            </Text>
-          </View>
-        </View>
+        {(() => {
+          const fare = estimatedFare ?? selVehicle.base;
+          const insufficient = walletBalance < fare;
+          return (
+            <View style={[styles.fareCard, { borderColor: selVehicle.color + '40' }]}>
+              <View style={[styles.fareIconWrap, { backgroundColor: selVehicle.color + '18' }]}>
+                <Ionicons name="wallet-outline" size={20} color={selVehicle.color} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.fareLabel}>
+                  {estimatedFare != null ? 'Estimated Fare' : 'Starting Fare'}
+                </Text>
+                <Text style={[styles.fareValue, { color: selVehicle.color }]}>
+                  {estimatedFare != null
+                    ? `$${estimatedFare.toFixed(2)}`
+                    : `$${selVehicle.base.toFixed(2)} + $${selVehicle.perKm.toFixed(2)}/km`}
+                </Text>
+                {distanceKm != null && (
+                  <Text style={styles.fareDistance}>
+                    {distanceKm.toFixed(1)} km · ${selVehicle.base.toFixed(2)} base + ${(selVehicle.perKm * distanceKm).toFixed(2)}
+                  </Text>
+                )}
+                <View style={styles.fareBalanceRow}>
+                  <Ionicons name="card-outline" size={11} color={insufficient ? COLORS.danger : COLORS.textMuted} />
+                  <Text style={[styles.fareBalanceText, insufficient && styles.fareBalanceInsufficient]}>
+                    Wallet: ${walletBalance.toFixed(2)}
+                    {insufficient ? '  ⚠ Insufficient' : ''}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.fareNote}>
+                <Text style={styles.fareNoteText}>
+                  {distanceKm != null ? 'Deducted from wallet' : 'Select locations to calculate'}
+                </Text>
+              </View>
+            </View>
+          );
+        })()}
 
         {/* ── When Card ── */}
         <View style={styles.card}>
@@ -879,6 +905,10 @@ const TaxiReservationScreen = ({ navigation, route }) => {
               {(drivers ?? []).map(d => {
                 const initials = d.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
                 const isSelected = selectedDriverId === d.driver_id;
+                const driverDist = pickupLatLng && d.current_lat != null
+                  ? haversineKm(pickupLatLng, { latitude: d.current_lat, longitude: d.current_lng })
+                  : null;
+                const driverEtaMin = driverDist != null ? Math.max(1, Math.round(driverDist / 30 * 60)) : null;
                 return (
                   <TouchableOpacity
                     key={d.driver_id}
@@ -913,6 +943,22 @@ const TaxiReservationScreen = ({ navigation, route }) => {
                           </>
                         ) : null}
                       </View>
+                      {driverDist != null ? (
+                        <View style={styles.driverDistRow}>
+                          <Ionicons name="navigate" size={10} color={COLORS.primary} />
+                          <Text style={styles.driverDistText}>
+                            {driverDist < 1
+                              ? `${Math.round(driverDist * 1000)} m away`
+                              : `${driverDist.toFixed(1)} km away`}
+                            {' · ~'}{driverEtaMin} min
+                          </Text>
+                        </View>
+                      ) : pickupLatLng ? (
+                        <View style={styles.driverDistRow}>
+                          <Ionicons name="radio-outline" size={10} color={COLORS.textMuted} />
+                          <Text style={styles.driverDistTextMuted}>Location unavailable</Text>
+                        </View>
+                      ) : null}
                     </View>
                     {isSelected
                       ? <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />
@@ -1359,6 +1405,9 @@ const styles = StyleSheet.create({
   fareDistance: { fontSize: 11, color: COLORS.textMuted, fontWeight: '500', marginTop: 2 },
   fareNote: { alignItems: 'flex-end' },
   fareNoteText: { fontSize: 10, color: COLORS.textMuted, fontWeight: '500', textAlign: 'right', maxWidth: 90 },
+  fareBalanceRow:         { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 },
+  fareBalanceText:        { fontSize: 11, color: COLORS.textMuted, fontWeight: '500' },
+  fareBalanceInsufficient:{ color: COLORS.danger, fontWeight: '700' },
 
   // Driver selection
   driverCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
@@ -1399,6 +1448,9 @@ const styles = StyleSheet.create({
   driverAvailDot: {
     width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.secondary,
   },
+  driverDistRow:      { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
+  driverDistText:     { fontSize: 11, fontWeight: '600', color: COLORS.primary },
+  driverDistTextMuted:{ fontSize: 11, fontWeight: '500', color: COLORS.textMuted },
 
   // Notes
   notesInput: {

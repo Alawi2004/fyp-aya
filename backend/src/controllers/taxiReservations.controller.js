@@ -19,15 +19,48 @@ export const createTaxiReservation = async (req, res) => {
     return res.status(400).json({ error: "vehicle_type, pickup_address, and dest_address are required" });
   }
 
+  const fare = Math.max(0, toFloat(estimated_fare) ?? 0);
   const stopsJson = Array.isArray(stops) && stops.length > 0
     ? JSON.stringify(stops)
     : null;
 
-  try {
-    const pool = await poolPromise;
-    await ensureOperationalTables(pool);
+  const pool = await poolPromise;
+  const tx = pool.transaction();
 
-    const result = await pool.request()
+  try {
+    await ensureOperationalTables(pool);
+    await tx.begin();
+
+    // 1. Verify wallet exists, is not frozen, and has enough balance
+    const walletResult = await tx.request()
+      .input("uid", sql.Int, userId)
+      .query("SELECT balance, is_frozen FROM wallets WHERE user_id = @uid");
+    const wallet = walletResult.recordset[0];
+
+    if (!wallet) {
+      await tx.rollback();
+      return res.status(400).json({ error: "Wallet not found. Please top up your wallet first." });
+    }
+    if (wallet.is_frozen) {
+      await tx.rollback();
+      return res.status(403).json({ error: "Your wallet is frozen — contact support." });
+    }
+    const currentBalance = parseFloat(wallet.balance);
+    if (currentBalance < fare) {
+      await tx.rollback();
+      return res.status(402).json({
+        error: `Insufficient balance. Your wallet has $${currentBalance.toFixed(2)} but the fare is $${fare.toFixed(2)}.`,
+      });
+    }
+
+    // 2. Deduct fare from wallet
+    await tx.request()
+      .input("uid", sql.Int, userId)
+      .input("amt", sql.Decimal(10, 2), fare)
+      .query("UPDATE wallets SET balance = balance - @amt, updated_at = GETUTCDATE() WHERE user_id = @uid");
+
+    // 3. Insert the reservation
+    const result = await tx.request()
       .input("userId",        sql.Int,            userId)
       .input("vehicleType",   sql.NVarChar(20),   vehicle_type)
       .input("pickupAddress", sql.NVarChar(300),  pickup_address.trim())
@@ -37,7 +70,7 @@ export const createTaxiReservation = async (req, res) => {
       .input("destLat",       sql.Float,          toFloat(dest_lat))
       .input("destLng",       sql.Float,          toFloat(dest_lng))
       .input("distanceKm",    sql.Float,          toFloat(distance_km))
-      .input("estimatedFare", sql.Decimal(10, 2), toFloat(estimated_fare) ?? 0)
+      .input("estimatedFare", sql.Decimal(10, 2), fare)
       .input("driverId",      sql.Int,            toInt(driver_id))
       .input("driverName",    sql.NVarChar(100),  driver_name ?? null)
       .input("scheduledFor",  sql.NVarChar(100),  scheduled_for ?? "Now")
@@ -60,8 +93,31 @@ export const createTaxiReservation = async (req, res) => {
            @driverId, @driverName, @scheduledFor, @recurrence, @notes, @stopsJson)
       `);
 
-    res.status(201).json({ message: "Reservation created", reservation: result.recordset[0] });
+    // 4. Log the wallet debit
+    await tx.request()
+      .input("uid",  sql.Int, userId)
+      .input("amt",  sql.Decimal(10, 2), fare)
+      .input("desc", sql.NVarChar(500),
+        `Taxi fare — ${pickup_address.trim()} → ${dest_address.trim()}`)
+      .query(`
+        INSERT INTO wallet_transactions (user_id, type, amount, description, created_at)
+        VALUES (@uid, 'debit', @amt, @desc, GETUTCDATE())
+      `);
+
+    await tx.commit();
+
+    const balanceResult = await pool.request()
+      .input("uid", sql.Int, userId)
+      .query("SELECT balance FROM wallets WHERE user_id = @uid");
+    const newBalance = parseFloat(balanceResult.recordset[0]?.balance ?? 0);
+
+    res.status(201).json({
+      message:     "Reservation created",
+      reservation: result.recordset[0],
+      newBalance,
+    });
   } catch (err) {
+    await tx.rollback().catch(() => {});
     console.error("[createTaxiReservation]", err);
     res.status(500).json({ error: "Failed to create reservation" });
   }
@@ -125,6 +181,79 @@ export const expandMapUrl = async (req, res) => {
     }
     console.error('[expandMapUrl]', err.message);
     return res.status(500).json({ error: 'Failed to expand URL', detail: err.message });
+  }
+};
+
+// DELETE /api/taxi-reservations/:id — cancel a reservation and refund wallet
+export const cancelTaxiReservation = async (req, res) => {
+  const userId = req.user?.user_id;
+  if (!userId) return res.status(401).json({ error: "Authentication required" });
+
+  const reservationId = parseInt(req.params.id, 10);
+  if (!reservationId) return res.status(400).json({ error: "Invalid reservation id" });
+
+  const pool = await poolPromise;
+  const tx = pool.transaction();
+
+  try {
+    await tx.begin();
+
+    const resResult = await tx.request()
+      .input("id",  sql.Int, reservationId)
+      .input("uid", sql.Int, userId)
+      .query("SELECT reservation_id, user_id, status, estimated_fare FROM taxi_reservations WHERE reservation_id = @id");
+    const reservation = resResult.recordset[0];
+
+    if (!reservation) {
+      await tx.rollback();
+      return res.status(404).json({ error: "Reservation not found" });
+    }
+    if (reservation.user_id !== userId) {
+      await tx.rollback();
+      return res.status(403).json({ error: "You can only cancel your own reservations" });
+    }
+    if (reservation.status === "cancelled") {
+      await tx.rollback();
+      return res.status(409).json({ error: "Reservation is already cancelled" });
+    }
+    if (reservation.status === "completed") {
+      await tx.rollback();
+      return res.status(409).json({ error: "Completed reservations cannot be cancelled" });
+    }
+
+    await tx.request()
+      .input("id", sql.Int, reservationId)
+      .query("UPDATE taxi_reservations SET status = 'cancelled' WHERE reservation_id = @id");
+
+    const refund = parseFloat(reservation.estimated_fare ?? 0);
+    if (refund > 0) {
+      await tx.request()
+        .input("uid", sql.Int, userId)
+        .input("amt", sql.Decimal(10, 2), refund)
+        .query("UPDATE wallets SET balance = balance + @amt, updated_at = GETUTCDATE() WHERE user_id = @uid");
+
+      await tx.request()
+        .input("uid",  sql.Int, userId)
+        .input("amt",  sql.Decimal(10, 2), refund)
+        .input("desc", sql.NVarChar(500), `Refund — cancelled taxi reservation #${reservationId}`)
+        .query(`
+          INSERT INTO wallet_transactions (user_id, type, amount, description, created_at)
+          VALUES (@uid, 'credit', @amt, @desc, GETUTCDATE())
+        `);
+    }
+
+    await tx.commit();
+
+    const balanceResult = await pool.request()
+      .input("uid", sql.Int, userId)
+      .query("SELECT balance FROM wallets WHERE user_id = @uid");
+    const newBalance = parseFloat(balanceResult.recordset[0]?.balance ?? 0);
+
+    res.json({ message: "Reservation cancelled", refund, newBalance });
+  } catch (err) {
+    await tx.rollback().catch(() => {});
+    console.error("[cancelTaxiReservation]", err);
+    res.status(500).json({ error: "Failed to cancel reservation" });
   }
 };
 

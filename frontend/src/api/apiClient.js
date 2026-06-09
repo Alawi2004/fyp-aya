@@ -134,6 +134,7 @@ export const updateMyComplaint = (id, payload)   => apiClient.put(`/complaints/$
 export const deleteMyComplaint = (id)            => apiClient.delete(`/complaints/${id}`).then((r) => r.data);
 
 export const createTaxiReservation = (payload)   => apiClient.post('/taxi-reservations', payload).then((r) => r.data);
+export const cancelTaxiReservation = (id)         => apiClient.delete(`/taxi-reservations/${id}`).then((r) => r.data);
 export const getMyTaxiReservations  = ()          => apiClient.get('/taxi-reservations').then((r) => r.data);
 export const expandMapUrl           = (url)       => apiClient.get('/taxi-reservations/expand-map', { params: { url } }).then((r) => r.data);
 

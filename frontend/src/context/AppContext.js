@@ -33,6 +33,7 @@ import * as Notifications from 'expo-notifications';
 import { registerPushToken, registerFcmToken } from '../api/apiClient';
 import { getWalletApi } from '../api/walletApi';
 import { getBookingsApi, cancelBookingApi } from '../api/bookingApi';
+import { cancelTaxiReservation } from '../api/apiClient';
 import { useAuth } from './AuthContext';
 
 const AppContext = createContext();
@@ -138,11 +139,28 @@ export const AppProvider = ({ children }) => {
     const booking = bookings.find(b => b._id === bookingId);
     if (!booking) return { ok: false, error: 'Booking not found' };
 
-    // Taxi reservations: optimistically mark cancelled in UI (no wallet refund for taxi)
+    // Taxi reservations: call server to cancel and refund
     if (booking.type === 'taxi') {
-      setBookings(prev => prev.map(b => (b._id === bookingId ? { ...b, status: 'cancelled' } : b)));
-      addNotification({ _id: Date.now().toString(), type: 'info', title: 'Booking Cancelled', body: 'Your taxi reservation has been cancelled.', time: 'Just now', read: false });
-      return { ok: true };
+      const reservationId = String(bookingId).replace('taxi_', '');
+      try {
+        const data = await cancelTaxiReservation(reservationId);
+        setBookings(prev => prev.map(b => (b._id === bookingId ? { ...b, status: 'cancelled' } : b)));
+        if (typeof data.newBalance === 'number') setWalletBalance(data.newBalance);
+        const refundAmount = parseFloat(data.refund ?? 0);
+        addNotification({
+          _id: Date.now().toString(),
+          type: 'info',
+          title: 'Reservation Cancelled',
+          body: refundAmount > 0
+            ? `Your taxi reservation has been cancelled. $${refundAmount.toFixed(2)} refunded to wallet.`
+            : 'Your taxi reservation has been cancelled.',
+          time: 'Just now',
+          read: false,
+        });
+        return { ok: true, refund: refundAmount };
+      } catch (err) {
+        return { ok: false, error: err?.response?.data?.error || 'Could not cancel this reservation. Please try again.' };
+      }
     }
 
     try {

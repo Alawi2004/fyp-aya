@@ -219,7 +219,9 @@ export const getAvailableDrivers = async (req, res) => {
           ISNULL(rs.total_ratings, 0)   AS total_ratings,
           veh.plate_number,
           veh.color,
-          veh.model
+          veh.model,
+          gpsPos.current_lat,
+          gpsPos.current_lng
         FROM drivers d
         JOIN users u ON d.user_id = u.user_id
         -- latest vehicle assigned to this driver (via most recent trip)
@@ -240,6 +242,21 @@ export const getAvailableDrivers = async (req, res) => {
           WHERE t.driver_id IS NOT NULL
           GROUP BY t.driver_id
         ) rs ON rs.driver_id = d.driver_id
+        -- latest GPS ping for each driver (across all their trips)
+        LEFT JOIN (
+          SELECT driver_id, current_lat, current_lng
+          FROM (
+            SELECT
+              t.driver_id,
+              CAST(g.latitude  AS FLOAT) AS current_lat,
+              CAST(g.longitude AS FLOAT) AS current_lng,
+              ROW_NUMBER() OVER (PARTITION BY t.driver_id ORDER BY g.recorded_at DESC) AS rn
+            FROM gps_logs g
+            JOIN trips t ON t.trip_id = g.trip_id
+            WHERE t.driver_id IS NOT NULL
+          ) sub
+          WHERE sub.rn = 1
+        ) gpsPos ON gpsPos.driver_id = d.driver_id
         WHERE ISNULL(d.is_deleted, 0) = 0
           AND NOT EXISTS (
             SELECT 1 FROM trips ct
