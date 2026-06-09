@@ -249,6 +249,22 @@ const HomeScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
+        {/* Request Stop banner */}
+        <TouchableOpacity
+          style={[styles.taxiCard, { backgroundColor: '#F0FDF4', borderColor: '#16A34A' }]}
+          onPress={() => navigation.navigate('RequestStop')}
+          activeOpacity={0.85}
+        >
+          <View style={[styles.taxiIconWrap, { backgroundColor: '#DCFCE7' }]}>
+            <Ionicons name="add-circle-outline" size={22} color="#16A34A" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.taxiTitle, { color: '#16A34A' }]}>Request a Stop</Text>
+            <Text style={styles.taxiSub}>Ask us to add a bus stop near you</Text>
+          </View>
+          <Ionicons name="arrow-forward" size={16} color="#16A34A" />
+        </TouchableOpacity>
+
         {/* Reserve Taxi banner */}
         <TouchableOpacity
           style={styles.taxiCard}

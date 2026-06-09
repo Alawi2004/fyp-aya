@@ -366,6 +366,22 @@ BEGIN
   );
   CREATE INDEX IX_taxi_reservations_user ON taxi_reservations(user_id, created_at DESC);
 END;
+
+-- Passenger-submitted requests to add a new bus stop at a location
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'stop_requests')
+BEGIN
+  CREATE TABLE stop_requests (
+    request_id   INT            NOT NULL IDENTITY(1,1) PRIMARY KEY,
+    user_id      INT            NOT NULL REFERENCES users(user_id),
+    address      NVARCHAR(300)  NOT NULL,
+    lat          FLOAT          NULL,
+    lng          FLOAT          NULL,
+    description  NVARCHAR(500)  NULL,
+    status       NVARCHAR(20)   NOT NULL DEFAULT 'pending',
+    created_at   DATETIME2      NOT NULL DEFAULT GETUTCDATE()
+  );
+  CREATE INDEX IX_stop_requests_user ON stop_requests(user_id, created_at DESC);
+END;
 `;
 
 export const ensureOperationalTables = async (pool) => {

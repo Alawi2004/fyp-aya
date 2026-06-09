@@ -27,6 +27,7 @@ import PrivacyPolicyScreen from '../screens/passenger/PrivacyPolicyScreen';
 import RateAppScreen       from '../screens/passenger/RateAppScreen';
 import TaxiReservationScreen from '../screens/passenger/TaxiReservationScreen';
 import MapLocationPickerScreen from '../screens/passenger/MapLocationPickerScreen';
+import RequestStopScreen from '../screens/passenger/RequestStopScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -43,6 +44,7 @@ const HomeStack = () => (
     <Stack.Screen name="Complaint"         component={ComplaintScreen} />
     <Stack.Screen name="TaxiReservation"    component={TaxiReservationScreen} />
     <Stack.Screen name="MapLocationPicker" component={MapLocationPickerScreen} />
+    <Stack.Screen name="RequestStop"       component={RequestStopScreen} />
   </Stack.Navigator>
 );
 

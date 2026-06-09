@@ -137,4 +137,7 @@ export const createTaxiReservation = (payload)   => apiClient.post('/taxi-reserv
 export const getMyTaxiReservations  = ()          => apiClient.get('/taxi-reservations').then((r) => r.data);
 export const expandMapUrl           = (url)       => apiClient.get('/taxi-reservations/expand-map', { params: { url } }).then((r) => r.data);
 
+export const createStopRequest  = (payload) => apiClient.post('/stop-requests', payload).then((r) => r.data);
+export const getMyStopRequests  = ()        => apiClient.get('/stop-requests').then((r) => r.data);
+
 export default apiClient;
