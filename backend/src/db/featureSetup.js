@@ -367,6 +367,14 @@ BEGIN
   CREATE INDEX IX_taxi_reservations_user ON taxi_reservations(user_id, created_at DESC);
 END;
 
+IF NOT EXISTS (
+  SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_NAME = 'taxi_reservations' AND COLUMN_NAME = 'stops_json'
+)
+BEGIN
+  ALTER TABLE taxi_reservations ADD stops_json NVARCHAR(MAX) NULL;
+END;
+
 -- Passenger-submitted requests to add a new bus stop at a location
 IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'stop_requests')
 BEGIN

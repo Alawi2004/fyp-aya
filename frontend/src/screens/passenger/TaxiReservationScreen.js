@@ -269,6 +269,8 @@ const TaxiReservationScreen = ({ navigation, route }) => {
   const [dest,          setDest]          = useState(toStop?.stop_name   ?? '');
   const [pickupLatLng,  setPickupLatLng]  = useState(null);
   const [destLatLng,    setDestLatLng]    = useState(null);
+  // Intermediate stops: [{address: string, latLng: {latitude, longitude} | null}]
+  const [stops,         setStops]         = useState([]);
   const [bookNow,       setBookNow]       = useState(true);
   const [selDay,        setSelDay]        = useState(DAYS[0].key);
   const [hour,          setHour]          = useState('08');
@@ -292,9 +294,26 @@ const TaxiReservationScreen = ({ navigation, route }) => {
   const searchTimerRef = useRef(null);
   const searchInputRef = useRef(null);
 
+  // Helper — apply a resolved address+latLng to whichever field is active
+  const applyFieldValue = (field, label, latLng) => {
+    if (field === 'pickup') { setPickup(label); setPickupLatLng(latLng); }
+    else if (field === 'dest') { setDest(label); setDestLatLng(latLng); }
+    else if (field?.startsWith('stop_')) {
+      const idx = parseInt(field.slice(5), 10);
+      setStops(prev => prev.map((s, i) => i === idx ? { address: label, latLng } : s));
+    }
+  };
+
+  const addStop    = () => setStops(prev => [...prev, { address: '', latLng: null }]);
+  const removeStop = (idx) => setStops(prev => prev.filter((_, i) => i !== idx));
+
   const openSearch = (field) => {
     setSearchField(field);
-    setSearchQuery(field === 'pickup' ? pickup : dest);
+    let currentVal = '';
+    if (field === 'pickup') currentVal = pickup;
+    else if (field === 'dest') currentVal = dest;
+    else if (field?.startsWith('stop_')) currentVal = stops[parseInt(field.slice(5), 10)]?.address ?? '';
+    setSearchQuery(currentVal);
     setSuggestions([]);
     setSearchModal(true);
     setTimeout(() => searchInputRef.current?.focus(), 120);
@@ -322,14 +341,7 @@ const TaxiReservationScreen = ({ navigation, route }) => {
   };
 
   const selectSuggestion = (item) => {
-    const latLng = { latitude: item.lat, longitude: item.lng };
-    if (searchField === 'pickup') {
-      setPickup(item.label);
-      setPickupLatLng(latLng);
-    } else {
-      setDest(item.label);
-      setDestLatLng(latLng);
-    }
+    applyFieldValue(searchField, item.label, { latitude: item.lat, longitude: item.lng });
     closeSearch();
   };
 
@@ -337,11 +349,11 @@ const TaxiReservationScreen = ({ navigation, route }) => {
   const handleOpenMap = () => {
     const field = searchField;
     closeSearch();
+    const title = field === 'pickup' ? 'Set Pickup Location'
+      : field === 'dest' ? 'Set Destination'
+      : `Set Stop ${parseInt(field?.slice(5) ?? '0', 10) + 1}`;
     setTimeout(() => {
-      navigation.navigate('MapLocationPicker', {
-        field,
-        title: field === 'pickup' ? 'Set Pickup Location' : 'Set Destination',
-      });
+      navigation.navigate('MapLocationPicker', { field, title });
     }, 300);
   };
 
@@ -350,17 +362,11 @@ const TaxiReservationScreen = ({ navigation, route }) => {
     const unsub = navigation.addListener('focus', () => {
       const r = getPickerResult();
       if (!r) return;
-      if (r.field === 'pickup') {
-        setPickup(r.address);
-        if (r.latLng) setPickupLatLng(r.latLng);
-      } else {
-        setDest(r.address);
-        if (r.latLng) setDestLatLng(r.latLng);
-      }
+      applyFieldValue(r.field, r.address, r.latLng ?? null);
       clearPickerResult();
     });
     return unsub;
-  }, [navigation]);
+  }, [navigation, stops]); // stops in deps so applyFieldValue closure is fresh
 
   // ── "Google Maps link or Coordinates" ────────────────────────────────────
   const [pastingLink,  setPastingLink]  = useState(false);
@@ -382,8 +388,7 @@ const TaxiReservationScreen = ({ navigation, route }) => {
       const latLng = { latitude: lat, longitude: lng };
       const address = await reverseGeocode(lat, lng);
       const label = address ?? `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-      if (searchField === 'pickup') { setPickup(label); setPickupLatLng(latLng); }
-      else                          { setDest(label);   setDestLatLng(latLng);   }
+      applyFieldValue(searchField, label, latLng);
       setMapsLink('');
       setPastingLink(false);
       closeSearch();
@@ -410,16 +415,8 @@ const TaxiReservationScreen = ({ navigation, route }) => {
       }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const { latitude, longitude } = loc.coords;
-      const latLng = { latitude, longitude };
       const address = await reverseGeocode(latitude, longitude);
-      const label = address ?? `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
-      if (field === 'pickup') {
-        setPickup(label);
-        setPickupLatLng(latLng);
-      } else {
-        setDest(label);
-        setDestLatLng(latLng);
-      }
+      applyFieldValue(field, address ?? `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`, { latitude, longitude });
     } catch {
       Alert.alert('Error', 'Could not get your location. Make sure GPS is enabled.');
     } finally {
@@ -479,7 +476,18 @@ const TaxiReservationScreen = ({ navigation, route }) => {
       * Math.sin(dLon / 2) ** 2;
     return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
   };
-  const distanceKm   = haversineKm(pickupLatLng, destLatLng);
+  // Sum haversine distance through all waypoints: pickup → stop1 → ... → dest
+  const distanceKm = (() => {
+    const pts = [pickupLatLng, ...stops.map(s => s.latLng), destLatLng];
+    if (!pts[0] || !pts[pts.length - 1]) return null;
+    let total = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const d = haversineKm(pts[i - 1], pts[i]);
+      if (d == null) return null;
+      total += d;
+    }
+    return total;
+  })();
   const estimatedFare = distanceKm != null
     ? selVehicle.base + selVehicle.perKm * distanceKm
     : null;
@@ -515,6 +523,11 @@ const TaxiReservationScreen = ({ navigation, route }) => {
         scheduled_for:   when,
         recurrence:      recurr,
         notes:           notes || null,
+        stops:           stops.filter(s => s.address.trim()).map(s => ({
+          address: s.address,
+          lat: s.latLng?.latitude  ?? null,
+          lng: s.latLng?.longitude ?? null,
+        })),
       });
 
       const newBooking = {
@@ -609,6 +622,38 @@ const TaxiReservationScreen = ({ navigation, route }) => {
               {gpsLoading ? 'Getting location…' : 'Use my current location'}
             </Text>
           </TouchableOpacity>
+
+          {/* ── Intermediate stops ─────────────────────────────────────── */}
+          {stops.map((stop, i) => (
+            <View key={i}>
+              <View style={styles.locDivider} />
+              <View style={styles.stopRow}>
+                <TouchableOpacity style={[styles.locRow, { flex: 1 }]} onPress={() => openSearch(`stop_${i}`)} activeOpacity={0.8}>
+                  <View style={[styles.locDot, { backgroundColor: '#F59E0B' }]} />
+                  <View style={styles.locTextWrap}>
+                    <Text style={styles.locLabel}>STOP {i + 1}</Text>
+                    <Text style={[styles.locValue, !stop.address && styles.locPlaceholder]} numberOfLines={1}>
+                      {stop.address || 'Search stop location…'}
+                    </Text>
+                  </View>
+                  <View style={styles.searchBtn}>
+                    <Ionicons name="search-outline" size={16} color={COLORS.primary} />
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => removeStop(i)} style={styles.removeStopBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close-circle" size={22} color={COLORS.danger} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+
+          {/* + Add Stop button (max 3 stops) */}
+          {stops.length < 3 && (
+            <TouchableOpacity style={styles.addStopBtn} onPress={addStop} activeOpacity={0.8}>
+              <Ionicons name="add-circle-outline" size={16} color={COLORS.primary} />
+              <Text style={styles.addStopText}>Add a Stop</Text>
+            </TouchableOpacity>
+          )}
 
           <View style={styles.locDivider} />
 
@@ -1160,6 +1205,16 @@ const styles = StyleSheet.create({
   },
   pasteLinkBtnText: { fontSize: 14, fontWeight: '800', color: COLORS.white },
   locDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: 4, marginLeft: 24 },
+  stopRow:      { flexDirection: 'row', alignItems: 'center' },
+  removeStopBtn:{ paddingHorizontal: 4, paddingVertical: 10 },
+  addStopBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingVertical: 8, paddingHorizontal: 12,
+    marginTop: 6, marginLeft: 8, alignSelf: 'flex-start',
+    borderRadius: 10, borderWidth: 1.5, borderColor: COLORS.primary,
+    backgroundColor: COLORS.primaryLight,
+  },
+  addStopText: { fontSize: 13, fontWeight: '600', color: COLORS.primary },
 
   gpsBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 7,

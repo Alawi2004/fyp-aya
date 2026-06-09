@@ -12,12 +12,16 @@ export const createTaxiReservation = async (req, res) => {
   const {
     vehicle_type, pickup_address, pickup_lat, pickup_lng,
     dest_address, dest_lat, dest_lng, distance_km, estimated_fare,
-    driver_id, driver_name, scheduled_for, recurrence, notes,
+    driver_id, driver_name, scheduled_for, recurrence, notes, stops,
   } = req.body;
 
   if (!vehicle_type || !pickup_address?.trim() || !dest_address?.trim()) {
     return res.status(400).json({ error: "vehicle_type, pickup_address, and dest_address are required" });
   }
+
+  const stopsJson = Array.isArray(stops) && stops.length > 0
+    ? JSON.stringify(stops)
+    : null;
 
   try {
     const pool = await poolPromise;
@@ -39,20 +43,21 @@ export const createTaxiReservation = async (req, res) => {
       .input("scheduledFor",  sql.NVarChar(100),  scheduled_for ?? "Now")
       .input("recurrence",    sql.NVarChar(20),   recurrence ?? "once")
       .input("notes",         sql.NVarChar(500),  notes ?? null)
+      .input("stopsJson",     sql.NVarChar(sql.MAX), stopsJson)
       .query(`
         INSERT INTO taxi_reservations
           (user_id, vehicle_type, pickup_address, pickup_lat, pickup_lng,
            dest_address, dest_lat, dest_lng, distance_km, estimated_fare,
-           driver_id, driver_name, scheduled_for, recurrence, notes)
+           driver_id, driver_name, scheduled_for, recurrence, notes, stops_json)
         OUTPUT
           INSERTED.reservation_id, INSERTED.status, INSERTED.created_at,
           INSERTED.vehicle_type, INSERTED.pickup_address, INSERTED.dest_address,
           INSERTED.estimated_fare, INSERTED.scheduled_for, INSERTED.driver_name,
-          INSERTED.distance_km
+          INSERTED.distance_km, INSERTED.stops_json
         VALUES
           (@userId, @vehicleType, @pickupAddress, @pickupLat, @pickupLng,
            @destAddress, @destLat, @destLng, @distanceKm, @estimatedFare,
-           @driverId, @driverName, @scheduledFor, @recurrence, @notes)
+           @driverId, @driverName, @scheduledFor, @recurrence, @notes, @stopsJson)
       `);
 
     res.status(201).json({ message: "Reservation created", reservation: result.recordset[0] });
