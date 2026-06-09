@@ -262,7 +262,7 @@ const VEHICLE_TYPES = [
 
 const TaxiReservationScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
-  const { addBooking } = useApp();
+  const { refreshBookings } = useApp();
   const { fromStop, toStop, tripSummary } = route?.params ?? {};
 
   const [pickup,        setPickup]        = useState(fromStop?.stop_name ?? '');
@@ -530,8 +530,10 @@ const TaxiReservationScreen = ({ navigation, route }) => {
         })),
       });
 
+      // Build the booking object for the Ticket screen from the server response
+      const res = data.reservation ?? {};
       const newBooking = {
-        _id:          `taxi_${data.reservation?.reservation_id ?? Date.now()}`,
+        _id:          `taxi_${res.reservation_id}`,
         type:         'taxi',
         bus:          { name: `${selVehicle.label} Taxi`, origin: pickup, destination: dest },
         seatId:       null,
@@ -553,7 +555,8 @@ const TaxiReservationScreen = ({ navigation, route }) => {
         recurrence:   recurr,
         notes,
       };
-      addBooking(newBooking);
+      // Refresh from DB (source of truth) instead of adding locally to avoid duplicates
+      refreshBookings();
       navigation.replace('Ticket', { booking: newBooking });
     } catch (err) {
       console.error('[handleConfirm taxi]', err);
@@ -623,38 +626,6 @@ const TaxiReservationScreen = ({ navigation, route }) => {
             </Text>
           </TouchableOpacity>
 
-          {/* ── Intermediate stops ─────────────────────────────────────── */}
-          {stops.map((stop, i) => (
-            <View key={i}>
-              <View style={styles.locDivider} />
-              <View style={styles.stopRow}>
-                <TouchableOpacity style={[styles.locRow, { flex: 1 }]} onPress={() => openSearch(`stop_${i}`)} activeOpacity={0.8}>
-                  <View style={[styles.locDot, { backgroundColor: '#F59E0B' }]} />
-                  <View style={styles.locTextWrap}>
-                    <Text style={styles.locLabel}>STOP {i + 1}</Text>
-                    <Text style={[styles.locValue, !stop.address && styles.locPlaceholder]} numberOfLines={1}>
-                      {stop.address || 'Search stop location…'}
-                    </Text>
-                  </View>
-                  <View style={styles.searchBtn}>
-                    <Ionicons name="search-outline" size={16} color={COLORS.primary} />
-                  </View>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => removeStop(i)} style={styles.removeStopBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="close-circle" size={22} color={COLORS.danger} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))}
-
-          {/* + Add Stop button (max 3 stops) */}
-          {stops.length < 3 && (
-            <TouchableOpacity style={styles.addStopBtn} onPress={addStop} activeOpacity={0.8}>
-              <Ionicons name="add-circle-outline" size={16} color={COLORS.primary} />
-              <Text style={styles.addStopText}>Add a Stop</Text>
-            </TouchableOpacity>
-          )}
-
           <View style={styles.locDivider} />
 
           {/* Destination */}
@@ -671,6 +642,47 @@ const TaxiReservationScreen = ({ navigation, route }) => {
             </View>
           </TouchableOpacity>
         </View>
+
+        {/* ── Intermediate Stops ── */}
+        {stops.map((stop, i) => (
+          <View key={`stop-card-${i}`} style={styles.stopCard}>
+            <View style={styles.stopCardLeft}>
+              <View style={styles.stopNumberBadge}>
+                <Text style={styles.stopNumberText}>{i + 1}</Text>
+              </View>
+              <View style={styles.stopCardLine} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.stopCardLabel}>Stop {i + 1}</Text>
+              <TouchableOpacity style={styles.stopCardField} onPress={() => openSearch(`stop_${i}`)} activeOpacity={0.8}>
+                <Ionicons name="location-outline" size={16} color="#F59E0B" style={{ marginRight: 8 }} />
+                <Text style={[styles.stopCardValue, !stop.address && styles.locPlaceholder]} numberOfLines={1}>
+                  {stop.address || 'Search stop location…'}
+                </Text>
+                <View style={styles.searchBtn}>
+                  <Ionicons name="search-outline" size={15} color={COLORS.primary} />
+                </View>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity onPress={() => removeStop(i)} style={styles.removeStopBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close-circle" size={22} color={COLORS.danger} />
+            </TouchableOpacity>
+          </View>
+        ))}
+
+        {/* ── Add Stop button ── */}
+        {stops.length < 3 && (
+          <TouchableOpacity style={styles.addStopBtn} onPress={addStop} activeOpacity={0.8}>
+            <View style={styles.addStopIconWrap}>
+              <Ionicons name="add" size={18} color={COLORS.primary} />
+            </View>
+            <View>
+              <Text style={styles.addStopText}>Add a Stop</Text>
+              <Text style={styles.addStopSub}>Add a waypoint along your route</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={COLORS.primary} style={{ marginLeft: 'auto' }} />
+          </TouchableOpacity>
+        )}
 
         {/* ── Vehicle Type Card ── */}
         <View style={styles.card}>
@@ -1205,16 +1217,46 @@ const styles = StyleSheet.create({
   },
   pasteLinkBtnText: { fontSize: 14, fontWeight: '800', color: COLORS.white },
   locDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: 4, marginLeft: 24 },
-  stopRow:      { flexDirection: 'row', alignItems: 'center' },
-  removeStopBtn:{ paddingHorizontal: 4, paddingVertical: 10 },
-  addStopBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingVertical: 8, paddingHorizontal: 12,
-    marginTop: 6, marginLeft: 8, alignSelf: 'flex-start',
-    borderRadius: 10, borderWidth: 1.5, borderColor: COLORS.primary,
-    backgroundColor: COLORS.primaryLight,
+  removeStopBtn: { paddingLeft: 8, paddingVertical: 4 },
+
+  // Stop card (between location card and vehicle card)
+  stopCard: {
+    flexDirection: 'row', alignItems: 'flex-start',
+    backgroundColor: COLORS.white,
+    borderRadius: 16, borderWidth: 1.5, borderColor: '#FEF3C7',
+    padding: 14, marginBottom: 8,
   },
-  addStopText: { fontSize: 13, fontWeight: '600', color: COLORS.primary },
+  stopCardLeft: { alignItems: 'center', marginRight: 12, paddingTop: 2 },
+  stopNumberBadge: {
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: '#F59E0B', alignItems: 'center', justifyContent: 'center',
+  },
+  stopNumberText:  { fontSize: 11, fontWeight: '800', color: COLORS.white },
+  stopCardLine:    { width: 2, flex: 1, backgroundColor: '#FDE68A', marginTop: 4, minHeight: 16 },
+  stopCardLabel:   { fontSize: 11, fontWeight: '700', color: '#92400E', letterSpacing: 0.5, marginBottom: 6, textTransform: 'uppercase' },
+  stopCardField: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: COLORS.background, borderRadius: 10,
+    borderWidth: 1, borderColor: COLORS.border,
+    paddingVertical: 10, paddingHorizontal: 10,
+  },
+  stopCardValue: { flex: 1, fontSize: 14, color: COLORS.textPrimary },
+
+  // Add stop button
+  addStopBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: COLORS.white, borderRadius: 16,
+    borderWidth: 1.5, borderColor: COLORS.border,
+    borderStyle: 'dashed',
+    paddingVertical: 12, paddingHorizontal: 14, marginBottom: 8,
+  },
+  addStopIconWrap: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: COLORS.primaryLight,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  addStopText: { fontSize: 14, fontWeight: '700', color: COLORS.textPrimary },
+  addStopSub:  { fontSize: 12, color: COLORS.textMuted, marginTop: 1 },
 
   gpsBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 7,

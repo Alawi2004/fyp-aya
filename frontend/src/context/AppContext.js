@@ -113,20 +113,14 @@ export const AppProvider = ({ children }) => {
     return newRating;
   };
 
-  // Pulls the passenger's real ticket bookings from the DB (joined with
-  // trip/vehicle/route info server-side) and merges them with whatever
-  // taxi reservations are already in state. Taxi bookings have no backend
-  // table — they're a purely local/mock feature — so a DB refresh must
-  // preserve them rather than replace the whole list.
+  // Pulls all bookings (bus tickets + taxi reservations) from the DB.
+  // Taxi reservations are now fully persisted server-side, so the DB
+  // response is the single source of truth — no local merging needed.
   const refreshBookings = async () => {
     if (role !== 'passenger' || !user) return;
     try {
       const res = await getBookingsApi();
-      const dbBookings = res.data ?? [];
-      setBookings(prev => {
-        const taxiOnly = prev.filter(b => b.type === 'taxi');
-        return [...dbBookings, ...taxiOnly].sort((a, b) => new Date(b.date) - new Date(a.date));
-      });
+      setBookings(res.data ?? []);
     } catch { /* best-effort — leave whatever's already in state */ }
   };
 
@@ -144,17 +138,10 @@ export const AppProvider = ({ children }) => {
     const booking = bookings.find(b => b._id === bookingId);
     if (!booking) return { ok: false, error: 'Booking not found' };
 
-    // Taxi reservations are local-only mocks — there's nothing to cancel server-side.
+    // Taxi reservations: optimistically mark cancelled in UI (no wallet refund for taxi)
     if (booking.type === 'taxi') {
       setBookings(prev => prev.map(b => (b._id === bookingId ? { ...b, status: 'cancelled' } : b)));
-      addNotification({
-        _id: Date.now().toString(),
-        type: 'info',
-        title: 'Booking Cancelled',
-        body: `Your taxi reservation has been cancelled.`,
-        time: 'Just now',
-        read: false,
-      });
+      addNotification({ _id: Date.now().toString(), type: 'info', title: 'Booking Cancelled', body: 'Your taxi reservation has been cancelled.', time: 'Just now', read: false });
       return { ok: true };
     }
 
