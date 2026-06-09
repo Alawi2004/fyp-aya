@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS } from '../../constants/colors';
-import { getDriverTripsApi, startTripApi, completeTripApi } from '../../api/driverApi';
+import { getDriverTripsApi, startTripApi, completeTripApi, cancelTripApi } from '../../api/driverApi';
 
 const TRIP_STATUS = [
   { key: 'idle',       label: 'Not Started', icon: 'ellipse-outline',    color: COLORS.textMuted   },
@@ -60,7 +60,7 @@ const isDoneStatus      = (s) => ['completed', 'cancelled', 'closed'].includes(s
 // anything else (confirmed, boarded, upcoming, pending, scheduled) → can be started
 
 // ── Trip Detail Modal ────────────────────────────────────────────────────────
-const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd, onOpenMap }) => {
+const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd, onOpenMap, onCancel, onManifest }) => {
   if (!trip) return null;
 
   const isLoading = actionLoading === trip.trip_id;
@@ -213,6 +213,28 @@ const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd,
               </TouchableOpacity>
             )}
 
+            {!done && (
+              <TouchableOpacity
+                style={[modalStyles.cancelBtn, isLoading && { opacity: 0.6 }]}
+                onPress={() => onCancel(trip)}
+                disabled={isLoading}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="close-circle-outline" size={18} color={COLORS.danger} />
+                <Text style={modalStyles.cancelBtnText}>Cancel Trip</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Manifest — always visible regardless of status */}
+            <TouchableOpacity
+              style={modalStyles.manifestBtn}
+              onPress={() => onManifest(trip)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="people-outline" size={16} color={COLORS.primary} />
+              <Text style={modalStyles.manifestBtnText}>View Passenger Manifest</Text>
+            </TouchableOpacity>
+
             <View style={{ height: 8 }} />
           </ScrollView>
         </View>
@@ -299,13 +321,27 @@ const modalStyles = StyleSheet.create({
     backgroundColor: COLORS.background, borderRadius: 12, padding: 14,
   },
   doneNoteText: { flex: 1, fontSize: 13, color: COLORS.textMuted, fontWeight: '500' },
+
+  cancelBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderWidth: 1.5, borderColor: COLORS.danger, borderRadius: 14, paddingVertical: 13,
+    marginTop: 10, backgroundColor: COLORS.dangerLight,
+  },
+  cancelBtnText: { fontSize: 14, fontWeight: '700', color: COLORS.danger },
+
+  manifestBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderWidth: 1.5, borderColor: COLORS.primary, borderRadius: 14, paddingVertical: 13,
+    marginTop: 10, backgroundColor: COLORS.primaryLight,
+  },
+  manifestBtnText: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DriverDashboardScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const fadeAnim   = useRef(new Animated.Value(0)).current;
   const slideAnim  = useRef(new Animated.Value(20)).current;
   const pulseAnim  = useRef(new Animated.Value(1)).current;
@@ -369,6 +405,30 @@ const DriverDashboardScreen = ({ navigation }) => {
         },
       },
     ]);
+  };
+
+  const handleCancelTrip = (trip) => {
+    Alert.alert(
+      'Cancel Trip',
+      `Are you sure you want to cancel ${trip.routeName}? This cannot be undone.`,
+      [
+        { text: 'Keep Trip', style: 'cancel' },
+        {
+          text: 'Cancel Trip', style: 'destructive', onPress: async () => {
+            setActionLoading(trip.trip_id);
+            try {
+              await cancelTripApi(trip.trip_id);
+              setSelectedTrip(null);
+              loadTrips(true);
+            } catch (err) {
+              Alert.alert('Error', err?.response?.data?.error || 'Could not cancel trip.');
+            } finally {
+              setActionLoading(null);
+            }
+          },
+        },
+      ],
+    );
   };
 
   useEffect(() => {
@@ -442,34 +502,34 @@ const DriverDashboardScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Status control row */}
-        <View style={styles.statusControl}>
-          <View style={styles.statusLeft}>
-            {tripStatus === 'active' && (
+        {/* Status control row — only when a trip is active */}
+        {activeTrip && (
+          <View style={styles.statusControl}>
+            <View style={styles.statusLeft}>
               <Animated.View style={[styles.livePulse, { transform: [{ scale: pulseAnim }] }]} />
-            )}
-            <View style={[styles.statusDot, { backgroundColor: currentStatus.color }]} />
-            <View>
-              <Text style={styles.statusLabel}>Trip Status</Text>
-              <Text style={styles.statusValue}>{currentStatus.label}</Text>
+              <View style={[styles.statusDot, { backgroundColor: COLORS.secondary }]} />
+              <View>
+                <Text style={styles.statusLabel}>Trip Status</Text>
+                <Text style={styles.statusValue}>Active</Text>
+              </View>
+            </View>
+            <View style={styles.statusBtns}>
+              {TRIP_STATUS.filter(s => s.key !== 'idle').map(s => (
+                <TouchableOpacity
+                  key={s.key}
+                  style={[styles.statusBtn, tripStatus === s.key && { backgroundColor: s.color }]}
+                  onPress={() => handleStatusChange(s.key)}
+                >
+                  <Ionicons
+                    name={s.icon}
+                    size={13}
+                    color={tripStatus === s.key ? COLORS.white : COLORS.textMuted}
+                  />
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
-          <View style={styles.statusBtns}>
-            {TRIP_STATUS.filter(s => s.key !== 'idle').map(s => (
-              <TouchableOpacity
-                key={s.key}
-                style={[styles.statusBtn, tripStatus === s.key && { backgroundColor: s.color }]}
-                onPress={() => handleStatusChange(s.key)}
-              >
-                <Ionicons
-                  name={s.icon}
-                  size={13}
-                  color={tripStatus === s.key ? COLORS.white : COLORS.textMuted}
-                />
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+        )}
       </View>
 
       {/* ─── Stats strip ─── */}
@@ -530,7 +590,12 @@ const DriverDashboardScreen = ({ navigation }) => {
             <TouchableOpacity
               style={styles.activeBanner}
               activeOpacity={0.88}
-              onPress={() => navigation.navigate('DriverMap')}
+              onPress={() => navigation.navigate('DriverMap', {
+                  tripId:    activeTrip._id,
+                  routeId:   activeTrip.route_id,
+                  routeName: activeTrip.routeName,
+                  busNumber: activeTrip.busNumber,
+                })}
             >
               <View style={styles.bannerLeft}>
                 <View style={styles.bannerLiveDot} />
@@ -634,18 +699,6 @@ const DriverDashboardScreen = ({ navigation }) => {
             );
           })}
 
-          {/* ─── Sign Out ─── */}
-          <TouchableOpacity
-            style={styles.signOutBtn}
-            onPress={() => Alert.alert('Sign Out', 'Sign out of your account?', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Sign Out', style: 'destructive', onPress: logout },
-            ])}
-          >
-            <Ionicons name="log-out-outline" size={16} color={COLORS.textMuted} />
-            <Text style={styles.signOutText}>Sign Out</Text>
-          </TouchableOpacity>
-
           <View style={{ height: 32 }} />
         </Animated.View>
       </ScrollView>
@@ -658,7 +711,20 @@ const DriverDashboardScreen = ({ navigation }) => {
         onClose={() => setSelectedTrip(null)}
         onStart={handleStartTrip}
         onEnd={handleEndTrip}
-        onOpenMap={(trip) => { setSelectedTrip(null); navigation.navigate('DriverMap', { tripId: trip._id }); }}
+        onCancel={handleCancelTrip}
+        onManifest={(trip) => {
+          setSelectedTrip(null);
+          navigation.navigate('PassengerList', { tripId: trip._id, routeName: trip.routeName });
+        }}
+        onOpenMap={(trip) => {
+          setSelectedTrip(null);
+          navigation.navigate('DriverMap', {
+            tripId:    trip._id,
+            routeId:   trip.route_id,
+            routeName: trip.routeName,
+            busNumber: trip.busNumber,
+          });
+        }}
       />
     </View>
   );
@@ -835,13 +901,6 @@ const styles = StyleSheet.create({
   },
   tripTapHintText: { fontSize: 11, color: COLORS.textMuted, fontWeight: '500' },
 
-  /* Sign out */
-  signOutBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    paddingVertical: 14, borderRadius: 14, marginTop: 8,
-    backgroundColor: COLORS.surfaceAlt,
-  },
-  signOutText: { fontSize: 13, fontWeight: '700', color: COLORS.textMuted },
 });
 
 export default DriverDashboardScreen;

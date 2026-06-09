@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
-  StatusBar, ActivityIndicator, RefreshControl,
+  StatusBar, ActivityIndicator, RefreshControl, ScrollView,
 } from 'react-native';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,11 +9,15 @@ import { COLORS } from '../../constants/colors';
 import { getDriverTripsApi } from '../../api/driverApi';
 
 const STATUS_CFG = {
-  completed: { label: 'Completed', bg: COLORS.secondaryLight, text: COLORS.secondary,  icon: 'checkmark-circle'  },
-  cancelled: { label: 'Cancelled', bg: COLORS.dangerLight,    text: COLORS.danger,     icon: 'close-circle'      },
-  upcoming:  { label: 'Upcoming',  bg: COLORS.primaryLight,   text: COLORS.primary,    icon: 'time-outline'      },
+  completed: { label: 'Completed', bg: COLORS.secondaryLight, text: COLORS.secondary, icon: 'checkmark-circle'  },
+  cancelled: { label: 'Cancelled', bg: COLORS.dangerLight,    text: COLORS.danger,    icon: 'close-circle'      },
+  upcoming:  { label: 'Upcoming',  bg: COLORS.primaryLight,   text: COLORS.primary,   icon: 'time-outline'      },
+  confirmed: { label: 'Scheduled', bg: COLORS.primaryLight,   text: COLORS.primary,   icon: 'calendar-outline'  },
+  boarded:   { label: 'Boarding',  bg: COLORS.primaryLight,   text: COLORS.primary,   icon: 'people-outline'    },
   ongoing:   { label: 'Active',    bg: COLORS.warningLight ?? COLORS.primaryLight, text: COLORS.warning ?? COLORS.primary, icon: 'radio-button-on' },
 };
+
+const UPCOMING_STATUSES = ['upcoming', 'confirmed', 'boarded'];
 
 function formatTime(dateStr) {
   if (!dateStr) return '—';
@@ -83,11 +87,16 @@ const DriverTripHistoryScreen = ({ navigation }) => {
 
   useEffect(() => { loadTrips(); }, [loadTrips]);
 
-  const filtered = filter === 'all' ? trips : trips.filter(t => t.status === filter);
+  const filtered = (() => {
+    if (filter === 'all')      return trips;
+    if (filter === 'upcoming') return trips.filter(t => UPCOMING_STATUSES.includes(t.status));
+    return trips.filter(t => t.status === filter);
+  })();
 
   const totalEarned  = trips.filter(t => t.status === 'completed').reduce((s, t) => s + t.earnings, 0);
   const completedCnt = trips.filter(t => t.status === 'completed').length;
   const cancelledCnt = trips.filter(t => t.status === 'cancelled').length;
+  const upcomingCnt  = trips.filter(t => UPCOMING_STATUSES.includes(t.status)).length;
 
   const renderItem = ({ item }) => {
     const cfg  = STATUS_CFG[item.status] || STATUS_CFG.upcoming;
@@ -185,11 +194,12 @@ const DriverTripHistoryScreen = ({ navigation }) => {
 
         <View style={styles.summaryRow}>
           {[
-            { icon: 'checkmark-circle', label: 'Completed', value: completedCnt, color: COLORS.secondary   },
-            { icon: 'close-circle',     label: 'Cancelled',  value: cancelledCnt,  color: COLORS.danger     },
-            { icon: 'cash-outline',     label: 'Earned',     value: `$${totalEarned.toFixed(0)}`, color: 'rgba(255,255,255,0.9)' },
+            { icon: 'checkmark-circle', label: 'Completed', value: completedCnt,                    color: COLORS.secondary          },
+            { icon: 'calendar-outline', label: 'Upcoming',  value: upcomingCnt,                     color: 'rgba(255,255,255,0.9)'   },
+            { icon: 'close-circle',     label: 'Cancelled', value: cancelledCnt,                    color: COLORS.danger             },
+            { icon: 'cash-outline',     label: 'Earned',    value: `$${totalEarned.toFixed(0)}`,    color: 'rgba(255,255,255,0.9)'   },
           ].map((s, i) => (
-            <View key={s.label} style={[styles.summaryCell, i < 2 && styles.summaryCellBorder]}>
+            <View key={s.label} style={[styles.summaryCell, i < 3 && styles.summaryCellBorder]}>
               <Ionicons name={s.icon} size={14} color={s.color} />
               <Text style={[styles.summaryVal, { color: s.color }]}>{s.value}</Text>
               <Text style={styles.summaryLbl}>{s.label}</Text>
@@ -198,11 +208,13 @@ const DriverTripHistoryScreen = ({ navigation }) => {
         </View>
       </View>
 
-      <View style={styles.filterWrap}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterWrap} contentContainerStyle={styles.filterContent}>
         {[
-          { key: 'all',       label: 'All Trips'  },
-          { key: 'completed', label: 'Completed'  },
-          { key: 'cancelled', label: 'Cancelled'  },
+          { key: 'all',       label: 'All'       },
+          { key: 'upcoming',  label: 'Upcoming'  },
+          { key: 'ongoing',   label: 'Active'    },
+          { key: 'completed', label: 'Completed' },
+          { key: 'cancelled', label: 'Cancelled' },
         ].map(f => (
           <TouchableOpacity
             key={f.key}
@@ -214,7 +226,7 @@ const DriverTripHistoryScreen = ({ navigation }) => {
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
       {loading ? (
         <View style={styles.center}>
@@ -278,7 +290,8 @@ const styles = StyleSheet.create({
   summaryVal: { fontSize: 16, fontWeight: '900' },
   summaryLbl: { fontSize: 9, color: 'rgba(255,255,255,0.5)', fontWeight: '600', textTransform: 'uppercase' },
 
-  filterWrap: { flexDirection: 'row', padding: 14, gap: 8 },
+  filterWrap:    { paddingVertical: 14 },
+  filterContent: { flexDirection: 'row', gap: 8, paddingHorizontal: 14 },
   filterBtn: {
     paddingHorizontal: 16, paddingVertical: 8,
     borderRadius: 999, backgroundColor: COLORS.surfaceAlt,

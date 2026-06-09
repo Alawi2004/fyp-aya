@@ -3,6 +3,7 @@ import {
   getDriverTrips,
   startTrip,
   completeTrip,
+  cancelTrip,
   getTripPassengers,
   getDriverEarnings,
   reportIssue,
@@ -79,6 +80,7 @@ router.put("/trips/:id/start", startTrip);
  *         description: Trip completed
  */
 router.put("/trips/:id/complete", completeTrip);
+router.put("/trips/:id/cancel",   cancelTrip);
 router.post("/trips/:id/checklist", submitChecklist);
 
 /**

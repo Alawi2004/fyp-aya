@@ -108,6 +108,27 @@ export const completeTrip = async (req, res) => {
   }
 };
 
+// PUT /api/driver/trips/:id/cancel
+export const cancelTrip = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool
+      .request()
+      .input("id", sql.Int, req.params.id)
+      .query(`
+        UPDATE trips
+        SET status = 'cancelled', end_time = GETDATE()
+        WHERE trip_id = @id AND status NOT IN ('completed', 'cancelled')
+      `);
+    if (result.rowsAffected[0] === 0) {
+      return res.status(400).json({ error: "Trip cannot be cancelled (already completed or cancelled)." });
+    }
+    res.json({ message: "Trip cancelled" });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to cancel trip" });
+  }
+};
+
 // GET /api/driver/trips/:id/passengers
 export const getTripPassengers = async (req, res) => {
   try {
