@@ -1,0 +1,85 @@
+{
+  "expo": {
+    "name": "Yalla Transit",
+    "slug": "yalla-transit",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "yallatransit",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "plugins": [
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Yalla Transit to use Face ID for secure login."
+        }
+      ],
+      "expo-secure-store",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Yalla Transit to access your photos so you can attach images to complaints.",
+          "cameraPermission": "Allow Yalla Transit to use your camera to attach photos to complaints."
+        }
+      ],
+      "expo-audio"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yallatransit.app",
+      "config": {
+        "googleMapsApiKey": "AIzaSyBDjPl-hMJ3n354sSDwpL6UqmbVb_OPj-U"
+      }
+    },
+    "android": {
+      "package": "com.yallatransit.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBDjPl-hMJ3n354sSDwpL6UqmbVb_OPj-U"
+        }
+      },
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "yallatransit"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
+    },
+    "updates": {
+      "enabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b3fb1f56-c476-4738-8a57-b567b6444c3f"
+      }
+    }
+  }
+}

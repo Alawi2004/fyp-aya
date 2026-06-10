@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+    <!-- Theme & PWA -->
+    <meta name="theme-color" content="#2563EB" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Yalla Transit" />
+    <meta name="application-name" content="Yalla Transit Admin" />
+
+    <!-- SEO / description -->
+    <meta name="description" content="Yalla Transit Admin Portal — Real-time fleet tracking, driver monitoring, and passenger management." />
+    <meta name="robots" content="noindex, nofollow" />
+
+    <!-- Favicon — bus icon in blue -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232563EB'/%3E%3Crect x='5' y='7' width='22' height='15' rx='2.5' fill='none' stroke='white' stroke-width='1.6'/%3E%3Cline x1='5' y1='13' x2='27' y2='13' stroke='white' stroke-width='1.6'/%3E%3Cline x1='16' y1='7' x2='16' y2='22' stroke='white' stroke-width='1.2' stroke-dasharray='0'/%3E%3Ccircle cx='9' cy='24.5' r='2' fill='white'/%3E%3Ccircle cx='23' cy='24.5' r='2' fill='white'/%3E%3C/svg%3E" />
+
+    <!-- Google Fonts preconnect for faster load -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <title>Yalla Transit Admin</title>
+
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      html, body {
+        height: 100%;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        background: #F8FAFC;
+        color: #1E293B;
+      }
+
+      #root { height: 100%; }
+
+      /* ── Loading screen shown before React hydrates ── */
+      #app-loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #F8FAFC;
+        z-index: 9999;
+        gap: 20px;
+        transition: opacity .3s ease;
+      }
+
+      #app-loader.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .loader-logo {
+        width: 52px;
+        height: 52px;
+        background: #2563EB;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .loader-spinner {
+        width: 28px;
+        height: 28px;
+        border: 3px solid #E2E8F0;
+        border-top-color: #2563EB;
+        border-radius: 50%;
+        animation: spin .7s linear infinite;
+      }
+
+      .loader-text {
+        font-size: 13px;
+        color: #94A3B8;
+        font-weight: 500;
+        letter-spacing: .01em;
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+  </head>
+  <body>
+
+    <!-- Shown instantly while React loads — hidden once app mounts -->
+    <div id="app-loader">
+      <div class="loader-logo">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round">
+          <rect x="2" y="4" width="20" height="16" rx="3"/>
+          <path d="M2 12h20M8 6v6M16 6v6"/>
+          <circle cx="7" cy="20" r="1.5"/><circle cx="17" cy="20" r="1.5"/>
+        </svg>
+      </div>
+      <div class="loader-spinner"></div>
+      <span class="loader-text">Yalla Transit Admin</span>
+    </div>
+
+    <div id="root"></div>
+
+    <script type="module" src="/src/main.jsx"></script>
+
+    <!-- Hide loader once React has mounted -->
+    <script>
+      window.__hideLoader = function () {
+        var el = document.getElementById('app-loader');
+        if (el) { el.classList.add('hidden'); setTimeout(function(){ el.remove(); }, 400); }
+      };
+    </script>
+  </body>
+</html>
