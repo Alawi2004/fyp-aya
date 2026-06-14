@@ -9,7 +9,8 @@ import {
 import { Panel }    from "../components/Panel";
 import { StatCard } from "../components/StatCard";
 import DashboardMap from "../components/map/DashboardMap";
-import { getDashboardStats, getDashboardOverview, getEmergencyAlerts } from "../api/endpoints";
+import { TripModal } from "../components/TripModal";
+import { getDashboardStats, getDashboardOverview, getEmergencyAlerts, createTrip, getRoutes, getDrivers, getVehicles } from "../api/endpoints";
 
 const ALERT_CFG = {
   emergency: { dot: "#EF4444", bg: "#FEF2F2", color: "#DC2626", label: "Emergency" },
@@ -148,6 +149,10 @@ export default function DashboardPage({ onNavigate }) {
   const [loadHours, setLoadHours] = useState([]);
   const [revSummary,   setRevSummary]   = useState({ this_week: 0, last_week: 0, change_pct: 0 });
   const [emergencies,  setEmergencies]  = useState([]);
+  const [tripModal,    setTripModal]    = useState(null);
+  const [routeOpts,    setRouteOpts]    = useState([]);
+  const [driverOpts,   setDriverOpts]   = useState([]);
+  const [vehicleOpts,  setVehicleOpts]  = useState([]);
 
   useEffect(() => {
     getDashboardStats()
@@ -170,7 +175,27 @@ export default function DashboardPage({ onNavigate }) {
     getEmergencyAlerts()
       .then(d => { if (Array.isArray(d)) setEmergencies(d); })
       .catch(() => {});
+
+    getRoutes().then(d => setRouteOpts(Array.isArray(d) ? d : [])).catch(() => {});
+    getDrivers().then(d => setDriverOpts(Array.isArray(d?.data ?? d) ? (d?.data ?? d) : [])).catch(() => {});
+    getVehicles().then(d => setVehicleOpts(Array.isArray(d?.data ?? d) ? (d?.data ?? d) : [])).catch(() => {});
   }, []);
+
+  async function handleSaveTrip(form) {
+    try {
+      await createTrip({
+        route_id:   form.route_id   ?? null,
+        driver_id:  form.driver_id  ?? null,
+        vehicle_id: form.vehicle_id ?? null,
+        start_time: `${form.date}T${form.time}:00`,
+        status:     form.status.toLowerCase(),
+      });
+      getDashboardStats().then(d => setStats(d)).catch(() => {});
+      return null;
+    } catch (err) {
+      return err?.message ?? "Failed to create trip.";
+    }
+  }
 
   const KPI = [
     {
@@ -250,6 +275,7 @@ export default function DashboardPage({ onNavigate }) {
 
           <button
             className="btn-primary"
+            onClick={() => setTripModal(false)}
             style={{
               background:   "#2563EB",
               color:        "#fff",
@@ -917,6 +943,18 @@ export default function DashboardPage({ onNavigate }) {
           </table>
         </div>
       </Panel>
+
+      {tripModal !== null && (
+        <TripModal
+          trip={tripModal || null}
+          allTrips={[]}
+          onClose={() => setTripModal(null)}
+          onSave={handleSaveTrip}
+          routeOpts={routeOpts}
+          driverOpts={driverOpts}
+          vehicleOpts={vehicleOpts}
+        />
+      )}
 
     </div>
   );

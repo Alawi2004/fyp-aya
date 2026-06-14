@@ -29,6 +29,20 @@ function relDate(iso) {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
+function relDateTime(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+    + " · " + d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+}
+function formatTripDate(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const date = d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const time = d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+  return `${date} ${time}`;
+}
+
 
 // shared button style matching all other admin pages
 const actionBtn = (color, bg) => ({
@@ -38,102 +52,231 @@ const actionBtn = (color, bg) => ({
 
 // ── Passenger Profile Drawer ──────────────────────────────────────────────────
 
+const TRIP_STATUS_STYLE = {
+  completed:  { bg: "#F0FDF4", color: "#059669", label: "Completed"  },
+  upcoming:   { bg: "#EFF6FF", color: "#2563EB", label: "Upcoming"   },
+  cancelled:  { bg: "#FEF2F2", color: "#DC2626", label: "Cancelled"  },
+  confirmed:  { bg: "#EFF6FF", color: "#2563EB", label: "Confirmed"  },
+  ongoing:    { bg: "#FFF7ED", color: "#EA580C", label: "Ongoing"    },
+  scheduled:  { bg: "#EFF6FF", color: "#2563EB", label: "Scheduled"  },
+  boarded:    { bg: "#F0FDF4", color: "#059669", label: "Boarded"    },
+};
+
+function TripDetailPanel({ trip, passenger, onBack }) {
+  const tripSt     = TRIP_STATUS_STYLE[trip.trip_status?.toLowerCase()]      || TRIP_STATUS_STYLE.upcoming;
+  const bookingSt  = TRIP_STATUS_STYLE[trip.ui_status ?? trip.trip_status?.toLowerCase()] || TRIP_STATUS_STYLE.upcoming;
+
+  const routeLabel = trip.route_name
+    || (trip.origin && trip.destination ? `${trip.origin} → ${trip.destination}` : "—");
+
+  const vehicleLabel = [
+    trip.plate        || null,
+    trip.vehicle_name || null,
+    trip.vehicle_type ? `(${trip.vehicle_type.charAt(0).toUpperCase() + trip.vehicle_type.slice(1)})` : null,
+  ].filter(Boolean).join(" · ") || "—";
+
+  const fareLabel = trip.fare != null
+    ? `$${fmt(trip.fare)}` + (trip.seat_count > 1 ? ` × ${trip.seat_count} seats` : "")
+    : "—";
+
+  const bookedAt = trip.booking_time
+    ? formatTripDate(trip.booking_time)
+    : trip.created_at ? formatTripDate(trip.created_at) : "—";
+
+  const SectionLabel = ({ text }) => (
+    <div style={{ fontSize: 10, fontWeight: 800, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".1em", padding: "18px 0 6px" }}>
+      {text}
+    </div>
+  );
+
+  const Row = ({ label, value, accent, last }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "11px 0", borderBottom: last ? "none" : "1px solid #F1F5F9", gap: 12 }}>
+      <span style={{ fontSize: 12, color: "#94A3B8", fontWeight: 600, flexShrink: 0, minWidth: 90 }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 700, color: accent ?? "#0F172A", textAlign: "right", wordBreak: "break-word" }}>
+        {value || "—"}
+      </span>
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Header */}
+      <div style={{ padding: "14px 20px", borderBottom: "1px solid #F1F5F9", display: "flex", alignItems: "center", gap: 10, flexShrink: 0, background: "#FAFBFF" }}>
+        <button onClick={onBack} style={{ background: "#F1F5F9", border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer", color: "#475569", fontSize: 13, fontWeight: 600 }}>
+          ← Back
+        </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".08em" }}>Trip Details</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "#0F172A", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {routeLabel}
+          </div>
+        </div>
+        <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: tripSt.bg, color: tripSt.color, flexShrink: 0 }}>
+          {tripSt.label}
+        </span>
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto", padding: "0 20px 24px" }}>
+
+        {/* ── Trip section (admin-configured) ── */}
+        <SectionLabel text="Trip Information" />
+        <Row label="Route"      value={routeLabel} />
+        <Row label="From"       value={trip.origin} />
+        <Row label="To"         value={trip.destination} />
+        <Row label="Date & Time" value={formatTripDate(trip.start_time)} />
+        <Row label="Duration"   value={trip.duration} />
+        <Row label="Driver"     value={trip.driver_name} accent={trip.driver_name ? "#1D4ED8" : undefined} />
+        <Row label="Vehicle"    value={vehicleLabel} />
+        <Row label="Capacity"   value={trip.vehicle_capacity ? `${trip.vehicle_capacity} seats` : null} last />
+
+        {/* ── Booking section (passenger-specific) ── */}
+        <SectionLabel text="Passenger Booking" />
+        <Row label="Passenger"  value={passenger?.full_name} />
+        <Row label="Seat"       value={trip.seat_number} accent="#7C3AED" />
+        <Row label="Fare"       value={fareLabel} accent="#059669" />
+        <Row label="Booked At"  value={bookedAt} />
+        <Row label="Status"     value={bookingSt.label} accent={bookingSt.color} last />
+      </div>
+    </div>
+  );
+}
+
 function PassengerProfileDrawer({ passenger, onClose, onEdit, onWallet }) {
-  const [tickets, setTickets] = useState(null);
+  const [tickets,      setTickets]      = useState(null);
+  const [ticketsError, setTicketsError] = useState(null);
+  const [selectedTrip, setSelectedTrip] = useState(null);
 
   useEffect(() => {
+    setTickets(null);
+    setTicketsError(null);
     apiClient.get(`/users/${passenger.user_id}/tickets`)
-      .then(data => setTickets(Array.isArray(data) ? data : []))
-      .catch(() => setTickets([]));
+      .then(data => {
+        const rows = Array.isArray(data) ? data : [];
+        console.log(`[PassengerProfile] tickets for user ${passenger.user_id}:`, rows);
+        setTickets(rows);
+      })
+      .catch(err => {
+        console.error("[PassengerProfile] tickets fetch failed:", err);
+        setTickets([]);
+        setTicketsError(err?.message || "Failed to load trip history");
+      });
   }, [passenger.user_id]);
 
   const initials = (passenger.full_name || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
   const nationalId = "IC-" + String(passenger.user_id).padStart(6, "0") + "X";
-  const completedCount = (tickets || []).filter(t => ["completed", "confirmed"].includes(t.status?.toLowerCase())).length;
+  const completedCount = (tickets || []).filter(t => ["completed", "confirmed", "upcoming"].includes((t.ui_status ?? t.status)?.toLowerCase())).length;
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "stretch", justifyContent: "flex-end" }}>
-      <style>{`@keyframes slideInRight { from { transform:translateX(40px);opacity:0 } to { transform:none;opacity:1 } }`}</style>
+      <style>{`
+        @keyframes slideInRight { from { transform:translateX(40px);opacity:0 } to { transform:none;opacity:1 } }
+        .trip-row:hover { background: #EFF6FF !important; border-color: #BFDBFE !important; }
+      `}</style>
       <div onClick={onClose} style={{ flex: 1, background: "rgba(15,23,42,.40)", backdropFilter: "blur(3px)" }} />
-      <div style={{ width: "min(92vw, 560px)", background: "#fff", display: "flex", flexDirection: "column", boxShadow: "-8px 0 40px rgba(0,0,0,.14)", overflowY: "auto", animation: "slideInRight .25s ease" }}>
+      <div style={{ width: "min(92vw, 560px)", background: "#fff", display: "flex", flexDirection: "column", boxShadow: "-8px 0 40px rgba(0,0,0,.14)", animation: "slideInRight .25s ease", overflow: "hidden" }}>
 
-        {/* Header */}
-        <div style={{ padding: "24px 24px 20px", borderBottom: "1px solid #F1F5F9", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-            <span style={{ fontSize: 15, fontWeight: 800, color: "#0F172A" }}>Passenger Profile</span>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => onWallet(passenger)} style={{ background: "#ECFDF5", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", color: "#059669", fontSize: 12, fontWeight: 600 }}>Wallet</button>
-              <button onClick={() => onEdit(passenger)} style={{ background: "#F5F3FF", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", color: "#6D28D9", fontSize: 12, fontWeight: 600 }}>Edit</button>
-              <button onClick={onClose} style={{ background: "#F1F5F9", border: "none", borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: "#64748B", fontSize: 15, lineHeight: 1 }}>✕</button>
-            </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <div style={{ width: 64, height: 64, borderRadius: "50%", flexShrink: 0, background: "#F5F3FF", border: "3px solid #6D28D930", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: "#6D28D9" }}>
-              {initials}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 17, fontWeight: 800, color: "#0F172A", marginBottom: 4 }}>{passenger.full_name}</div>
-              <div style={{ fontSize: 12, color: "#64748B", marginBottom: 6 }}>{passenger.email}</div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: "#F5F3FF", color: "#6D28D9" }}>Passenger</span>
-                <StatusBadge status={passenger.status} />
+        {selectedTrip ? (
+          <TripDetailPanel trip={selectedTrip} passenger={passenger} onBack={() => setSelectedTrip(null)} />
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", height: "100%", overflowY: "auto" }}>
+            {/* Header */}
+            <div style={{ padding: "24px 24px 20px", borderBottom: "1px solid #F1F5F9", flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <span style={{ fontSize: 15, fontWeight: 800, color: "#0F172A" }}>Passenger Profile</span>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => onWallet(passenger)} style={{ background: "#ECFDF5", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", color: "#059669", fontSize: 12, fontWeight: 600 }}>Wallet</button>
+                  <button onClick={() => onEdit(passenger)} style={{ background: "#F5F3FF", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", color: "#6D28D9", fontSize: 12, fontWeight: 600 }}>Edit</button>
+                  <button onClick={onClose} style={{ background: "#F1F5F9", border: "none", borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: "#64748B", fontSize: 15, lineHeight: 1 }}>✕</button>
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Identity & Contact */}
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid #F1F5F9" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#94A3B8", marginBottom: 14 }}>Identity &amp; Contact</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            {[
-              { label: "National ID",    value: nationalId },
-              { label: "Date of Birth",  value: passenger.birth_date ? relDate(passenger.birth_date) : "—" },
-              { label: "Wallet Balance", value: `OMR ${fmt(passenger.wallet_balance)}`, accent: "#059669" },
-              { label: "Phone",          value: passenger.phone || "—" },
-              { label: "Joined",         value: relDate(passenger.created_at) },
-              { label: "Total Trips",    value: passenger.trip_count ?? 0 },
-            ].map(({ label, value, accent }) => (
-              <div key={label} style={{ background: "#F8FAFC", borderRadius: 10, padding: "11px 14px", border: "1px solid #F1F5F9" }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 }}>{label}</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: accent ?? "#0F172A" }}>{value}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Trip History */}
-        <div style={{ padding: "20px 24px", flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#94A3B8" }}>Trip History</div>
-            {tickets && <span style={{ fontSize: 11, color: "#64748B" }}>{completedCount} completed · {tickets.length - completedCount} other</span>}
-          </div>
-          {tickets === null ? (
-            <div style={{ textAlign: "center", color: "#94A3B8", fontSize: 13, padding: "20px 0" }}>Loading…</div>
-          ) : tickets.length === 0 ? (
-            <div style={{ textAlign: "center", color: "#bbb", fontSize: 13, padding: "20px 0" }}>No trips found</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {tickets.slice(0, 10).map((t, i) => {
-                const isOk = ["completed", "confirmed"].includes(t.status?.toLowerCase() ?? "");
-                return (
-                  <div key={t.ticket_id ?? i} style={{ display: "flex", alignItems: "center", gap: 12, background: "#F8FAFC", border: "1px solid #F1F5F9", borderRadius: 10, padding: "10px 14px" }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: "#0F172A", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {t.route_name ?? (t.trip_id ? `Trip #${t.trip_id}` : `Ticket #${t.ticket_id}`)}
-                      </div>
-                      <div style={{ fontSize: 11, color: "#94A3B8" }}>{relDate(t.created_at ?? t.booked_at)}</div>
-                    </div>
-                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      {t.fare != null && <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", marginBottom: 2 }}>OMR {fmt(t.fare)}</div>}
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6, background: isOk ? "#F0FDF4" : "#FEF2F2", color: isOk ? "#059669" : "#DC2626" }}>{t.status}</span>
-                    </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <div style={{ width: 64, height: 64, borderRadius: "50%", flexShrink: 0, background: "#F5F3FF", border: "3px solid #6D28D930", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: "#6D28D9" }}>
+                  {initials}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 17, fontWeight: 800, color: "#0F172A", marginBottom: 4 }}>{passenger.full_name}</div>
+                  <div style={{ fontSize: 12, color: "#64748B", marginBottom: 6 }}>{passenger.email}</div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: "#F5F3FF", color: "#6D28D9" }}>Passenger</span>
+                    <StatusBadge status={passenger.status} />
                   </div>
-                );
-              })}
+                </div>
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* Identity & Contact */}
+            <div style={{ padding: "20px 24px", borderBottom: "1px solid #F1F5F9" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#94A3B8", marginBottom: 14 }}>Identity &amp; Contact</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                {[
+                  { label: "National ID",    value: nationalId },
+                  { label: "Date of Birth",  value: passenger.birth_date ? relDate(passenger.birth_date) : "—" },
+                  { label: "Wallet Balance", value: `$${fmt(passenger.wallet_balance)}`, accent: "#059669" },
+                  { label: "Phone",          value: passenger.phone || "—" },
+                  { label: "Joined",         value: relDate(passenger.created_at) },
+                  { label: "Total Trips",    value: passenger.trip_count ?? 0 },
+                ].map(({ label, value, accent }) => (
+                  <div key={label} style={{ background: "#F8FAFC", borderRadius: 10, padding: "11px 14px", border: "1px solid #F1F5F9" }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 }}>{label}</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: accent ?? "#0F172A" }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Trip History */}
+            <div style={{ padding: "20px 24px", flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#94A3B8" }}>Trip History</div>
+                {tickets && <span style={{ fontSize: 11, color: "#64748B" }}>{completedCount} active · {tickets.length} total</span>}
+              </div>
+              {ticketsError && (
+                <div style={{ padding: "10px 14px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>
+                  ⚠ {ticketsError}
+                </div>
+              )}
+              {tickets === null ? (
+                <div style={{ textAlign: "center", color: "#94A3B8", fontSize: 13, padding: "20px 0" }}>Loading…</div>
+              ) : tickets.length === 0 && !ticketsError ? (
+                <div style={{ textAlign: "center", color: "#bbb", fontSize: 13, padding: "20px 0" }}>No trips found</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {tickets.slice(0, 15).map((t, i) => {
+                    const statusKey = (t.ui_status ?? t.status ?? "upcoming").toLowerCase();
+                    const st = TRIP_STATUS_STYLE[statusKey] || TRIP_STATUS_STYLE.upcoming;
+                    return (
+                      <button
+                        key={t.ticket_id ?? i}
+                        className="trip-row"
+                        onClick={() => setSelectedTrip(t)}
+                        style={{ display: "flex", alignItems: "center", gap: 12, background: "#F8FAFC", border: "1px solid #F1F5F9", borderRadius: 10, padding: "10px 14px", cursor: "pointer", textAlign: "left", width: "100%", transition: "background .15s, border-color .15s" }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {t.route_name || (t.origin && t.destination ? `${t.origin} → ${t.destination}` : `Ticket #${t.ticket_id}`)}
+                          </div>
+                          {t.origin && t.destination
+                            ? <div style={{ fontSize: 11, color: "#64748B" }}>{t.origin} → {t.destination}</div>
+                            : null}
+                          <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 1 }}>
+                            {t.start_time ? relDateTime(t.start_time) : relDate(t.created_at)}
+                            {t.driver_name ? ` · ${t.driver_name}` : ""}
+                            {t.seat_count > 1 ? ` · ${t.seat_count} seats` : ""}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          {t.fare != null && <div style={{ fontSize: 12, fontWeight: 700, color: "#059669", marginBottom: 4 }}>${fmt(t.fare)}</div>}
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6, background: st.bg, color: st.color }}>{st.label}</span>
+                        </div>
+                        <span style={{ color: "#CBD5E1", fontSize: 14, flexShrink: 0 }}>›</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -245,7 +388,7 @@ function WalletModal({ passenger, onClose, onDone }) {
     setBusy(true); setErr(null);
     try {
       await apiClient.post("/wallet/adjust", { user_id: passenger.user_id, type, amount: parsed, reason, notes: notes || undefined });
-      onDone(`OMR ${parsed.toFixed(2)} ${type}ed successfully`);
+      onDone(`$${parsed.toFixed(2)} ${type}ed successfully`);
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
@@ -255,7 +398,7 @@ function WalletModal({ passenger, onClose, onDone }) {
   return (
     <Modal title={`Wallet — ${passenger.full_name}`} onClose={onClose} onSave={submit} saving={busy}>
       {err && <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>{err}</div>}
-      <p style={{ fontSize: 13, color: "#64748B", marginBottom: 16 }}>Balance: <strong style={{ color: "#0F172A" }}>OMR {fmt(passenger.wallet_balance)}</strong></p>
+      <p style={{ fontSize: 13, color: "#64748B", marginBottom: 16 }}>Balance: <strong style={{ color: "#0F172A" }}>${fmt(passenger.wallet_balance)}</strong></p>
       <div style={{ display: "flex", gap: 4, background: "#F1F5F9", borderRadius: 10, padding: 4, marginBottom: 16 }}>
         {["credit", "debit"].map(t => (
           <button key={t} onClick={() => setType(t)} style={{ flex: 1, padding: "7px", borderRadius: 8, border: "none", background: type === t ? "#fff" : "transparent", color: type === t ? (t === "credit" ? "#059669" : "#DC2626") : "#64748B", fontWeight: type === t ? 700 : 500, fontSize: 13, cursor: "pointer" }}>
@@ -264,7 +407,7 @@ function WalletModal({ passenger, onClose, onDone }) {
         ))}
       </div>
       <div style={{ marginBottom: 14 }}>
-        <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 6 }}>Amount (OMR) *</label>
+        <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 6 }}>Amount ($) *</label>
         <input type="number" min="0.01" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" style={inp} />
       </div>
       <div style={{ marginBottom: 14 }}>
@@ -277,7 +420,7 @@ function WalletModal({ passenger, onClose, onDone }) {
       </div>
       {amount && !isNaN(parseFloat(amount)) && (
         <div style={{ padding: "10px 12px", background: isCredit ? "#ECFDF5" : "#FEF2F2", border: `1px solid ${isCredit ? "#A7F3D0" : "#FECACA"}`, borderRadius: 8, fontSize: 13, color: isCredit ? "#059669" : "#DC2626" }}>
-          New balance: <strong>OMR {newBal}</strong>
+          New balance: <strong>${newBal}</strong>
         </div>
       )}
     </Modal>
@@ -441,7 +584,7 @@ export default function PassengersPage() {
         <StatCard label="Active"           value={counts.active}                             delta="accounts"     />
         <StatCard label="Suspended"        value={counts.suspended}                          delta="temporarily"  />
         <StatCard label="Blocked"          value={counts.blocked}                            delta="permanently"  accent="#DC2626" />
-        <StatCard label="Total balance"    value={`OMR ${counts.balance.toFixed(2)}`}        delta="all wallets"  accent="#7C3AED" />
+        <StatCard label="Total balance"    value={`$${counts.balance.toFixed(2)}`}        delta="all wallets"  accent="#7C3AED" />
       </div>
 
       {/* Filter bar */}
@@ -485,7 +628,7 @@ export default function PassengersPage() {
             </div>
             <div style={{ fontSize: 13, color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.email}</div>
             <div><StatusBadge status={p.status} /></div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B" }}>OMR {fmt(p.wallet_balance)}</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B" }}>${fmt(p.wallet_balance)}</div>
             <div style={{ fontSize: 13, color: "#475569" }}>{p.trip_count ?? 0}</div>
             <div style={{ fontSize: 12, color: "#94A3B8" }}>{relDate(p.created_at)}</div>
             <div style={{ display: "flex", gap: 6 }}>

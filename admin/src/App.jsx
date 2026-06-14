@@ -257,6 +257,7 @@ function AppShell() {
           onToggleSidebar={() => setSidebarCollapsed(c => !c)}
           collapsed={sidebarCollapsed}
           activePage={activePage}
+          onNavigate={setActivePage}
         />
 
         <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>

@@ -90,6 +90,9 @@ const getComplaintWithTimeline = async (pool, complaintId) => {
     `);
 
   complaint.timeline = updatesRes.recordset;
+  complaint.comments = updatesRes.recordset
+    .filter(u => u.action_type === "comment")
+    .map(u => ({ author: u.actor_name ?? "Admin", text: u.comment, time: u.created_at }));
   return complaint;
 };
 
@@ -431,6 +434,45 @@ export const editMyComplaint = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to update complaint" });
+  }
+};
+
+// POST /api/complaints/:id/comments — admin/staff add an internal comment
+export const addComplaintComment = async (req, res) => {
+  const complaintId = parseInt(req.params.id, 10);
+  const text = req.body.text?.trim();
+
+  if (!text) return res.status(400).json({ error: "Comment text is required" });
+
+  try {
+    const pool = await poolPromise;
+    await ensureOperationalTables(pool);
+
+    const existing = await pool.request()
+      .input("id", sql.Int, complaintId)
+      .query(`SELECT complaint_id FROM complaints WHERE complaint_id = @id`);
+
+    if (!existing.recordset[0]) return res.status(404).json({ error: "Complaint not found" });
+
+    const result = await pool.request()
+      .input("complaintId", sql.Int, complaintId)
+      .input("actorUserId", sql.Int, req.user.user_id)
+      .input("actionType",  sql.NVarChar(30),   "comment")
+      .input("comment",     sql.NVarChar(1000),  text)
+      .query(`
+        INSERT INTO complaint_updates (complaint_id, actor_user_id, action_type, comment)
+        OUTPUT INSERTED.created_at
+        VALUES (@complaintId, @actorUserId, @actionType, @comment)
+      `);
+
+    res.status(201).json({
+      author: req.user.full_name ?? req.user.email ?? "Admin",
+      text,
+      time: result.recordset[0].created_at,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to add comment" });
   }
 };
 

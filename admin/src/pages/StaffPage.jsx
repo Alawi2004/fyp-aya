@@ -14,7 +14,7 @@ import {
 const FLAG_CONFIG = {
   rapid_sequence: { label: "Rapid Sequence", color: "#D97706", bg: "#FFFBEB", desc: "Multiple top-ups < 5 min apart" },
   repeat_user:    { label: "Repeat Top-Up",  color: "#7C3AED", bg: "#F5F3FF", desc: "Same passenger topped up again within 30 min" },
-  large_amount:   { label: "Large Amount",   color: "#DC2626", bg: "#FEF2F2", desc: "Single transaction > OMR 500" },
+  large_amount:   { label: "Large Amount",   color: "#DC2626", bg: "#FEF2F2", desc: "Single transaction > $500" },
   velocity_spike: { label: "Velocity Spike", color: "#9D174D", bg: "#FFF1F2", desc: "> 15 top-ups in one hour" },
 };
 
@@ -80,8 +80,8 @@ function LimitsModal({ staff, onClose, onSave }) {
         Set the maximum amounts this staff member can process.
       </p>
       {[
-        { label: "Daily Top-Up Limit (OMR)", val: daily, set: setDaily },
-        { label: "Per-Transaction Limit (OMR)", val: perTx, set: setPerTx },
+        { label: "Daily Top-Up Limit ($)", val: daily, set: setDaily },
+        { label: "Per-Transaction Limit ($)", val: perTx, set: setPerTx },
       ].map(({ label, val, set }) => (
         <div key={label} style={{ marginBottom: 16 }}>
           <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 6 }}>{label}</label>
@@ -120,7 +120,7 @@ function AccountsTab({ staff, onToggleStatus, onEditLimits }) {
       render: (v, row) => (
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>{v} top-ups</div>
-          <div style={{ fontSize: 11, color: "#64748B" }}>OMR {row.today_total.toLocaleString()}</div>
+          <div style={{ fontSize: 11, color: "#64748B" }}>${row.today_total.toLocaleString()}</div>
         </div>
       ),
     },
@@ -128,8 +128,8 @@ function AccountsTab({ staff, onToggleStatus, onEditLimits }) {
       key: "daily_limit", label: "Limits",
       render: (v, row) => (
         <div style={{ fontSize: 11, color: "#475569" }}>
-          <div>Daily: <strong>OMR {v.toLocaleString()}</strong></div>
-          <div>Per-TX: <strong>OMR {row.tx_limit}</strong></div>
+          <div>Daily: <strong>${v.toLocaleString()}</strong></div>
+          <div>Per-TX: <strong>${row.tx_limit}</strong></div>
         </div>
       ),
     },
@@ -212,7 +212,7 @@ function TransactionsTab({ transactions, showSuspiciousOnly, onToggle }) {
     { key: "passenger", label: "Passenger", render: v => <span style={{ fontSize: 12 }}>{v}</span> },
     {
       key: "amount", label: "Amount",
-      render: v => <span style={{ fontSize: 13, fontWeight: 700, color: "#059669" }}>OMR {v.toFixed(2)}</span>,
+      render: v => <span style={{ fontSize: 13, fontWeight: 700, color: "#059669" }}>${v.toFixed(2)}</span>,
     },
     { key: "method",   label: "Method",   render: v => <span style={{ fontSize: 11, color: "#475569" }}>{v}</span> },
     { key: "location", label: "Location", render: v => <span style={{ fontSize: 11, color: "#475569" }}>{v}</span> },
@@ -368,7 +368,7 @@ function SuspiciousTab({ transactions, staff }) {
                     </div>
                   </td>
                   <td style={{ padding: "10px 14px", fontSize: 12 }}>{t.passenger}</td>
-                  <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 700, color: "#DC2626" }}>OMR {t.amount.toFixed(2)}</td>
+                  <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 700, color: "#DC2626" }}>${t.amount.toFixed(2)}</td>
                   <td style={{ padding: "10px 14px", fontSize: 11, color: "#64748B" }}>{t.location}</td>
                   <td style={{ padding: "10px 14px" }}>
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -412,12 +412,12 @@ function SubmitCashModal({ record, onClose, onSubmit }) {
       </p>
       <div style={{ padding: "12px 16px", background: "#F8FAFC", borderRadius: 10, border: "1px solid #E2E8F0", marginBottom: 16 }}>
         <div style={{ fontSize: 12, color: "#94A3B8", marginBottom: 4 }}>System Expected Cash</div>
-        <div style={{ fontSize: 24, fontWeight: 800, color: "#0F172A" }}>OMR {record.expected.toFixed(2)}</div>
+        <div style={{ fontSize: 24, fontWeight: 800, color: "#0F172A" }}>${record.expected.toFixed(2)}</div>
         <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{record.cash_txns} cash transaction{record.cash_txns !== 1 ? "s" : ""}</div>
       </div>
       <div style={{ marginBottom: 14 }}>
         <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 }}>
-          Cash in Hand (OMR)
+          Cash in Hand ($)
         </label>
         <input
           type="number" step="0.01" min="0" placeholder="0.00"
@@ -429,7 +429,7 @@ function SubmitCashModal({ record, onClose, onSubmit }) {
           const color = diff === 0 ? "#059669" : diff < 0 ? "#DC2626" : "#D97706";
           return (
             <div style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color }}>
-              {diff === 0 ? "✓ Matches system exactly" : diff < 0 ? `⚠ Shortage of OMR ${Math.abs(diff).toFixed(2)}` : `⚠ Excess of OMR ${diff.toFixed(2)}`}
+              {diff === 0 ? "✓ Matches system exactly" : diff < 0 ? `⚠ Shortage of $${Math.abs(diff).toFixed(2)}` : `⚠ Excess of $${diff.toFixed(2)}`}
             </div>
           );
         })()}
@@ -464,7 +464,7 @@ function ReconciliationTab({ reconciliation, onSubmit }) {
       @media print{@page{margin:15mm}}</style></head><body>
       <h2>Daily Cash Reconciliation — ${date}</h2>
       <p>Generated: ${new Date().toLocaleString()} · ${rows.length} staff members</p>
-      <table><thead><tr><th>Staff</th><th>Station</th><th>Cash Txns</th><th>Expected (OMR)</th><th>Reported (OMR)</th><th>Discrepancy</th><th>Status</th></tr></thead>
+      <table><thead><tr><th>Staff</th><th>Station</th><th>Cash Txns</th><th>Expected ($)</th><th>Reported ($)</th><th>Discrepancy</th><th>Status</th></tr></thead>
       <tbody>${rows.map(r => `<tr>
         <td>${r.staff}</td><td>${r.station}</td><td>${r.cash_txns}</td>
         <td>${r.expected.toFixed(2)}</td>
@@ -506,9 +506,9 @@ function ReconciliationTab({ reconciliation, onSubmit }) {
 
       {/* KPI cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
-        <StatCard label="Expected Cash"    value={`OMR ${totalExpected.toFixed(0)}`} delta="from cash top-ups" accent="#2563EB" />
-        <StatCard label="Reported Cash"    value={`OMR ${totalReported.toFixed(0)}`} delta={`${rows.length - pending} submitted`} accent="#10B981" />
-        <StatCard label="Net Discrepancy"  value={`${totalDiscrep >= 0 ? "+" : ""}OMR ${totalDiscrep.toFixed(2)}`} delta={totalDiscrep === 0 ? "balanced" : "needs review"} up={totalDiscrep === 0} accent={totalDiscrep === 0 ? "#10B981" : "#EF4444"} />
+        <StatCard label="Expected Cash"    value={`$${totalExpected.toFixed(0)}`} delta="from cash top-ups" accent="#2563EB" />
+        <StatCard label="Reported Cash"    value={`$${totalReported.toFixed(0)}`} delta={`${rows.length - pending} submitted`} accent="#10B981" />
+        <StatCard label="Net Discrepancy"  value={`${totalDiscrep >= 0 ? "+" : ""}$${totalDiscrep.toFixed(2)}`} delta={totalDiscrep === 0 ? "balanced" : "needs review"} up={totalDiscrep === 0} accent={totalDiscrep === 0 ? "#10B981" : "#EF4444"} />
         <StatCard label="Pending"          value={pending} delta="not yet submitted" up={pending === 0} accent="#F59E0B" />
       </div>
 
@@ -522,7 +522,7 @@ function ReconciliationTab({ reconciliation, onSubmit }) {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: "#FAFAFA", borderBottom: "1px solid #F1F5F9" }}>
-                {["Staff", "Station", "Cash Txns", "Expected (OMR)", "Reported (OMR)", "Discrepancy", "Status", "Action"].map(h => (
+                {["Staff", "Station", "Cash Txns", "Expected ($)", "Reported ($)", "Discrepancy", "Status", "Action"].map(h => (
                   <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".05em", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
@@ -549,16 +549,16 @@ function ReconciliationTab({ reconciliation, onSubmit }) {
                     {/* Cash txns */}
                     <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 600, color: "#0F172A", textAlign: "center" }}>{r.cash_txns}</td>
                     {/* Expected */}
-                    <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 700, color: "#0F172A" }}>OMR {r.expected.toFixed(2)}</td>
+                    <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 700, color: "#0F172A" }}>${r.expected.toFixed(2)}</td>
                     {/* Reported */}
                     <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 700, color: r.reported !== null ? "#0F172A" : "#94A3B8" }}>
-                      {r.reported !== null ? `OMR ${r.reported.toFixed(2)}` : "—"}
+                      {r.reported !== null ? `$${r.reported.toFixed(2)}` : "—"}
                     </td>
                     {/* Discrepancy */}
                     <td style={{ padding: "12px 14px" }}>
                       {r.discrepancy !== null ? (
                         <span style={{ fontSize: 13, fontWeight: 800, color: rs.color }}>
-                          {r.discrepancy === 0 ? "—" : (r.discrepancy > 0 ? "+" : "") + `OMR ${r.discrepancy.toFixed(2)}`}
+                          {r.discrepancy === 0 ? "—" : (r.discrepancy > 0 ? "+" : "") + `$${r.discrepancy.toFixed(2)}`}
                         </span>
                       ) : <span style={{ color: "#94A3B8", fontSize: 12 }}>—</span>}
                     </td>
@@ -586,11 +586,11 @@ function ReconciliationTab({ reconciliation, onSubmit }) {
             <tfoot>
               <tr style={{ borderTop: "2px solid #E2E8F0", background: "#F8FAFC" }}>
                 <td colSpan={3} style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700, color: "#0F172A" }}>Totals</td>
-                <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 800, color: "#0F172A" }}>OMR {totalExpected.toFixed(2)}</td>
-                <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 800, color: "#0F172A" }}>OMR {totalReported.toFixed(2)}</td>
+                <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 800, color: "#0F172A" }}>${totalExpected.toFixed(2)}</td>
+                <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 800, color: "#0F172A" }}>${totalReported.toFixed(2)}</td>
                 <td style={{ padding: "10px 14px" }}>
                   <span style={{ fontSize: 13, fontWeight: 800, color: totalDiscrep === 0 ? "#059669" : totalDiscrep < 0 ? "#DC2626" : "#D97706" }}>
-                    {totalDiscrep === 0 ? "Balanced" : (totalDiscrep > 0 ? "+" : "") + `OMR ${totalDiscrep.toFixed(2)}`}
+                    {totalDiscrep === 0 ? "Balanced" : (totalDiscrep > 0 ? "+" : "") + `$${totalDiscrep.toFixed(2)}`}
                   </span>
                 </td>
                 <td colSpan={2} />
@@ -717,7 +717,7 @@ export default function StaffPage() {
         />
         <StatCard
           label="Today's Volume"
-          value={`OMR ${todayTotal.toLocaleString()}`}
+          value={`$${todayTotal.toLocaleString()}`}
           delta={`${transactions.filter(t => t.time.startsWith("2026-05-05")).length} transactions`}
           accent="#7C3AED"
           icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>}

@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
-import { Menu, Search, Bell, ChevronDown, Settings, User, LogOut, Zap, Smartphone, Monitor, Globe, AlertTriangle, Clock, Wrench } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Menu, Search, Bell, ChevronDown, Settings, User, LogOut, Zap, Smartphone, Monitor, Globe, AlertTriangle, Clock, Wrench, Bus, UserCircle, MapPin, Route } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { getTrips, getDrivers, getVehicles, getRoutes } from "../api/endpoints";
 
 const PAGE_LABELS = {
   dashboard:     "Dashboard",
@@ -146,13 +147,100 @@ function SessionsModal({ onClose }) {
   );
 }
 
-export default function Topbar({ onToggleSidebar, collapsed, activePage }) {
+const SEARCH_CATEGORIES = {
+  trips:    { label: "Trip",    icon: Zap,        color: "#2563EB", bg: "#EFF6FF" },
+  drivers:  { label: "Driver",  icon: UserCircle,  color: "#7C3AED", bg: "#F5F3FF" },
+  vehicles: { label: "Vehicle", icon: Bus,         color: "#059669", bg: "#ECFDF5" },
+  routes:   { label: "Route",   icon: Route,       color: "#D97706", bg: "#FFFBEB" },
+};
+
+export default function Topbar({ onToggleSidebar, collapsed, activePage, onNavigate }) {
   const [showProfile,   setShowProfile]   = useState(false);
   const [notifOpen,     setNotifOpen]     = useState(false);
   const [showSessions,  setShowSessions]  = useState(false);
+  const [query,         setQuery]         = useState("");
+  const [results,       setResults]       = useState([]);
+  const [searchOpen,    setSearchOpen]    = useState(false);
+  const [allData,       setAllData]       = useState(null);
+  const searchRef = useRef(null);
   const { user, logout } = useAuth();
 
   const pageLabel = PAGE_LABELS[activePage] || "Dashboard";
+
+  // Load all searchable data once
+  useEffect(() => {
+    Promise.allSettled([getTrips(), getDrivers(), getVehicles(), getRoutes()])
+      .then(([t, d, v, r]) => {
+        setAllData({
+          trips:    (t.value?.data ?? t.value ?? []).slice(0, 300),
+          drivers:  (d.value?.data ?? d.value ?? []).slice(0, 300),
+          vehicles: (v.value?.data ?? v.value ?? []).slice(0, 300),
+          routes:   (r.value?.data ?? r.value ?? []).slice(0, 300),
+        });
+      });
+  }, []);
+
+  // Filter results as user types
+  useEffect(() => {
+    const q = query.trim().toLowerCase();
+    if (q.length < 2 || !allData) { setResults([]); return; }
+
+    const hits = [];
+
+    (allData.trips || []).filter(t =>
+      String(t.trip_id ?? t.id ?? "").toLowerCase().includes(q) ||
+      (t.route_name ?? t.route ?? "").toLowerCase().includes(q) ||
+      (t.driver_name ?? t.driver ?? "").toLowerCase().includes(q) ||
+      (t.plate_number ?? t.vehicle ?? "").toLowerCase().includes(q)
+    ).slice(0, 4).forEach(t => hits.push({
+      type:  "trips",
+      label: `Trip ${t.trip_id ?? t.id} — ${t.route_name ?? t.route ?? ""}`,
+      sub:   t.driver_name ?? t.driver ?? "",
+    }));
+
+    (allData.drivers || []).filter(d =>
+      (d.full_name ?? d.name ?? "").toLowerCase().includes(q) ||
+      (d.license_number ?? "").toLowerCase().includes(q) ||
+      (d.phone ?? "").toLowerCase().includes(q)
+    ).slice(0, 4).forEach(d => hits.push({
+      type:  "drivers",
+      label: d.full_name ?? d.name ?? "",
+      sub:   d.license_number ?? d.phone ?? "",
+    }));
+
+    (allData.vehicles || []).filter(v =>
+      (v.plate_number ?? v.plate ?? "").toLowerCase().includes(q) ||
+      (v.model ?? "").toLowerCase().includes(q) ||
+      (v.type ?? "").toLowerCase().includes(q)
+    ).slice(0, 4).forEach(v => hits.push({
+      type:  "vehicles",
+      label: v.plate_number ?? v.plate ?? "",
+      sub:   [v.type, v.model].filter(Boolean).join(" · "),
+    }));
+
+    (allData.routes || []).filter(r =>
+      (r.route_name ?? r.name ?? "").toLowerCase().includes(q) ||
+      (r.start_location ?? "").toLowerCase().includes(q) ||
+      (r.end_location ?? "").toLowerCase().includes(q)
+    ).slice(0, 4).forEach(r => hits.push({
+      type:  "routes",
+      label: r.route_name ?? r.name ?? "",
+      sub:   [r.start_location, r.end_location].filter(Boolean).join(" → "),
+    }));
+
+    setResults(hits);
+  }, [query, allData]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClick(e) {
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
+        setSearchOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   return (
     <>
@@ -228,13 +316,27 @@ export default function Topbar({ onToggleSidebar, collapsed, activePage }) {
       </div>
 
       {/* ── Search ── */}
-      <div style={{ flex: 1, maxWidth: 440, margin: "0 auto", position: "relative" }}>
+      <div ref={searchRef} style={{ flex: 1, maxWidth: 440, margin: "0 auto", position: "relative" }}>
         <Search
           size={14}
           color="#94A3B8"
-          style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}
+          style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", zIndex: 1 }}
         />
         <input
+          value={query}
+          onChange={e => { setQuery(e.target.value); setSearchOpen(true); }}
+          onFocus={e => {
+            setSearchOpen(true);
+            e.target.style.borderColor = "#93C5FD";
+            e.target.style.background  = "#fff";
+            e.target.style.boxShadow   = "0 0 0 3px rgba(37,99,235,.08)";
+          }}
+          onBlur={e => {
+            e.target.style.borderColor = "#E2E8F0";
+            e.target.style.background  = "#F8FAFC";
+            e.target.style.boxShadow   = "none";
+          }}
+          onKeyDown={e => { if (e.key === "Escape") { setSearchOpen(false); setQuery(""); } }}
           placeholder="Search vehicles, drivers, trips…"
           style={{
             width:        "100%",
@@ -247,17 +349,75 @@ export default function Topbar({ onToggleSidebar, collapsed, activePage }) {
             outline:      "none",
             transition:   "border-color .14s, background .14s",
           }}
-          onFocus={e => {
-            e.target.style.borderColor = "#93C5FD";
-            e.target.style.background  = "#fff";
-            e.target.style.boxShadow   = "0 0 0 3px rgba(37,99,235,.08)";
-          }}
-          onBlur={e => {
-            e.target.style.borderColor = "#E2E8F0";
-            e.target.style.background  = "#F8FAFC";
-            e.target.style.boxShadow   = "none";
-          }}
         />
+
+        {/* Dropdown */}
+        {searchOpen && query.trim().length >= 2 && (
+          <div style={{
+            position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0,
+            background: "#fff", borderRadius: 12, border: "1px solid #E2E8F0",
+            boxShadow: "0 16px 48px rgba(0,0,0,.12)", zIndex: 500,
+            overflow: "hidden", animation: "slideInDown .12s ease",
+          }}>
+            {results.length === 0 ? (
+              <div style={{ padding: "16px 18px", fontSize: 13, color: "#94A3B8", textAlign: "center" }}>
+                No results for "{query.trim()}"
+              </div>
+            ) : (
+              <>
+                {results.map((r, i) => {
+                  const cat = SEARCH_CATEGORIES[r.type];
+                  const Icon = cat.icon;
+                  return (
+                    <div
+                      key={i}
+                      onMouseDown={() => {
+                        onNavigate?.(r.type);
+                        setSearchOpen(false);
+                        setQuery("");
+                      }}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 12,
+                        padding: "10px 16px",
+                        cursor: "pointer",
+                        borderBottom: i < results.length - 1 ? "1px solid #F8FAFC" : "none",
+                        transition: "background .1s",
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                    >
+                      <div style={{
+                        width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                        background: cat.bg, display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        <Icon size={15} color={cat.color} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#0F172A", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {r.label}
+                        </div>
+                        {r.sub && (
+                          <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {r.sub}
+                          </div>
+                        )}
+                      </div>
+                      <span style={{
+                        fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 20,
+                        background: cat.bg, color: cat.color, flexShrink: 0,
+                      }}>
+                        {cat.label}
+                      </span>
+                    </div>
+                  );
+                })}
+                <div style={{ padding: "8px 16px", borderTop: "1px solid #F1F5F9", fontSize: 11, color: "#94A3B8", textAlign: "center" }}>
+                  {results.length} result{results.length !== 1 ? "s" : ""} · click to navigate
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Right controls ── */}

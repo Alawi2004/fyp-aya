@@ -1,0 +1,211 @@
+import { useState, useEffect } from "react";
+import { Modal } from "./Modal";
+
+const STATUSES    = ["Scheduled", "Ongoing", "Completed", "Delayed", "Cancelled"];
+const RECURRENCES = ["none", "daily", "weekdays", "weekends", "custom"];
+const WEEK_DAYS   = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+const RECURRENCE_LABEL = {
+  none:     "One-time",
+  daily:    "Daily",
+  weekdays: "Weekdays (Mon–Fri)",
+  weekends: "Weekends (Sat–Sun)",
+  custom:   "Custom days",
+};
+
+const ROUTE_DURATIONS = {
+  "Route 12A": 55,
+  "Route 7B":  80,
+  "Route 3C":  90,
+  "Route 5D":  75,
+  "Route 9E":  110,
+};
+
+function timeToMin(t = "") {
+  const [h, m] = t.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+function checkFormConflicts(form, allTrips, excludeId = null) {
+  if (!form.driver && !form.vehicle) return [];
+  if (!form.date || !form.time) return [];
+  const warnings = [];
+  const fS = timeToMin(form.time);
+  const fE = fS + (ROUTE_DURATIONS[form.route] ?? 60);
+  allTrips
+    .filter(t => t.date === form.date && t.id !== excludeId)
+    .forEach(t => {
+      const tS = timeToMin(t.time), tE = tS + (ROUTE_DURATIONS[t.route] ?? 60);
+      if (fS >= tE || tS >= fE) return;
+      if (form.driver && form.driver === t.driver)
+        warnings.push({ type: "driver",  msg: `${form.driver} is already on ${t.id} (${t.route}) at ${t.time}` });
+      if (form.vehicle && form.vehicle === t.vehicle)
+        warnings.push({ type: "vehicle", msg: `${form.vehicle} is already on ${t.id} (${t.route}) at ${t.time}` });
+    });
+  return warnings;
+}
+
+const lbl = { fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 };
+const inp = { width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" };
+
+export function TripModal({ trip, allTrips = [], onClose, onSave, routeOpts = [], driverOpts = [], vehicleOpts = [] }) {
+  const isEdit = Boolean(trip);
+  const EMPTY  = { route: "", route_id: null, driver: "", driver_id: null, vehicle: "", vehicle_id: null, date: new Date().toISOString().split("T")[0], time: "", status: "Scheduled", recurrence: "none", days: [] };
+
+  const [form,     setForm]     = useState(isEdit ? { ...trip, route_id: trip.route_id ?? null, driver_id: trip.driver_id ?? null, vehicle_id: trip.vehicle_id ?? null, recurrence: "none", days: [] } : EMPTY);
+  const [warnings, setWarnings] = useState([]);
+  const [saving,   setSaving]   = useState(false);
+  const [error,    setError]    = useState(null);
+
+  const set = k => v => setForm(f => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    setWarnings(checkFormConflicts(form, allTrips, trip?.id));
+  }, [form.driver, form.vehicle, form.date, form.time, form.route]);
+
+  function toggleDay(day) {
+    setForm(f => ({
+      ...f,
+      days: f.days.includes(day) ? f.days.filter(d => d !== day) : [...f.days, day],
+    }));
+  }
+
+  async function handleSave() {
+    setError(null);
+    if (!form.date || !form.time)  { setError("Date and time are required."); return; }
+    if (!form.route_id)            { setError("Please select a route."); return; }
+    if (!form.driver_id)           { setError("Please select a driver."); return; }
+    if (!form.vehicle_id)          { setError("Please select a vehicle."); return; }
+    setSaving(true);
+    const err = await onSave(form);
+    setSaving(false);
+    if (err) { setError(err); return; }
+    onClose();
+  }
+
+  return (
+    <Modal title={isEdit ? "Edit Trip" : "Create New Trip"} onClose={onClose} onSave={handleSave} saving={saving}>
+      {error && (
+        <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>
+          {error}
+        </div>
+      )}
+
+      {warnings.length > 0 && (
+        <div style={{ padding: "10px 14px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 9, marginBottom: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#D97706", marginBottom: 6 }}>
+            ⚠ Scheduling Conflict Detected
+          </div>
+          {warnings.map((w, i) => (
+            <div key={i} style={{ fontSize: 11, color: "#92400E", marginBottom: 3 }}>
+              <strong>{w.type === "driver" ? "Driver" : "Vehicle"}:</strong> {w.msg}
+            </div>
+          ))}
+          <div style={{ fontSize: 10, color: "#B45309", marginTop: 5 }}>You may still save — review before confirming.</div>
+        </div>
+      )}
+
+      <div style={{ marginBottom: 13 }}>
+        <label style={lbl}>Route *</label>
+        <select
+          value={form.route_id ?? ""}
+          onChange={e => {
+            const id  = e.target.value ? Number(e.target.value) : null;
+            const obj = routeOpts.find(r => r.route_id === id);
+            setForm(f => ({ ...f, route_id: id, route: obj?.route_name ?? obj?.name ?? "" }));
+          }}
+          style={inp}
+        >
+          <option value="">— Select route —</option>
+          {routeOpts.map(r => (
+            <option key={r.route_id} value={r.route_id}>{r.route_name ?? r.name}</option>
+          ))}
+        </select>
+      </div>
+
+      <div style={{ marginBottom: 13 }}>
+        <label style={lbl}>Driver</label>
+        <select
+          value={form.driver_id ?? ""}
+          onChange={e => {
+            const id  = e.target.value ? Number(e.target.value) : null;
+            const obj = driverOpts.find(d => d.driver_id === id);
+            setForm(f => ({ ...f, driver_id: id, driver: obj?.full_name ?? obj?.name ?? "" }));
+          }}
+          style={inp}
+        >
+          <option value="">— Select driver —</option>
+          {driverOpts.map(d => (
+            <option key={d.driver_id} value={d.driver_id}>{d.full_name ?? d.name}</option>
+          ))}
+        </select>
+      </div>
+
+      <div style={{ marginBottom: 13 }}>
+        <label style={lbl}>Vehicle</label>
+        <select
+          value={form.vehicle_id ?? ""}
+          onChange={e => {
+            const id  = e.target.value ? Number(e.target.value) : null;
+            const obj = vehicleOpts.find(v => v.vehicle_id === id);
+            setForm(f => ({ ...f, vehicle_id: id, vehicle: obj?.plate_number ?? obj?.plate ?? "" }));
+          }}
+          style={inp}
+        >
+          <option value="">— Select vehicle —</option>
+          {vehicleOpts.map(v => (
+            <option key={v.vehicle_id} value={v.vehicle_id}>{v.plate_number ?? v.plate}</option>
+          ))}
+        </select>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 13 }}>
+        <div>
+          <label style={lbl}>Date</label>
+          <input type="date" value={form.date} onChange={e => set("date")(e.target.value)} style={inp} />
+        </div>
+        <div>
+          <label style={lbl}>Departure Time</label>
+          <input type="time" value={form.time} onChange={e => set("time")(e.target.value)} style={inp} />
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 13 }}>
+        <label style={lbl}>Status</label>
+        <select value={form.status} onChange={e => set("status")(e.target.value)} style={inp}>
+          {STATUSES.map(s => <option key={s}>{s}</option>)}
+        </select>
+      </div>
+
+      {!isEdit && (
+        <div style={{ border: "1px solid #E2E8F0", borderRadius: 10, padding: "12px 14px" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", marginBottom: 10 }}>Recurring Schedule</div>
+          <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 10 }}>
+            {RECURRENCES.map(r => (
+              <button key={r} onClick={() => set("recurrence")(r)} style={{
+                padding: "5px 12px", borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: "pointer", border: "none",
+                background: form.recurrence === r ? "#2563EB" : "#F1F5F9",
+                color:      form.recurrence === r ? "#fff"    : "#64748B",
+              }}>
+                {RECURRENCE_LABEL[r]}
+              </button>
+            ))}
+          </div>
+          {form.recurrence === "custom" && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {WEEK_DAYS.map(d => (
+                <button key={d} onClick={() => toggleDay(d)} style={{
+                  width: 38, height: 34, borderRadius: 8, border: "none", fontSize: 11, fontWeight: 700, cursor: "pointer",
+                  background: form.days.includes(d) ? "#2563EB" : "#F1F5F9",
+                  color:      form.days.includes(d) ? "#fff"    : "#64748B",
+                }}>
+                  {d}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+}
