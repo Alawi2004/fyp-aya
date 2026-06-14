@@ -6,7 +6,7 @@ import {
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 import { scanQrApi } from '../../api/driverApi';
 
 const PassengerVerifyScreen = ({ navigation }) => {
@@ -65,7 +65,7 @@ const PassengerVerifyScreen = ({ navigation }) => {
   if (!permission.granted) {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+        <StatusBar barStyle="light-content" backgroundColor={PURPLE.deep} />
         <View style={[styles.permHeader, headerInsets]}>
           <TouchableOpacity style={styles.topBackBtn} onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={20} color={COLORS.white} />
@@ -75,7 +75,7 @@ const PassengerVerifyScreen = ({ navigation }) => {
         </View>
         <View style={styles.permBody}>
           <View style={styles.permIconWrap}>
-            <Ionicons name="camera-outline" size={42} color={COLORS.primary} />
+            <Ionicons name="camera-outline" size={42} color={PURPLE.primary} />
           </View>
           <Text style={styles.permTitle}>Camera Access Required</Text>
           <Text style={styles.permSub}>Enable camera permission to scan passenger boarding QR tickets.</Text>
@@ -170,7 +170,7 @@ const PassengerVerifyScreen = ({ navigation }) => {
         {scanned && result === 'valid' && scanData && (
           <View style={styles.ticketInfoCard}>
             <View style={styles.ticketInfoRow}>
-              <Ionicons name="person-outline" size={14} color={COLORS.primary} />
+              <Ionicons name="person-outline" size={14} color={PURPLE.primary} />
               <Text style={styles.ticketInfoLabel}>Passenger</Text>
               <Text style={styles.ticketInfoVal}>{scanData.passenger?.name ?? '—'}</Text>
             </View>
@@ -244,15 +244,15 @@ const styles = StyleSheet.create({
   viewfinder: {
     width: 230, height: 230, alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
   },
-  corner: { position: 'absolute', width: 26, height: 26, borderColor: COLORS.primary, borderWidth: 3 },
+  corner: { position: 'absolute', width: 26, height: 26, borderColor: PURPLE.primary, borderWidth: 3 },
   cTL: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0, borderTopLeftRadius: 5 },
   cTR: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0, borderTopRightRadius: 5 },
   cBL: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0, borderBottomLeftRadius: 5 },
   cBR: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0, borderBottomRightRadius: 5 },
   scanLine: {
     position: 'absolute', left: 0, right: 0, height: 2,
-    backgroundColor: COLORS.primary, opacity: 0.85,
-    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 0 },
+    backgroundColor: PURPLE.primary, opacity: 0.85,
+    shadowColor: PURPLE.primary, shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 1, shadowRadius: 4,
   },
   scanHint: { color: 'rgba(255,255,255,0.65)', fontSize: 13, marginTop: 18, fontWeight: '500' },
@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
   ticketInfoDivider: { width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.15)', marginHorizontal: 12 },
   nextBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: COLORS.primary, borderRadius: 14,
+    backgroundColor: PURPLE.primary, borderRadius: 14,
     paddingHorizontal: 28, paddingVertical: 14, width: '100%', justifyContent: 'center',
   },
   nextBtnText: { fontSize: 15, fontWeight: '800', color: COLORS.white },
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
 
   /* Permission */
   permHeader: {
-    backgroundColor: COLORS.headerBg,
+    backgroundColor: PURPLE.deep,
     paddingBottom: 18, paddingHorizontal: 20,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
   },
@@ -310,14 +310,14 @@ const styles = StyleSheet.create({
   permBody: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   permIconWrap: {
     width: 80, height: 80, borderRadius: 24,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: PURPLE.light,
     alignItems: 'center', justifyContent: 'center', marginBottom: 20,
   },
   permTitle: { fontSize: 20, fontWeight: '800', color: COLORS.textPrimary, marginBottom: 8 },
   permSub: { fontSize: 14, color: COLORS.textMuted, textAlign: 'center', lineHeight: 22, marginBottom: 24 },
   permBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: COLORS.primary, borderRadius: 14,
+    backgroundColor: PURPLE.primary, borderRadius: 14,
     paddingHorizontal: 28, paddingVertical: 14,
   },
   permBtnText: { fontSize: 15, fontWeight: '800', color: COLORS.white },

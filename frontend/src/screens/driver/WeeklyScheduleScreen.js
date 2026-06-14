@@ -1,45 +1,23 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Platform, StatusBar, FlatList,
+  StatusBar, FlatList, ActivityIndicator,
 } from 'react-native';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
+import { getDriverTripsApi } from '../../api/driverApi';
+
+const hhmm = (d) => (d ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '—');
 
 const DAY_ABBR = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MONTH_ABB = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DAY_FULL  = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 
-// Trip templates per weekday: index 0=Mon … 6=Sun
-const SCHEDULE = [
-  [ // Monday
-    { id: 'm1', time: '07:00', end: '08:15', route: 'Route A — City Center', bus: 'BUS-101', from: 'Terminal North',  to: 'City Mall',         pax: 22, seats: 30 },
-    { id: 'm2', time: '14:30', end: '15:45', route: 'Route C — Airport',     bus: 'BUS-303', from: 'Downtown Hub',    to: 'Airport',           pax: 28, seats: 30 },
-  ],
-  [ // Tuesday
-    { id: 't1', time: '08:00', end: '09:00', route: 'Route B — University',  bus: 'BUS-202', from: 'Central Station', to: 'University Campus', pax: 19, seats: 30 },
-  ],
-  [ // Wednesday
-    { id: 'w1', time: '07:00', end: '08:15', route: 'Route A — City Center', bus: 'BUS-101', from: 'Terminal North',  to: 'City Mall',         pax: 24, seats: 30 },
-    { id: 'w2', time: '10:30', end: '11:30', route: 'Route D — Industrial',  bus: 'BUS-404', from: 'City Center',     to: 'Industrial Park',   pax: 17, seats: 30 },
-    { id: 'w3', time: '15:00', end: '16:15', route: 'Route A — City Center', bus: 'BUS-101', from: 'City Mall',       to: 'Terminal North',    pax: 21, seats: 30 },
-  ],
-  [ // Thursday
-    { id: 'h1', time: '07:30', end: '08:30', route: 'Route B — University',  bus: 'BUS-202', from: 'Central Station', to: 'University Campus', pax: 20, seats: 30 },
-    { id: 'h2', time: '13:00', end: '14:00', route: 'Route C — Airport',     bus: 'BUS-303', from: 'Downtown Hub',    to: 'Airport',           pax: 26, seats: 30 },
-  ],
-  [ // Friday
-    { id: 'f1', time: '06:00', end: '07:00', route: 'Route C — Airport',     bus: 'BUS-303', from: 'Airport',         to: 'Downtown Hub',      pax: 25, seats: 30 },
-    { id: 'f2', time: '09:00', end: '10:15', route: 'Route A — City Center', bus: 'BUS-101', from: 'Terminal North',  to: 'City Mall',         pax: 18, seats: 30 },
-  ],
-  [], // Saturday — rest
-  [], // Sunday   — rest
-];
-
 const STATUS_CFG = {
-  completed: { label: 'Done',     bg: COLORS.secondaryLight, text: COLORS.secondary, icon: 'checkmark-circle' },
-  upcoming:  { label: 'Upcoming', bg: COLORS.primaryLight,   text: COLORS.primary,   icon: 'time-outline'     },
+  completed: { label: 'Done',      bg: COLORS.secondaryLight, text: COLORS.secondary, icon: 'checkmark-circle' },
+  upcoming:  { label: 'Upcoming',  bg: PURPLE.light,          text: PURPLE.primary,   icon: 'time-outline'     },
+  cancelled: { label: 'Cancelled', bg: COLORS.dangerLight,    text: COLORS.danger,    icon: 'close-circle'     },
 };
 
 const getWeekDays = () => {
@@ -71,6 +49,52 @@ const WeeklyScheduleScreen = ({ navigation }) => {
   const weekScrollRef = useRef(null);
   const weekDays      = useMemo(() => getWeekDays(), []);
 
+  const [trips,   setTrips]   = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Real schedule = the driver's assigned trips for this calendar week, from the DB.
+  useEffect(() => {
+    let alive = true;
+    getDriverTripsApi()
+      .then(res => {
+        if (!alive) return;
+        const data = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.trips) ? res.data.trips : []);
+        setTrips(data);
+      })
+      .catch(() => { if (alive) setTrips([]); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  // Bucket trips into Mon…Sun of the current week
+  const weekSchedule = useMemo(() => {
+    const buckets = Array.from({ length: 7 }, () => []);
+    const sameDay = (a, b) =>
+      a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+    for (const t of trips) {
+      if (!t.start_time) continue;
+      const start = new Date(t.start_time);
+      const idx = weekDays.findIndex(d => sameDay(d, start));
+      if (idx < 0) continue;
+      const end = t.end_time ? new Date(t.end_time) : null;
+      buckets[idx].push({
+        id:    String(t.trip_id),
+        start,
+        time:  hhmm(start),
+        end:   end ? hhmm(end) : '—',
+        route: t.route_name ?? 'Route',
+        bus:   t.plate_number ?? t.vehicle_model ?? 'Bus',
+        from:  t.start_location ?? '—',
+        to:    t.end_location ?? '—',
+        pax:   Number(t.passengers ?? 0),
+        seats: Number(t.totalSeats ?? t.capacity ?? 30),
+        rawStatus: t.status ?? 'upcoming',
+      });
+    }
+    buckets.forEach(b => b.sort((a, z) => a.start - z.start));
+    return buckets;
+  }, [trips, weekDays]);
+
   const todayIdx = useMemo(() => {
     const t = new Date();
     const idx = weekDays.findIndex(
@@ -92,15 +116,16 @@ const WeeklyScheduleScreen = ({ navigation }) => {
   const selectedDay = weekDays[selectedIdx];
 
   const dayTrips = useMemo(() =>
-    SCHEDULE[selectedIdx].map(t => ({
-      ...t,
-      status:    tripStatus(selectedDay, t.time),
-      actualPax: tripStatus(selectedDay, t.time) === 'completed' ? t.pax : 0,
-    })),
-  [selectedIdx, selectedDay]);
+    weekSchedule[selectedIdx].map(t => {
+      const status = t.rawStatus === 'completed' ? 'completed'
+                   : t.rawStatus === 'cancelled' ? 'cancelled'
+                   : tripStatus(selectedDay, t.time);
+      return { ...t, status, actualPax: status === 'completed' ? t.pax : 0 };
+    }),
+  [weekSchedule, selectedIdx, selectedDay]);
 
-  const totalTrips = SCHEDULE.reduce((sum, d) => sum + d.length, 0);
-  const workDays   = SCHEDULE.filter(d => d.length > 0).length;
+  const totalTrips = weekSchedule.reduce((sum, d) => sum + d.length, 0);
+  const workDays   = weekSchedule.filter(d => d.length > 0).length;
 
   const isToday = (idx) => {
     const t = new Date();
@@ -180,7 +205,7 @@ const WeeklyScheduleScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE.deep} />
 
       {/* Header */}
       <View style={[styles.header, headerInsets]}>
@@ -204,7 +229,7 @@ const WeeklyScheduleScreen = ({ navigation }) => {
           contentContainerStyle={styles.weekStrip}
         >
           {weekDays.map((day, idx) => {
-            const count    = SCHEDULE[idx].length;
+            const count    = weekSchedule[idx].length;
             const selected = selectedIdx === idx;
             const today    = isToday(idx);
             const past     = isPast(idx);
@@ -276,22 +301,28 @@ const WeeklyScheduleScreen = ({ navigation }) => {
       </View>
 
       {/* Trip list */}
-      <FlatList
-        data={dayTrips}
-        keyExtractor={item => item.id}
-        renderItem={renderTrip}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyWrap}>
-            <View style={styles.emptyIconWrap}>
-              <Ionicons name="bed-outline" size={36} color={COLORS.textMuted} />
+      {loading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="large" color={PURPLE.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={dayTrips}
+          keyExtractor={item => item.id}
+          renderItem={renderTrip}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyWrap}>
+              <View style={styles.emptyIconWrap}>
+                <Ionicons name="bed-outline" size={36} color={COLORS.textMuted} />
+              </View>
+              <Text style={styles.emptyTitle}>Rest day</Text>
+              <Text style={styles.emptySub}>No trips scheduled — enjoy your day off!</Text>
             </View>
-            <Text style={styles.emptyTitle}>Rest day</Text>
-            <Text style={styles.emptySub}>No trips scheduled — enjoy your day off!</Text>
-          </View>
-        }
-      />
+          }
+        />
+      )}
     </View>
   );
 };
@@ -300,7 +331,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
 
   /* Header */
-  header: { backgroundColor: COLORS.headerBg, overflow: 'hidden' },
+  header: { backgroundColor: PURPLE.deep, overflow: 'hidden' },
   headerDecor: {
     position: 'absolute', top: -50, right: -50,
     width: 200, height: 200, borderRadius: 100,
@@ -347,15 +378,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: COLORS.border,
   },
   dayBarDate:  { fontSize: 14, fontWeight: '800', color: COLORS.textPrimary },
-  dayBarToday: { fontSize: 11, fontWeight: '700', color: COLORS.primary, marginTop: 1 },
+  dayBarToday: { fontSize: 11, fontWeight: '700', color: PURPLE.primary, marginTop: 1 },
   dayBarBadge: {
-    backgroundColor: COLORS.primaryLight, borderRadius: 10,
+    backgroundColor: PURPLE.light, borderRadius: 10,
     paddingHorizontal: 12, paddingVertical: 4,
   },
-  dayBarBadgeText: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
+  dayBarBadgeText: { fontSize: 12, fontWeight: '700', color: PURPLE.primary },
 
   /* List */
   list: { padding: 14, paddingBottom: 30 },
+  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 40 },
 
   /* Trip card */
   tripCard: {
@@ -370,10 +402,10 @@ const styles = StyleSheet.create({
   timeCol: {
     width: 58, alignItems: 'center', justifyContent: 'space-between',
     paddingVertical: 14, paddingHorizontal: 6,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: PURPLE.light,
   },
-  timeStart: { fontSize: 11, fontWeight: '800', color: COLORS.primary },
-  timeLine:  { flex: 1, width: 2, backgroundColor: COLORS.primaryMid, marginVertical: 4, borderRadius: 1 },
+  timeStart: { fontSize: 11, fontWeight: '800', color: PURPLE.primary },
+  timeLine:  { flex: 1, width: 2, backgroundColor: PURPLE.midStrong, marginVertical: 4, borderRadius: 1 },
   timeEnd:   { fontSize: 11, fontWeight: '700', color: COLORS.textMuted },
 
   /* Content */

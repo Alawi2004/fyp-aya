@@ -2,9 +2,10 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS } from '../constants/colors';
+import { COLORS, PURPLE } from '../constants/colors';
+import PressableScale from '../components/common/PressableScale';
 
 import DriverDashboardScreen   from '../screens/driver/DriverDashboardScreen';
 import DriverMapScreen         from '../screens/driver/DriverMapScreen';
@@ -47,6 +48,8 @@ const DashboardStack = () => (
     <Stack.Screen name="WeeklySchedule"   component={WeeklyScheduleScreen}   />
     <Stack.Screen name="DriverHelpSupport"  component={DriverHelpSupportScreen} />
     <Stack.Screen name="ScheduleService"    component={ScheduleServiceScreen}   />
+    {/* Notifications now opened from the dashboard bell (Inbox tab removed) */}
+    <Stack.Screen name="DriverNotifications" component={DriverNotificationsScreen} />
   </Stack.Navigator>
 );
 
@@ -90,13 +93,6 @@ const HistoryStack = () => (
   </Stack.Navigator>
 );
 
-// ── Notifications tab stack ───────────────────────────────────────────────────
-const NotificationsStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
-    <Stack.Screen name="DriverNotifications" component={DriverNotificationsScreen} />
-  </Stack.Navigator>
-);
-
 // ── Tab config ───────────────────────────────────────────────────────────────
 const TAB_CONFIG = {
   DashboardStack:      { label: 'Dashboard', icon: 'speedometer',      iconOutline: 'speedometer-outline'      },
@@ -104,42 +100,38 @@ const TAB_CONFIG = {
   VehicleStack:        { label: 'Vehicle',   icon: 'car',              iconOutline: 'car-outline'              },
   EarningsStack:       { label: 'Earnings',  icon: 'cash',             iconOutline: 'cash-outline'             },
   HistoryStack:        { label: 'History',   icon: 'time',             iconOutline: 'time-outline'             },
-  NotificationsStack:  { label: 'Inbox',     icon: 'notifications',    iconOutline: 'notifications-outline'    },
 };
 
-const CustomTabBar = ({ state, descriptors, navigation }) => {
+const CustomTabBar = ({ state, navigation }) => {
   const insets = useSafeAreaInsets();
   return (
-  <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-    {state.routes.map((route, index) => {
-      const isFocused = state.index === index;
-      const cfg = TAB_CONFIG[route.name] || {};
+    <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+      {state.routes.map((route, index) => {
+        const isFocused = state.index === index;
+        const cfg = TAB_CONFIG[route.name] || {};
 
-      const onPress = () => {
-        const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-        if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
-      };
+        const onPress = () => {
+          const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+          if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
+        };
 
-      return (
-        <View key={route.key} style={styles.tabItem}>
-          <View
-            onTouchEnd={onPress}
-            style={[styles.tabBtn, isFocused && styles.tabBtnActive]}
-          >
-            <Ionicons
-              name={isFocused ? cfg.icon : cfg.iconOutline}
-              size={21}
-              color={isFocused ? COLORS.primary : COLORS.textMuted}
-            />
+        return (
+          <PressableScale key={route.key} style={styles.tabItem} onPress={onPress} scaleTo={0.88}>
+            {isFocused && <View style={styles.tabIndicator} />}
+            <View style={[styles.tabBtn, isFocused && styles.tabBtnActive]}>
+              <Ionicons
+                name={isFocused ? cfg.icon : cfg.iconOutline}
+                size={21}
+                color={isFocused ? COLORS.white : COLORS.textMuted}
+              />
+            </View>
             <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
               {cfg.label}
             </Text>
-            {isFocused && <View style={styles.tabDot} />}
-          </View>
-        </View>
-      );
-    })}
-  </View>
+          </PressableScale>
+        );
+      })}
+    </View>
   );
 };
 
@@ -153,7 +145,6 @@ const DriverNavigator = () => (
     <Tab.Screen name="VehicleStack"       component={VehicleStack}       options={{ tabBarLabel: 'Vehicle'   }} />
     <Tab.Screen name="EarningsStack"      component={EarningsStack}      options={{ tabBarLabel: 'Earnings'  }} />
     <Tab.Screen name="HistoryStack"       component={HistoryStack}       options={{ tabBarLabel: 'History'   }} />
-    <Tab.Screen name="NotificationsStack" component={NotificationsStack} options={{ tabBarLabel: 'Inbox'     }} />
   </Tab.Navigator>
 );
 
@@ -161,30 +152,34 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     backgroundColor: COLORS.white,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingTop: 8,
-    paddingHorizontal: 4,
-    shadowColor: '#1E293B',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 16,
-    elevation: 16,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    paddingTop: 12,
+    paddingHorizontal: 6,
+    shadowColor: PURPLE.deep,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 20,
   },
-  tabItem:      { flex: 1, alignItems: 'center' },
+  tabItem: { flex: 1, alignItems: 'center', paddingTop: 6 },
+  tabIndicator: {
+    position: 'absolute',
+    top: 0, width: 26, height: 3,
+    borderRadius: 2, backgroundColor: PURPLE.primary,
+  },
   tabBtn: {
+    width: 48, height: 34, borderRadius: 13,
     alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 6, paddingHorizontal: 8,
-    borderRadius: 14, position: 'relative',
   },
-  tabBtnActive:   { backgroundColor: COLORS.primaryLight },
-  tabLabel:       { fontSize: 9, fontWeight: '600', color: COLORS.textMuted, marginTop: 3 },
-  tabLabelActive: { color: COLORS.primary, fontWeight: '700' },
-  tabDot: {
-    position: 'absolute', bottom: -6,
-    width: 4, height: 4, borderRadius: 2,
-    backgroundColor: COLORS.primary,
+  tabBtnActive: {
+    backgroundColor: PURPLE.primary,
+    shadowColor: PURPLE.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4, shadowRadius: 8, elevation: 5,
   },
+  tabLabel: { fontSize: 10, fontWeight: '600', color: COLORS.textMuted, marginTop: 5 },
+  tabLabelActive: { color: PURPLE.primary, fontWeight: '800' },
 });
 
 export default DriverNavigator;

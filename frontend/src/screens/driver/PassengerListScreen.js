@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 import { getPassengerListApi } from '../../api/driverApi';
 
 const STATUS_CFG = {
@@ -82,7 +82,7 @@ const PassengerListScreen = ({ navigation, route: navRoute }) => {
           <Text style={styles.cardName}>{item.name}</Text>
           <View style={styles.cardMeta}>
             <View style={styles.seatPill}>
-              <Ionicons name="ticket-outline" size={10} color={COLORS.primary} />
+              <Ionicons name="ticket-outline" size={10} color={PURPLE.primary} />
               <Text style={styles.seatPillText}>Seat {item.seat}</Text>
             </View>
             {item.time !== '—' && (
@@ -103,7 +103,7 @@ const PassengerListScreen = ({ navigation, route: navRoute }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE.deep} />
 
       <View style={[styles.header, headerInsets]}>
         <View style={styles.headerDecor} />
@@ -169,7 +169,7 @@ const PassengerListScreen = ({ navigation, route: navRoute }) => {
       </View>
 
       {loading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.primary} />
+        <ActivityIndicator style={{ marginTop: 40 }} color={PURPLE.primary} />
       ) : (
         <FlatList
           data={filtered}
@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
 
   header: {
-    backgroundColor: COLORS.headerBg,
+    backgroundColor: PURPLE.deep,
     overflow: 'hidden',
   },
   headerDecor: {
@@ -240,9 +240,9 @@ const styles = StyleSheet.create({
     borderRadius: 999, backgroundColor: COLORS.surfaceAlt,
     borderWidth: 1, borderColor: 'transparent',
   },
-  filterBtnActive: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primaryMid },
+  filterBtnActive: { backgroundColor: PURPLE.light, borderColor: PURPLE.midStrong },
   filterText: { fontSize: 11, fontWeight: '700', color: COLORS.textMuted },
-  filterTextActive: { color: COLORS.primary },
+  filterTextActive: { color: PURPLE.primary },
 
   list: { paddingHorizontal: 14, paddingBottom: 24 },
 
@@ -254,18 +254,18 @@ const styles = StyleSheet.create({
   },
   cardAvatar: {
     width: 42, height: 42, borderRadius: 13,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: PURPLE.light,
     alignItems: 'center', justifyContent: 'center',
   },
-  cardAvatarText: { fontSize: 14, fontWeight: '800', color: COLORS.primary },
+  cardAvatarText: { fontSize: 14, fontWeight: '800', color: PURPLE.primary },
   cardName: { fontSize: 13, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 5 },
   cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   seatPill: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: COLORS.primaryLight, borderRadius: 999,
+    backgroundColor: PURPLE.light, borderRadius: 999,
     paddingHorizontal: 8, paddingVertical: 3,
   },
-  seatPillText: { fontSize: 10, fontWeight: '700', color: COLORS.primary },
+  seatPillText: { fontSize: 10, fontWeight: '700', color: PURPLE.primary },
   metaDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: COLORS.border },
   metaTime: { fontSize: 10, color: COLORS.textMuted, fontWeight: '500' },
   statusBadge: {

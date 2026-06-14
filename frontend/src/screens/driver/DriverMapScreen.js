@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ExpoLocation from 'expo-location';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 import {
   markStopArrivalApi, getRouteWaypointsApi, getRouteStopsApi,
   getDriverTripsApi, startTripApi, completeTripApi, cancelTripApi,
@@ -59,12 +59,12 @@ const isActive = s => ['ongoing', 'active', 'in_progress'].includes(s);
 const isDone   = s => ['completed', 'cancelled', 'closed'].includes(s);
 
 const STATUS_CFG = {
-  confirmed: { label: 'Upcoming', bg: COLORS.primaryLight,    text: COLORS.primary,   dot: COLORS.primary   },
-  boarded:   { label: 'Boarding', bg: COLORS.primaryLight,    text: COLORS.primary,   dot: COLORS.primary   },
+  confirmed: { label: 'Upcoming', bg: PURPLE.light,    text: PURPLE.primary,   dot: PURPLE.primary   },
+  boarded:   { label: 'Boarding', bg: PURPLE.light,    text: PURPLE.primary,   dot: PURPLE.primary   },
   ongoing:   { label: 'Active',   bg: COLORS.secondaryLight,  text: COLORS.secondary, dot: COLORS.secondary },
   completed: { label: 'Done',     bg: COLORS.surfaceAlt,      text: COLORS.textMuted, dot: COLORS.textMuted },
   cancelled: { label: 'Cancelled',bg: '#FEE2E2',              text: COLORS.danger,    dot: COLORS.danger    },
-  upcoming:  { label: 'Upcoming', bg: COLORS.primaryLight,    text: COLORS.primary,   dot: COLORS.primary   },
+  upcoming:  { label: 'Upcoming', bg: PURPLE.light,    text: PURPLE.primary,   dot: PURPLE.primary   },
 };
 
 // ─── Trip Action Modal ─────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ const TripActionModal = ({ trip, loading, insets, onClose, onStart, onEnd, onCan
 
           <View style={mS.header}>
             <View style={mS.busIcon}>
-              <Ionicons name="bus" size={20} color={COLORS.primary} />
+              <Ionicons name="bus" size={20} color={PURPLE.primary} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={mS.routeName}>{trip.routeName}</Text>
@@ -159,7 +159,7 @@ const mS = StyleSheet.create({
   },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.border, alignSelf: 'center', marginBottom: 16 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
-  busIcon: { width: 44, height: 44, borderRadius: 13, backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center' },
+  busIcon: { width: 44, height: 44, borderRadius: 13, backgroundColor: PURPLE.light, alignItems: 'center', justifyContent: 'center' },
   routeName: { fontSize: 15, fontWeight: '800', color: COLORS.textPrimary },
   routeSub:  { fontSize: 11, color: COLORS.textMuted, marginTop: 2, fontWeight: '500' },
   badge:     { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
@@ -393,11 +393,11 @@ const DriverMapScreen = ({ navigation, route }) => {
       >
         {/* Planned route (dashed) */}
         {routeWaypoints.length >= 2 && (
-          <Polyline coordinates={routeWaypoints} strokeColor={COLORS.primaryMid ?? '#93C5FD'} strokeWidth={4} lineDashPattern={[8, 4]} />
+          <Polyline coordinates={routeWaypoints} strokeColor={PURPLE.midStrong ?? '#93C5FD'} strokeWidth={4} lineDashPattern={[8, 4]} />
         )}
         {/* Completed portion */}
         {routeWaypoints.length >= 2 && doneCount > 0 && (
-          <Polyline coordinates={routeWaypoints.slice(0, Math.max(2, doneCount))} strokeColor={COLORS.primary} strokeWidth={5} />
+          <Polyline coordinates={routeWaypoints.slice(0, Math.max(2, doneCount))} strokeColor={PURPLE.primary} strokeWidth={5} />
         )}
 
         {/* Bus marker */}
@@ -432,7 +432,7 @@ const DriverMapScreen = ({ navigation, route }) => {
       {/* GPS loading overlay (non-blocking — map still shows) */}
       {!location && (
         <View style={styles.gpsOverlay}>
-          <ActivityIndicator size="small" color={COLORS.primary} />
+          <ActivityIndicator size="small" color={PURPLE.primary} />
           <Text style={styles.gpsOverlayText}>Getting GPS…</Text>
         </View>
       )}
@@ -464,9 +464,9 @@ const DriverMapScreen = ({ navigation, route }) => {
       <View style={styles.statsBar}>
         {[
           { icon: 'location-outline', val: String(doneCount),                                          unit: 'done',     color: COLORS.secondary },
-          { icon: 'flag-outline',     val: String(stops.length - doneCount),                          unit: 'remaining',color: COLORS.primary   },
+          { icon: 'flag-outline',     val: String(stops.length - doneCount),                          unit: 'remaining',color: PURPLE.primary   },
           { icon: 'time-outline',     val: nextStopEta?.eta != null ? String(nextStopEta.eta) : '—',  unit: 'min next', color: COLORS.warning   },
-          { icon: 'calendar-outline', val: String(trips.filter(t => !isDone(t.status)).length),       unit: 'trips',    color: COLORS.primary   },
+          { icon: 'calendar-outline', val: String(trips.filter(t => !isDone(t.status)).length),       unit: 'trips',    color: PURPLE.primary   },
         ].map((s, i) => (
           <View key={i} style={[styles.statCell, i < 3 && styles.statCellBorder]}>
             <Ionicons name={s.icon} size={13} color={s.color} />
@@ -495,7 +495,7 @@ const DriverMapScreen = ({ navigation, route }) => {
           <View style={styles.nextStopCard}>
             <View style={styles.nextStopLeft}>
               <View style={styles.nextStopIconWrap}>
-                <Ionicons name="location" size={15} color={COLORS.primary} />
+                <Ionicons name="location" size={15} color={PURPLE.primary} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.nextStopLbl}>Next Stop</Text>
@@ -526,13 +526,13 @@ const DriverMapScreen = ({ navigation, route }) => {
                   <Ionicons
                     name={stop.done ? 'checkmark-circle' : isNext ? 'radio-button-on' : 'ellipse-outline'}
                     size={12}
-                    color={stop.done ? COLORS.secondary : isNext ? COLORS.primary : COLORS.textMuted}
+                    color={stop.done ? COLORS.secondary : isNext ? PURPLE.primary : COLORS.textMuted}
                   />
-                  <Text style={[styles.stopChipName, stop.done && { color: COLORS.secondary }, isNext && { color: COLORS.primary }]} numberOfLines={1}>
+                  <Text style={[styles.stopChipName, stop.done && { color: COLORS.secondary }, isNext && { color: PURPLE.primary }]} numberOfLines={1}>
                     {stop.name}
                   </Text>
                   {!stop.done && stop.eta !== null && (
-                    <View style={[styles.stopChipEtaPill, isNext && { backgroundColor: COLORS.primary }]}>
+                    <View style={[styles.stopChipEtaPill, isNext && { backgroundColor: PURPLE.primary }]}>
                       <Text style={[styles.stopChipEtaText, isNext && { color: COLORS.white }]}>{stop.eta}m</Text>
                     </View>
                   )}
@@ -559,7 +559,7 @@ const DriverMapScreen = ({ navigation, route }) => {
         {/* ── Today's Trips ── */}
         <Text style={styles.tripsHeader}>Today's Trips</Text>
         {tripsLoading ? (
-          <ActivityIndicator color={COLORS.primary} style={{ marginVertical: 12 }} />
+          <ActivityIndicator color={PURPLE.primary} style={{ marginVertical: 12 }} />
         ) : sortedTrips.length === 0 ? (
           <Text style={styles.tripsEmpty}>No trips scheduled for today.</Text>
         ) : (
@@ -635,12 +635,12 @@ const styles = StyleSheet.create({
   statUnit: { fontSize: 9, color: COLORS.textMuted, fontWeight: '600', textTransform: 'uppercase' },
 
   markerWrap:  { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
-  markerPulse: { position: 'absolute', width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(37,99,235,0.2)' },
-  markerCore:  { width: 30, height: 30, borderRadius: 15, backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2.5, borderColor: COLORS.white, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 6, elevation: 8 },
+  markerPulse: { position: 'absolute', width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(124,58,237,0.2)' },
+  markerCore:  { width: 30, height: 30, borderRadius: 15, backgroundColor: PURPLE.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2.5, borderColor: COLORS.white, shadowColor: PURPLE.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 6, elevation: 8 },
 
   stopPin:          { width: 16, height: 16, borderRadius: 8, backgroundColor: COLORS.border, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: COLORS.white },
   stopPinDone:      { backgroundColor: COLORS.secondary },
-  stopPinNext:      { width: 22, height: 22, borderRadius: 11, backgroundColor: COLORS.primary, borderWidth: 2.5 },
+  stopPinNext:      { width: 22, height: 22, borderRadius: 11, backgroundColor: PURPLE.primary, borderWidth: 2.5 },
   stopPinInnerNext: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.white },
   stopInnerDot:     { width: 5, height: 5, borderRadius: 2.5, backgroundColor: COLORS.textMuted },
 
@@ -650,20 +650,20 @@ const styles = StyleSheet.create({
 
   panel: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: COLORS.white, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: -6 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 20 },
 
-  nextStopCard:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.primaryLight, borderRadius: 14, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: COLORS.primaryMid ?? '#93C5FD' },
+  nextStopCard:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: PURPLE.light, borderRadius: 14, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: PURPLE.midStrong ?? '#93C5FD' },
   nextStopLeft:     { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   nextStopRight:    { flexDirection: 'row', alignItems: 'center', gap: 8 },
   nextStopIconWrap: { width: 34, height: 34, borderRadius: 10, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center' },
   nextStopLbl:      { fontSize: 9, fontWeight: '700', color: COLORS.textMuted, textTransform: 'uppercase' },
   nextStopName:     { fontSize: 14, fontWeight: '800', color: COLORS.textPrimary, marginTop: 2 },
-  nextEtaBadge:     { backgroundColor: COLORS.primary, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6 },
+  nextEtaBadge:     { backgroundColor: PURPLE.primary, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6 },
   nextEtaText:      { fontSize: 13, fontWeight: '800', color: COLORS.white },
   approachingBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: COLORS.warning, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
   approachingText:  { fontSize: 11, fontWeight: '800', color: COLORS.white },
 
   stopChip:         { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.surfaceAlt, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: COLORS.border, maxWidth: 150 },
   stopChipDone:     { backgroundColor: COLORS.secondaryLight, borderColor: COLORS.secondary + '40' },
-  stopChipNext:     { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primary },
+  stopChipNext:     { backgroundColor: PURPLE.light, borderColor: PURPLE.primary },
   stopChipName:     { fontSize: 11, fontWeight: '600', color: COLORS.textMuted, flexShrink: 1 },
   stopChipEtaPill:  { backgroundColor: COLORS.border, borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2 },
   stopChipEtaText:  { fontSize: 10, fontWeight: '800', color: COLORS.textMuted },

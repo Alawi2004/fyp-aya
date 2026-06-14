@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView,
   Alert, Platform, StatusBar, TextInput, KeyboardAvoidingView,
 } from 'react-native';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import { Ionicons } from '@expo/vector-icons';
-import Button from '../../components/common/Button';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
+import GradientFill from '../../components/common/GradientFill';
+import PressableScale from '../../components/common/PressableScale';
 
 const ISSUE_TYPES = [
   { id: 'traffic',    label: 'Traffic Congestion', icon: 'car-outline'           },
@@ -54,15 +55,18 @@ const IssueReportScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE.deep} />
 
-      {/* Header */}
+      {/* Gradient hero header */}
       <View style={[styles.header, headerInsets]}>
-        <View style={styles.headerDecor} />
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <GradientFill id="issueHero" colors={PURPLE.gradient} vertical />
+          <View style={styles.headerDecor} />
+        </View>
         <View style={styles.headerTop}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <PressableScale style={styles.backBtn} onPress={() => navigation.goBack()} scaleTo={0.88}>
             <Ionicons name="arrow-back" size={20} color={COLORS.white} />
-          </TouchableOpacity>
+          </PressableScale>
           <View style={{ alignItems: 'center' }}>
             <Text style={styles.headerTitle}>Report Issue</Text>
             <Text style={styles.headerSub}>Notify management instantly</Text>
@@ -85,7 +89,7 @@ const IssueReportScreen = ({ navigation }) => {
         {/* Trip context */}
         <View style={styles.contextCard}>
           <View style={styles.contextRow}>
-            <Ionicons name="bus-outline" size={15} color={COLORS.primary} />
+            <Ionicons name="bus-outline" size={15} color={PURPLE.primary} />
             <Text style={styles.contextLabel}>Active Trip</Text>
             <Text style={styles.contextVal}>Route A · BUS-101</Text>
           </View>
@@ -101,17 +105,17 @@ const IssueReportScreen = ({ navigation }) => {
         <Text style={styles.sectionTitle}>Issue Category</Text>
         <View style={styles.typesGrid}>
           {ISSUE_TYPES.map(t => (
-            <TouchableOpacity
+            <PressableScale
               key={t.id}
               style={[styles.typeCard, selectedType?.id === t.id && styles.typeCardSelected]}
-              activeOpacity={0.8}
+              scaleTo={0.93}
               onPress={() => setSelectedType(t)}
             >
               <View style={[styles.typeIconWrap, selectedType?.id === t.id && styles.typeIconActive]}>
                 <Ionicons
                   name={t.icon}
                   size={20}
-                  color={selectedType?.id === t.id ? COLORS.primary : COLORS.textMuted}
+                  color={selectedType?.id === t.id ? PURPLE.primary : COLORS.textMuted}
                 />
               </View>
               <Text style={[styles.typeLabel, selectedType?.id === t.id && styles.typeLabelSelected]}>
@@ -119,10 +123,10 @@ const IssueReportScreen = ({ navigation }) => {
               </Text>
               {selectedType?.id === t.id && (
                 <View style={styles.typeCheckmark}>
-                  <Ionicons name="checkmark-circle" size={14} color={COLORS.primary} />
+                  <Ionicons name="checkmark-circle" size={14} color={PURPLE.primary} />
                 </View>
               )}
-            </TouchableOpacity>
+            </PressableScale>
           ))}
         </View>
 
@@ -130,12 +134,13 @@ const IssueReportScreen = ({ navigation }) => {
         <Text style={styles.sectionTitle}>Priority Level</Text>
         <View style={styles.priorityRow}>
           {PRIORITY_OPTS.map(p => (
-            <TouchableOpacity
+            <PressableScale
               key={p.key}
               style={[
                 styles.priorityBtn,
                 priority === p.key && { backgroundColor: p.bg, borderColor: p.color },
               ]}
+              scaleTo={0.94}
               onPress={() => setPriority(p.key)}
             >
               <Text style={[styles.priorityLabel, priority === p.key && { color: p.color }]}>
@@ -144,7 +149,7 @@ const IssueReportScreen = ({ navigation }) => {
               <Text style={[styles.priorityDesc, priority === p.key && { color: p.color }]}>
                 {p.desc}
               </Text>
-            </TouchableOpacity>
+            </PressableScale>
           ))}
         </View>
 
@@ -169,21 +174,20 @@ const IssueReportScreen = ({ navigation }) => {
 
         {/* Auto-attach note */}
         <View style={styles.attachNote}>
-          <Ionicons name="attach-outline" size={15} color={COLORS.primary} />
+          <Ionicons name="attach-outline" size={15} color={PURPLE.primary} />
           <Text style={styles.attachText}>
             GPS location, vehicle ID, and trip details will be attached automatically.
           </Text>
         </View>
 
-        <Button
-          title="Submit Report"
+        <PressableScale
+          style={[styles.submitBtn, (!selectedType || !description.trim() || loading) && { opacity: 0.55 }]}
           onPress={handleSubmit}
-          loading={loading}
-          disabled={!selectedType || !description.trim()}
-          style={styles.submitBtn}
-          size="lg"
-          icon={<Ionicons name="send-outline" size={15} color={COLORS.white} />}
-        />
+          disabled={!selectedType || !description.trim() || loading}
+        >
+          <Ionicons name={loading ? 'hourglass-outline' : 'send-outline'} size={16} color={COLORS.white} />
+          <Text style={styles.submitBtnText}>{loading ? 'Submitting…' : 'Submit Report'}</Text>
+        </PressableScale>
 
         <View style={{ height: 30 }} />
       </ScrollView>
@@ -198,8 +202,9 @@ const styles = StyleSheet.create({
 
   /* Header */
   header: {
-    backgroundColor: COLORS.headerBg,
+    backgroundColor: PURPLE.deep,
     overflow: 'hidden',
+    borderBottomLeftRadius: 26, borderBottomRightRadius: 26,
   },
   headerDecor: {
     position: 'absolute', top: -50, right: -50,
@@ -241,7 +246,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05, shadowRadius: 5, elevation: 2,
     borderWidth: 1.5, borderColor: 'transparent',
   },
-  typeCardSelected: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
+  typeCardSelected: { borderColor: PURPLE.primary, backgroundColor: PURPLE.light },
   typeIconWrap: {
     width: 44, height: 44, borderRadius: 13,
     backgroundColor: COLORS.surfaceAlt,
@@ -249,7 +254,7 @@ const styles = StyleSheet.create({
   },
   typeIconActive: { backgroundColor: COLORS.white },
   typeLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textMuted, textAlign: 'center' },
-  typeLabelSelected: { color: COLORS.primary },
+  typeLabelSelected: { color: PURPLE.primary },
   typeCheckmark: { position: 'absolute', top: 6, right: 6 },
 
   /* Priority */
@@ -285,12 +290,18 @@ const styles = StyleSheet.create({
   /* Attach note */
   attachNote: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    backgroundColor: COLORS.primaryLight, borderRadius: 12,
-    padding: 12, marginBottom: 18, borderWidth: 1, borderColor: COLORS.primaryMid,
+    backgroundColor: PURPLE.light, borderRadius: 12,
+    padding: 12, marginBottom: 18, borderWidth: 1, borderColor: PURPLE.midStrong,
   },
-  attachText: { flex: 1, fontSize: 12, color: COLORS.primary, fontWeight: '600', lineHeight: 18 },
+  attachText: { flex: 1, fontSize: 12, color: PURPLE.primary, fontWeight: '600', lineHeight: 18 },
 
-  submitBtn: { borderRadius: 14 },
+  submitBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: PURPLE.primary, borderRadius: 14, paddingVertical: 16,
+    shadowColor: PURPLE.primary, shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3, shadowRadius: 12, elevation: 5,
+  },
+  submitBtnText: { fontSize: 15, fontWeight: '800', color: COLORS.white },
 });
 
 export default IssueReportScreen;
