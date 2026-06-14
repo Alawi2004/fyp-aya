@@ -354,6 +354,7 @@ const HomeScreen = ({ navigation }) => {
     loadFavCount();
   }, [loadBuses, loadFavCount]);
 
+
   // Hero entrance: greeting row → wallet → search, staggered springs.
   useEffect(() => {
     Animated.stagger(
@@ -633,16 +634,11 @@ const HomeScreen = ({ navigation }) => {
         </View>
 
         <View style={{ paddingTop: insets.top + 10 }}>
-          {/* Greeting + identity */}
+          {/* Top bar */}
           <Animated.View style={[styles.heroTop, heroEntrance(0)]}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.greeting}>{getGreeting()}</Text>
-              <View style={styles.userNameRow}>
-                <Text style={styles.userName} numberOfLines={1}>
-                  {firstName}
-                </Text>
-                <WaveEmoji />
-              </View>
+            <View style={[styles.locationRow, { flex: 1 }]}>
+              <Ionicons name="bus" size={15} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.brandText}>Yalla Transit</Text>
             </View>
             <PressableScale
               style={styles.iconBtn}
@@ -877,16 +873,16 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 16,
   },
-  greeting: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.75)",
-    fontWeight: "500",
-  },
-  userNameRow: {
+  locationRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginTop: 1,
+    gap: 5,
+  },
+  brandText: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: COLORS.white,
+    letterSpacing: 0.5,
   },
   userName: {
     fontSize: 22,

@@ -6,13 +6,13 @@ import { THEME } from '../../constants/theme';
 const Button = ({
   title, onPress, variant = 'primary', size = 'md',
   loading = false, disabled = false, icon, style, textStyle,
-  driverMode = false,
+  driverMode = false, color: colorProp,
 }) => {
   const isPrimary = variant === 'primary';
   const isOutline = variant === 'outline';
   const isGhost = variant === 'ghost';
   const isDanger = variant === 'danger';
-  const color = driverMode ? COLORS.driverPrimary : COLORS.primary;
+  const color = colorProp || (driverMode ? COLORS.driverPrimary : COLORS.primary);
   const glowColor = driverMode ? COLORS.warningGlow : COLORS.primaryGlow;
 
   const bgColor = isPrimary ? color

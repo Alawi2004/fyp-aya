@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 import { THEME } from '../../constants/theme';
 
 const SeatPicker = ({ totalSeats = 40, bookedSeats = [], onSelect, multiSelect = false }) => {
@@ -31,7 +31,7 @@ const SeatPicker = ({ totalSeats = 40, bookedSeats = [], onSelect, multiSelect =
   const seatStyles = {
     available: { bg: COLORS.seatAvailable, border: COLORS.success,     text: COLORS.success     },
     booked:    { bg: COLORS.seatBooked,    border: COLORS.danger,      text: COLORS.danger      },
-    selected:  { bg: COLORS.seatSelected,  border: COLORS.primaryDark, text: COLORS.white       },
+    selected:  { bg: PURPLE.primary,        border: PURPLE.dark,        text: COLORS.white       },
   };
 
   const hasSelection = multiSelect ? selected.length > 0 : !!selected;
@@ -101,17 +101,17 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot: { width: 14, height: 14, borderRadius: 4, borderWidth: 1.5 },
   legendText: { fontSize: 12, color: COLORS.textSecondary },
-  busFront: { alignItems: 'center', backgroundColor: COLORS.primaryLight, borderRadius: 12, padding: 8, marginBottom: 16 },
-  busFrontText: { fontSize: 13, fontWeight: '600', color: COLORS.primary },
+  busFront: { alignItems: 'center', backgroundColor: PURPLE.light, borderRadius: 12, padding: 8, marginBottom: 16 },
+  busFrontText: { fontSize: 13, fontWeight: '600', color: PURPLE.primary },
   seatsGrid: { gap: 8 },
   row: { flexDirection: 'row', justifyContent: 'center', gap: 8 },
   seat: { width: 50, height: 44, borderRadius: 8, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   seatText: { fontSize: 11, fontWeight: '700' },
   emptySeat: { width: 50, height: 44 },
   aisle: { width: 24 },
-  selectedInfo: { marginTop: 16, alignItems: 'center', backgroundColor: COLORS.primaryLight, borderRadius: 10, padding: 10 },
+  selectedInfo: { marginTop: 16, alignItems: 'center', backgroundColor: PURPLE.light, borderRadius: 10, padding: 10 },
   selectedText: { fontSize: 14, color: COLORS.textSecondary },
-  selectedSeat: { fontWeight: '700', color: COLORS.primary },
+  selectedSeat: { fontWeight: '700', color: PURPLE.primary },
 });
 
 export default SeatPicker;

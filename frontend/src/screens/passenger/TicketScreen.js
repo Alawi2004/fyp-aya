@@ -10,7 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import Button from '../../components/common/Button';
 import ShareTicketModal from '../../components/passenger/ShareTicketModal';
 import { useAuth } from '../../context/AuthContext';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
+import GradientFill from '../../components/common/GradientFill';
 import { formatDateTime } from '../../utils/formatters';
 
 // expo-crypto — optional; falls back to a simpler digest if unavailable
@@ -102,17 +103,21 @@ const TicketScreen = ({ route, navigation }) => {
     return () => { cancelled = true; };
   }, [isOnline, booking, activeTicket, user]);
 
-  const urgencyColor = COLORS.secondary;
+  const urgencyColor = PURPLE.primary;
 
   const shareTicket = () => setShowShare(true);
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE.gradient[0]} />
 
       {/* ── Header ── */}
       <View style={[styles.header, headerInsets]}>
-        <View style={styles.headerDecor} />
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <GradientFill id="ticketHdr" colors={PURPLE.gradient} vertical />
+          <View style={styles.headerDecor1} />
+          <View style={styles.headerDecor2} />
+        </View>
         <TouchableOpacity
           style={styles.backBtn}
           onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Home')}
@@ -156,7 +161,7 @@ const TicketScreen = ({ route, navigation }) => {
               <Ionicons
                 name={booking.type === 'taxi' ? 'car-sport' : 'bus'}
                 size={26}
-                color={booking.type === 'taxi' ? '#D97706' : COLORS.primary}
+                color={booking.type === 'taxi' ? '#D97706' : PURPLE.primary}
               />
             </View>
             <View style={{ flex: 1 }}>
@@ -206,7 +211,7 @@ const TicketScreen = ({ route, navigation }) => {
                 <Text style={styles.detailLabel}>{d.label}</Text>
                 <Text style={[
                   styles.detailValue,
-                  d.highlight && { color: COLORS.primary },
+                  d.highlight && { color: PURPLE.primary },
                   d.green     && { color: COLORS.secondary },
                 ]}>
                   {d.value}
@@ -297,7 +302,7 @@ const TicketScreen = ({ route, navigation }) => {
                 </View>
 
                 {/* Badge: HMAC online / OFFLINE static */}
-                <View style={[styles.modeBadge, { backgroundColor: isOnline ? COLORS.primary : COLORS.warning }]}>
+                <View style={[styles.modeBadge, { backgroundColor: isOnline ? PURPLE.primary : COLORS.warning }]}>
                   <Ionicons name={isOnline ? 'lock-closed' : 'cloud-offline-outline'} size={10} color={COLORS.white} />
                   <Text style={styles.modeBadgeText}>{isOnline ? 'HMAC-SHA256' : 'OFFLINE'}</Text>
                 </View>
@@ -327,12 +332,14 @@ const TicketScreen = ({ route, navigation }) => {
             onPress={() => navigation.navigate('BusTracking', { tripId: booking.bus?._id, busName: booking.bus?.name, booking })}
             icon={<Ionicons name="navigate-outline" size={18} color={COLORS.white} />}
             size="lg"
+            color={PURPLE.primary}
           />
           <Button
             title="Share Ticket"
             onPress={shareTicket}
             variant="outline"
-            icon={<Ionicons name="share-outline" size={18} color={COLORS.primary} />}
+            color={PURPLE.primary}
+            icon={<Ionicons name="share-outline" size={18} color={PURPLE.primary} />}
             style={{ marginTop: 10 }}
           />
           <Button
@@ -372,13 +379,17 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
 
   header: {
-    backgroundColor: COLORS.headerBg,
+    backgroundColor: PURPLE.gradient[0],
     flexDirection: 'row', alignItems: 'center',
     paddingBottom: 16, paddingHorizontal: 16, overflow: 'hidden',
   },
-  headerDecor: {
-    position: 'absolute', width: 180, height: 180, borderRadius: 90,
-    backgroundColor: 'rgba(255,255,255,0.05)', top: -60, right: -40,
+  headerDecor1: {
+    position: 'absolute', width: 200, height: 200, borderRadius: 100,
+    backgroundColor: 'rgba(255,255,255,0.07)', top: -70, right: -50,
+  },
+  headerDecor2: {
+    position: 'absolute', width: 110, height: 110, borderRadius: 55,
+    backgroundColor: 'rgba(255,255,255,0.05)', bottom: -20, left: 60,
   },
   backBtn: {
     width: 38, height: 38, borderRadius: 12,
@@ -419,7 +430,7 @@ const styles = StyleSheet.create({
   ticketTop: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 20, paddingBottom: 16 },
   busIconWrap: {
     width: 52, height: 52, borderRadius: 16,
-    backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: PURPLE.light, alignItems: 'center', justifyContent: 'center',
   },
   taxiIconWrap: { backgroundColor: '#FEF3C7' },
 
@@ -429,7 +440,7 @@ const styles = StyleSheet.create({
   },
   driverAvatar: {
     width: 38, height: 38, borderRadius: 19,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: PURPLE.light,
     alignItems: 'center', justifyContent: 'center',
   },
   driverLabel: { fontSize: 9, fontWeight: '700', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: 0.6 },
@@ -483,9 +494,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999,
     backgroundColor: COLORS.background, borderWidth: 1.5, borderColor: COLORS.border,
   },
-  seatPillActive: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primary },
+  seatPillActive: { backgroundColor: PURPLE.light, borderColor: PURPLE.primary },
   seatPillText: { fontSize: 13, fontWeight: '700', color: COLORS.textMuted },
-  seatPillTextActive: { color: COLORS.primary },
+  seatPillTextActive: { color: PURPLE.primary },
 
   /* QR section */
   qrSection: { alignItems: 'center', paddingVertical: 20, paddingHorizontal: 20 },

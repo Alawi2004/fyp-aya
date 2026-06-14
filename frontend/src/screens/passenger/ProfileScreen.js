@@ -12,9 +12,9 @@ import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { getProfileApi, getMyRatingsApi } from '../../api/authApi';
 import { getWalletApi } from '../../api/walletApi';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 
-const BRAND = ['#1E3A8A', '#4338CA', '#7C3AED'];
+const BRAND = PURPLE.gradient;
 
 const CATEGORY_META = {
   regular:      { label: 'Regular Passenger', icon: 'person-outline',    color: COLORS.primary,    bg: COLORS.primaryLight,    discount: 'Full fare' },
@@ -52,7 +52,7 @@ const GradientFill = ({ id, colors, vertical = false }) => {
 const MenuItem = ({ icon, label, value, onPress, danger = false, rightEl, last = false }) => (
   <TouchableOpacity style={[styles.menuItem, last && { borderBottomWidth: 0 }]} onPress={onPress} activeOpacity={0.7}>
     <View style={[styles.menuIcon, danger && styles.menuIconDanger]}>
-      <Ionicons name={icon} size={18} color={danger ? COLORS.danger : COLORS.primary} />
+      <Ionicons name={icon} size={18} color={danger ? COLORS.danger : PURPLE.primary} />
     </View>
     <View style={{ flex: 1 }}>
       <Text style={[styles.menuLabel, danger && { color: COLORS.danger }]}>{label}</Text>
@@ -161,7 +161,7 @@ const ProfileScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 24 }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={PURPLE.primary} colors={[PURPLE.primary]} />
         }
       >
         {/* Hero */}
@@ -173,7 +173,7 @@ const ProfileScreen = ({ navigation }) => {
           </View>
 
           <TouchableOpacity
-            style={styles.editBtn}
+            style={[styles.editBtn, { top: headerInsets.paddingTop }]}
             onPress={() => navigation.push('PersonalInfo')}
             activeOpacity={0.85}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -219,20 +219,6 @@ const ProfileScreen = ({ navigation }) => {
 
         {/* Body */}
         <View style={styles.body}>
-          {/* Membership */}
-          <View style={styles.memberCard}>
-            <View style={[styles.memberIcon, { backgroundColor: cat.bg }]}>
-              <Ionicons name={cat.icon} size={20} color={cat.color} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.memberTitle}>{cat.label}</Text>
-              <Text style={styles.memberSub}>{completedTrips} completed · {cat.discount}</Text>
-            </View>
-            <View style={[styles.memberBadge, { backgroundColor: cat.bg }]}>
-              <Text style={[styles.memberBadgeText, { color: cat.color }]}>{isVerified ? 'Active' : 'Pending'}</Text>
-            </View>
-          </View>
-
           {/* Account */}
           <Text style={styles.sectionLabel}>Account</Text>
           <View style={styles.menuCard}>
@@ -321,7 +307,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.05)', bottom: -30, left: -40,
   },
   editBtn: {
-    position: 'absolute', right: 20, top: 14,
+    position: 'absolute', right: 20,
     width: 38, height: 38, borderRadius: 19,
     backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center', justifyContent: 'center',
@@ -389,8 +375,8 @@ const styles = StyleSheet.create({
   menuCard: {
     backgroundColor: COLORS.white, borderRadius: 18,
     marginBottom: 16, overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
+    shadowColor: PURPLE.deep, shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1, shadowRadius: 8, elevation: 3,
   },
   menuItem: {
     flexDirection: 'row', alignItems: 'center',
@@ -399,7 +385,7 @@ const styles = StyleSheet.create({
   },
   menuIcon: {
     width: 36, height: 36, borderRadius: 11,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: PURPLE.light,
     alignItems: 'center', justifyContent: 'center',
   },
   menuIconDanger: { backgroundColor: COLORS.dangerLight },

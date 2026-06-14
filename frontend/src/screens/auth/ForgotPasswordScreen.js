@@ -8,10 +8,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Defs, LinearGradient as SvgGradient, Stop, Rect } from 'react-native-svg';
 import { forgotPasswordApi } from '../../api/authApi';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const BRAND = ['#1E3A8A', '#4338CA', '#7C3AED'];
+const BRAND = PURPLE.gradient;
 
 // ── SVG gradient fill that measures its own box ──────────────────────────────
 const GradientFill = ({ id, colors, radius = 0, vertical = false }) => {
@@ -52,8 +52,8 @@ const Field = ({ icon, label, value, onChangeText, keyboardType, error }) => {
     }).start();
   }, [focused, value]);
 
-  const borderColor = error ? COLORS.danger : focused ? COLORS.primary : COLORS.border;
-  const tint = error ? COLORS.danger : focused ? COLORS.primary : COLORS.textMuted;
+  const borderColor = error ? COLORS.danger : focused ? PURPLE.primary : COLORS.border;
+  const tint = error ? COLORS.danger : focused ? PURPLE.primary : COLORS.textMuted;
 
   return (
     <View style={{ marginBottom: error ? 6 : 16 }}>
@@ -191,7 +191,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
               transform: [{ scale: intro[0].interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
             }]}>
               <View style={styles.logoCircle}>
-                <Ionicons name={sent ? 'mail' : 'lock-open'} size={34} color={COLORS.primary} />
+                <Ionicons name={sent ? 'mail' : 'lock-open'} size={34} color={PURPLE.primary} />
               </View>
             </Animated.View>
             <Animated.Text style={[styles.brand, sect(1)]}>
@@ -229,7 +229,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
                     style={[styles.primaryBtn, { marginTop: 4, transform: [{ scale: btnScale }], opacity: loading ? 0.85 : 1 }]}
                   >
                     <View style={styles.primaryBg} pointerEvents="none">
-                      <GradientFill id="fpBtnGrad" colors={['#2563EB', '#7C3AED']} radius={16} />
+                      <GradientFill id="fpBtnGrad" colors={PURPLE.gradient} radius={16} />
                     </View>
                     {loading ? (
                       <ActivityIndicator color={COLORS.white} />
@@ -242,7 +242,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
                   </AnimatedPressable>
 
                   <TouchableOpacity style={styles.backToLogin} onPress={() => navigation.navigate('Login')}>
-                    <Ionicons name="arrow-back" size={14} color={COLORS.primary} />
+                    <Ionicons name="arrow-back" size={14} color={PURPLE.primary} />
                     <Text style={styles.backToLoginText}>Back to Sign In</Text>
                   </TouchableOpacity>
                 </Animated.View>
@@ -253,7 +253,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
                 <Text style={styles.subtitle}>Open your inbox and follow the link to reset your password.</Text>
 
                 <View style={styles.note}>
-                  <Ionicons name="information-circle" size={18} color={COLORS.primary} />
+                  <Ionicons name="information-circle" size={18} color={PURPLE.primary} />
                   <Text style={styles.noteText}>Didn't receive it? Check your spam folder, or resend below.</Text>
                 </View>
 
@@ -264,14 +264,14 @@ const ForgotPasswordScreen = ({ navigation }) => {
                   style={[styles.primaryBtn, { marginTop: 18, transform: [{ scale: btnScale }] }]}
                 >
                   <View style={styles.primaryBg} pointerEvents="none">
-                    <GradientFill id="fpBtnGrad2" colors={['#2563EB', '#7C3AED']} radius={16} />
+                    <GradientFill id="fpBtnGrad2" colors={PURPLE.gradient} radius={16} />
                   </View>
                   <Text style={styles.primaryText}>Back to Sign In</Text>
                   <Ionicons name="arrow-forward" size={19} color={COLORS.white} />
                 </AnimatedPressable>
 
                 <TouchableOpacity style={styles.ghostBtn} onPress={() => setSent(false)} activeOpacity={0.85}>
-                  <Ionicons name="refresh" size={17} color={COLORS.primary} />
+                  <Ionicons name="refresh" size={17} color={PURPLE.primary} />
                   <Text style={styles.ghostText}>Resend email</Text>
                 </TouchableOpacity>
               </Animated.View>
@@ -351,19 +351,19 @@ const styles = StyleSheet.create({
 
   /* Secondary actions */
   backToLogin: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 20 },
-  backToLoginText: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
+  backToLoginText: { fontSize: 14, fontWeight: '700', color: PURPLE.primary },
   ghostBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    height: 54, borderRadius: 16, borderWidth: 1.5, borderColor: COLORS.primaryMid,
-    backgroundColor: COLORS.primaryLight, marginTop: 12,
+    height: 54, borderRadius: 16, borderWidth: 1.5, borderColor: PURPLE.midStrong,
+    backgroundColor: PURPLE.light, marginTop: 12,
   },
-  ghostText: { fontSize: 15, fontWeight: '800', color: COLORS.primary },
+  ghostText: { fontSize: 15, fontWeight: '800', color: PURPLE.primary },
 
   note: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    backgroundColor: COLORS.primaryLight, borderRadius: 14, padding: 14,
+    backgroundColor: PURPLE.light, borderRadius: 14, padding: 14,
   },
-  noteText: { flex: 1, fontSize: 13, color: COLORS.primary, lineHeight: 19, fontWeight: '500' },
+  noteText: { flex: 1, fontSize: 13, color: PURPLE.primary, lineHeight: 19, fontWeight: '500' },
 
   secureRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 22 },
   secureText: { fontSize: 12, color: COLORS.textMuted, fontWeight: '500' },
