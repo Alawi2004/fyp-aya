@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  addComplaintComment,
   assignComplaint,
   deleteMyComplaint,
   editMyComplaint,
@@ -110,5 +111,7 @@ router.patch("/:id/status", requireAdmin, updateComplaintStatus);
  *       - bearerAuth: []
  */
 router.patch("/:id/resolve", requireAdmin, resolveComplaint);
+
+router.post("/:id/comments", requireAdmin, addComplaintComment);
 
 export default router;

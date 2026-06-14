@@ -145,11 +145,12 @@ const mockAdminResponse = (method, endpoint, data = {}) => {
   if (endpoint.startsWith('/tickets') || endpoint.startsWith('/bookings')) return MOCK_TICKETS;
   if (endpoint.startsWith('/ratings')) return MOCK_RATINGS;
   if (endpoint.startsWith('/users/passengers')) return [];  // PassengersPage uses its own mock
-  if (endpoint.match(/\/users\/\d+\/suspend/))   return { message: "User suspended", new_status: "suspended" };
-  if (endpoint.match(/\/users\/\d+\/restore/))   return { message: "User restored",  new_status: "active"    };
+  if (endpoint.match(/\/users\/\d+\/tickets/))        return [];
+  if (endpoint.match(/\/users\/\d+\/suspend/))        return { message: "User suspended", new_status: "suspended" };
+  if (endpoint.match(/\/users\/\d+\/restore/))        return { message: "User restored",  new_status: "active"    };
   if (endpoint.match(/\/users\/\d+\/suspension-logs/)) return [];
-  if (endpoint.startsWith('/wallet/adjust'))      return { message: "Wallet adjusted", balance_after: 50 };
-  if (endpoint.startsWith('/wallet/adjustments')) return [];
+  if (endpoint.startsWith('/wallet/adjust'))          return { message: "Wallet adjusted", balance_after: 50 };
+  if (endpoint.startsWith('/wallet/adjustments'))     return [];
   if (endpoint.startsWith('/users')) return MOCK_USERS;
   if (endpoint.startsWith('/notifications/templates')) return MOCK_NOTIFICATION_TEMPLATES;
   if (endpoint.startsWith('/notifications/scheduled'))  return MOCK_SCHEDULED_NOTIFICATIONS;

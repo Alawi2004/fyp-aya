@@ -236,11 +236,68 @@ export const updateUserProfile = async (req, res) => {
 };
 
 export const getUserTickets = async (req, res) => {
-  const pool = await poolPromise;
-  const result = await pool.request()
-    .input("id", sql.Int, req.params.id)
-    .query("SELECT * FROM tickets WHERE user_id=@id");
-  res.json(result.recordset);
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input("id", sql.Int, req.params.id)
+      .query(`
+        SELECT
+          MIN(tk.ticket_id)                                    AS ticket_id,
+          tk.trip_id,
+          COUNT(*)                                             AS seat_count,
+          STRING_AGG(tk.seat_number, ', ')
+            WITHIN GROUP (ORDER BY tk.seat_number)            AS seat_number,
+          ISNULL(SUM(tk.amount), 0)                            AS fare,
+          MIN(tk.created_at)                                   AS created_at,
+          MIN(tk.booking_time)                                 AS booking_time,
+          r.route_name,
+          r.start_location                                     AS origin,
+          r.end_location                                       AS destination,
+          t.start_time,
+          t.end_time,
+          t.status                                             AS trip_status,
+          CASE
+            WHEN t.start_time IS NOT NULL
+            THEN CAST(
+                   DATEDIFF(MINUTE, t.start_time,
+                     ISNULL(t.end_time, DATEADD(MINUTE, 60, t.start_time)))
+                 AS NVARCHAR(10)) + N' min'
+            ELSE NULL
+          END                                                  AS duration,
+          v.model                                              AS vehicle_name,
+          v.plate_number                                       AS plate,
+          v.capacity                                           AS vehicle_capacity,
+          LOWER(ISNULL(v.vehicle_type, 'bus'))                 AS vehicle_type,
+          du.full_name                                         AS driver_name,
+          du.phone                                             AS driver_phone,
+          d.license_number                                     AS driver_license,
+          CASE
+            WHEN MAX(CASE WHEN tk.status != 'cancelled' THEN 1 ELSE 0 END) = 0
+                 THEN 'cancelled'
+            WHEN t.status = 'completed' THEN 'completed'
+            ELSE 'upcoming'
+          END                                                  AS ui_status
+        FROM       tickets  tk
+        LEFT JOIN  trips    t   ON  t.trip_id    = tk.trip_id
+        LEFT JOIN  routes   r   ON  r.route_id   = t.route_id
+        LEFT JOIN  vehicles v   ON  v.vehicle_id = t.vehicle_id
+        LEFT JOIN  drivers  d   ON  d.driver_id  = t.driver_id
+        LEFT JOIN  users    du  ON  du.user_id   = d.user_id
+        WHERE tk.user_id = @id
+        GROUP BY
+          tk.trip_id,
+          t.start_time, t.end_time, t.status,
+          r.route_name, r.start_location, r.end_location,
+          v.model, v.plate_number, v.capacity, v.vehicle_type,
+          du.full_name, du.phone,
+          d.license_number
+        ORDER BY MIN(tk.ticket_id) DESC
+      `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("[getUserTickets]", err.message);
+    res.status(500).json({ error: "Failed to fetch tickets" });
+  }
 };
 
 export const getUserNotifications = async (req, res) => {

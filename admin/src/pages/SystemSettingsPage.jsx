@@ -144,7 +144,7 @@ function FareTab({ s, set }) {
     <SectionCard title="Fare Rules" onSave={save} saving={saving} saved={saved} error={error}>
       <TwoCol>
         <Field label="Base Amount" unit="OMR" type="number" min="0" step="0.25" value={s["fare.base_amount"]} onChange={v => set("fare.base_amount", v)} description="Flat fare charged for every journey regardless of distance." />
-        <Field label="Per-km Rate" unit="OMR/km" type="number" min="0" step="0.01" value={s["fare.per_km_rate"]} onChange={v => set("fare.per_km_rate", v)} description="Variable component added on top of the base fare." />
+        <Field label="Per-km Rate" unit="$/km" type="number" min="0" step="0.01" value={s["fare.per_km_rate"]} onChange={v => set("fare.per_km_rate", v)} description="Variable component added on top of the base fare." />
         <Field label="Student Discount" unit="ratio 0–1" type="number" min="0" max="1" step="0.05" value={s["fare.student_discount"]} onChange={v => set("fare.student_discount", v)} description="e.g. 0.25 = 25% off for verified student accounts." />
         <Field label="Senior Discount" unit="ratio 0–1" type="number" min="0" max="1" step="0.05" value={s["fare.senior_discount"]} onChange={v => set("fare.senior_discount", v)} description="e.g. 0.30 = 30% off for senior citizens." />
         <Field label="Employee Discount" unit="ratio 0–1" type="number" min="0" max="1" step="0.05" value={s["fare.employee_discount"]} onChange={v => set("fare.employee_discount", v)} description="Discount for company employees." />
@@ -165,7 +165,7 @@ function FareTab({ s, set }) {
             return (
               <div key={label} style={{ background: "#fff", borderRadius: 8, padding: "10px 12px", border: "1px solid #BFDBFE" }}>
                 <div style={{ fontSize: 11, color: "#64748B" }}>{label}</div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: "#1D4ED8" }}>OMR {final.toFixed(2)}</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: "#1D4ED8" }}>${final.toFixed(2)}</div>
                 {disc > 0 && <div style={{ fontSize: 10, color: "#059669" }}>{Math.round(disc*100)}% off</div>}
               </div>
             );

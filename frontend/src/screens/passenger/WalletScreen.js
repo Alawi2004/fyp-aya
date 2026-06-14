@@ -138,7 +138,7 @@ const WalletScreen = () => {
           <View style={styles.heroStats}>
             <View style={styles.heroStat}>
               <Ionicons name="arrow-up-circle" size={16} color="rgba(255,255,255,0.8)" />
-              <Text style={styles.heroStatValue}>${totalSpent.toFixed(2)}</Text>
+              <Text style={styles.heroStatValue}>LBP {totalSpent.toFixed(0)}</Text>
               <Text style={styles.heroStatLabel}>Total Spent</Text>
             </View>
             <View style={styles.heroStatDivider} />

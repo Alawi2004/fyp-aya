@@ -141,33 +141,46 @@ export const getBookings = async (req, res) => {
           tk.seat_number,
           tk.amount,
           tk.created_at,
+          t.start_time,
+          r.route_name,
           v.model                                                              AS bus_name,
+          v.plate_number                                                       AS plate,
           LOWER(ISNULL(v.vehicle_type, 'bus'))                                 AS bus_type,
           r.start_location                                                     AS origin,
           r.end_location                                                       AS destination,
           CAST(DATEDIFF(MINUTE, t.start_time,
             ISNULL(t.end_time, DATEADD(MINUTE, 60, t.start_time)))
           AS VARCHAR) + ' min'                                                 AS duration,
+          du.full_name                                                         AS driver_name,
           CASE
             WHEN tk.status = 'cancelled' THEN 'cancelled'
             WHEN t.status  = 'completed' THEN 'completed'
             ELSE 'upcoming'
           END                                                                  AS ui_status
         FROM tickets  tk
-        JOIN trips    t ON t.trip_id    = tk.trip_id
-        JOIN vehicles v ON v.vehicle_id = t.vehicle_id
-        JOIN routes   r ON r.route_id   = t.route_id
+        JOIN trips    t  ON t.trip_id    = tk.trip_id
+        JOIN vehicles v  ON v.vehicle_id = t.vehicle_id
+        JOIN routes   r  ON r.route_id   = t.route_id
+        LEFT JOIN drivers d  ON d.driver_id = t.driver_id
+        LEFT JOIN users   du ON du.user_id  = d.user_id
         WHERE tk.user_id = @id
         ORDER BY tk.ticket_id DESC
       `);
 
     const bookings = result.recordset.map((row) => ({
-      _id:    String(row.ticket_id),
-      type:   "bus",
-      status: row.ui_status,
+      _id:           String(row.ticket_id),
+      ticketRef:     `TKT-${String(row.ticket_id).padStart(5, '0')}`,
+      type:          "bus",
+      status:        row.ui_status,
+      tripName:      row.route_name || `Trip #${row.trip_id}`,
+      departureTime: row.start_time,
+      date:          row.start_time || row.created_at,
+      bookedAt:      row.created_at,
+      driverName:    row.driver_name || null,
       bus: {
         _id:         row.trip_id,
         name:        row.bus_name,
+        plate:       row.plate,
         type:        row.bus_type,
         origin:      row.origin,
         destination: row.destination,
@@ -176,7 +189,6 @@ export const getBookings = async (req, res) => {
       seatId: row.seat_number,
       seats:  [row.seat_number],
       price:  parseFloat(row.amount),
-      date:   row.created_at,
     }));
 
     res.json(bookings);
