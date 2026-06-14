@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 import { formatDateTime } from '../../utils/formatters';
 
 // ── Status config ─────────────────────────────────────────────────────────────
@@ -89,7 +89,7 @@ const ShareTicketCard = React.forwardRef(
         {/* ── Route section ── */}
         <View style={[styles.routeSection, { backgroundColor: body }]}>
           <View style={styles.busNameRow}>
-            <Ionicons name="bus-outline" size={16} color={COLORS.primary} />
+            <Ionicons name="bus-outline" size={16} color={PURPLE.primary} />
             <Text style={[styles.busName, { color: txPri }]}>{bus.name || 'Express Service'}</Text>
             {bus.route ? (
               <View style={[styles.routePill, { borderColor: bdr }]}>
@@ -104,7 +104,7 @@ const ShareTicketCard = React.forwardRef(
               <Text style={[styles.stopCity, { color: txPri }]} numberOfLines={1}>
                 {bus.origin || '—'}
               </Text>
-              <Text style={[styles.stopTime, { color: COLORS.primary }]}>
+              <Text style={[styles.stopTime, { color: PURPLE.primary }]}>
                 {bus.departureTime || '—'}
               </Text>
               <Text style={[styles.stopLabel, { color: txSec }]}>DEPARTURE</Text>
@@ -126,7 +126,7 @@ const ShareTicketCard = React.forwardRef(
               <Text style={[styles.stopCity, { color: txPri }]} numberOfLines={1}>
                 {bus.destination || '—'}
               </Text>
-              <Text style={[styles.stopTime, { color: COLORS.primary }]}>
+              <Text style={[styles.stopTime, { color: PURPLE.primary }]}>
                 {bus.arrivalTime || '—'}
               </Text>
               <Text style={[styles.stopLabel, { color: txSec }]}>ARRIVAL</Text>
@@ -141,7 +141,7 @@ const ShareTicketCard = React.forwardRef(
         <View style={[styles.detailSection, { backgroundColor: bg }]}>
           <View style={styles.detailGrid}>
             <DetailCell label="PASSENGER" value={passengerName || 'Passenger'} isDark={isDark} />
-            <DetailCell label="SEAT"      value={ticket?.seat_number ?? booking?.seatId}              isDark={isDark} accent={COLORS.primary} />
+            <DetailCell label="SEAT"      value={ticket?.seat_number ?? booking?.seatId}              isDark={isDark} accent={PURPLE.primary} />
             <DetailCell
               label="DATE"
               value={booking?.date
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
 
   /* Header */
   header: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: PURPLE.primary,
     paddingHorizontal: 18,
     paddingTop: 16,
     paddingBottom: 16,
