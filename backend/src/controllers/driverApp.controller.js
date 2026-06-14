@@ -67,7 +67,11 @@ export const getDriverTrips = async (req, res) => {
       .input("id", sql.Int, driverId)
       .query(`
         SELECT t.*, r.route_name, r.start_location, r.end_location,
-               v.model AS vehicle_model, v.plate_number
+               v.model AS vehicle_model, v.plate_number, v.capacity AS totalSeats,
+               (SELECT ISNULL(SUM(tk.amount), 0) FROM tickets tk
+                  WHERE tk.trip_id = t.trip_id AND tk.status <> 'cancelled') AS earnings,
+               (SELECT COUNT(*) FROM tickets tk
+                  WHERE tk.trip_id = t.trip_id AND tk.status <> 'cancelled') AS passengers
         FROM trips t
         JOIN routes r ON t.route_id = r.route_id
         JOIN vehicles v ON t.vehicle_id = v.vehicle_id
@@ -169,6 +173,113 @@ export const getDriverEarnings = async (req, res) => {
     res.json(result.recordset[0] || { total_tickets: 0, total_earnings: 0 });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch earnings" });
+  }
+};
+
+// GET /api/driver/vehicle — the driver's currently assigned vehicle + maintenance summary
+export const getDriverVehicle = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    let driverId = req.query.driver_id;
+    if (!driverId && req.user?.user_id) {
+      const dr = await pool.request()
+        .input("uid", sql.Int, req.user.user_id)
+        .query("SELECT driver_id FROM drivers WHERE user_id = @uid");
+      driverId = dr.recordset[0]?.driver_id;
+    }
+    if (!driverId) return res.status(400).json({ error: "driver_id required" });
+
+    // Most recent vehicle this driver was assigned to (via trips)
+    const vRes = await pool.request()
+      .input("id", sql.Int, driverId)
+      .query(`
+        SELECT TOP 1 v.vehicle_id, v.plate_number, v.vehicle_type, v.capacity, v.model, v.status
+        FROM trips t
+        JOIN vehicles v ON v.vehicle_id = t.vehicle_id
+        WHERE t.driver_id = @id
+        ORDER BY t.start_time DESC
+      `);
+    const vehicle = vRes.recordset[0];
+    if (!vehicle) return res.json({ vehicle: null, maintenance: null });
+
+    // Latest maintenance record → last service, next scheduled service, odometer
+    const mRes = await pool.request()
+      .input("vid", sql.Int, vehicle.vehicle_id)
+      .query(`
+        SELECT TOP 1 service_date, next_service_date, odometer_km, service_type
+        FROM vehicle_maintenance_records
+        WHERE vehicle_id = @vid
+        ORDER BY service_date DESC
+      `);
+    const m = mRes.recordset[0] || null;
+
+    res.json({
+      vehicle: {
+        vehicle_id:   vehicle.vehicle_id,
+        plate_number: vehicle.plate_number,
+        vehicle_type: vehicle.vehicle_type,
+        capacity:     vehicle.capacity,
+        model:        vehicle.model,
+        status:       vehicle.status || "active",
+      },
+      maintenance: m ? {
+        last_service: m.service_date,
+        next_service: m.next_service_date,
+        odometer_km:  m.odometer_km,
+        service_type: m.service_type,
+      } : null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch vehicle" });
+  }
+};
+
+// POST /api/driver/service-request — driver requests a maintenance service for their vehicle
+export const createServiceRequest = async (req, res) => {
+  try {
+    const { service_type, service_date, notes } = req.body || {};
+    if (!service_type || !service_date) {
+      return res.status(400).json({ error: "service_type and service_date are required" });
+    }
+    const pool = await poolPromise;
+
+    // Resolve driver + their current vehicle
+    let driverId = req.query.driver_id;
+    if (!driverId && req.user?.user_id) {
+      const dr = await pool.request()
+        .input("uid", sql.Int, req.user.user_id)
+        .query("SELECT driver_id FROM drivers WHERE user_id = @uid");
+      driverId = dr.recordset[0]?.driver_id;
+    }
+    if (!driverId) return res.status(400).json({ error: "driver_id required" });
+
+    const vRes = await pool.request()
+      .input("id", sql.Int, driverId)
+      .query(`
+        SELECT TOP 1 t.vehicle_id
+        FROM trips t
+        WHERE t.driver_id = @id AND t.vehicle_id IS NOT NULL
+        ORDER BY t.start_time DESC
+      `);
+    const vehicleId = vRes.recordset[0]?.vehicle_id;
+    if (!vehicleId) return res.status(400).json({ error: "No vehicle assigned to you." });
+
+    const ins = await pool.request()
+      .input("vid",   sql.Int, vehicleId)
+      .input("date",  sql.Date, service_date)
+      .input("type",  sql.NVarChar(100), String(service_type).slice(0, 100))
+      .input("notes", sql.NVarChar(500), notes ? String(notes).slice(0, 500) : null)
+      .input("by",    sql.Int, req.user?.user_id ?? null)
+      .query(`
+        INSERT INTO vehicle_maintenance_records
+          (vehicle_id, service_date, service_type, mechanic, notes, created_at, created_by)
+        OUTPUT INSERTED.record_id
+        VALUES (@vid, @date, @type, 'Pending assignment', @notes, GETDATE(), @by)
+      `);
+
+    res.status(201).json({ message: "Service request submitted", record_id: ins.recordset[0]?.record_id });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to submit service request" });
   }
 };
 

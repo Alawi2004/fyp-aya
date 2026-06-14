@@ -6,10 +6,13 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
+import GradientFill from '../../components/common/GradientFill';
+import PressableScale from '../../components/common/PressableScale';
+import { scheduleServiceApi } from '../../api/driverApi';
 
 const SERVICE_TYPES = [
-  { key: 'routine',  label: 'Routine Service',  icon: 'construct-outline',   color: COLORS.primary   },
+  { key: 'routine',  label: 'Routine Service',  icon: 'construct-outline',   color: PURPLE.primary   },
   { key: 'oil',      label: 'Oil Change',        icon: 'water-outline',       color: '#F97316'        },
   { key: 'tyre',     label: 'Tyre Check',        icon: 'ellipse-outline',     color: COLORS.warning   },
   { key: 'brake',    label: 'Brake Check',       icon: 'alert-circle-outline', color: COLORS.danger   },
@@ -32,20 +35,31 @@ const ScheduleServiceScreen = ({ navigation }) => {
     if (selected) setDate(selected);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!serviceType) {
       Alert.alert('Select Service Type', 'Please choose a service category.');
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      await scheduleServiceApi({
+        service_type: SERVICE_TYPES.find(s => s.key === serviceType)?.label || serviceType,
+        service_date: `${y}-${m}-${d}`,
+        notes: notes.trim() || null,
+      });
       Alert.alert(
         'Request Submitted',
         `Your ${SERVICE_TYPES.find(s => s.key === serviceType)?.label} has been scheduled for ${dateLabel}. Management will confirm shortly.`,
         [{ text: 'OK', onPress: () => navigation.goBack() }],
       );
-    }, 1000);
+    } catch (err) {
+      Alert.alert('Error', err?.response?.data?.error || 'Could not submit your request. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const selected = SERVICE_TYPES.find(s => s.key === serviceType);
@@ -56,21 +70,24 @@ const ScheduleServiceScreen = ({ navigation }) => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+        <StatusBar barStyle="light-content" backgroundColor={PURPLE.deep} />
 
-        {/* Header */}
+        {/* Gradient hero header */}
         <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-          <View style={styles.headerDecor1} />
-          <View style={styles.headerDecor2} />
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            <GradientFill id="schedHero" colors={PURPLE.gradient} vertical />
+            <View style={styles.headerDecor1} />
+            <View style={styles.headerDecor2} />
+          </View>
           <View style={styles.headerTop}>
-            <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <PressableScale style={styles.backBtn} onPress={() => navigation.goBack()} scaleTo={0.88}>
               <Ionicons name="arrow-back" size={20} color={COLORS.white} />
-            </TouchableOpacity>
+            </PressableScale>
             <Text style={styles.headerTitle}>Schedule Service</Text>
             <View style={{ width: 40 }} />
           </View>
           <View style={styles.headerSub}>
-            <Ionicons name="construct-outline" size={14} color="rgba(255,255,255,0.7)" />
+            <Ionicons name="construct-outline" size={14} color="rgba(255,255,255,0.8)" />
             <Text style={styles.headerSubText}>Request a maintenance appointment for your vehicle</Text>
           </View>
         </View>
@@ -83,14 +100,14 @@ const ScheduleServiceScreen = ({ navigation }) => {
             {SERVICE_TYPES.map(s => {
               const isSelected = serviceType === s.key;
               return (
-                <TouchableOpacity
+                <PressableScale
                   key={s.key}
                   style={[
                     styles.typeChip,
                     isSelected && { backgroundColor: s.color + '18', borderColor: s.color },
                   ]}
                   onPress={() => setServiceType(s.key)}
-                  activeOpacity={0.75}
+                  scaleTo={0.95}
                 >
                   <View style={[styles.typeChipIcon, { backgroundColor: isSelected ? s.color + '25' : COLORS.background }]}>
                     <Ionicons name={s.icon} size={18} color={isSelected ? s.color : COLORS.textMuted} />
@@ -103,7 +120,7 @@ const ScheduleServiceScreen = ({ navigation }) => {
                       <Ionicons name="checkmark" size={10} color={COLORS.white} />
                     </View>
                   )}
-                </TouchableOpacity>
+                </PressableScale>
               );
             })}
           </View>
@@ -113,7 +130,7 @@ const ScheduleServiceScreen = ({ navigation }) => {
           <TouchableOpacity style={styles.datePicker} onPress={() => setShowPicker(true)} activeOpacity={0.8}>
             <View style={styles.dateLeft}>
               <View style={styles.dateIconWrap}>
-                <Ionicons name="calendar-outline" size={18} color={COLORS.primary} />
+                <Ionicons name="calendar-outline" size={18} color={PURPLE.primary} />
               </View>
               <View>
                 <Text style={styles.dateLabel}>Selected date</Text>
@@ -188,15 +205,14 @@ const ScheduleServiceScreen = ({ navigation }) => {
           )}
 
           {/* Submit */}
-          <TouchableOpacity
+          <PressableScale
             style={[styles.submitBtn, (!serviceType || loading) && { opacity: 0.55 }]}
             onPress={handleSubmit}
             disabled={!serviceType || loading}
-            activeOpacity={0.85}
           >
             <Ionicons name={loading ? 'hourglass-outline' : 'checkmark-circle-outline'} size={18} color={COLORS.white} />
             <Text style={styles.submitBtnText}>{loading ? 'Submitting…' : 'Submit Request'}</Text>
-          </TouchableOpacity>
+          </PressableScale>
 
           <View style={{ height: 32 }} />
         </ScrollView>
@@ -211,8 +227,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
 
   header: {
-    backgroundColor: COLORS.headerBg,
+    backgroundColor: PURPLE.deep,
     paddingHorizontal: 20, paddingBottom: 18, overflow: 'hidden',
+    borderBottomLeftRadius: 26, borderBottomRightRadius: 26,
   },
   headerDecor1: {
     position: 'absolute', top: -50, right: -50,
@@ -277,7 +294,7 @@ const styles = StyleSheet.create({
   dateLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   dateIconWrap: {
     width: 40, height: 40, borderRadius: 12,
-    backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: PURPLE.light, alignItems: 'center', justifyContent: 'center',
   },
   dateLabel: { fontSize: 10, fontWeight: '700', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: 0.3 },
   dateValue: { fontSize: 14, fontWeight: '700', color: COLORS.textPrimary, marginTop: 2 },
@@ -296,7 +313,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8,
   },
   pickerSheetTitle: { fontSize: 16, fontWeight: '800', color: COLORS.textPrimary },
-  iosPickerDone: { fontSize: 15, fontWeight: '700', color: COLORS.primary },
+  iosPickerDone: { fontSize: 15, fontWeight: '700', color: PURPLE.primary },
 
   /* Notes */
   notesInput: {
@@ -321,9 +338,9 @@ const styles = StyleSheet.create({
   /* Submit */
   submitBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: COLORS.primary, borderRadius: 14,
+    backgroundColor: PURPLE.primary, borderRadius: 14,
     paddingVertical: 15, marginTop: 20,
-    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 },
+    shadowColor: PURPLE.primary, shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25, shadowRadius: 10, elevation: 5,
   },
   submitBtnText: { fontSize: 15, fontWeight: '800', color: COLORS.white },
