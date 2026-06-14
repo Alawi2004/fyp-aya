@@ -315,7 +315,7 @@ export default function CashReportPage() {
             )}
 
             {discrepancy === 0 && (
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14, padding: "10px 14px", borderRadius: 10, background: "#F0FDF4", border: "1.5px solid #A7F3D0" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14, padding: "10px 14px", borderRadius: 10, background: "#F0FDF4", border: "1.5px solid #BBF7D0" }}>
                 <CheckCircle size={15} color={C.success} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: "#064E3B" }}>Cash balanced — no discrepancy found.</span>
               </div>
@@ -356,32 +356,42 @@ export default function CashReportPage() {
           </div>
         )}
 
-        {/* Signature block — printable */}
-        <div style={{ ...cardStyle, padding: "24px 28px" }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 20 }}>
-            Acknowledgement &amp; Signatures
+        {/* Report footer — printable */}
+        <div style={{ ...cardStyle, padding: "20px 28px" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 14 }}>
+            Report Details
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 32 }}>
-            {["Staff Member", "Supervisor", "Finance Officer"].map(role => (
-              <div key={role}>
-                <div style={{ borderTop: `1.5px solid #CBD5E1`, paddingTop: 8 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#0F172A" }}>
-                    {role === "Staff Member" ? (user?.full_name ?? "Staff Member") : ""}
-                  </div>
-                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{role}</div>
-                  <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4 }}>Date: ____________________</div>
-                </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20 }}>
+            <div>
+              <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 4 }}>Staff Member</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A" }}>{user?.full_name ?? "—"}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 4 }}>Date</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A" }}>
+                {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
               </div>
-            ))}
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 4 }}>Location / Station</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A" }}>{report.location ?? "—"}</div>
+            </div>
           </div>
         </div>
       </div>
 
       <style>{`
         @media print {
-          body > * { display: none !important; }
-          #cash-report-print { display: block !important; position: fixed; top: 0; left: 0; width: 100%; padding: 20px; }
-          aside, nav, header { display: none !important; }
+          body * { visibility: hidden !important; }
+          #cash-report-print,
+          #cash-report-print * { visibility: visible !important; }
+          #cash-report-print {
+            position: fixed !important;
+            top: 0 !important; left: 0 !important;
+            width: 100% !important;
+            background: #fff !important;
+            padding: 20px !important;
+          }
           button { display: none !important; }
         }
       `}</style>

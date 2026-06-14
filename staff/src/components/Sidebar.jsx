@@ -1,14 +1,15 @@
 import { useState } from "react";
-import { Wallet, History, LogOut, Coins, ChevronLeft, ChevronRight, Clock, FileText } from "lucide-react";
+import { Wallet, History, LogOut, Coins, Clock, FileText, CalendarDays } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useShift } from "../context/ShiftContext";
 import { C } from "../styles/themes";
 
 const NAV = [
-  { id: "topup",   label: "Wallet Top-Up",        icon: Wallet   },
-  { id: "history", label: "My Top-Up History",     icon: History  },
-  { id: "shift",   label: "Shift Management",      icon: Clock    },
-  { id: "report",  label: "Cash Collection Report", icon: FileText },
+  { id: "shift",         label: "Shift Management", icon: Clock       },
+  { id: "topup",         label: "Wallet Top-Up",    icon: Wallet      },
+  { id: "report",        label: "Cash Report",      icon: FileText    },
+  { id: "history",       label: "Top-Up History",   icon: History     },
+  { id: "shift-history", label: "Shift History",    icon: CalendarDays },
 ];
 
 export default function Sidebar({ activePage, onNavigate, collapsed, onToggle }) {
@@ -47,13 +48,13 @@ export default function Sidebar({ activePage, onNavigate, collapsed, onToggle })
               width: 34, height: 34, borderRadius: 9,
               background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`,
               display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: `0 4px 12px rgba(5,150,105,.35)`,
+              boxShadow: `0 4px 12px rgba(37,99,235,.35)`,
             }}>
               <Coins size={16} color="#fff" strokeWidth={2.2} />
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 800, color: "#F8FAFC", letterSpacing: "-.3px" }}>Staff Portal</div>
-              <div style={{ fontSize: 10, color: C.primary, fontWeight: 600, letterSpacing: ".4px" }}>WALLET TOP-UP</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#F8FAFC", letterSpacing: "-.3px" }}>Yalla Transit</div>
+              <div style={{ fontSize: 10, color: C.primary, fontWeight: 600, letterSpacing: ".4px" }}>STAFF PORTAL</div>
             </div>
           </div>
         )}
@@ -66,22 +67,6 @@ export default function Sidebar({ activePage, onNavigate, collapsed, onToggle })
             <Coins size={16} color="#fff" strokeWidth={2.2} />
           </div>
         )}
-        <button
-          onClick={onToggle}
-          style={{
-            background: "rgba(255,255,255,.06)",
-            border: "none", borderRadius: 6,
-            width: 26, height: 26,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", flexShrink: 0,
-            ...(collapsed && { position: "absolute", bottom: -20, right: -14, display: "none" }),
-          }}
-        >
-          {collapsed
-            ? <ChevronRight size={13} color="#94A3B8" />
-            : <ChevronLeft  size={13} color="#94A3B8" />
-          }
-        </button>
       </div>
 
       {/* ── Shift status pill ── */}
@@ -90,17 +75,17 @@ export default function Sidebar({ activePage, onNavigate, collapsed, onToggle })
           margin: "10px 10px 2px",
           padding: "7px 10px",
           borderRadius: 8,
-          background: isShiftOpen ? "rgba(5,150,105,.15)" : "rgba(239,68,68,.12)",
-          border: `1px solid ${isShiftOpen ? "rgba(5,150,105,.3)" : "rgba(239,68,68,.25)"}`,
+          background: isShiftOpen ? "rgba(34,197,94,.12)" : "rgba(239,68,68,.10)",
+          border: `1px solid ${isShiftOpen ? "rgba(34,197,94,.3)" : "rgba(239,68,68,.25)"}`,
           display: "flex", alignItems: "center", gap: 7,
         }}>
           <div style={{
             width: 7, height: 7, borderRadius: "50%",
             background: isShiftOpen ? C.primary : C.danger,
-            boxShadow: isShiftOpen ? `0 0 0 3px rgba(5,150,105,.2)` : `0 0 0 3px rgba(239,68,68,.2)`,
+            boxShadow: isShiftOpen ? `0 0 0 3px rgba(34,197,94,.2)` : `0 0 0 3px rgba(239,68,68,.2)`,
             flexShrink: 0,
           }} />
-          <span style={{ fontSize: 11, fontWeight: 600, color: isShiftOpen ? "#6EE7B7" : "#FCA5A5" }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: isShiftOpen ? "#86EFAC" : "#FCA5A5" }}>
             {isShiftOpen ? "Shift Active" : "No Active Shift"}
           </span>
         </div>
@@ -133,7 +118,7 @@ export default function Sidebar({ activePage, onNavigate, collapsed, onToggle })
                 cursor: "pointer",
                 position: "relative",
                 background: active
-                  ? "rgba(5,150,105,.18)"
+                  ? "rgba(37,99,235,.20)"
                   : isHov ? "rgba(255,255,255,.05)"
                   : "transparent",
                 transition: "background .13s",
@@ -177,7 +162,7 @@ export default function Sidebar({ activePage, onNavigate, collapsed, onToggle })
                   fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 99,
                   background: C.danger, color: "#fff",
                 }}>
-                  OPEN
+                  START
                 </span>
               )}
             </div>
