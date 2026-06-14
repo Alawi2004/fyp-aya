@@ -3,6 +3,7 @@ import {
   closeStaffShift,
   getCurrentStaffShift,
   openStaffShift,
+  getShiftHistory,
 } from "../controllers/staffShift.controller.js";
 import { requireStaffOnly } from "../middleware/auth.middleware.js";
 
@@ -49,5 +50,6 @@ router.post("/close", closeStaffShift);
  *       - bearerAuth: []
  */
 router.get("/current", getCurrentStaffShift);
+router.get("/history", getShiftHistory);
 
 export default router;

@@ -21,7 +21,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await login(email, password);
-      navigate("/topup", { replace: true });
+      navigate("/shift", { replace: true });
     } catch (err) {
       setError(err.message || "Login failed. Please check your credentials.");
     } finally {
@@ -38,8 +38,8 @@ export default function LoginPage() {
       fontFamily: "Inter, system-ui, sans-serif",
     }}>
       {/* Decorative blobs */}
-      <div style={{ position: "fixed", top: -100, right: -100, width: 400, height: 400, borderRadius: "50%", background: `radial-gradient(circle, rgba(5,150,105,.15) 0%, transparent 70%)`, pointerEvents: "none" }} />
-      <div style={{ position: "fixed", bottom: -120, left: -80,  width: 350, height: 350, borderRadius: "50%", background: `radial-gradient(circle, rgba(5,150,105,.10) 0%, transparent 70%)`, pointerEvents: "none" }} />
+      <div style={{ position: "fixed", top: -100, right: -100, width: 400, height: 400, borderRadius: "50%", background: `radial-gradient(circle, rgba(37,99,235,.18) 0%, transparent 70%)`, pointerEvents: "none" }} />
+      <div style={{ position: "fixed", bottom: -120, left: -80,  width: 350, height: 350, borderRadius: "50%", background: `radial-gradient(circle, rgba(37,99,235,.12) 0%, transparent 70%)`, pointerEvents: "none" }} />
 
       <div style={{
         width: "100%", maxWidth: 420,

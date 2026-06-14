@@ -291,7 +291,7 @@ export default function TopUpPage() {
           <div style={{ padding: "20px 24px 16px", borderBottom: `1px solid #F1F5F9`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <span style={{ fontSize: 15, fontWeight: 700, color: "#0F172A" }}>Find Passenger</span>
             <button onClick={() => setShowScanner(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, border: `1.5px solid ${C.primaryBorder}`, background: C.primaryLight, fontSize: 12, fontWeight: 700, color: C.primary, cursor: "pointer" }}>
-              <QrCode size={14} /> Scan QR / NFC
+              <QrCode size={14} /> Scan QR Code
             </button>
           </div>
           <div style={{ padding: 24 }}>
@@ -333,7 +333,7 @@ export default function TopUpPage() {
               <div style={{ textAlign: "center", padding: "32px 0", color: C.textMuted }}>
                 <Search size={32} style={{ marginBottom: 10, opacity: 0.3 }} />
                 <p style={{ margin: 0, fontSize: 14 }}>Start typing to search for a passenger</p>
-                <p style={{ margin: "4px 0 0", fontSize: 12 }}>Or tap <strong style={{ color: C.primary }}>Scan QR / NFC</strong> to use the camera</p>
+                <p style={{ margin: "4px 0 0", fontSize: 12 }}>Or tap <strong style={{ color: C.primary }}>Scan QR Code</strong> to use the camera</p>
               </div>
             )}
           </div>
@@ -680,10 +680,16 @@ function DigitalReceipt({ receipt, onNewTopUp }) {
     `Yalla Transit — Smart Transit System`,
   ].join("\n");
 
-  const shareWhatsApp = () => window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank");
-  const shareSMS      = () => window.open(`sms:?body=${encodeURIComponent(shareText)}`, "_blank");
-  const shareEmail    = () => window.open(`mailto:${encodeURIComponent(receipt.user_email || "")}?subject=${encodeURIComponent(`Receipt — ${receipt.receipt_no}`)}&body=${encodeURIComponent(shareText)}`, "_blank");
-  const printReceipt  = () => window.print();
+  const cleanPhone = (receipt.user_phone ?? "").replace(/\D/g, "");
+  const shareWhatsApp = () => {
+    const url = cleanPhone
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(shareText)}`
+      : `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+    window.open(url, "_blank");
+  };
+  const shareSMS     = () => window.open(`sms:${cleanPhone}?body=${encodeURIComponent(shareText)}`, "_blank");
+  const shareEmail   = () => window.open(`mailto:${encodeURIComponent(receipt.user_email || "")}?subject=${encodeURIComponent(`Receipt — ${receipt.receipt_no}`)}&body=${encodeURIComponent(shareText)}`, "_blank");
+  const printReceipt = () => window.print();
 
   return (
     <div style={{ maxWidth: 560, margin: "0 auto" }}>
@@ -778,9 +784,15 @@ function DigitalReceipt({ receipt, onNewTopUp }) {
       </div>
       <style>{`
         @media print {
-          body > * { display: none !important; }
-          #digital-receipt-print { display: block !important; position: fixed; top: 0; left: 0; width: 100%; }
-          aside, nav, header { display: none !important; }
+          body * { visibility: hidden !important; }
+          #digital-receipt-print,
+          #digital-receipt-print * { visibility: visible !important; }
+          #digital-receipt-print {
+            position: fixed !important;
+            top: 0 !important; left: 0 !important;
+            width: 100% !important;
+            background: #fff !important;
+          }
         }
       `}</style>
     </div>

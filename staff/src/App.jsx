@@ -6,18 +6,20 @@ import { OfflineProvider } from "./context/OfflineContext";
 import Sidebar       from "./components/Sidebar";
 import Topbar        from "./components/Topbar";
 import OfflineBanner from "./components/OfflineBanner";
-import LoginPage     from "./pages/LoginPage";
-import TopUpPage     from "./pages/TopUpPage";
-import HistoryPage   from "./pages/HistoryPage";
-import ShiftPage     from "./pages/ShiftPage";
-import CashReportPage from "./pages/CashReportPage";
+import LoginPage        from "./pages/LoginPage";
+import TopUpPage        from "./pages/TopUpPage";
+import HistoryPage      from "./pages/HistoryPage";
+import ShiftPage        from "./pages/ShiftPage";
+import ShiftHistoryPage from "./pages/ShiftHistoryPage";
+import CashReportPage   from "./pages/CashReportPage";
 
 // ─── Page titles ───────────────────────────────────────────────────────────
 const PAGE_TITLES = {
-  "/topup":   "Wallet Top-Up",
-  "/history": "My Top-Up History",
-  "/shift":   "Shift Management",
-  "/report":  "Cash Collection Report",
+  "/topup":         "Wallet Top-Up",
+  "/history":       "My Top-Up History",
+  "/shift":         "Shift Management",
+  "/shift-history": "Shift History",
+  "/report":        "Cash Collection Report",
 };
 
 // ─── Protected route wrapper ────────────────────────────────────────────────
@@ -39,7 +41,7 @@ function InnerApp() {
 
   const showShell = isAuthenticated && location.pathname !== "/login";
   const pageTitle = PAGE_TITLES[location.pathname] ?? "Staff Portal";
-  const activePage = location.pathname.replace("/", "") || "topup";
+  const activePage = location.pathname.replace("/", "") || "shift";
 
   const handleNavigate = (page) => navigate(`/${page}`);
 
@@ -58,11 +60,11 @@ function InnerApp() {
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 99px; }
         select { cursor: pointer; }
-        button:focus-visible { outline: 2px solid #059669; outline-offset: 2px; }
+        button:focus-visible { outline: 2px solid #2563EB; outline-offset: 2px; }
         input:focus, select:focus, textarea:focus {
           outline: none;
-          border-color: #059669 !important;
-          box-shadow: 0 0 0 3px rgba(5,150,105,.12);
+          border-color: #2563EB !important;
+          box-shadow: 0 0 0 3px rgba(37,99,235,.12);
         }
       `}</style>
 
@@ -101,13 +103,17 @@ function InnerApp() {
                 <RequireStaff><ShiftPage /></RequireStaff>
               } />
 
+              <Route path="/shift-history" element={
+                <RequireStaff><ShiftHistoryPage /></RequireStaff>
+              } />
+
               <Route path="/report" element={
                 <RequireStaff><CashReportPage /></RequireStaff>
               } />
 
               {/* Default redirect */}
-              <Route path="/" element={<Navigate to="/topup" replace />} />
-              <Route path="*" element={<Navigate to="/topup" replace />} />
+              <Route path="/" element={<Navigate to="/shift" replace />} />
+              <Route path="*" element={<Navigate to="/shift" replace />} />
             </Routes>
           </main>
         </div>
@@ -119,7 +125,7 @@ function InnerApp() {
 // Redirect already-logged-in staff away from login page
 function LoginWithRedirect() {
   const { isAuthenticated } = useAuth();
-  if (isAuthenticated) return <Navigate to="/topup" replace />;
+  if (isAuthenticated) return <Navigate to="/shift" replace />;
   return <LoginPage />;
 }
 

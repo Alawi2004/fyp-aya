@@ -73,7 +73,7 @@ export default function OfflineBanner() {
   if (lastSyncResult && isOnline && pendingCount === 0) {
     return (
       <div style={{
-        background: "#F0FDF4", borderBottom: "1.5px solid #A7F3D0",
+        background: "#F0FDF4", borderBottom: "1.5px solid #BBF7D0",
         padding: "8px 20px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
       }}>
         <CheckCircle size={14} color={C.primary} style={{ flexShrink: 0 }} />

@@ -1,32 +1,32 @@
 // Staff Portal Theme
-// Emerald green primary to visually distinguish from admin blue (#2563EB).
+// Primary: Blue (#2563EB) | Secondary/Success: Green (#22C55E)
 
 export const C = {
-  // Brand
-  primary:      "#059669",   // emerald-600
-  primaryDark:  "#047857",   // emerald-700
-  primaryLight: "#ECFDF5",   // emerald-50
-  primaryBorder:"#A7F3D0",   // emerald-200
+  // Brand — Blue primary
+  primary:       "#2563EB",   // blue-600
+  primaryDark:   "#1D4ED8",   // blue-700
+  primaryLight:  "#EFF6FF",   // blue-50
+  primaryBorder: "#BFDBFE",   // blue-200
 
   // Surfaces
-  bg:      "#F1F5F9",
+  bg:      "#F8FAFC",
   surface: "#FFFFFF",
   border:  "#E2E8F0",
 
   // Text
-  textPrimary: "#0F172A",
+  textPrimary: "#1E293B",
   textSecond:  "#475569",
   textMuted:   "#94A3B8",
 
   // Semantic
-  success:   "#10B981",
-  successBg: "#ECFDF5",
-  warning:   "#F59E0B",
-  warningBg: "#FFFBEB",
-  danger:    "#EF4444",
-  dangerBg:  "#FEF2F2",
-  info:      "#3B82F6",
-  infoBg:    "#EFF6FF",
+  success:    "#22C55E",   // green-500
+  successBg:  "#F0FDF4",   // green-50
+  warning:    "#F59E0B",
+  warningBg:  "#FFFBEB",
+  danger:     "#EF4444",
+  dangerBg:   "#FEF2F2",
+  info:       "#3B82F6",
+  infoBg:     "#EFF6FF",
 };
 
 export const cardStyle = {
@@ -71,5 +71,5 @@ export const btnPrimary = {
   fontSize:       14,
   fontWeight:     700,
   cursor:         "pointer",
-  boxShadow:      `0 4px 14px rgba(5,150,105,.28)`,
+  boxShadow:      `0 4px 14px rgba(37,99,235,.28)`,
 };

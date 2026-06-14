@@ -164,3 +164,60 @@ export const getCurrentStaffShift = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch current shift" });
   }
 };
+
+export const getShiftHistory = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    await ensureOperationalTables(pool);
+
+    const result = await pool
+      .request()
+      .input("staffUserId", sql.Int, req.user.user_id)
+      .query(`
+        SELECT
+          sss.shift_id,
+          sss.opening_cash,
+          sss.expected_cash,
+          sss.closing_cash,
+          sss.cash_difference,
+          sss.opened_at,
+          sss.closed_at,
+          sss.opening_notes,
+          sss.closing_notes,
+          sss.summary_json,
+          u.full_name  AS staff_name,
+          u.email      AS staff_email
+        FROM staff_shift_sessions sss
+        JOIN users u ON sss.staff_user_id = u.user_id
+        WHERE sss.staff_user_id = @staffUserId
+        ORDER BY sss.opened_at DESC
+      `);
+
+    const shifts = result.recordset.map(row => {
+      let summary = null;
+      try { summary = JSON.parse(row.summary_json); } catch {}
+      return {
+        shift_id:           row.shift_id,
+        staff_name:         row.staff_name,
+        staff_email:        row.staff_email,
+        location:           row.opening_notes || "—",
+        opening_cash:       parseFloat(row.opening_cash  || 0),
+        expected_cash:      row.expected_cash  != null ? parseFloat(row.expected_cash)  : null,
+        closing_cash:       row.closing_cash   != null ? parseFloat(row.closing_cash)   : null,
+        cash_difference:    row.cash_difference != null ? parseFloat(row.cash_difference) : null,
+        opened_at:          row.opened_at,
+        closed_at:          row.closed_at,
+        closing_notes:      row.closing_notes  || null,
+        total_transactions: summary?.total_transactions ?? null,
+        total_collected:    summary?.total_collected    != null ? parseFloat(summary.total_collected)    : null,
+        cash_collected:     summary?.cash_collected     != null ? parseFloat(summary.cash_collected)     : null,
+        status:             row.closed_at ? "closed" : "active",
+      };
+    });
+
+    res.json(shifts);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch shift history" });
+  }
+};

@@ -34,9 +34,11 @@ export default function ShiftPage() {
 
   const [openForm,    setOpenForm]    = useState({ opening_cash: "", location: LOCATIONS[0] });
   const [openErr,     setOpenErr]     = useState({});
+  const [openLoading, setOpenLoading] = useState(false);
   const [showClose,   setShowClose]   = useState(false);
   const [closingCash, setClosingCash] = useState("");
   const [closeErr,    setCloseErr]    = useState(null);
+  const [closeLoading, setCloseLoading] = useState(false);
   const [summary,     setSummary]     = useState(null);
 
   // ── Open shift ────────────────────────────────────────────────────────────
@@ -49,10 +51,18 @@ export default function ShiftPage() {
     return Object.keys(e).length === 0;
   };
 
-  const handleOpenShift = () => {
+  const handleOpenShift = async () => {
     if (!validateOpen()) return;
-    openShift({ opening_cash: openForm.opening_cash, location: openForm.location });
-    setOpenForm({ opening_cash: "", location: LOCATIONS[0] });
+    setOpenLoading(true);
+    try {
+      await openShift({ opening_cash: openForm.opening_cash, location: openForm.location });
+      setOpenForm({ opening_cash: "", location: LOCATIONS[0] });
+      setOpenErr({});
+    } catch (err) {
+      setOpenErr(e => ({ ...e, _api: err.message }));
+    } finally {
+      setOpenLoading(false);
+    }
   };
 
   // ── Close shift ───────────────────────────────────────────────────────────
@@ -61,14 +71,21 @@ export default function ShiftPage() {
   const isOver  = diff > 0;
   const isShort = diff < 0;
 
-  const handleCloseShift = () => {
+  const handleCloseShift = async () => {
     const cash = parseFloat(closingCash);
     if (isNaN(cash) || cash < 0) { setCloseErr("Enter a valid closing cash amount"); return; }
     setCloseErr(null);
-    const s = closeShift(closingCash);
-    setSummary(s);
-    setShowClose(false);
-    setClosingCash("");
+    setCloseLoading(true);
+    try {
+      const s = await closeShift(closingCash);
+      setSummary(s);
+      setShowClose(false);
+      setClosingCash("");
+    } catch (err) {
+      setCloseErr(err.message);
+    } finally {
+      setCloseLoading(false);
+    }
   };
 
   // ── Post-close: print summary ─────────────────────────────────────────────
@@ -247,8 +264,9 @@ export default function ShiftPage() {
                 </div>
               </div>
 
-              <button onClick={handleOpenShift} style={{ ...btnPrimary, width: "100%", padding: "13px", fontSize: 15, gap: 8 }}>
-                <LogIn size={16} /> Open Shift
+              {openErr._api && <ErrMsg msg={openErr._api} />}
+              <button onClick={handleOpenShift} disabled={openLoading} style={{ ...btnPrimary, width: "100%", padding: "13px", fontSize: 15, gap: 8, opacity: openLoading ? 0.75 : 1, cursor: openLoading ? "not-allowed" : "pointer" }}>
+                <LogIn size={16} /> {openLoading ? "Opening…" : "Open Shift"}
               </button>
             </div>
           </div>
@@ -286,7 +304,7 @@ export default function ShiftPage() {
 
           {/* Active shift banner */}
           <div style={{
-            background: C.successBg, border: `1.5px solid #A7F3D0`, borderRadius: 14,
+            background: C.successBg, border: `1.5px solid #BBF7D0`, borderRadius: 14,
             padding: "16px 20px", display: "flex", alignItems: "center", gap: 14,
           }}>
             <div style={{
@@ -306,7 +324,7 @@ export default function ShiftPage() {
               onClick={() => setShowClose(s => !s)}
               style={{
                 display: "flex", alignItems: "center", gap: 6,
-                padding: "8px 14px", borderRadius: 8, border: "1.5px solid #6EE7B7",
+                padding: "8px 14px", borderRadius: 8, border: "1.5px solid #86EFAC",
                 background: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", color: "#064E3B",
               }}
             >
@@ -386,7 +404,7 @@ export default function ShiftPage() {
                     display: "flex", alignItems: "flex-start", gap: 12,
                     padding: "14px 16px", borderRadius: 10, marginBottom: 20,
                     background: diff === 0 ? C.successBg : isShort ? C.dangerBg : C.warningBg,
-                    border: `1.5px solid ${diff === 0 ? "#A7F3D0" : isShort ? "#FCA5A5" : "#FDE68A"}`,
+                    border: `1.5px solid ${diff === 0 ? "#BBF7D0" : isShort ? "#FCA5A5" : "#FDE68A"}`,
                   }}>
                     {diff === 0
                       ? <CheckCircle size={16} color={C.success} style={{ flexShrink: 0, marginTop: 1 }} />
@@ -418,15 +436,18 @@ export default function ShiftPage() {
                   </button>
                   <button
                     onClick={handleCloseShift}
+                    disabled={closeLoading}
                     style={{
                       flex: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                       padding: "11px", borderRadius: 10, border: "none",
                       background: `linear-gradient(135deg, #DC2626, #B91C1C)`,
-                      color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer",
+                      color: "#fff", fontSize: 14, fontWeight: 700,
+                      cursor: closeLoading ? "not-allowed" : "pointer",
+                      opacity: closeLoading ? 0.75 : 1,
                       boxShadow: "0 4px 14px rgba(220,38,38,.28)",
                     }}
                   >
-                    <LogOut size={15} /> Confirm Close Shift
+                    <LogOut size={15} /> {closeLoading ? "Closing…" : "Confirm Close Shift"}
                   </button>
                 </div>
               </div>
@@ -453,9 +474,17 @@ export default function ShiftPage() {
 
       <style>{`
         @media print {
-          body > * { display: none !important; }
-          #shift-summary-print { display: block !important; }
-          aside, nav, header { display: none !important; }
+          body * { visibility: hidden !important; }
+          #shift-summary-print,
+          #shift-summary-print * { visibility: visible !important; }
+          #shift-summary-print {
+            position: fixed !important;
+            top: 0 !important; left: 0 !important;
+            width: 100% !important;
+            background: #fff !important;
+            padding: 24px !important;
+          }
+          button { display: none !important; }
         }
       `}</style>
     </div>
