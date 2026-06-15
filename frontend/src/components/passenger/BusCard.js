@@ -1,12 +1,12 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 import { THEME } from '../../constants/theme';
 
 const STATUS_CONFIG = {
   active:    { label: 'On Time',   bg: COLORS.secondaryLight, text: COLORS.secondary, dot: COLORS.secondary },
-  boarding:  { label: 'Boarding',  bg: COLORS.primaryMid,     text: COLORS.primary,   dot: COLORS.primary   },
+  boarding:  { label: 'Boarding',  bg: PURPLE.mid,     text: PURPLE.primary,   dot: PURPLE.primary   },
   delayed:   { label: 'Delayed',   bg: COLORS.warningLight,   text: COLORS.warning,   dot: COLORS.warning   },
   cancelled: { label: 'Cancelled', bg: COLORS.dangerLight,    text: COLORS.danger,    dot: COLORS.danger    },
 };
@@ -40,7 +40,7 @@ const BusCard = ({ bus, onPress }) => {
       {/* Top row */}
       <View style={styles.topRow}>
         <View style={styles.busIconWrap}>
-          <Ionicons name={vehicleIcon} size={22} color={COLORS.primary} />
+          <Ionicons name={vehicleIcon} size={22} color={PURPLE.primary} />
         </View>
         <View style={styles.busInfo}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -70,7 +70,7 @@ const BusCard = ({ bus, onPress }) => {
         <View style={styles.routeMid}>
           <View style={styles.routeLineDash} />
           <View style={styles.routeArrow}>
-            <Ionicons name="bus-outline" size={13} color={COLORS.primary} />
+            <Ionicons name="bus-outline" size={13} color={PURPLE.primary} />
           </View>
           <View style={styles.routeLineDash} />
         </View>
@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
     borderRadius: THEME.borderRadius.lg,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#2563EB',
+    shadowColor: '#7C3AED',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 16,
@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   typeTag: {
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: PURPLE.light,
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
   typeTagText: {
     fontSize: 9,
     fontWeight: '800',
-    color: COLORS.primary,
+    color: PURPLE.primary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: THEME.borderRadius.md,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: PURPLE.light,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 10,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: PURPLE.light,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -261,25 +261,25 @@ const styles = StyleSheet.create({
   priceCurrency: {
     fontSize: 13,
     fontWeight: THEME.fontWeight.bold,
-    color: COLORS.primary,
+    color: PURPLE.primary,
     marginTop: 3,
   },
   priceAmount: {
     fontSize: 22,
     fontWeight: '900',
-    color: COLORS.primary,
+    color: PURPLE.primary,
     letterSpacing: -0.5,
   },
   bookNowBtn: {
     width: 30,
     height: 30,
     borderRadius: 10,
-    backgroundColor: COLORS.primary,
+    backgroundColor: PURPLE.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,
     overflow: 'hidden',
-    shadowColor: COLORS.primary,
+    shadowColor: PURPLE.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 8,

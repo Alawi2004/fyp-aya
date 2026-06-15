@@ -5,7 +5,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
+import GradientFill from '../../components/common/GradientFill';
+import FadeInView from '../../components/common/FadeInView';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -114,24 +116,31 @@ const PrivacyPolicyScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE.deep} />
 
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="chevron-back" size={22} color={COLORS.white} />
-        </TouchableOpacity>
-        <View style={{ flex: 1, marginLeft: 12 }}>
-          <Text style={styles.headerTitle}>Privacy Policy</Text>
-          <Text style={styles.headerSub}>Last updated: June 2026</Text>
+      {/* Gradient header */}
+      <View style={styles.hero}>
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <GradientFill id="privacyHero" colors={PURPLE.gradient} vertical />
+          <View style={styles.heroDecor1} />
+          <View style={styles.heroDecor2} />
         </View>
-        <View style={styles.headerBadge}>
-          <Ionicons name="shield-checkmark" size={14} color={COLORS.white} />
-          <Text style={styles.headerBadgeText}>Secure</Text>
+        <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="chevron-back" size={22} color={COLORS.white} />
+          </TouchableOpacity>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.headerTitle}>Privacy Policy</Text>
+            <Text style={styles.headerSub}>Last updated: June 2026</Text>
+          </View>
+          <View style={styles.headerBadge}>
+            <Ionicons name="shield-checkmark" size={14} color={COLORS.white} />
+            <Text style={styles.headerBadgeText}>Secure</Text>
+          </View>
         </View>
       </View>
 
@@ -143,7 +152,7 @@ const PrivacyPolicyScreen = ({ navigation }) => {
         <View style={styles.introCard}>
           <View style={styles.introIconRow}>
             <View style={styles.introIconWrap}>
-              <Ionicons name="shield-checkmark" size={28} color={COLORS.primary} />
+              <Ionicons name="shield-checkmark" size={28} color={PURPLE.primary} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.introTitle}>Your Privacy Matters</Text>
@@ -163,7 +172,7 @@ const PrivacyPolicyScreen = ({ navigation }) => {
               { icon: 'checkmark-circle-outline', label: 'Compliant' },
             ].map(b => (
               <View key={b.label} style={styles.trustBadge}>
-                <Ionicons name={b.icon} size={14} color={COLORS.primary} />
+                <Ionicons name={b.icon} size={14} color={PURPLE.primary} />
                 <Text style={styles.trustBadgeText}>{b.label}</Text>
               </View>
             ))}
@@ -175,7 +184,9 @@ const PrivacyPolicyScreen = ({ navigation }) => {
 
         {/* Collapsible policy sections */}
         {SECTIONS.map((item, index) => (
-          <PolicyCard key={item.title} item={item} index={index} />
+          <FadeInView key={item.title} index={index} stagger={55}>
+            <PolicyCard item={item} index={index} />
+          </FadeInView>
         ))}
 
         {/* Footer */}
@@ -195,8 +206,22 @@ export default PrivacyPolicyScreen;
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
 
+  /* Hero */
+  hero: {
+    backgroundColor: PURPLE.deep,
+    overflow: 'hidden',
+    borderBottomLeftRadius: 26,
+    borderBottomRightRadius: 26,
+  },
+  heroDecor1: {
+    position: 'absolute', width: 190, height: 190, borderRadius: 95,
+    backgroundColor: 'rgba(255,255,255,0.07)', top: -80, right: -50,
+  },
+  heroDecor2: {
+    position: 'absolute', width: 120, height: 120, borderRadius: 60,
+    backgroundColor: 'rgba(255,255,255,0.05)', bottom: -20, left: -30,
+  },
   header: {
-    backgroundColor: COLORS.headerBg,
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingBottom: 18,
   },
@@ -206,7 +231,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   headerTitle: { fontSize: 20, fontWeight: '800', color: COLORS.white },
-  headerSub:   { fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 1 },
+  headerSub:   { fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 1 },
   headerBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: 'rgba(255,255,255,0.18)',
@@ -228,7 +253,7 @@ const styles = StyleSheet.create({
   },
   introIconWrap: {
     width: 52, height: 52, borderRadius: 16,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: PURPLE.light,
     alignItems: 'center', justifyContent: 'center',
   },
   introTitle: { fontSize: 17, fontWeight: '800', color: COLORS.textPrimary },
@@ -237,11 +262,11 @@ const styles = StyleSheet.create({
   badgeRow:   { flexDirection: 'row', gap: 8 },
   trustBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: COLORS.primaryLight, borderRadius: 999,
+    backgroundColor: PURPLE.light, borderRadius: 999,
     paddingHorizontal: 10, paddingVertical: 5,
-    borderWidth: 1, borderColor: COLORS.primaryMid,
+    borderWidth: 1, borderColor: PURPLE.midStrong,
   },
-  trustBadgeText: { fontSize: 11, fontWeight: '700', color: COLORS.primary },
+  trustBadgeText: { fontSize: 11, fontWeight: '700', color: PURPLE.primary },
 
   sectionLabel: {
     fontSize: 10, fontWeight: '700', color: COLORS.textMuted,

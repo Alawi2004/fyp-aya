@@ -1,14 +1,17 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Alert, ActivityIndicator, StatusBar, Platform, Modal,
+  TextInput, Alert, ActivityIndicator, StatusBar, Platform, Modal, Animated, Easing,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
+import GradientFill from '../../components/common/GradientFill';
+import FadeInView from '../../components/common/FadeInView';
+import PressableScale from '../../components/common/PressableScale';
 import apiClient from '../../api/apiClient';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -49,7 +52,7 @@ const FieldRow = ({
 }) => (
   <View style={[styles.fieldRow, !last && styles.fieldRowBorder]}>
     <View style={styles.fieldIcon}>
-      <Ionicons name={icon} size={16} color={COLORS.primary} />
+      <Ionicons name={icon} size={16} color={PURPLE.primary} />
     </View>
     <View style={{ flex: 1 }}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -95,6 +98,27 @@ const PersonalInfoScreen = ({ navigation }) => {
   // Date picker state
   const [showPicker,   setShowPicker]   = useState(false);
   const [pickerDate,   setPickerDate]   = useState(dobDate || new Date(1995, 0, 1));
+
+  // Avatar entrance pop
+  const avatarScale = useRef(new Animated.Value(0.6)).current;
+  const avatarOpacity = useRef(new Animated.Value(0)).current;
+  // Soft, continuously breathing glow ring behind the avatar
+  const glowPulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(avatarScale, { toValue: 1, friction: 6, tension: 80, useNativeDriver: true }),
+      Animated.timing(avatarOpacity, { toValue: 1, duration: 350, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start();
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowPulse, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(glowPulse, { toValue: 0, duration: 1800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [avatarScale, avatarOpacity, glowPulse]);
 
   const initials = fullName
     ? fullName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -193,22 +217,57 @@ const PersonalInfoScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE.deep} />
 
-      {/* ── Header ── */}
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={handleBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="chevron-back" size={22} color={COLORS.white} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Personal Info</Text>
-        <TouchableOpacity
-          style={[styles.saveHeaderBtn, (!dirty || saving) && { opacity: 0.38 }]}
-          onPress={handleSave}
-          disabled={!dirty || saving}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Text style={styles.saveHeaderText}>{saving ? 'Saving…' : 'Save'}</Text>
-        </TouchableOpacity>
+      {/* ── Gradient hero (header + avatar) ── */}
+      <View style={styles.hero}>
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <GradientFill id="piHero" colors={PURPLE.gradient} vertical />
+          <View style={styles.heroDecor1} />
+          <View style={styles.heroDecor2} />
+        </View>
+
+        {/* Header bar */}
+        <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+          <TouchableOpacity style={styles.backBtn} onPress={handleBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="chevron-back" size={22} color={COLORS.white} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Personal Info</Text>
+          <TouchableOpacity
+            style={[styles.saveHeaderBtn, (!dirty || saving) && { opacity: 0.38 }]}
+            onPress={handleSave}
+            disabled={!dirty || saving}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.saveHeaderText}>{saving ? 'Saving…' : 'Save'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Avatar */}
+        <View style={styles.avatarSection}>
+          <View style={styles.avatarStack}>
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.avatarGlow,
+                {
+                  opacity: glowPulse.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0.45] }),
+                  transform: [{ scale: glowPulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.18] }) }],
+                },
+              ]}
+            />
+            <Animated.View
+              style={[
+                styles.avatarWrap,
+                { opacity: avatarOpacity, transform: [{ scale: avatarScale }] },
+              ]}
+            >
+              <Text style={styles.avatarText}>{initials}</Text>
+            </Animated.View>
+          </View>
+          <Text style={styles.avatarName}>{fullName || 'Your Name'}</Text>
+          <Text style={styles.avatarEmail}>{user?.email || ''}</Text>
+        </View>
       </View>
 
       <ScrollView
@@ -216,88 +275,82 @@ const PersonalInfoScreen = ({ navigation }) => {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
       >
-        {/* ── Avatar ── */}
-        <View style={styles.avatarSection}>
-          <View style={styles.avatarWrap}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </View>
-          <Text style={styles.avatarName}>{fullName || 'Your Name'}</Text>
-          <Text style={styles.avatarEmail}>{user?.email || ''}</Text>
-        </View>
-
         {/* ── Editable fields ── */}
         <View style={styles.formSection}>
-          <Text style={styles.sectionLabel}>BASIC INFORMATION</Text>
-          <View style={styles.formCard}>
-            <FieldRow
-              icon="person-outline"
-              label="Full Name"
-              value={fullName}
-              onChangeText={v => { setFullName(v); setDirty(true); }}
-              placeholder="Your full name"
-              autoCapitalize="words"
-            />
-            <FieldRow
-              icon="call-outline"
-              label="Phone"
-              value={phone}
-              onChangeText={v => { setPhone(v); setDirty(true); }}
-              placeholder="+961 xx xxx xxx"
-              keyboardType="phone-pad"
-            />
+          <FadeInView index={0}>
+            <Text style={styles.sectionLabel}>BASIC INFORMATION</Text>
+            <View style={styles.formCard}>
+              <FieldRow
+                icon="person-outline"
+                label="Full Name"
+                value={fullName}
+                onChangeText={v => { setFullName(v); setDirty(true); }}
+                placeholder="Your full name"
+                autoCapitalize="words"
+              />
+              <FieldRow
+                icon="call-outline"
+                label="Phone"
+                value={phone}
+                onChangeText={v => { setPhone(v); setDirty(true); }}
+                placeholder="+961 xx xxx xxx"
+                keyboardType="phone-pad"
+              />
 
-            {/* Date of birth — tappable row */}
-            <View style={styles.fieldRow}>
-              <View style={styles.fieldIcon}>
-                <Ionicons name="calendar-outline" size={16} color={COLORS.primary} />
+              {/* Date of birth — tappable row */}
+              <View style={styles.fieldRow}>
+                <View style={styles.fieldIcon}>
+                  <Ionicons name="calendar-outline" size={16} color={PURPLE.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>Date of Birth</Text>
+                  <TouchableOpacity onPress={openDatePicker} activeOpacity={0.7}>
+                    <Text style={[styles.fieldInput, !dobDate && { color: COLORS.textMuted }]}>
+                      {dobDate ? formatDisplay(dobDate) : 'Select date'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                {dobDate ? (
+                  <TouchableOpacity onPress={clearDob} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
+                  </TouchableOpacity>
+                ) : (
+                  <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+                )}
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.fieldLabel}>Date of Birth</Text>
-                <TouchableOpacity onPress={openDatePicker} activeOpacity={0.7}>
-                  <Text style={[styles.fieldInput, !dobDate && { color: COLORS.textMuted }]}>
-                    {dobDate ? formatDisplay(dobDate) : 'Select date'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              {dobDate ? (
-                <TouchableOpacity onPress={clearDob} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="close-circle" size={18} color={COLORS.textMuted} />
-                </TouchableOpacity>
-              ) : (
-                <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
-              )}
             </View>
-          </View>
+          </FadeInView>
 
           {/* ── Read-only fields ── */}
-          <Text style={styles.sectionLabel}>ACCOUNT DETAILS</Text>
-          <View style={styles.formCard}>
-            <ReadOnlyRow icon="mail-outline"            label="Email Address" value={user?.email} />
-            <ReadOnlyRow icon="shield-checkmark-outline" label="Account Type"
-              value={user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : '—'} />
-            <ReadOnlyRow icon="time-outline" label="Member Since" value={createdAt} last />
-          </View>
+          <FadeInView index={1}>
+            <Text style={styles.sectionLabel}>ACCOUNT DETAILS</Text>
+            <View style={styles.formCard}>
+              <ReadOnlyRow icon="mail-outline"            label="Email Address" value={user?.email} />
+              <ReadOnlyRow icon="shield-checkmark-outline" label="Account Type"
+                value={user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : '—'} />
+              <ReadOnlyRow icon="time-outline" label="Member Since" value={createdAt} last />
+            </View>
 
-          <Text style={styles.hintText}>
-            To change your email address, contact support.
-          </Text>
+            <Text style={styles.hintText}>
+              To change your email address, contact support.
+            </Text>
+          </FadeInView>
         </View>
 
         {/* ── Save button ── */}
-        <View style={styles.saveBtnWrap}>
-          <TouchableOpacity
+        <FadeInView index={2} style={styles.saveBtnWrap}>
+          <PressableScale
             style={[styles.saveBtn, (!dirty || saving) && { opacity: 0.45 }]}
             onPress={handleSave}
             disabled={!dirty || saving}
-            activeOpacity={0.82}
           >
             {saving
               ? <ActivityIndicator color={COLORS.white} size="small" />
               : <Ionicons name="checkmark-circle-outline" size={20} color={COLORS.white} />
             }
             <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save Changes'}</Text>
-          </TouchableOpacity>
-        </View>
+          </PressableScale>
+        </FadeInView>
       </ScrollView>
 
       {/* ── Android date picker (renders as dialog) ── */}
@@ -349,15 +402,30 @@ export default PersonalInfoScreen;
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
 
+  /* Hero */
+  hero: {
+    backgroundColor: PURPLE.deep,
+    overflow: 'hidden',
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+  },
+  heroDecor1: {
+    position: 'absolute', width: 220, height: 220, borderRadius: 110,
+    backgroundColor: 'rgba(255,255,255,0.07)', top: -80, right: -50,
+  },
+  heroDecor2: {
+    position: 'absolute', width: 150, height: 150, borderRadius: 75,
+    backgroundColor: 'rgba(255,255,255,0.05)', bottom: -30, left: -40,
+  },
+
   /* Header */
   header: {
-    backgroundColor: COLORS.headerBg,
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingBottom: 16,
+    paddingHorizontal: 16, paddingBottom: 4,
   },
   backBtn: {
     width: 36, height: 36, borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center', justifyContent: 'center',
   },
   headerTitle: {
@@ -369,18 +437,26 @@ const styles = StyleSheet.create({
 
   /* Avatar */
   avatarSection: {
-    backgroundColor: COLORS.headerBg,
-    alignItems: 'center', paddingBottom: 28, paddingHorizontal: 24,
+    alignItems: 'center', paddingBottom: 30, paddingTop: 8, paddingHorizontal: 24,
+  },
+  avatarStack: {
+    width: 84, height: 84, marginBottom: 12,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  avatarGlow: {
+    position: 'absolute',
+    width: 110, height: 110, borderRadius: 38,
+    backgroundColor: 'rgba(255,255,255,0.85)',
   },
   avatarWrap: {
-    width: 80, height: 80, borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.35)',
-    alignItems: 'center', justifyContent: 'center', marginBottom: 12,
+    width: 84, height: 84, borderRadius: 26,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.4)',
+    alignItems: 'center', justifyContent: 'center',
   },
-  avatarText: { fontSize: 28, fontWeight: '800', color: COLORS.white },
-  avatarName:  { fontSize: 18, fontWeight: '800', color: COLORS.white, marginBottom: 3 },
-  avatarEmail: { fontSize: 13, color: 'rgba(255,255,255,0.65)' },
+  avatarText: { fontSize: 30, fontWeight: '900', color: COLORS.white },
+  avatarName:  { fontSize: 19, fontWeight: '800', color: COLORS.white, marginBottom: 3 },
+  avatarEmail: { fontSize: 13, color: 'rgba(255,255,255,0.7)' },
 
   /* Form */
   formSection: { paddingHorizontal: 16, paddingTop: 24 },
@@ -391,8 +467,8 @@ const styles = StyleSheet.create({
   },
   formCard: {
     backgroundColor: COLORS.white, borderRadius: 18, marginBottom: 20, overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
+    shadowColor: PURPLE.deep, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08, shadowRadius: 12, elevation: 2,
   },
 
   /* Field rows */
@@ -403,7 +479,7 @@ const styles = StyleSheet.create({
   fieldRowBorder: { borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
   fieldIcon: {
     width: 34, height: 34, borderRadius: 10,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: PURPLE.light,
     alignItems: 'center', justifyContent: 'center',
   },
   fieldIconMuted: { backgroundColor: COLORS.background },
@@ -423,9 +499,9 @@ const styles = StyleSheet.create({
   saveBtnWrap: { paddingHorizontal: 20, marginTop: 4 },
   saveBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    backgroundColor: COLORS.primary, borderRadius: 16, paddingVertical: 16,
-    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
+    backgroundColor: PURPLE.primary, borderRadius: 16, paddingVertical: 16,
+    shadowColor: PURPLE.primary, shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.32, shadowRadius: 12, elevation: 5,
   },
   saveBtnText: { fontSize: 16, fontWeight: '800', color: COLORS.white },
 
@@ -444,5 +520,5 @@ const styles = StyleSheet.create({
   },
   iosPickerTitle:  { fontSize: 16, fontWeight: '700', color: COLORS.textPrimary },
   iosPickerCancel: { fontSize: 15, color: COLORS.textMuted, fontWeight: '600' },
-  iosPickerDone:   { fontSize: 15, color: COLORS.primary, fontWeight: '700' },
+  iosPickerDone:   { fontSize: 15, color: PURPLE.primary, fontWeight: '700' },
 });

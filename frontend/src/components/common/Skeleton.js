@@ -1,62 +1,70 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Animated, StyleSheet } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { View, StyleSheet, Animated, Easing } from 'react-native';
+import { COLORS } from '../../constants/colors';
 
-const SkeletonBox = ({ width, height, style }) => {
-  const shimmer = useRef(new Animated.Value(0)).current;
+/**
+ * Shimmering placeholder block. Loops a soft opacity pulse (native driver),
+ * giving list screens a polished loading state instead of a bare spinner.
+ *
+ * @param {number|string} width
+ * @param {number} height
+ * @param {number} radius   border radius (default 8)
+ */
+export const Skeleton = ({ width = '100%', height = 14, radius = 8, style }) => {
+  const pulse = useRef(new Animated.Value(0.4)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(shimmer, { toValue: 1, duration: 900, useNativeDriver: true }),
-        Animated.timing(shimmer, { toValue: 0, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.4, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ])
-    ).start();
-  }, [shimmer]);
-
-  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.9] });
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
 
   return (
     <Animated.View
-      style={[{ width, height, borderRadius: 8, backgroundColor: '#E2E8F0', opacity }, style]}
+      style={[
+        { width, height, borderRadius: radius, backgroundColor: COLORS.surfaceAlt, opacity: pulse },
+        style,
+      ]}
     />
   );
 };
 
-export const SkeletonCard = () => (
-  <View style={styles.card}>
-    <View style={styles.cardHeader}>
-      <SkeletonBox width={40} height={40} style={{ borderRadius: 12 }} />
-      <View style={{ flex: 1, gap: 8 }}>
-        <SkeletonBox width="70%" height={12} />
-        <SkeletonBox width="45%" height={10} />
+/**
+ * A card-shaped skeleton matching the rounded white cards used across the
+ * profile screens. Renders `count` of them for a believable loading list.
+ */
+export const SkeletonCardList = ({ count = 5 }) => (
+  <View style={styles.list}>
+    {Array.from({ length: count }).map((_, i) => (
+      <View key={i} style={styles.card}>
+        <View style={styles.row}>
+          <Skeleton width={42} height={42} radius={13} />
+          <View style={{ flex: 1, gap: 8 }}>
+            <Skeleton width="55%" height={13} />
+            <Skeleton width="35%" height={11} />
+          </View>
+          <Skeleton width={64} height={22} radius={999} />
+        </View>
+        <Skeleton width="100%" height={11} style={{ marginTop: 14 }} />
+        <Skeleton width="80%" height={11} style={{ marginTop: 8 }} />
       </View>
-      <SkeletonBox width={60} height={22} style={{ borderRadius: 99 }} />
-    </View>
-    <SkeletonBox width="100%" height={10} style={{ marginTop: 12 }} />
-    <SkeletonBox width="80%" height={10} style={{ marginTop: 8 }} />
+    ))}
   </View>
 );
 
-export const SkeletonCardList = ({ count = 3 }) => (
-  <>
-    {Array.from({ length: count }).map((_, i) => (
-      <SkeletonCard key={i} />
-    ))}
-  </>
-);
-
 const styles = StyleSheet.create({
+  list: { padding: 16, gap: 12 },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.white,
     borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
+    padding: 16,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
 });
 
-export default SkeletonCard;
+export default Skeleton;

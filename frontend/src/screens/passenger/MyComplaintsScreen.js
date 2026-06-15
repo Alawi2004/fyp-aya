@@ -7,7 +7,11 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
+import GradientFill from '../../components/common/GradientFill';
+import FadeInView from '../../components/common/FadeInView';
+import PressableScale from '../../components/common/PressableScale';
+import { SkeletonCardList } from '../../components/common/Skeleton';
 import { getMyComplaints, updateMyComplaint, deleteMyComplaint } from '../../api/apiClient';
 
 const BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000/api').replace(/\/api\/?$/, '');
@@ -99,14 +103,14 @@ const ComplaintCard = ({ item, onEdit, onDelete }) => {
       <View style={styles.cardActions}>
         {editable ? (
           <>
-            <TouchableOpacity style={styles.editBtn} onPress={() => onEdit(item)} activeOpacity={0.7}>
-              <Ionicons name="pencil-outline" size={14} color={COLORS.primary} />
+            <PressableScale style={styles.editBtn} onPress={() => onEdit(item)}>
+              <Ionicons name="pencil-outline" size={14} color={PURPLE.primary} />
               <Text style={styles.editBtnText}>Edit</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.deleteBtn} onPress={() => onDelete(item)} activeOpacity={0.7}>
+            </PressableScale>
+            <PressableScale style={styles.deleteBtn} onPress={() => onDelete(item)}>
               <Ionicons name="trash-outline" size={14} color={COLORS.danger} />
               <Text style={styles.deleteBtnText}>Delete</Text>
-            </TouchableOpacity>
+            </PressableScale>
           </>
         ) : (
           <View style={styles.lockedRow}>
@@ -202,17 +206,17 @@ const EditModal = ({ visible, item, onClose, onSave }) => {
           />
 
           <View style={styles.modalBtns}>
-            <TouchableOpacity style={styles.modalCancelBtn} onPress={onClose}>
+            <PressableScale style={styles.modalCancelBtn} onPress={onClose}>
               <Text style={styles.modalCancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+            </PressableScale>
+            <PressableScale
               style={[styles.modalSaveBtn, (!valid || saving) && { opacity: 0.5 }]}
               onPress={handleSave}
               disabled={!valid || saving}
             >
               {saving ? <ActivityIndicator size="small" color={COLORS.white} /> : <Ionicons name="checkmark" size={16} color={COLORS.white} />}
               <Text style={styles.modalSaveText}>{saving ? 'Saving…' : 'Save Changes'}</Text>
-            </TouchableOpacity>
+            </PressableScale>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -274,25 +278,33 @@ const MyComplaintsScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE.deep} />
 
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="chevron-back" size={22} color={COLORS.white} />
-        </TouchableOpacity>
-        <View style={{ flex: 1, marginLeft: 12 }}>
-          <Text style={styles.headerTitle}>My Complaints</Text>
-          {complaints.length > 0 && (
-            <Text style={styles.headerSub}>{complaints.length} complaint{complaints.length !== 1 ? 's' : ''} filed</Text>
-          )}
+      {/* Gradient header */}
+      <View style={styles.hero}>
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <GradientFill id="complaintsHero" colors={PURPLE.gradient} vertical />
+          <View style={styles.heroDecor1} />
+          <View style={styles.heroDecor2} />
         </View>
-        <TouchableOpacity style={styles.newBtn} onPress={() => navigation.navigate('FileComplaint')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="add" size={20} color={COLORS.white} />
-        </TouchableOpacity>
+        <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="chevron-back" size={22} color={COLORS.white} />
+          </TouchableOpacity>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.headerTitle}>My Complaints</Text>
+            {complaints.length > 0 && (
+              <Text style={styles.headerSub}>{complaints.length} complaint{complaints.length !== 1 ? 's' : ''} filed</Text>
+            )}
+          </View>
+          <TouchableOpacity style={styles.newBtn} onPress={() => navigation.navigate('FileComplaint')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="add" size={20} color={COLORS.white} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {loading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>
+        <SkeletonCardList count={4} />
       ) : (
         <FlatList
           data={complaints}
@@ -303,22 +315,26 @@ const MyComplaintsScreen = ({ navigation }) => {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => { setRefreshing(true); load(true); }}
-              tintColor={COLORS.primary}
-              colors={[COLORS.primary]}
+              tintColor={PURPLE.primary}
+              colors={[PURPLE.primary]}
             />
           }
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
-              <View style={styles.emptyIcon}><Ionicons name="document-text-outline" size={40} color={COLORS.textMuted} /></View>
+              <View style={styles.emptyIcon}><Ionicons name="document-text-outline" size={40} color={PURPLE.primary} /></View>
               <Text style={styles.emptyTitle}>No complaints filed</Text>
               <Text style={styles.emptySub}>Issues you report will appear here so you can track their progress.</Text>
-              <TouchableOpacity style={styles.emptyBtn} onPress={() => navigation.navigate('FileComplaint')}>
+              <PressableScale style={styles.emptyBtn} onPress={() => navigation.navigate('FileComplaint')}>
                 <Ionicons name="add-circle-outline" size={16} color={COLORS.white} />
                 <Text style={styles.emptyBtnText}>File a Complaint</Text>
-              </TouchableOpacity>
+              </PressableScale>
             </View>
           }
-          renderItem={({ item }) => <ComplaintCard item={item} onEdit={setEditItem} onDelete={handleDelete} />}
+          renderItem={({ item, index }) => (
+            <FadeInView index={index}>
+              <ComplaintCard item={item} onEdit={setEditItem} onDelete={handleDelete} />
+            </FadeInView>
+          )}
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
         />
       )}
@@ -334,8 +350,22 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   center:    { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
+  /* Hero */
+  hero: {
+    backgroundColor: PURPLE.deep,
+    overflow: 'hidden',
+    borderBottomLeftRadius: 26,
+    borderBottomRightRadius: 26,
+  },
+  heroDecor1: {
+    position: 'absolute', width: 190, height: 190, borderRadius: 95,
+    backgroundColor: 'rgba(255,255,255,0.07)', top: -80, right: -50,
+  },
+  heroDecor2: {
+    position: 'absolute', width: 120, height: 120, borderRadius: 60,
+    backgroundColor: 'rgba(255,255,255,0.05)', bottom: -20, left: -30,
+  },
   header: {
-    backgroundColor: COLORS.headerBg,
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingBottom: 18,
   },
@@ -350,7 +380,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   headerTitle: { fontSize: 20, fontWeight: '800', color: COLORS.white },
-  headerSub:   { fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
+  headerSub:   { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
 
   /* Card */
   card: {
@@ -390,10 +420,10 @@ const styles = StyleSheet.create({
   },
   editBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
-    backgroundColor: COLORS.primaryLight, paddingVertical: 8, borderRadius: 10,
-    borderWidth: 1, borderColor: COLORS.primaryMid,
+    backgroundColor: PURPLE.light, paddingVertical: 8, borderRadius: 10,
+    borderWidth: 1, borderColor: PURPLE.midStrong,
   },
-  editBtnText: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
+  editBtnText: { fontSize: 13, fontWeight: '700', color: PURPLE.primary },
   deleteBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
     backgroundColor: COLORS.dangerLight, paddingVertical: 8, borderRadius: 10,
@@ -406,14 +436,14 @@ const styles = StyleSheet.create({
   /* Empty state */
   emptyWrap:  { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 },
   emptyIcon: {
-    width: 72, height: 72, borderRadius: 22, backgroundColor: COLORS.background,
+    width: 72, height: 72, borderRadius: 22, backgroundColor: PURPLE.light,
     alignItems: 'center', justifyContent: 'center', marginBottom: 16,
   },
   emptyTitle: { fontSize: 18, fontWeight: '800', color: COLORS.textPrimary, marginBottom: 6 },
   emptySub:   { fontSize: 14, color: COLORS.textMuted, textAlign: 'center', lineHeight: 20, paddingHorizontal: 24, marginBottom: 20 },
   emptyBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12,
+    backgroundColor: PURPLE.primary, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12,
   },
   emptyBtnText: { fontSize: 14, fontWeight: '700', color: COLORS.white },
 
@@ -460,7 +490,7 @@ const styles = StyleSheet.create({
   modalCancelText: { fontSize: 15, fontWeight: '700', color: COLORS.textSecondary },
   modalSaveBtn: {
     flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    paddingVertical: 14, borderRadius: 12, backgroundColor: COLORS.primary,
+    paddingVertical: 14, borderRadius: 12, backgroundColor: PURPLE.primary,
   },
   modalSaveText: { fontSize: 15, fontWeight: '700', color: COLORS.white },
 });

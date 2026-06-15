@@ -4,11 +4,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
 import { THEME } from '../../constants/theme';
 
-const EmptyState = ({ icon = 'bus-outline', title, message }) => (
+const EmptyState = ({ icon = 'bus-outline', title, message, tint, tintBg, tintGlow }) => (
   <View style={styles.container}>
-    <View style={styles.glowRing}>
-      <View style={styles.iconWrap}>
-        <Ionicons name={icon} size={44} color={COLORS.primary} />
+    <View style={[styles.glowRing, tintGlow && { backgroundColor: tintGlow }]}>
+      <View style={[styles.iconWrap, tintBg && { backgroundColor: tintBg }]}>
+        <Ionicons name={icon} size={44} color={tint || COLORS.primary} />
       </View>
     </View>
     <Text style={styles.title}>{title}</Text>

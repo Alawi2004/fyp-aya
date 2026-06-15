@@ -1,27 +1,51 @@
 import React, { useRef } from 'react';
 import { Animated, Pressable } from 'react-native';
 
-const PressableScale = ({ children, onPress, style, scaleTo = 0.95, disabled, ...rest }) => {
+// Animating the Pressable itself (rather than an inner wrapper) keeps the
+// passed-in style — including flex — on a single element, so flex-row buttons
+// size correctly while still scaling on press.
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+/**
+ * Pressable that springs down slightly while pressed — adds tactile feedback
+ * to buttons and cards. Drop-in replacement for TouchableOpacity in most cases:
+ * `style` and press handlers pass straight through.
+ *
+ * @param {number} scaleTo  pressed scale (default 0.96)
+ */
+const PressableScale = ({
+  children,
+  onPress,
+  onLongPress,
+  disabled = false,
+  style,
+  scaleTo = 0.96,
+  hitSlop,
+  ...rest
+}) => {
   const scale = useRef(new Animated.Value(1)).current;
 
-  const pressIn = () =>
-    Animated.spring(scale, { toValue: scaleTo, useNativeDriver: true, friction: 6, tension: 300 }).start();
-
-  const pressOut = () =>
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6, tension: 300 }).start();
+  const spring = (toValue) =>
+    Animated.spring(scale, {
+      toValue,
+      useNativeDriver: true,
+      friction: 7,
+      tension: 140,
+    }).start();
 
   return (
-    <Pressable
-      onPress={disabled ? undefined : onPress}
-      onPressIn={pressIn}
-      onPressOut={pressOut}
+    <AnimatedPressable
+      onPress={onPress}
+      onLongPress={onLongPress}
       disabled={disabled}
+      hitSlop={hitSlop}
+      onPressIn={() => !disabled && spring(scaleTo)}
+      onPressOut={() => spring(1)}
+      style={[style, { transform: [{ scale }] }]}
       {...rest}
     >
-      <Animated.View style={[style, { transform: [{ scale }] }]}>
-        {children}
-      </Animated.View>
-    </Pressable>
+      {children}
+    </AnimatedPressable>
   );
 };
 

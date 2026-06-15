@@ -7,7 +7,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../context/AuthContext';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
+import FadeInView from '../../components/common/FadeInView';
+import PressableScale from '../../components/common/PressableScale';
 import { requestAccountDeletion } from '../../api/apiClient';
 
 const DELETION_DATE_KEY = 'accountDeletionRequestedAt';
@@ -83,7 +85,7 @@ const DeleteAccountScreen = ({ navigation }) => {
           </Text>
           <View style={styles.doneTips}>
             <View style={styles.doneTip}>
-              <Ionicons name="information-circle-outline" size={16} color={COLORS.primary} />
+              <Ionicons name="information-circle-outline" size={16} color={PURPLE.primary} />
               <Text style={styles.doneTipText}>
                 You can cancel this request by logging back in within 30 days.
               </Text>
@@ -95,9 +97,9 @@ const DeleteAccountScreen = ({ navigation }) => {
               </Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.logoutBtn} onPress={handleDoneLogout} activeOpacity={0.85}>
+          <PressableScale style={styles.logoutBtn} onPress={handleDoneLogout}>
             <Text style={styles.logoutBtnText}>Sign Out Now</Text>
-          </TouchableOpacity>
+          </PressableScale>
         </View>
       </View>
     );
@@ -125,21 +127,24 @@ const DeleteAccountScreen = ({ navigation }) => {
           contentContainerStyle={{ padding: 20, paddingBottom: 48 }}
         >
           {/* Warning banner */}
-          <View style={styles.warningBanner}>
-            <Ionicons name="warning" size={28} color={COLORS.danger} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.warningTitle}>Permanent Action</Text>
-              <Text style={styles.warningText}>
-                This cannot be undone after the 30-day cooling off period.
-              </Text>
+          <FadeInView index={0}>
+            <View style={styles.warningBanner}>
+              <Ionicons name="warning" size={28} color={COLORS.danger} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.warningTitle}>Permanent Action</Text>
+                <Text style={styles.warningText}>
+                  This cannot be undone after the 30-day cooling off period.
+                </Text>
+              </View>
             </View>
-          </View>
+          </FadeInView>
 
           {/* Cooling off info */}
+          <FadeInView index={1}>
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
-              <View style={[styles.infoIcon, { backgroundColor: COLORS.primaryLight }]}>
-                <Ionicons name="time-outline" size={20} color={COLORS.primary} />
+              <View style={[styles.infoIcon, { backgroundColor: PURPLE.light }]}>
+                <Ionicons name="time-outline" size={20} color={PURPLE.primary} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.infoTitle}>30-Day Cooling Off Period</Text>
@@ -154,8 +159,10 @@ const DeleteAccountScreen = ({ navigation }) => {
               </View>
             </View>
           </View>
+          </FadeInView>
 
           {/* What gets deleted */}
+          <FadeInView index={2}>
           <Text style={styles.sectionLabel}>What will be deleted</Text>
           <View style={styles.deletionList}>
             {WHAT_GETS_DELETED.map((item, i) => (
@@ -167,6 +174,7 @@ const DeleteAccountScreen = ({ navigation }) => {
               </View>
             ))}
           </View>
+          </FadeInView>
 
           {/* What's kept */}
           <View style={styles.keptCard}>
@@ -197,25 +205,23 @@ const DeleteAccountScreen = ({ navigation }) => {
           </View>
 
           {/* Submit */}
-          <TouchableOpacity
+          <PressableScale
             style={[styles.deleteBtn, !canSubmit && styles.deleteBtnDisabled]}
             onPress={handleRequest}
             disabled={!canSubmit || loading}
-            activeOpacity={0.85}
           >
             <Ionicons name="trash-outline" size={18} color={COLORS.white} />
             <Text style={styles.deleteBtnText}>
               {loading ? 'Submitting…' : 'Request Account Deletion'}
             </Text>
-          </TouchableOpacity>
+          </PressableScale>
 
-          <TouchableOpacity
+          <PressableScale
             style={styles.cancelBtn}
             onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
           >
             <Text style={styles.cancelBtnText}>Keep My Account</Text>
-          </TouchableOpacity>
+          </PressableScale>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -404,7 +410,7 @@ const styles = StyleSheet.create({
   doneTipText: { flex: 1, fontSize: 13, color: COLORS.textSecondary, lineHeight: 19 },
   logoutBtn: {
     width: '100%',
-    backgroundColor: COLORS.primary,
+    backgroundColor: PURPLE.primary,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',

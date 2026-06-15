@@ -76,6 +76,7 @@ export const COLORS = {
   driverHeaderBg: '#78350F',
 
   // Glow / overlay helpers (60-30-10 accent at opacity)
+  // (purple helpers appended after this object — see PURPLE export below)
   primaryGlow: 'rgba(37,99,235,0.12)',
   primaryGlowStrong: 'rgba(37,99,235,0.22)',
   secondaryGlow: 'rgba(16,185,129,0.12)',
@@ -83,4 +84,22 @@ export const COLORS = {
   dangerGlow: 'rgba(239,68,68,0.12)',
   overlayLight: 'rgba(255,255,255,0.85)',
   overlayDark: 'rgba(30,41,59,0.55)',
+};
+
+// ── Purple profile theme ──────────────────────────────────────────────────────
+// Used by the passenger profile screens (Personal Info, Trip History, My Ratings)
+// to give the profile area a distinct, polished violet identity that matches the
+// ProfileScreen hero gradient.
+export const PURPLE = {
+  primary: '#7C3AED',        // violet-600 (main accent)
+  dark: '#6D28D9',           // violet-700
+  deep: '#5B21B6',           // violet-800
+  light: '#F5F3FF',          // violet-50  (tinted backgrounds)
+  mid: '#EDE9FE',            // violet-100 (chips / pills)
+  midStrong: '#DDD6FE',      // violet-200 (borders)
+  onLight: '#6D28D9',        // text/icon on light violet
+  glow: 'rgba(124,58,237,0.12)',
+  glowStrong: 'rgba(124,58,237,0.22)',
+  // Hero gradient (deep → violet → light violet) — rich and clearly purple
+  gradient: ['#4C1D95', '#6D28D9', '#8B5CF6'],
 };

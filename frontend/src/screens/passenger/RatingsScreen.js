@@ -3,12 +3,17 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Alert, StatusBar, ActivityIndicator, RefreshControl,
   Modal, TextInput, KeyboardAvoidingView, Platform,
-  ScrollView,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
+import GradientFill from '../../components/common/GradientFill';
+import FadeInView from '../../components/common/FadeInView';
+import PressableScale from '../../components/common/PressableScale';
+import { SkeletonCardList } from '../../components/common/Skeleton';
+import CountUp from '../../components/common/CountUp';
+import StarRatingInput from '../../components/common/StarRatingInput';
 import apiClient from '../../api/apiClient';
 
 // ── Star row ──────────────────────────────────────────────────────────────────
@@ -25,25 +30,6 @@ const Stars = ({ rating, size = 14 }) => (
   </View>
 );
 
-// ── Interactive star picker ───────────────────────────────────────────────────
-const StarPicker = ({ value, onChange, size = 36 }) => (
-  <View style={{ flexDirection: 'row', gap: 8 }}>
-    {[1, 2, 3, 4, 5].map(s => (
-      <TouchableOpacity
-        key={s}
-        onPress={() => onChange(s)}
-        hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
-      >
-        <Ionicons
-          name={s <= value ? 'star' : 'star-outline'}
-          size={size}
-          color={s <= value ? '#F59E0B' : COLORS.border}
-        />
-      </TouchableOpacity>
-    ))}
-  </View>
-);
-
 const RATING_LABELS = ['', 'Poor', 'Fair', 'Good', 'Very Good', 'Excellent'];
 
 const EDIT_WINDOW_HOURS = 24;
@@ -56,7 +42,7 @@ const isEditable = (item) => {
 };
 
 // ── Rating card ───────────────────────────────────────────────────────────────
-const RatingCard = ({ item, onEdit, onDelete }) => {
+const RatingCard = ({ item, index, onEdit, onDelete }) => {
   const dateStr = item.created_at
     ? new Date(item.created_at).toLocaleDateString('en-GB', {
         day: 'numeric', month: 'short', year: 'numeric',
@@ -66,56 +52,58 @@ const RatingCard = ({ item, onEdit, onDelete }) => {
   const editable = isEditable(item);
 
   return (
-    <View style={styles.card}>
-      {/* Route + date */}
-      <View style={styles.cardTop}>
-        <View style={styles.routeIcon}>
-          <Ionicons name="bus-outline" size={16} color={COLORS.primary} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.routeName} numberOfLines={1}>
-            {item.route_name || 'General Rating'}
-          </Text>
-          {item.driver_name ? (
-            <Text style={styles.driverName}>Driver: {item.driver_name}</Text>
-          ) : null}
-        </View>
-        <Text style={styles.dateText}>{dateStr}</Text>
-      </View>
-
-      {/* Stars + label */}
-      <View style={styles.starsRow}>
-        <Stars rating={item.rating} size={16} />
-        <Text style={styles.ratingLabel}>{RATING_LABELS[item.rating] || ''}</Text>
-      </View>
-
-      {/* Comment */}
-      {item.comment ? (
-        <Text style={styles.comment}>{item.comment}</Text>
-      ) : null}
-
-      {/* Actions */}
-      <View style={styles.cardActions}>
-        {editable ? (
-          <TouchableOpacity style={styles.editBtn} onPress={() => onEdit(item)} activeOpacity={0.7}>
-            <Ionicons name="pencil-outline" size={14} color={COLORS.primary} />
-            <Text style={styles.editBtnText}>Edit</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={[styles.editBtn, styles.editBtnLocked]}>
-            <Ionicons name="lock-closed-outline" size={13} color={COLORS.textMuted} />
-            <Text style={styles.editBtnLockedText}>Edit locked</Text>
+    <FadeInView index={index}>
+      <View style={styles.card}>
+        {/* Route + date */}
+        <View style={styles.cardTop}>
+          <View style={styles.routeIcon}>
+            <Ionicons name="bus-outline" size={16} color={PURPLE.primary} />
           </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.routeName} numberOfLines={1}>
+              {item.route_name || 'General Rating'}
+            </Text>
+            {item.driver_name ? (
+              <Text style={styles.driverName}>Driver: {item.driver_name}</Text>
+            ) : null}
+          </View>
+          <Text style={styles.dateText}>{dateStr}</Text>
+        </View>
+
+        {/* Stars + label */}
+        <View style={styles.starsRow}>
+          <Stars rating={item.rating} size={16} />
+          <Text style={styles.ratingLabel}>{RATING_LABELS[item.rating] || ''}</Text>
+        </View>
+
+        {/* Comment */}
+        {item.comment ? (
+          <Text style={styles.comment}>{item.comment}</Text>
+        ) : null}
+
+        {/* Actions */}
+        <View style={styles.cardActions}>
+          {editable ? (
+            <PressableScale style={styles.editBtn} onPress={() => onEdit(item)}>
+              <Ionicons name="pencil-outline" size={14} color={PURPLE.primary} />
+              <Text style={styles.editBtnText}>Edit</Text>
+            </PressableScale>
+          ) : (
+            <View style={[styles.editBtn, styles.editBtnLocked]}>
+              <Ionicons name="lock-closed-outline" size={13} color={COLORS.textMuted} />
+              <Text style={styles.editBtnLockedText}>Edit locked</Text>
+            </View>
+          )}
+          <PressableScale style={styles.deleteBtn} onPress={() => onDelete(item)}>
+            <Ionicons name="trash-outline" size={14} color={COLORS.danger} />
+            <Text style={styles.deleteBtnText}>Delete</Text>
+          </PressableScale>
+        </View>
+        {!editable && (
+          <Text style={styles.lockHint}>Ratings can be edited within 24 hours of posting.</Text>
         )}
-        <TouchableOpacity style={styles.deleteBtn} onPress={() => onDelete(item)} activeOpacity={0.7}>
-          <Ionicons name="trash-outline" size={14} color={COLORS.danger} />
-          <Text style={styles.deleteBtnText}>Delete</Text>
-        </TouchableOpacity>
       </View>
-      {!editable && (
-        <Text style={styles.lockHint}>Ratings can be edited within 24 hours of posting.</Text>
-      )}
-    </View>
+    </FadeInView>
   );
 };
 
@@ -138,7 +126,7 @@ const EditModal = ({ visible, item, onClose, onSave }) => {
     if (!rating) return;
     setSaving(true);
     try {
-      const res = await apiClient.put(`/ratings/${item.rating_id}`, {
+      await apiClient.put(`/ratings/${item.rating_id}`, {
         rating,
         comment: comment.trim() || null,
       });
@@ -166,7 +154,7 @@ const EditModal = ({ visible, item, onClose, onSave }) => {
           {/* Stars */}
           <Text style={styles.modalLabel}>Your Rating</Text>
           <View style={styles.modalStarsWrap}>
-            <StarPicker value={rating} onChange={setRating} size={38} />
+            <StarRatingInput value={rating} onChange={setRating} size={38} />
             {rating > 0 && (
               <Text style={styles.modalRatingLabel}>{RATING_LABELS[rating]}</Text>
             )}
@@ -188,10 +176,10 @@ const EditModal = ({ visible, item, onClose, onSave }) => {
 
           {/* Buttons */}
           <View style={styles.modalBtns}>
-            <TouchableOpacity style={styles.modalCancelBtn} onPress={onClose}>
+            <PressableScale style={styles.modalCancelBtn} onPress={onClose}>
               <Text style={styles.modalCancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+            </PressableScale>
+            <PressableScale
               style={[styles.modalSaveBtn, (!rating || saving) && { opacity: 0.5 }]}
               onPress={handleSave}
               disabled={!rating || saving}
@@ -201,7 +189,7 @@ const EditModal = ({ visible, item, onClose, onSave }) => {
                 : <Ionicons name="checkmark" size={16} color={COLORS.white} />
               }
               <Text style={styles.modalSaveText}>{saving ? 'Saving…' : 'Save Changes'}</Text>
-            </TouchableOpacity>
+            </PressableScale>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -275,38 +263,63 @@ const RatingsScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE.deep} />
 
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="chevron-back" size={22} color={COLORS.white} />
-        </TouchableOpacity>
-        <View style={{ flex: 1, marginLeft: 12 }}>
-          <Text style={styles.headerTitle}>My Ratings</Text>
-          {ratings.length > 0 && (
-            <Text style={styles.headerSub}>
-              {ratings.length} review{ratings.length !== 1 ? 's' : ''} · avg {avgRating} ⭐
-            </Text>
-          )}
+      {/* Gradient header */}
+      <View style={styles.hero}>
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <GradientFill id="ratingsHero" colors={PURPLE.gradient} vertical />
+          <View style={styles.heroDecor1} />
+          <View style={styles.heroDecor2} />
         </View>
-        <TouchableOpacity
-          style={styles.refreshBtn}
-          onPress={() => load()}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="refresh-outline" size={18} color={COLORS.white} />
-        </TouchableOpacity>
+
+        <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="chevron-back" size={22} color={COLORS.white} />
+          </TouchableOpacity>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={styles.headerTitle}>My Ratings</Text>
+            <Text style={styles.headerSub}>
+              {ratings.length > 0
+                ? `${ratings.length} review${ratings.length !== 1 ? 's' : ''} submitted`
+                : 'Your trip reviews'}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.refreshBtn}
+            onPress={() => load()}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="refresh-outline" size={18} color={COLORS.white} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Average rating summary */}
+        {ratings.length > 0 && (
+          <FadeInView index={0} style={styles.summaryWrap}>
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryLeft}>
+                <CountUp value={avgRating} decimals={1} style={styles.summaryAvg} />
+                <Stars rating={Math.round(Number(avgRating))} size={14} />
+              </View>
+              <View style={styles.summaryDivider} />
+              <View style={styles.summaryRight}>
+                <CountUp value={ratings.length} decimals={0} style={styles.summaryCount} />
+                <Text style={styles.summaryCountLabel}>
+                  total review{ratings.length !== 1 ? 's' : ''}
+                </Text>
+              </View>
+            </View>
+          </FadeInView>
+        )}
       </View>
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-        </View>
+        <SkeletonCardList count={5} />
       ) : (
         <FlatList
           data={ratings}
@@ -317,14 +330,14 @@ const RatingsScreen = ({ navigation }) => {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => { setRefreshing(true); load(true); }}
-              tintColor={COLORS.primary}
-              colors={[COLORS.primary]}
+              tintColor={PURPLE.primary}
+              colors={[PURPLE.primary]}
             />
           }
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
               <View style={styles.emptyIcon}>
-                <Ionicons name="star-outline" size={40} color={COLORS.textMuted} />
+                <Ionicons name="star-outline" size={40} color={PURPLE.primary} />
               </View>
               <Text style={styles.emptyTitle}>No ratings yet</Text>
               <Text style={styles.emptySub}>
@@ -332,9 +345,10 @@ const RatingsScreen = ({ navigation }) => {
               </Text>
             </View>
           }
-          renderItem={({ item }) => (
+          renderItem={({ item, index }) => (
             <RatingCard
               item={item}
+              index={index}
               onEdit={handleEdit}
               onDelete={handleDelete}
             />
@@ -360,38 +374,69 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   center:    { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
+  /* Hero */
+  hero: {
+    backgroundColor: PURPLE.deep,
+    overflow: 'hidden',
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    paddingBottom: 20,
+  },
+  heroDecor1: {
+    position: 'absolute', width: 200, height: 200, borderRadius: 100,
+    backgroundColor: 'rgba(255,255,255,0.07)', top: -70, right: -50,
+  },
+  heroDecor2: {
+    position: 'absolute', width: 130, height: 130, borderRadius: 65,
+    backgroundColor: 'rgba(255,255,255,0.05)', bottom: -20, left: -30,
+  },
+
   /* Header */
   header: {
-    backgroundColor: COLORS.headerBg,
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingBottom: 18,
+    paddingHorizontal: 16, paddingBottom: 14,
   },
   backBtn: {
     width: 36, height: 36, borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center', justifyContent: 'center',
   },
   refreshBtn: {
     width: 36, height: 36, borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center', justifyContent: 'center',
   },
   headerTitle: { fontSize: 20, fontWeight: '800', color: COLORS.white },
-  headerSub:   { fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
+  headerSub:   { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
+
+  /* Summary card */
+  summaryWrap: { paddingHorizontal: 16 },
+  summaryCard: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 18, paddingVertical: 14, paddingHorizontal: 20,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+  },
+  summaryLeft:  { flex: 1, alignItems: 'center', gap: 6 },
+  summaryRight: { flex: 1, alignItems: 'center', gap: 2 },
+  summaryAvg: { fontSize: 30, fontWeight: '900', color: COLORS.white, lineHeight: 34 },
+  summaryDivider: { width: 1, height: 44, backgroundColor: 'rgba(255,255,255,0.22)' },
+  summaryCount: { fontSize: 26, fontWeight: '900', color: COLORS.white },
+  summaryCountLabel: { fontSize: 11, color: 'rgba(255,255,255,0.75)', fontWeight: '600' },
 
   /* Card */
   card: {
     backgroundColor: COLORS.white, borderRadius: 16,
     padding: 14,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
+    shadowColor: PURPLE.deep, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08, shadowRadius: 12, elevation: 2,
   },
   cardTop: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 10,
   },
   routeIcon: {
     width: 34, height: 34, borderRadius: 10,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: PURPLE.light,
     alignItems: 'center', justifyContent: 'center',
   },
   routeName:  { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary },
@@ -409,11 +454,11 @@ const styles = StyleSheet.create({
   },
   editBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: PURPLE.light,
     paddingVertical: 8, borderRadius: 10,
-    borderWidth: 1, borderColor: COLORS.primaryMid,
+    borderWidth: 1, borderColor: PURPLE.midStrong,
   },
-  editBtnText: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
+  editBtnText: { fontSize: 13, fontWeight: '700', color: PURPLE.primary },
   editBtnLocked: {
     backgroundColor: COLORS.background,
     borderColor: COLORS.border,
@@ -434,7 +479,7 @@ const styles = StyleSheet.create({
   emptyWrap:  { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 },
   emptyIcon: {
     width: 72, height: 72, borderRadius: 22,
-    backgroundColor: COLORS.background,
+    backgroundColor: PURPLE.light,
     alignItems: 'center', justifyContent: 'center', marginBottom: 16,
   },
   emptyTitle: { fontSize: 18, fontWeight: '800', color: COLORS.textPrimary, marginBottom: 6 },
@@ -485,7 +530,7 @@ const styles = StyleSheet.create({
   modalSaveBtn: {
     flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     paddingVertical: 14, borderRadius: 12,
-    backgroundColor: COLORS.primary,
+    backgroundColor: PURPLE.primary,
   },
   modalSaveText: { fontSize: 15, fontWeight: '700', color: COLORS.white },
 });
