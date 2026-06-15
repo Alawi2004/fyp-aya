@@ -6,7 +6,7 @@ import axios from 'axios';
 
 const AuthContext = createContext();
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.0.103:4000/api';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.0.109:4000/api';
 const FRONTEND_ONLY = process.env.EXPO_PUBLIC_FRONTEND_ONLY !== 'false';
 
 const MOCK_PASSENGER = {
