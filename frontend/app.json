@@ -28,6 +28,16 @@
           "cameraPermission": "Allow Yalla Transit to use your camera to attach photos to complaints."
         }
       ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Yalla Transit needs your location to share your bus position with passengers in real time.",
+          "locationAlwaysAndWhenInUsePermission": "Yalla Transit needs your location in the background to keep sharing your bus position while the app is minimised.",
+          "locationAlwaysPermission": "Yalla Transit needs your location in the background to keep sharing your bus position while the app is minimised.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true
+        }
+      ],
       "expo-audio"
     ],
     "ios": {
@@ -67,7 +77,10 @@
       ],
       "permissions": [
         "android.permission.USE_BIOMETRIC",
-        "android.permission.USE_FINGERPRINT"
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION"
       ]
     },
     "updates": {

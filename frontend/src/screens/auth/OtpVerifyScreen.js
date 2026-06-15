@@ -9,10 +9,10 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Defs, LinearGradient as SvgGradient, Stop, Rect } from 'react-native-svg';
 import { useAuth } from '../../context/AuthContext';
 import { verifyOtpApi, sendOtpApi } from '../../api/authApi';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const BRAND = ['#1E3A8A', '#4338CA', '#7C3AED'];
+const BRAND = PURPLE.gradient;
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 60;
 
@@ -218,7 +218,7 @@ const OtpVerifyScreen = ({ navigation, route }) => {
               transform: [{ scale: intro[0].interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
             }]}>
               <View style={styles.logoCircle}>
-                <Ionicons name="shield-checkmark" size={34} color={COLORS.primary} />
+                <Ionicons name="shield-checkmark" size={34} color={PURPLE.primary} />
               </View>
             </Animated.View>
             <Animated.Text style={[styles.brand, sect(1)]}>{headingText}</Animated.Text>
@@ -237,7 +237,7 @@ const OtpVerifyScreen = ({ navigation, route }) => {
 
             {devCode ? (
               <View style={styles.devNote}>
-                <Ionicons name="construct" size={15} color={COLORS.primary} />
+                <Ionicons name="construct" size={15} color={PURPLE.primary} />
                 <Text style={styles.devNoteText}>Dev code: <Text style={{ fontWeight: '800' }}>{devCode}</Text></Text>
               </View>
             ) : null}
@@ -277,7 +277,7 @@ const OtpVerifyScreen = ({ navigation, route }) => {
                 style={[styles.primaryBtn, { transform: [{ scale: btnScale }], opacity: loading ? 0.85 : 1 }]}
               >
                 <View style={styles.primaryBg} pointerEvents="none">
-                  <GradientFill id="otpBtnGrad" colors={['#2563EB', '#7C3AED']} radius={16} />
+                  <GradientFill id="otpBtnGrad" colors={PURPLE.gradient} radius={16} />
                 </View>
                 {loading ? (
                   <ActivityIndicator color={COLORS.white} />
@@ -293,7 +293,7 @@ const OtpVerifyScreen = ({ navigation, route }) => {
               <View style={styles.resendRow}>
                 {timer > 0 ? (
                   <Text style={styles.timerText}>
-                    Resend code in <Text style={{ color: COLORS.primary, fontWeight: '800' }}>{timer}s</Text>
+                    Resend code in <Text style={{ color: PURPLE.primary, fontWeight: '800' }}>{timer}s</Text>
                   </Text>
                 ) : (
                   <TouchableOpacity onPress={resend} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -356,9 +356,9 @@ const styles = StyleSheet.create({
 
   devNote: {
     flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
-    backgroundColor: COLORS.primaryLight, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10, marginBottom: 18,
+    backgroundColor: PURPLE.light, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 10, marginBottom: 18,
   },
-  devNoteText: { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
+  devNoteText: { fontSize: 13, color: PURPLE.primary, fontWeight: '600' },
 
   /* OTP boxes */
   otpRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 26 },
@@ -369,8 +369,8 @@ const styles = StyleSheet.create({
   },
   // value-based + focus highlight only change border/colour (focus-safe, no
   // backgroundColor/shadow toggling that would drop native focus on Fabric).
-  otpBoxFilled: { borderColor: COLORS.primaryMid, color: COLORS.primary },
-  otpBoxActive: { borderColor: COLORS.primary },
+  otpBoxFilled: { borderColor: PURPLE.midStrong, color: PURPLE.primary },
+  otpBoxActive: { borderColor: PURPLE.primary },
 
   /* Primary gradient button */
   primaryBtn: {
@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
   /* Resend */
   resendRow: { alignItems: 'center', marginTop: 18 },
   timerText: { fontSize: 14, color: COLORS.textSecondary, fontWeight: '500' },
-  resendLink: { fontSize: 14, fontWeight: '800', color: COLORS.primary },
+  resendLink: { fontSize: 14, fontWeight: '800', color: PURPLE.primary },
 
   secureRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 22 },
   secureText: { fontSize: 12, color: COLORS.textMuted, fontWeight: '500' },

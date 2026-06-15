@@ -729,6 +729,53 @@ export const resetPassword = async (req, res) => {
   }
 };
 
+// ── Reset Password via OTP (in-app flow) ─────────────────────────────────────
+
+export const resetPasswordOtp = async (req, res) => {
+  const { email, otp, new_password } = req.body;
+  try {
+    const pool = await poolPromise;
+    await ensureAuthTables(pool);
+
+    const otpResult = await pool.request()
+      .input("email", sql.NVarChar(120), email)
+      .query("SELECT TOP 1 otp_id, code, expires_at FROM otp_codes WHERE email = @email AND purpose = 'reset_password' ORDER BY created_at DESC");
+
+    const stored = otpResult.recordset[0];
+    if (!stored) return res.status(400).json({ error: "No reset code found — request a new one" });
+
+    if (new Date() > new Date(stored.expires_at)) {
+      await pool.request().input("otp_id", sql.Int, stored.otp_id).query("DELETE FROM otp_codes WHERE otp_id = @otp_id");
+      return res.status(400).json({ error: "Code expired — request a new one" });
+    }
+
+    if (stored.code !== String(otp).trim()) {
+      return res.status(400).json({ error: "Invalid code" });
+    }
+
+    const userResult = await pool.request()
+      .input("email", sql.NVarChar(120), email)
+      .query("SELECT user_id FROM users WHERE email = @email");
+
+    const user = userResult.recordset[0];
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const hashed = await bcrypt.hash(new_password, 10);
+    await pool.request()
+      .input("user_id",      sql.Int,     user.user_id)
+      .input("password_hash", sql.VarChar, hashed)
+      .query("UPDATE users SET password_hash = @password_hash WHERE user_id = @user_id");
+
+    await pool.request().input("otp_id", sql.Int, stored.otp_id).query("DELETE FROM otp_codes WHERE otp_id = @otp_id");
+    await pool.request().input("user_id", sql.Int, user.user_id).query("DELETE FROM refresh_tokens WHERE user_id = @user_id");
+
+    return res.json({ message: "Password reset successfully. Please log in with your new password." });
+  } catch (err) {
+    console.error("[auth] resetPasswordOtp error:", err.message);
+    return res.status(500).json({ error: "Password reset failed. Please try again." });
+  }
+};
+
 // ── Refresh ───────────────────────────────────────────────────────────────────
 
 export const refresh = async (req, res) => {

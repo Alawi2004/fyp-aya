@@ -11,12 +11,17 @@ import {
   StyleSheet,
   Animated,
   Easing,
+  PanResponder,
+  Dimensions,
   Platform,
   StatusBar,
   ScrollView,
   Alert,
   Linking,
 } from "react-native";
+
+const SCREEN_H         = Dimensions.get("window").height;
+const PANEL_COLLAPSE_Y = Math.round(SCREEN_H * 0.46);
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import * as Notifications from "expo-notifications";
@@ -274,11 +279,37 @@ const BusTrackingScreen = ({ route, navigation }) => {
   const isTaxi = booking?.type === "taxi";
   const vehicleId = String(tripId ?? "");
   const mapRef = useRef(null);
-  const panelSlide = useRef(new Animated.Value(0)).current;
-  const topSlide = useRef(new Animated.Value(0)).current;
+  const panelSlide   = useRef(new Animated.Value(0)).current;
+  const topSlide     = useRef(new Animated.Value(0)).current;
+  const panelDragY   = useRef(new Animated.Value(0)).current;
+  const collapsedRef = useRef(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const etaInterval = useRef(null);
   const alertSent = useRef(false);
   const notifGranted = useRef(false);
+
+  const panelPan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, { dy }) => Math.abs(dy) > 6,
+      onPanResponderMove: (_, { dy }) => {
+        const base = collapsedRef.current ? PANEL_COLLAPSE_Y : 0;
+        panelDragY.setValue(Math.max(0, Math.min(PANEL_COLLAPSE_Y, base + dy)));
+      },
+      onPanResponderRelease: (_, { dy, vy }) => {
+        const base      = collapsedRef.current ? PANEL_COLLAPSE_Y : 0;
+        const projected = base + dy;
+        const collapse  = projected > PANEL_COLLAPSE_Y / 2 || vy > 0.4;
+        collapsedRef.current = collapse;
+        setIsCollapsed(collapse);
+        Animated.spring(panelDragY, {
+          toValue:          collapse ? PANEL_COLLAPSE_Y : 0,
+          useNativeDriver:  false,
+          friction:         9,
+          tension:          70,
+        }).start();
+      },
+    })
+  ).current;
 
   // WebSocket GPS stream (with HTTP polling fallback built in)
   const {
@@ -370,11 +401,12 @@ const BusTrackingScreen = ({ route, navigation }) => {
         }
         if (d.totalSeats) {
           const cap = parseInt(d.totalSeats, 10);
-          setSeatInfo((s) => ({
-            ...s,
-            capacity: cap,
-            available: Math.max(0, cap - s.occupied),
-          }));
+          const occ = parseInt(d.bookedSeats || 0, 10);
+          setSeatInfo({
+            capacity:  cap,
+            occupied:  occ,
+            available: Math.max(0, cap - occ),
+          });
         }
       })
       .catch(() => {});
@@ -501,7 +533,7 @@ const BusTrackingScreen = ({ route, navigation }) => {
         toValue: 1,
         friction: 9,
         tension: 40,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start();
 
@@ -530,6 +562,7 @@ const BusTrackingScreen = ({ route, navigation }) => {
     inputRange: [0, 1],
     outputRange: [300, 0],
   });
+  const panelTotalY = Animated.add(panelTranslate, panelDragY);
   const topTranslate = topSlide.interpolate({
     inputRange: [0, 1],
     outputRange: [-90, 0],
@@ -638,9 +671,18 @@ const BusTrackingScreen = ({ route, navigation }) => {
 
       {/* Slide-up bottom panel */}
       <Animated.View
-        style={[styles.panel, { transform: [{ translateY: panelTranslate }] }]}
+        style={[styles.panel, { transform: [{ translateY: panelTotalY }] }]}
       >
-        <View style={styles.panelHandle} />
+        <View style={styles.panelHandleArea} {...panelPan.panHandlers}>
+          <View style={styles.panelHandle} />
+          <Ionicons
+            name={isCollapsed ? "chevron-up" : "chevron-down"}
+            size={16}
+            color={COLORS.textMuted}
+            style={{ marginTop: -4, marginBottom: 6 }}
+          />
+        </View>
+        <ScrollView showsVerticalScrollIndicator={false} bounces={false} contentContainerStyle={{ paddingBottom: 4 }}>
 
         {/* Traffic badge */}
         {etaData?.traffic && (
@@ -998,6 +1040,7 @@ const BusTrackingScreen = ({ route, navigation }) => {
             <Text style={styles.emergencyText}>Report an Issue</Text>
           </PressableScale>
         </FadeInView>
+        </ScrollView>
       </Animated.View>
     </View>
   );
@@ -1091,6 +1134,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    maxHeight: "70%",
     backgroundColor: COLORS.white,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
@@ -1102,14 +1146,16 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 16,
   },
+  panelHandleArea: {
+    alignItems: "center",
+    paddingTop: 12,
+  },
   panelHandle: {
     width: 40,
     height: 4,
     borderRadius: 2,
     backgroundColor: COLORS.border,
-    alignSelf: "center",
-    marginTop: 12,
-    marginBottom: 12,
+    marginBottom: 6,
   },
 
   trafficBadge: {

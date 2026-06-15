@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
-  StatusBar, RefreshControl,
+  StatusBar, RefreshControl, AppState,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,7 +13,7 @@ import { SkeletonCardList } from '../../components/common/Skeleton';
 import { useAuth } from '../../context/AuthContext';
 import apiClient from '../../api/apiClient';
 
-const POLL_MS = 30000;
+const POLL_MS = 15000;
 
 const TYPE_CFG = {
   arrival:   { icon: 'bus',                color: COLORS.success,  bg: COLORS.success  + '18' },
@@ -58,11 +58,19 @@ const NotificationsScreen = ({ navigation }) => {
     }
   }, [user]);
 
-  // Initial load + polling
+  // Initial load + polling + foreground refresh
   useEffect(() => {
     load();
     timerRef.current = setInterval(() => load(true), POLL_MS);
-    return () => clearInterval(timerRef.current);
+
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') load(true);
+    });
+
+    return () => {
+      clearInterval(timerRef.current);
+      sub.remove();
+    };
   }, [load]);
 
   const handleRead = useCallback(async (id) => {

@@ -2,12 +2,14 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal,
   Alert, Platform, StatusBar, Animated, ActivityIndicator, RefreshControl,
+  PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS, PURPLE } from '../../constants/colors';
 import { getDriverTripsApi, startTripApi, completeTripApi, cancelTripApi } from '../../api/driverApi';
+import { useGpsTracking } from '../../hooks/useGpsTracking';
 
 const TRIP_STATUS = [
   { key: 'idle',       label: 'Not Started', icon: 'ellipse-outline',    color: COLORS.textMuted   },
@@ -61,6 +63,53 @@ const isDoneStatus      = (s) => ['completed', 'cancelled', 'closed'].includes(s
 
 // ── Trip Detail Modal ────────────────────────────────────────────────────────
 const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd, onOpenMap, onCancel, onManifest }) => {
+  // Hooks must come before any early return
+  const sheetY    = useRef(new Animated.Value(600)).current;
+  const dragBase  = useRef(0);
+
+  useEffect(() => {
+    Animated.spring(sheetY, {
+      toValue:         0,
+      useNativeDriver: false,
+      friction:        10,
+      tension:         60,
+    }).start();
+  }, [sheetY]);
+
+  const swipePan = useRef(
+    PanResponder.create({
+      // Capture phase: claim only clear downward swipes on the sheet
+      onMoveShouldSetPanResponderCapture: (_, { dy, dx }) =>
+        dy > 8 && Math.abs(dy) > Math.abs(dx) * 1.5,
+      onPanResponderGrant: () => {
+        sheetY.stopAnimation((val) => { dragBase.current = val; });
+      },
+      onPanResponderMove: (_, { dy }) => {
+        sheetY.setValue(Math.max(0, dragBase.current + dy));
+      },
+      onPanResponderRelease: (_, { dy, vy }) => {
+        const projected = dragBase.current + dy;
+        if (projected > 120 || vy > 0.4) {
+          Animated.timing(sheetY, {
+            toValue:         700,
+            duration:        200,
+            useNativeDriver: false,
+          }).start(() => {
+            sheetY.setValue(600);
+            onClose();
+          });
+        } else {
+          Animated.spring(sheetY, {
+            toValue:         0,
+            useNativeDriver: false,
+            friction:        9,
+            tension:         70,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
   if (!trip) return null;
 
   const isLoading = actionLoading === trip.trip_id;
@@ -74,7 +123,7 @@ const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd,
     <Modal
       visible
       transparent
-      animationType="slide"
+      animationType="none"
       onRequestClose={onClose}
     >
       {/* Full-screen flex column: overlay (flex:1) + sheet at bottom */}
@@ -88,8 +137,10 @@ const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd,
         />
 
         {/* Bottom sheet */}
-        <View style={[modalStyles.sheet, { paddingBottom: (insets?.bottom ?? 0) + 20 }]}>
-          <View style={modalStyles.handle} />
+        <Animated.View style={[modalStyles.sheet, { paddingBottom: (insets?.bottom ?? 0) + 20, transform: [{ translateY: sheetY }] }]} {...swipePan.panHandlers}>
+          <View style={modalStyles.handleArea}>
+            <View style={modalStyles.handle} />
+          </View>
 
           <ScrollView
             showsVerticalScrollIndicator={false}
@@ -231,7 +282,7 @@ const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd,
 
             <View style={{ height: 8 }} />
           </ScrollView>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -242,11 +293,16 @@ const modalStyles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     paddingTop: 16, paddingHorizontal: 20,
-    maxHeight: '85%',
+    maxHeight: '65%',
+  },
+  handleArea: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    paddingTop: 10,
+    paddingBottom: 14,
   },
   handle: {
     width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.border,
-    alignSelf: 'center', marginBottom: 16,
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
   busIcon: {
@@ -442,6 +498,7 @@ const DriverDashboardScreen = ({ navigation }) => {
   }, [loadTrips]);
 
   const activeTrip    = trips.find(t => isActiveStatus(t.status));
+  useGpsTracking(activeTrip?.trip_id ?? null);
   const upcomingCount = trips.filter(t => !isActiveStatus(t.status) && !isDoneStatus(t.status)).length;
   const doneToday     = trips.filter(t => isDoneStatus(t.status)).length;
   const earnedToday   = trips.filter(t => isDoneStatus(t.status)).reduce((s, t) => s + t.earnings, 0);

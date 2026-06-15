@@ -46,7 +46,11 @@ const STATUS_META = {
 // once staff start handling it, the record must stay stable for the audit trail.
 const isEditable = (item) => item?.status === 'submitted';
 
-const photoUrl = (path) => (path ? `${BASE_URL}${path}` : null);
+const photoUrl = (p) => {
+  if (!p) return null;
+  if (p.startsWith('http')) return p; // already a full Azure Blob URL
+  return `${BASE_URL}${p}`;           // legacy relative path
+};
 
 // ── Complaint card ────────────────────────────────────────────────────────────
 const ComplaintCard = ({ item, onEdit, onDelete }) => {
