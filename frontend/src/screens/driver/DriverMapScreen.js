@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal,
   Switch, Platform, StatusBar, Animated, ScrollView,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, PanResponder, Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ExpoLocation from 'expo-location';
@@ -16,6 +16,7 @@ import {
 } from '../../api/driverApi';
 
 // ─── constants ────────────────────────────────────────────────────────────────
+const SCREEN_H           = Dimensions.get('window').height;
 const ARRIVAL_RADIUS_M   = 50;
 const APPROACH_RADIUS_M  = 200;
 const DEVIATION_RADIUS_M = 150;
@@ -193,6 +194,35 @@ const DriverMapScreen = ({ navigation, route }) => {
   const triggeredRef = useRef(new Set());
   const broadcastRef = useRef(null);
 
+  // ── Swipe-to-collapse panel (finger-following, spring snap) ──
+  const panelDragY    = useRef(new Animated.Value(0)).current;
+  const collapsedRef  = useRef(false);
+  const collapseDist  = useRef(Math.round(SCREEN_H * 0.42));   // how far the panel drops when collapsed
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  const panelPan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, { dy }) => Math.abs(dy) > 6,
+      onPanResponderMove: (_, { dy }) => {
+        const base = collapsedRef.current ? collapseDist.current : 0;
+        panelDragY.setValue(Math.max(0, Math.min(collapseDist.current, base + dy)));
+      },
+      onPanResponderRelease: (_, { dy, vy }) => {
+        const base      = collapsedRef.current ? collapseDist.current : 0;
+        const projected = base + dy;
+        const collapse  = projected > collapseDist.current / 2 || vy > 0.4;
+        collapsedRef.current = collapse;
+        setIsCollapsed(collapse);
+        Animated.spring(panelDragY, {
+          toValue:         collapse ? collapseDist.current : 0,
+          useNativeDriver: false,
+          friction:        9,
+          tension:         70,
+        }).start();
+      },
+    })
+  ).current;
+
   // GPS
   const [location,  setLocation]  = useState(null);
   const [gpsError,  setGpsError]  = useState(false);
@@ -228,9 +258,10 @@ const DriverMapScreen = ({ navigation, route }) => {
       if (status !== 'granted') { setGpsError(true); return; }
       const loc = await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.Balanced });
       setLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-      // Watch for updates
+      // Watch for updates — distanceInterval:0 so it fires on time alone even
+      // when the bus is stationary (Android needs BOTH time + distance otherwise)
       sub = await ExpoLocation.watchPositionAsync(
-        { accuracy: ExpoLocation.Accuracy.Balanced, distanceInterval: 10 },
+        { accuracy: ExpoLocation.Accuracy.Balanced, timeInterval: 5000, distanceInterval: 0 },
         l => setLocation({ latitude: l.coords.latitude, longitude: l.coords.longitude })
       );
     })();
@@ -300,7 +331,8 @@ const DriverMapScreen = ({ navigation, route }) => {
 
   // ── Animations ──
   useEffect(() => {
-    Animated.timing(panelAnim, { toValue: 0, duration: 500, useNativeDriver: true }).start();
+    // non-native so it can combine with the drag value via Animated.add
+    Animated.timing(panelAnim, { toValue: 0, duration: 500, useNativeDriver: false }).start();
     const pulse = Animated.loop(Animated.sequence([
       Animated.timing(pulseAnim, { toValue: 1.7, duration: 1000, useNativeDriver: true }),
       Animated.timing(pulseAnim, { toValue: 1.0, duration: 1000, useNativeDriver: true }),
@@ -487,8 +519,31 @@ const DriverMapScreen = ({ navigation, route }) => {
         </View>
       )}
 
-      {/* ── Bottom Panel ── */}
-      <Animated.View style={[styles.panel, { transform: [{ translateY: panelAnim }], paddingBottom: insets.bottom + 8 }]}>
+      {/* ── Bottom Panel (swipe up/down to reveal the map) ── */}
+      <Animated.View
+        onLayout={(e) => {
+          const h = e.nativeEvent.layout.height;
+          // collapse far enough to leave only the handle + next-stop card peeking
+          collapseDist.current = Math.max(120, Math.round(h - 150));
+        }}
+        style={[
+          styles.panel,
+          {
+            transform: [{ translateY: Animated.add(panelAnim, panelDragY) }],
+            paddingBottom: insets.bottom + 8,
+          },
+        ]}
+      >
+        {/* Drag handle — the only swipe target, so inner ScrollViews still work */}
+        <View style={styles.handleArea} {...panelPan.panHandlers}>
+          <View style={styles.handleBar} />
+          <Ionicons
+            name={isCollapsed ? 'chevron-up' : 'chevron-down'}
+            size={16}
+            color={COLORS.textMuted}
+            style={{ marginTop: 2 }}
+          />
+        </View>
 
         {/* Next Stop card — only when there's an active trip with stops */}
         {nextStopEta && activeTrip && (
@@ -648,7 +703,9 @@ const styles = StyleSheet.create({
   deviationText:   { flex: 1, fontSize: 12, fontWeight: '700', color: COLORS.white },
   deviationClose:  { width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
 
-  panel: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: COLORS.white, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: -6 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 20 },
+  panel: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: COLORS.white, borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingHorizontal: 16, paddingBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: -6 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 20 },
+  handleArea: { alignSelf: 'stretch', alignItems: 'center', paddingTop: 10, paddingBottom: 8, marginHorizontal: -16 },
+  handleBar:  { width: 44, height: 5, borderRadius: 3, backgroundColor: COLORS.border },
 
   nextStopCard:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: PURPLE.light, borderRadius: 14, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: PURPLE.midStrong ?? '#93C5FD' },
   nextStopLeft:     { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },

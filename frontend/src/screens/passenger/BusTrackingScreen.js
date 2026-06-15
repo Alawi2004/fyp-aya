@@ -38,7 +38,7 @@ import apiClient from "../../api/apiClient";
 
 const CAMERA_SERVER = "http://localhost:9000";
 const SEAT_POLL_MS = 5_000;
-const ETA_POLL_MS = 30_000;
+const ETA_POLL_MS = 15_000;
 
 const EMPTY_STOPS = [];
 
