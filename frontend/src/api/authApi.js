@@ -8,3 +8,4 @@ export const updateProfileApi = (data) => apiClient.put('/users/me', data).then(
 export const getMyRatingsApi = () => apiClient.get('/ratings/me').then(r => r.data);
 export const sendOtpApi = (email, purpose) => apiClient.post('/auth/send-otp', { email, purpose });
 export const verifyOtpApi = (email, code) => apiClient.post('/auth/verify-otp', { email, code });
+export const resetPasswordOtpApi = (data) => apiClient.post('/auth/reset-password-otp', data);

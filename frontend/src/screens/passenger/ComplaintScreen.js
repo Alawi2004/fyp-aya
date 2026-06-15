@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Alert, StatusBar, Image,
+  TextInput, Alert, StatusBar, Image, Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -81,12 +81,18 @@ const ComplaintScreen = ({ navigation, route }) => {
     }
     const { status, canAskAgain } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(
-        'Permission needed',
-        canAskAgain
-          ? 'Allow photo library access to attach an image to your complaint.'
-          : 'Photo access was denied. Enable it from your device Settings → Yalla Transit → Photos.',
-      );
+      if (canAskAgain) {
+        Alert.alert('Permission needed', 'Allow photo library access to attach an image to your complaint.');
+      } else {
+        Alert.alert(
+          'Permission denied',
+          'Photo access is blocked. Open Settings to enable it for Yalla Transit.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ],
+        );
+      }
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({

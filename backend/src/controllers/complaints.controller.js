@@ -1,6 +1,5 @@
 import { poolPromise, sql } from "../db/db.js";
 import { ensureOperationalTables } from "../db/featureSetup.js";
-import { COMPLAINT_UPLOAD_BASE_URL } from "../middleware/complaintUpload.middleware.js";
 
 // Keep in sync with the categories offered in the passenger app's complaint form.
 const CATEGORY_LABELS = {
@@ -138,7 +137,7 @@ export const submitComplaint = async (req, res) => {
   const tripId   = toPositiveInt(req.body.trip_id);
   const driverId = toPositiveInt(req.body.driver_id);
   const routeId  = toPositiveInt(req.body.route_id);
-  const photoUrl = req.file ? `${COMPLAINT_UPLOAD_BASE_URL}/${req.file.filename}` : null;
+  const photoUrl = req.file?.azureUrl ?? null;
 
   try {
     const pool = await poolPromise;

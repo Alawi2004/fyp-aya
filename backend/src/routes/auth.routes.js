@@ -4,7 +4,7 @@ import {
   setup2fa, confirm2fa, disable2fa, get2faStatus,
   getLoginAudit,
   getSessions, revokeSession, revokeAllOtherSessions,
-  forgotPassword, resetPassword,
+  forgotPassword, resetPassword, resetPasswordOtp,
   refresh, logout, savePushToken, saveFcmToken,
   sendOtp, verifyOtp,
 } from "../controllers/auth.controller.js";
@@ -14,7 +14,7 @@ import { authLimiter, refreshLimiter, registerLimiter, otpLimiter } from "../mid
 import {
   registerSchema, loginSchema, refreshSchema,
   verify2faSchema, confirm2faSchema,
-  forgotPasswordSchema, resetPasswordSchema,
+  forgotPasswordSchema, resetPasswordSchema, resetPasswordOtpSchema,
   disable2faSchema, sendOtpSchema, verifyOtpSchema,
 } from "../validators/auth.validators.js";
 
@@ -32,8 +32,9 @@ router.post("/logout",   validate(refreshSchema), logout);
 
 // ── Password reset (public, rate-limited) ────────────────────────────────────
 
-router.post("/forgot-password", authLimiter, validate(forgotPasswordSchema), forgotPassword);
-router.post("/reset-password",  authLimiter, validate(resetPasswordSchema),  resetPassword);
+router.post("/forgot-password",     authLimiter, validate(forgotPasswordSchema),    forgotPassword);
+router.post("/reset-password",      authLimiter, validate(resetPasswordSchema),     resetPassword);
+router.post("/reset-password-otp",  authLimiter, validate(resetPasswordOtpSchema),  resetPasswordOtp);
 
 // ── 2FA management (requires active session) ─────────────────────────────────
 
