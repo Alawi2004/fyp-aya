@@ -48,7 +48,7 @@ export function useGpsWebSocket(vehicleId, initialLocation = null) {
         const loc = await fetchBusGps(vehicleId);
         if (loc?.latitude != null && mountedRef.current) {
           setLocation({ latitude: loc.latitude, longitude: loc.longitude });
-          setLastUpdated(loc.updatedAt || new Date().toISOString());
+          setLastUpdated(loc.updatedAt || loc.recorded_at || new Date().toISOString());
           setIsLive(true);
         }
       } catch { /* keep showing last known position */ }

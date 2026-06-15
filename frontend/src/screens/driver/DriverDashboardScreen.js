@@ -78,9 +78,8 @@ const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd,
 
   const swipePan = useRef(
     PanResponder.create({
-      // Capture phase: claim only clear downward swipes on the sheet
-      onMoveShouldSetPanResponderCapture: (_, { dy, dx }) =>
-        dy > 8 && Math.abs(dy) > Math.abs(dx) * 1.5,
+      // Attached only to the handle strip — never fights the ScrollView
+      onStartShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
         sheetY.stopAnimation((val) => { dragBase.current = val; });
       },
@@ -137,8 +136,8 @@ const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd,
         />
 
         {/* Bottom sheet */}
-        <Animated.View style={[modalStyles.sheet, { paddingBottom: (insets?.bottom ?? 0) + 20, transform: [{ translateY: sheetY }] }]} {...swipePan.panHandlers}>
-          <View style={modalStyles.handleArea}>
+        <Animated.View style={[modalStyles.sheet, { paddingBottom: (insets?.bottom ?? 0) + 20, transform: [{ translateY: sheetY }] }]}>
+          <View style={modalStyles.handleArea} {...swipePan.panHandlers}>
             <View style={modalStyles.handle} />
           </View>
 
@@ -298,8 +297,10 @@ const modalStyles = StyleSheet.create({
   handleArea: {
     alignSelf: 'stretch',
     alignItems: 'center',
-    paddingTop: 10,
-    paddingBottom: 14,
+    paddingTop: 14,
+    paddingBottom: 20,
+    marginHorizontal: -20,
+    paddingHorizontal: 20,
   },
   handle: {
     width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.border,
