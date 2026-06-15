@@ -25,6 +25,7 @@ const PANEL_COLLAPSE_Y = Math.round(SCREEN_H * 0.46);
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
 // AppContext import removed — passenger tracking uses backend GPS directly
 import { getTripEtaPredictions } from "../../api/etaApi";
@@ -52,15 +53,21 @@ const TRAFFIC_COLOR = {
 };
 
 // ── Notification setup ────────────────────────────────────────────────────────
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+// Local notifications still work in Expo Go; only remote push was removed in SDK 53.
+const IS_EXPO_GO = Constants.executionEnvironment === 'storeClient';
+
+if (!IS_EXPO_GO) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+}
 
 const requestNotifPermission = async () => {
+  if (IS_EXPO_GO) return false;
   const { status } = await Notifications.requestPermissionsAsync();
   return status === "granted";
 };
@@ -71,6 +78,7 @@ const sendApproachingAlert = async (
   stopsAway,
   isTaxi = false
 ) => {
+  if (IS_EXPO_GO) return;
   const body =
     stopsAway <= 2
       ? `${busName} is ${stopsAway} stop${

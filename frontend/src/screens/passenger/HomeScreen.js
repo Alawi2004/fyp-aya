@@ -17,7 +17,6 @@ import {
   ScrollView,
   LayoutAnimation,
   Platform,
-  UIManager,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -35,12 +34,7 @@ import { getBusesApi } from "../../api/busApi";
 import { getFavoriteRoutes } from "../../api/apiClient";
 import { COLORS, PURPLE } from "../../constants/colors";
 
-if (
-  Platform.OS === "android" &&
-  UIManager.setLayoutAnimationEnabledExperimental
-) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+// setLayoutAnimationEnabledExperimental is a no-op in the New Architecture (SDK 53+)
 
 const VEHICLE_TYPES = [
   { key: "all", label: "All", icon: "apps-outline" },
