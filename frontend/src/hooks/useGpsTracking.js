@@ -25,12 +25,20 @@ export function useGpsTracking(tripId) {
 
       subRef.current = await Location.watchPositionAsync(
         {
-          accuracy:         Location.Accuracy.Balanced,
+          // BestForNavigation uses the GPS chip for true ~5m accuracy.
+          // Balanced fell back to wifi/cell (~100m–1km off) which is why the
+          // driver's pin showed the wrong place.
+          accuracy:         Location.Accuracy.BestForNavigation,
           timeInterval:     INTERVAL_MS,
           distanceInterval: 0,          // fire on time alone — not requiring movement
         },
         ({ coords }) => {
-          console.log('[GPS] sending trip_id:', tripId, coords.latitude, coords.longitude);
+          // Drop low-quality fixes (network estimates can report 1000m+ accuracy)
+          if (coords.accuracy != null && coords.accuracy > 100) {
+            console.log('[GPS] skipped low-accuracy fix:', Math.round(coords.accuracy), 'm');
+            return;
+          }
+          console.log('[GPS] sending trip_id:', tripId, coords.latitude, coords.longitude, '±', Math.round(coords.accuracy ?? 0), 'm');
           apiClient.post('/gps', {
             trip_id:   tripId,
             latitude:  coords.latitude,

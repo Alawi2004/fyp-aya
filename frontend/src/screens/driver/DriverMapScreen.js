@@ -256,13 +256,19 @@ const DriverMapScreen = ({ navigation, route }) => {
     (async () => {
       const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
       if (status !== 'granted') { setGpsError(true); return; }
-      const loc = await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.Balanced });
+      // Quick first fix at High accuracy, then watch at navigation-grade accuracy.
+      const loc = await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.High });
       setLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
       // Watch for updates — distanceInterval:0 so it fires on time alone even
-      // when the bus is stationary (Android needs BOTH time + distance otherwise)
+      // when the bus is stationary (Android needs BOTH time + distance otherwise).
+      // BestForNavigation forces the GPS chip (~5m) instead of wifi/cell (~100m+).
       sub = await ExpoLocation.watchPositionAsync(
-        { accuracy: ExpoLocation.Accuracy.Balanced, timeInterval: 5000, distanceInterval: 0 },
-        l => setLocation({ latitude: l.coords.latitude, longitude: l.coords.longitude })
+        { accuracy: ExpoLocation.Accuracy.BestForNavigation, timeInterval: 5000, distanceInterval: 0 },
+        l => {
+          // Ignore coarse network fixes that would jump the pin far away
+          if (l.coords.accuracy != null && l.coords.accuracy > 100) return;
+          setLocation({ latitude: l.coords.latitude, longitude: l.coords.longitude });
+        }
       );
     })();
     return () => sub?.remove();
