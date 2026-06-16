@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { X, Camera, AlertTriangle, Loader, QrCode, CheckCircle } from "lucide-react";
+import jsQR from "jsqr";
 import { C } from "../styles/themes";
 
 export default function QRScanModal({ onResult, onClose }) {
   const videoRef    = useRef(null);
+  const canvasRef   = useRef(null);
   const streamRef   = useRef(null);
-  const detectorRef = useRef(null);
+  const detectorRef = useRef(null);  // BarcodeDetector (if available)
   const rafRef      = useRef(null);
   const scannedRef  = useRef(false);
 
@@ -43,11 +45,11 @@ export default function QRScanModal({ onResult, onClose }) {
 
       if ("BarcodeDetector" in window) {
         detectorRef.current = new window.BarcodeDetector({ formats: ["qr_code"] });
-        setCamState("live");
-        scheduleScan();
-      } else {
-        setCamState("live");
       }
+      // jsQR is always available as fallback — no else branch needed
+
+      setCamState("live");
+      scheduleScan();
     } catch (err) {
       setCamState("error");
       setCamError(
@@ -64,18 +66,48 @@ export default function QRScanModal({ onResult, onClose }) {
     streamRef.current = null;
   };
 
+  // ── Scan loop — BarcodeDetector first, jsQR fallback ─────────────────────
   const scheduleScan = () => {
     rafRef.current = requestAnimationFrame(async () => {
-      if (!scannedRef.current && detectorRef.current && videoRef.current?.readyState >= 2) {
-        try {
-          const results = await detectorRef.current.detect(videoRef.current);
-          if (results.length > 0 && !scannedRef.current) {
-            handleDetected({ type: "qr", raw: results[0].rawValue });
-            return;
-          }
-        } catch {}
+      if (scannedRef.current) return;
+
+      const video = videoRef.current;
+      if (video?.readyState >= 2) {
+        let raw = null;
+
+        // Path 1: native BarcodeDetector (Chrome/Edge)
+        if (detectorRef.current) {
+          try {
+            const results = await detectorRef.current.detect(video);
+            if (results.length > 0) raw = results[0].rawValue;
+          } catch {}
+        }
+
+        // Path 2: jsQR canvas fallback (Firefox / Safari / any browser)
+        if (!raw) {
+          try {
+            const canvas = canvasRef.current;
+            const w = video.videoWidth;
+            const h = video.videoHeight;
+            if (w > 0 && h > 0) {
+              canvas.width  = w;
+              canvas.height = h;
+              const ctx = canvas.getContext("2d");
+              ctx.drawImage(video, 0, 0, w, h);
+              const imageData = ctx.getImageData(0, 0, w, h);
+              const code = jsQR(imageData.data, w, h, { inversionAttempts: "dontInvert" });
+              if (code) raw = code.data;
+            }
+          } catch {}
+        }
+
+        if (raw && !scannedRef.current) {
+          handleDetected({ type: "qr", raw });
+          return;
+        }
       }
-      if (!scannedRef.current) setTimeout(scheduleScan, 400);
+
+      if (!scannedRef.current) setTimeout(scheduleScan, 150);
     });
   };
 
@@ -102,6 +134,9 @@ export default function QRScanModal({ onResult, onClose }) {
       display: "flex", alignItems: "center", justifyContent: "center",
       padding: 16,
     }}>
+      {/* Hidden canvas for jsQR frame extraction */}
+      <canvas ref={canvasRef} style={{ display: "none" }} />
+
       <div style={{
         background: "#fff", borderRadius: 20, overflow: "hidden",
         width: "100%", maxWidth: 460,

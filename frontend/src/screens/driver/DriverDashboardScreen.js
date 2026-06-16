@@ -620,7 +620,7 @@ const DriverDashboardScreen = ({ navigation }) => {
           <View style={styles.actionsRow}>
             {[
               { icon: 'navigate',      label: 'Navigate',   color: PURPLE.primary,    bg: PURPLE.light,   onPress: () => navigation.navigate('TripChecklist')   },
-              { icon: 'qr-code',       label: 'Scan QR',    color: COLORS.secondary,  bg: COLORS.secondaryLight, onPress: () => navigation.navigate('PassengerVerify')  },
+              { icon: 'qr-code',       label: 'Scan QR',    color: COLORS.secondary,  bg: COLORS.secondaryLight, onPress: () => navigation.navigate('PassengerVerify', { tripId: activeTrip?.trip_id ?? null })  },
               { icon: 'calendar',      label: 'Schedule',   color: PURPLE.primary,    bg: PURPLE.light,   onPress: () => navigation.navigate('WeeklySchedule')   },
               { icon: 'warning',       label: 'Emergency',  color: COLORS.danger,     bg: COLORS.dangerLight,    onPress: () => navigation.navigate('Emergency')        },
             ].map(a => (

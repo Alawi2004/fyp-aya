@@ -8,6 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, PURPLE } from '../../constants/colors';
 import GradientFill from '../../components/common/GradientFill';
 import PressableScale from '../../components/common/PressableScale';
+import { useAuth } from '../../context/AuthContext';
+import { reportIssueApi } from '../../api/driverApi';
 
 const ISSUE_TYPES = [
   { id: 'traffic',    label: 'Traffic Congestion', icon: 'car-outline'           },
@@ -26,12 +28,13 @@ const PRIORITY_OPTS = [
 
 const IssueReportScreen = ({ navigation }) => {
   const headerInsets = useHeaderInsets();
+  const { user } = useAuth();
   const [selectedType, setSelectedType] = useState(null);
   const [priority, setPriority]         = useState('medium');
   const [description, setDescription]   = useState('');
   const [loading, setLoading]           = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!selectedType) {
       Alert.alert('Select Issue Type', 'Please choose a category for this issue.');
       return;
@@ -41,14 +44,23 @@ const IssueReportScreen = ({ navigation }) => {
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const payload = {
+        driver_id: user?.driver_id ?? user?.user_id,
+        trip_id: user?.active_trip_id ?? null,
+        description: `[${selectedType.label}][${priority.toUpperCase()}] ${description.trim()}`,
+      };
+      await reportIssueApi(payload);
       Alert.alert(
         'Report Submitted',
         'Your issue has been reported to management. Passengers will be notified if needed.',
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
-    }, 1200);
+    } catch {
+      Alert.alert('Submission Failed', 'Could not send report. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const selectedPriority = PRIORITY_OPTS.find(p => p.key === priority);
