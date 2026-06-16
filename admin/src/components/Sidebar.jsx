@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   LayoutDashboard, MapPin, Camera, Users, UserCheck, UserRound,
   Bus, GitBranch, CalendarDays, BarChart3,
-  Ticket, Bell, Star, ChevronRight, Wallet, Shield, BadgeCheck, MessageSquareWarning, ScrollText, Settings, ClipboardList,
+  Ticket, Bell, Star, ChevronRight, Wallet, BadgeCheck, MessageSquareWarning, ScrollText, Settings, ClipboardList,
 } from "lucide-react";
 
 const NAV = [
@@ -28,7 +28,6 @@ const NAV = [
   { id: "complaints",    label: "Complaints",        icon: MessageSquareWarning,   badge: null },
   { id: "issues",        label: "Issues Inbox",      icon: ClipboardList,          badge: null },
   { section: "Admin" },
-  { id: "roles",     label: "Roles & Permissions", icon: Shield,      badge: null },
   { id: "auditlog",  label: "Audit Log",           icon: ScrollText,  badge: null },
   { id: "settings",  label: "System Settings",     icon: Settings,    badge: null },
 ];

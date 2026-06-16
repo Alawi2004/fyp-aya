@@ -21,7 +21,6 @@ const PAGE_LABELS = {
   wallet:        "Wallet",
   complaints:    "Complaints",
   issues:        "Issues Inbox",
-  roles:         "Roles & Permissions",
   auditlog:      "Audit Log",
   settings:      "System Settings",
 };
