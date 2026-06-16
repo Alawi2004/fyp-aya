@@ -54,32 +54,46 @@ async function checkAndSend() {
       `);
 
     for (const report of result.recordset) {
+      // Always advance next_send_at to the next scheduled slot — even on
+      // failure — so a misconfigured report can't be retried every minute.
+      const nextSend = calcNextSend(report.frequency, report.day_of_week, report.hour_of_day);
+      const advance  = async (sent) =>
+        pool.request()
+          .input("id",           sql.Int,       report.schedule_id)
+          .input("last_sent_at", sql.DateTime2, sent ? now : null)
+          .input("next_send_at", sql.DateTime2, nextSend)
+          .query(`
+            UPDATE scheduled_reports
+            SET ${sent ? "last_sent_at = @last_sent_at, " : ""}next_send_at = @next_send_at
+            WHERE schedule_id = @id
+          `);
+
       try {
         // recipients may be a JSON array or a plain comma-separated email string
         let recipients;
         try {
           recipients = JSON.parse(report.recipients);
         } catch {
-          recipients = report.recipients.split(",").map(s => s.trim()).filter(Boolean);
+          recipients = (report.recipients ?? "").split(",").map(s => s.trim()).filter(Boolean);
         }
+        if (!Array.isArray(recipients)) recipients = [];
+
+        if (recipients.length === 0) {
+          // Nothing to send to — skip quietly and wait for the next slot
+          await advance(false);
+          console.warn(`[scheduler] Skipped "${report.report_name}" (id=${report.schedule_id}): no recipients → next at ${nextSend.toISOString()}`);
+          continue;
+        }
+
         const { rows, cols } = await fetchReportData(pool, report.report_type);
         await sendScheduledReport(recipients, report.report_type, report.report_name, rows, cols);
-
-        const nextSend = calcNextSend(report.frequency, report.day_of_week, report.hour_of_day);
-
-        await pool.request()
-          .input("id",           sql.Int,       report.schedule_id)
-          .input("last_sent_at", sql.DateTime2, now)
-          .input("next_send_at", sql.DateTime2, nextSend)
-          .query(`
-            UPDATE scheduled_reports
-            SET last_sent_at = @last_sent_at, next_send_at = @next_send_at
-            WHERE schedule_id = @id
-          `);
+        await advance(true);
 
         console.log(`[scheduler] Sent "${report.report_name}" → next at ${nextSend.toISOString()}`);
       } catch (err) {
-        console.error(`[scheduler] Failed report id=${report.schedule_id}:`, err.message);
+        // Advance anyway so failures wait for the next slot instead of looping
+        await advance(false).catch(() => {});
+        console.error(`[scheduler] Failed report id=${report.schedule_id} (will retry at ${nextSend.toISOString()}):`, err.message);
       }
     }
   } catch (err) {
