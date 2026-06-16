@@ -8,6 +8,7 @@ import React, {
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   Animated,
   Easing,
@@ -100,6 +101,8 @@ const sendApproachingAlert = async (
 
 // ── Confidence from GPS freshness ──────────────────────────────────────────────
 const deriveConfidence = (isLive, timeSinceUpdate, hasEtaData) => {
+  if (!isLive && timeSinceUpdate === null)
+    return { level: "waiting", label: "Waiting", color: "#9ca3af" };
   if (!isLive || timeSinceUpdate === null)
     return { level: "low", label: "Low", color: COLORS.danger };
   if (timeSinceUpdate > 120)
@@ -334,7 +337,9 @@ const BusTrackingScreen = ({ route, navigation }) => {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [etaData, setEtaData] = useState(null);
   const [etaLoading, setEtaLoading] = useState(false);
+  const [etaError, setEtaError] = useState(null);
   const [driverInfo, setDriverInfo] = useState(null);
+  const [vehiclePhoto, setVehiclePhoto] = useState(null);
 
   // Seat availability (capacity updated when driver info loads)
   const [seatInfo, setSeatInfo] = useState({
@@ -416,6 +421,16 @@ const BusTrackingScreen = ({ route, navigation }) => {
             available: Math.max(0, cap - occ),
           });
         }
+        if (d.vehicle_id) {
+          apiClient
+            .get(`/vehicles/${d.vehicle_id}/photos`)
+            .then((pr) => {
+              const exterior = (Array.isArray(pr.data) ? pr.data : [])
+                .find((p) => p.slot === 'exterior' || p.slot === 'photo');
+              if (exterior?.url) setVehiclePhoto(exterior.url);
+            })
+            .catch(() => {});
+        }
       })
       .catch(() => {});
   }, [tripId, isTaxi]);
@@ -426,7 +441,14 @@ const BusTrackingScreen = ({ route, navigation }) => {
     return EMPTY_STOPS;
   }, [etaData]);
 
-  const nextStop = stopsList[0];
+  // Pick the first stop with a meaningful ETA (> 1 min ahead).
+  // When the bus is at the first stop (eta_min ≈ 0 → "Arriving"), skip to the
+  // next stop so the ETA card shows something useful to the passenger.
+  const nextStop =
+    stopsList.find((s) => s.eta_min > 1) ??
+    stopsList[0] ??
+    null;
+
   const etaDisplay = nextStop
     ? nextStop.eta_min < 1
       ? "Arriving"
@@ -490,13 +512,20 @@ const BusTrackingScreen = ({ route, navigation }) => {
   }, [vehicleId]);
 
   const fetchEta = useCallback(async () => {
-    if (!tripId) return;
+    if (!tripId) {
+      console.log('[ETA] no tripId — skipping');
+      return;
+    }
     setEtaLoading(true);
     try {
       const resp = await getTripEtaPredictions(tripId);
       setEtaData(resp.data);
-    } catch {
-      /* keep previous data */
+      setEtaError(null);
+    } catch (err) {
+      const status = err?.response?.status;
+      const msg    = err?.response?.data?.error ?? err?.message ?? 'Network error';
+      console.warn(`[ETA] fetch failed (trip ${tripId}) HTTP ${status}:`, msg);
+      setEtaError(`${status ?? '—'}: ${msg}`);
     } finally {
       setEtaLoading(false);
     }
@@ -687,144 +716,94 @@ const BusTrackingScreen = ({ route, navigation }) => {
             name={isCollapsed ? "chevron-up" : "chevron-down"}
             size={16}
             color={COLORS.textMuted}
-            style={{ marginTop: -4, marginBottom: 6 }}
           />
         </View>
-        <ScrollView showsVerticalScrollIndicator={false} bounces={false} contentContainerStyle={{ paddingBottom: 4 }}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.scrollContent}
+        >
 
-        {/* Traffic badge */}
-        {etaData?.traffic && (
-          <FadeInView index={0}>
-            <Bump
-              trigger={etaData.traffic.severity}
-              style={{ alignSelf: "flex-start" }}
-            >
-              <View
-                style={[
-                  styles.trafficBadge,
-                  {
-                    backgroundColor: trafficColor + "18",
-                    borderColor: trafficColor + "55",
-                  },
-                ]}
-              >
-                <View
-                  style={[styles.trafficDot, { backgroundColor: trafficColor }]}
-                />
-                <Text style={[styles.trafficLabel, { color: trafficColor }]}>
-                  {trafficLabel} traffic · {etaData.traffic.delay_description}
-                </Text>
+        {/* ── ETA card (2 cols: ETA | Distance) + traffic strip ── */}
+        <FadeInView index={0}>
+          <View style={styles.etaCard}>
+            {/* ETA column */}
+            <View style={styles.etaCol}>
+              <View style={[styles.etaIconWrap, { backgroundColor: PURPLE.light }]}>
+                <Ionicons name="time-outline" size={18} color={PURPLE.primary} />
               </View>
-            </Bump>
-          </FadeInView>
-        )}
-
-        {/* ── ETA + Confidence + Distance row ── */}
-        <FadeInView index={1}>
-          <View style={styles.etaRow}>
-            {/* ETA */}
-            <View style={styles.etaItem}>
-              <View
-                style={[styles.etaIconWrap, { backgroundColor: PURPLE.light }]}
-              >
-                <Ionicons
-                  name="time-outline"
-                  size={20}
-                  color={PURPLE.primary}
-                />
-              </View>
-              <View>
-                <Bump trigger={etaDisplay}>
-                  <Text style={styles.etaValue}>{etaDisplay}</Text>
-                </Bump>
-                <Text style={styles.etaLabel}>
-                  {nextStop ? `to ${nextStop.stop_name.split(" ")[0]}` : "ETA"}
-                </Text>
-              </View>
+              <Bump trigger={etaDisplay}>
+                <Text style={styles.etaValue}>{etaDisplay}</Text>
+              </Bump>
+              <Text style={styles.etaLabel}>
+                {nextStop ? `to ${nextStop.stop_name.split(" ")[0]}` : "ETA"}
+              </Text>
             </View>
 
             <View style={styles.etaDivider} />
 
-            {/* ETA Confidence */}
-            <View style={styles.etaItem}>
-              <View
-                style={[
-                  styles.etaIconWrap,
-                  { backgroundColor: confidence.color + "20" },
-                ]}
-              >
+            {/* Distance column */}
+            <View style={styles.etaCol}>
+              <View style={[styles.etaIconWrap, { backgroundColor: COLORS.secondaryLight }]}>
+                <Ionicons name="navigate-outline" size={18} color={COLORS.secondary} />
+              </View>
+              <Bump trigger={nextStop?.distance_m}>
+                <Text style={styles.etaValue}>
+                  {nextStop == null
+                    ? "— km"
+                    : nextStop.distance_m > 100
+                    ? `${(nextStop.distance_m / 1000).toFixed(1)} km`
+                    : nextStop.distance_m != null
+                    ? "At stop"
+                    : "— km"}
+                </Text>
+              </Bump>
+              <Text style={styles.etaLabel}>Road dist.</Text>
+            </View>
+
+            <View style={styles.etaDivider} />
+
+            {/* GPS signal column */}
+            <View style={styles.etaCol}>
+              <View style={[styles.etaIconWrap, { backgroundColor: confidence.color + "20" }]}>
                 <Ionicons
-                  name={
-                    confidence.level === "high"
-                      ? "cellular"
-                      : "cellular-outline"
-                  }
-                  size={20}
+                  name={confidence.level === "high" ? "cellular" : "cellular-outline"}
+                  size={18}
                   color={confidence.color}
                 />
               </View>
-              <View>
-                <Bump
-                  trigger={confidence.level}
-                  style={{ alignSelf: "flex-start" }}
-                >
-                  <View
-                    style={[
-                      styles.confidencePill,
-                      {
-                        backgroundColor: confidence.color + "18",
-                        borderColor: confidence.color + "55",
-                      },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.confidenceDot,
-                        { backgroundColor: confidence.color },
-                      ]}
-                    />
-                    <Text
-                      style={[
-                        styles.confidenceLabel,
-                        { color: confidence.color },
-                      ]}
-                    >
-                      {confidence.label}
-                    </Text>
-                  </View>
-                </Bump>
-                <Text style={styles.etaLabel}>GPS confidence</Text>
-              </View>
-            </View>
-
-            <View style={styles.etaDivider} />
-
-            {/* Distance */}
-            <View style={styles.etaItem}>
-              <View
-                style={[
-                  styles.etaIconWrap,
-                  { backgroundColor: COLORS.secondaryLight },
-                ]}
-              >
-                <Ionicons
-                  name="navigate-outline"
-                  size={20}
-                  color={COLORS.secondary}
-                />
-              </View>
-              <View>
-                <Bump trigger={nextStop?.distance_m}>
-                  <Text style={styles.etaValue}>
-                    {nextStop && nextStop.distance_m
-                      ? `${(nextStop.distance_m / 1000).toFixed(1)} km`
-                      : "— km"}
-                  </Text>
-                </Bump>
-                <Text style={styles.etaLabel}>Road dist.</Text>
-              </View>
+              <Text style={[styles.etaValue, { color: confidence.color, fontSize: 14 }]}>
+                {confidence.label}
+              </Text>
+              <Text style={styles.etaLabel}>GPS signal</Text>
             </View>
           </View>
+
+          {/* Traffic strip — only shown when data available */}
+          {etaData?.traffic ? (
+            <View style={[styles.trafficStrip, { backgroundColor: trafficColor + "14", borderColor: trafficColor + "45" }]}>
+              <View style={[styles.trafficDot, { backgroundColor: trafficColor }]} />
+              <Text style={[styles.trafficStripText, { color: trafficColor }]}>
+                {trafficLabel} traffic · {etaData.traffic.delay_description}
+              </Text>
+              {etaLoading && (
+                <Spin>
+                  <Ionicons name="sync" size={10} color={trafficColor} style={{ marginLeft: 4 }} />
+                </Spin>
+              )}
+            </View>
+          ) : etaError ? (
+            <View style={styles.etaErrorStrip}>
+              <Ionicons name="warning-outline" size={13} color={COLORS.warning} />
+              <Text style={styles.etaErrorText} numberOfLines={2}>ETA unavailable · {etaError}</Text>
+            </View>
+          ) : etaLoading ? (
+            <View style={styles.etaErrorStrip}>
+              <Spin><Ionicons name="sync" size={13} color={COLORS.textMuted} /></Spin>
+              <Text style={styles.etaErrorText}>Loading ETA…</Text>
+            </View>
+          ) : null}
         </FadeInView>
 
         {/* Approaching alert banner (shown when close) */}
@@ -973,9 +952,22 @@ const BusTrackingScreen = ({ route, navigation }) => {
           </FadeInView>
         )}
 
+        {/* Vehicle Photo */}
+        {vehiclePhoto && (
+          <FadeInView index={5}>
+            <View style={styles.vehiclePhotoWrap}>
+              <Image
+                source={{ uri: vehiclePhoto }}
+                style={styles.vehiclePhoto}
+                resizeMode="cover"
+              />
+            </View>
+          </FadeInView>
+        )}
+
         {/* Driver Card */}
         {driverInfo && (
-          <FadeInView index={5}>
+          <FadeInView index={vehiclePhoto ? 6 : 5}>
             <View style={[styles.driverCard, isTaxi && styles.taxiDriverCard]}>
               <View
                 style={[styles.driverAvatar, isTaxi && styles.taxiDriverAvatar]}
@@ -1042,7 +1034,7 @@ const BusTrackingScreen = ({ route, navigation }) => {
           </FadeInView>
         )}
 
-        <FadeInView index={6}>
+        <FadeInView index={vehiclePhoto ? 7 : 6}>
           <PressableScale style={styles.emergencyBtn} scaleTo={0.97}>
             <Ionicons name="warning-outline" size={18} color={COLORS.danger} />
             <Text style={styles.emergencyText}>Report an Issue</Text>
@@ -1156,75 +1148,77 @@ const styles = StyleSheet.create({
   },
   panelHandleArea: {
     alignItems: "center",
-    paddingTop: 12,
+    paddingTop: 14,
+    paddingBottom: 10,
   },
   panelHandle: {
-    width: 40,
+    width: 44,
     height: 4,
     borderRadius: 2,
     backgroundColor: COLORS.border,
-    marginBottom: 6,
+    marginBottom: 8,
   },
 
-  trafficBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    marginBottom: 12,
-    alignSelf: "flex-start",
-  },
-  trafficDot: { width: 7, height: 7, borderRadius: 4 },
-  trafficLabel: { fontSize: 11, fontWeight: "700" },
+  scrollContent: { paddingBottom: 28 },
 
-  /* ETA row */
-  etaRow: {
+  /* ETA card */
+  etaCard: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
     backgroundColor: COLORS.background,
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    marginBottom: 8,
   },
-  etaItem: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8 },
+  etaCol: { flex: 1, alignItems: "center", gap: 5 },
   etaIconWrap: {
-    width: 38,
-    height: 38,
+    width: 36,
+    height: 36,
     borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 2,
   },
   etaValue: { fontSize: 16, fontWeight: "800", color: COLORS.textPrimary },
   etaLabel: {
     fontSize: 10,
     color: COLORS.textMuted,
-    marginTop: 1,
     fontWeight: "500",
+    textAlign: "center",
   },
   etaDivider: {
     width: 1,
-    height: 36,
+    height: 44,
     backgroundColor: COLORS.border,
-    marginHorizontal: 2,
+    marginHorizontal: 4,
   },
 
-  /* Confidence pill */
-  confidencePill: {
+  /* Traffic strip */
+  trafficStrip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 7,
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginBottom: 2,
-    alignSelf: "flex-start",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    marginBottom: 14,
   },
-  confidenceDot: { width: 6, height: 6, borderRadius: 3 },
-  confidenceLabel: { fontSize: 11, fontWeight: "700" },
+  trafficDot: { width: 7, height: 7, borderRadius: 4 },
+  trafficStripText: { flex: 1, fontSize: 11, fontWeight: "700" },
+
+  etaErrorStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    backgroundColor: COLORS.background,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    marginBottom: 14,
+  },
+  etaErrorText: { flex: 1, fontSize: 11, color: COLORS.textMuted, fontWeight: "500" },
 
   /* Approaching banner */
   approachingBanner: {
@@ -1437,6 +1431,17 @@ const styles = StyleSheet.create({
     borderColor: COLORS.dangerMid,
   },
   emergencyText: { fontSize: 14, fontWeight: "700", color: COLORS.danger },
+
+  vehiclePhotoWrap: {
+    borderRadius: 16,
+    overflow: "hidden",
+    marginBottom: 12,
+    height: 160,
+  },
+  vehiclePhoto: {
+    width: "100%",
+    height: "100%",
+  },
 });
 
 export default BusTrackingScreen;

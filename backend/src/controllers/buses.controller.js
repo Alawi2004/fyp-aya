@@ -46,6 +46,7 @@ export const getBusById = async (req, res) => {
       .query(`
         SELECT
           t.trip_id        AS _id,
+          v.vehicle_id,
           v.model          AS name,
           v.plate_number,
           r.route_name     AS route,

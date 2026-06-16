@@ -1,7 +1,5 @@
 import { poolPromise, sql } from "../db/db.js";
-import fs from "fs";
-import path from "path";
-import { UPLOAD_BASE_URL, UPLOAD_ABS_DIR } from "../middleware/upload.middleware.js";
+import { vehicleContainer, UPLOAD_BASE_URL } from "../middleware/upload.middleware.js";
 
 export const createVehicle = async (req, res) => {
   try {
@@ -386,13 +384,19 @@ export const uploadVehiclePhoto = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No image file received" });
 
+    const vehicleId = req.params.id ?? "unknown";
     const slot      = req.body.slot || "photo";
-    const filename  = req.file.filename;
-    const publicUrl = `${UPLOAD_BASE_URL}/${filename}`;
+    const ext       = (req.file.originalname.match(/\.[^.]+$/) || [".jpg"])[0].toLowerCase();
+    const blobName  = `vehicle-${vehicleId}-${slot}-${Date.now()}${ext}`;
+
+    const blockBlob = vehicleContainer.getBlockBlobClient(blobName);
+    await blockBlob.uploadData(req.file.buffer, {
+      blobHTTPHeaders: { blobContentType: req.file.mimetype },
+    });
 
     res.status(201).json({
-      url:      publicUrl,
-      filename,
+      url:      blockBlob.url,
+      filename: blobName,
       slot,
       message:  "Photo uploaded successfully",
     });
@@ -410,21 +414,18 @@ export const getVehiclePhotos = async (req, res) => {
   try {
     const vehicleId = req.params.id;
     const prefix    = `vehicle-${vehicleId}-`;
+    const photos    = [];
 
-    const files = fs.existsSync(UPLOAD_ABS_DIR)
-      ? fs.readdirSync(UPLOAD_ABS_DIR).filter(f => f.startsWith(prefix))
-      : [];
-
-    const photos = files.map(f => {
-      // filename: vehicle-{id}-{slot}-{ts}.ext
-      const parts = f.replace(/\.[^.]+$/, "").split("-");
-      const slot  = parts.slice(2, -1).join("-"); // everything between id and timestamp
-      return {
-        filename: f,
+    for await (const blob of vehicleContainer.listBlobsFlat({ prefix })) {
+      // blobName: vehicle-{id}-{slot}-{ts}.ext
+      const parts = blob.name.replace(/\.[^.]+$/, "").split("-");
+      const slot  = parts.slice(2, -1).join("-");
+      photos.push({
+        filename: blob.name,
         slot,
-        url:  `${UPLOAD_BASE_URL}/${f}`,
-      };
-    });
+        url: `${UPLOAD_BASE_URL}/${blob.name}`,
+      });
+    }
 
     res.json(photos);
   } catch (err) {
@@ -440,12 +441,10 @@ export const getVehiclePhotos = async (req, res) => {
 export const deleteVehiclePhoto = async (req, res) => {
   try {
     const { filename } = req.params;
-    // Security: only allow filenames that match our naming convention
     if (!/^vehicle-\d+-[\w-]+-\d+\.\w+$/.test(filename)) {
       return res.status(400).json({ error: "Invalid filename" });
     }
-    const filepath = path.join(UPLOAD_ABS_DIR, filename);
-    if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
+    await vehicleContainer.getBlockBlobClient(filename).deleteIfExists();
     res.json({ message: "Photo deleted" });
   } catch (err) {
     console.error(err);

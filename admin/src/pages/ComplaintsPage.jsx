@@ -144,6 +144,21 @@ function ComplaintDetail({ complaint, onClose, onUpdate, onAddComment }) {
           </div>
         </div>
 
+        {/* Attached photo */}
+        {complaint.photo_url && (
+          <div style={{ padding: "18px 24px", borderBottom: "1px solid #F1F5F9" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 10 }}>Attached Photo</div>
+            <a href={complaint.photo_url} target="_blank" rel="noreferrer" style={{ display: "block" }}>
+              <img
+                src={complaint.photo_url}
+                alt="Complaint attachment"
+                style={{ width: "100%", maxHeight: 280, objectFit: "cover", borderRadius: 10, border: "1px solid #F1F5F9", cursor: "zoom-in" }}
+              />
+            </a>
+            <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 6 }}>Click to open full-size</div>
+          </div>
+        )}
+
         {/* Manage section */}
         <div style={{ padding: "18px 24px", borderBottom: "1px solid #F1F5F9" }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 12 }}>Manage</div>
@@ -311,7 +326,18 @@ export default function ComplaintsPage() {
 
   useEffect(() => {
     getComplaints()
-      .then(d => setComplaints(Array.isArray(d) ? d : []))
+      .then(d => {
+        const rows = Array.isArray(d) ? d : [];
+        setComplaints(rows.map(c => ({
+          ...c,
+          id:          c.id          ?? c.tracking_code ?? String(c.complaint_id),
+          passenger:   c.passenger   ?? c.submitted_by_name ?? "—",
+          assigned_to: c.assigned_to ?? c.assigned_to_name  ?? null,
+          created_at:  c.created_at  ?? c.submitted_at      ?? null,
+          comments:    c.comments    ?? [],
+          photo_url:   c.photo_url   ?? null,
+        })));
+      })
       .catch(() => setComplaints([]));
     getDrivers()
       .then(d => setDriversOpts(Array.isArray(d) ? d : []))
