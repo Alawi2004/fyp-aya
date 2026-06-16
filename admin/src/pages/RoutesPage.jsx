@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
+import { GitBranch, CheckCircle, MapPin } from "lucide-react";
 import { PageLoading, PageError, PageEmpty } from "../components/DataStates";
 import { Panel } from "../components/Panel";
 import { Modal } from "../components/Modal";
 import { StatCard } from "../components/StatCard";
-import { getRoutes, createRoute, updateRoute, deleteRoute, getRouteStops } from "../api/endpoints";
+import { getRoutes, createRoute, updateRoute, deleteRoute, getRouteStops, createStop, removeStopFromRoute, updateRouteStopOrder } from "../api/endpoints";
 import apiClient from "../api/apiClient";
 import RouteMapEditor from "./RouteMapEditor";
 
@@ -24,7 +25,7 @@ function normalizeRoute(r) {
 }
 
 const EMPTY_ROUTE = { code: "", name: "", distance: "", duration: "", active: true };
-const EMPTY_STOP  = { name: "" };
+const EMPTY_STOP  = { name: "", lat: "", lng: "" };
 
 const ZONE_COLORS = [
   "#2563EB", "#059669", "#D97706", "#DC2626",
@@ -472,6 +473,8 @@ export default function RoutesPage() {
   const [activeTab,     setActiveTab]     = useState({});
   const [mapRoute,      setMapRoute]      = useState(null);
   const [toast,         setToast]         = useState(null);
+  const [routeStops,    setRouteStops]    = useState({});   // { [routeId]: Stop[] }
+  const [stopsLoading,  setStopsLoading]  = useState({});   // { [routeId]: bool }
 
   const loadRoutes = useCallback(() => {
     setRoutesLoading(true);
@@ -483,6 +486,22 @@ export default function RoutesPage() {
   }, []);
 
   useEffect(() => { loadRoutes(); }, [loadRoutes]);
+
+  const loadStopsForRoute = useCallback((routeId) => {
+    setStopsLoading(prev => ({ ...prev, [routeId]: true }));
+    return getRouteStops(routeId)
+      .then(data => setRouteStops(prev => ({ ...prev, [routeId]: data || [] })))
+      .catch(() => setRouteStops(prev => ({ ...prev, [routeId]: [] })))
+      .finally(() => setStopsLoading(prev => ({ ...prev, [routeId]: false })));
+  }, []);
+
+  function toggleRoute(routeId) {
+    const next = expanded === routeId ? null : routeId;
+    setExpanded(next);
+    if (next && routeStops[next] === undefined && !stopsLoading[next]) {
+      loadStopsForRoute(next);
+    }
+  }
 
   const [routeModal,   setRouteModal]   = useState(false);
   const [stopModal,    setStopModal]    = useState(null);
@@ -532,21 +551,57 @@ export default function RoutesPage() {
     }
   }
 
-  function saveStop(routeId) {
+  const [stopSaving, setStopSaving] = useState(false);
+
+  async function saveStop(routeId) {
     if (!stopForm.name) return;
-    setRoutes(prev => prev.map(r => {
-      if (r.id !== routeId) return r;
-      return { ...r, stops: [...r.stops, { id: Date.now(), name: stopForm.name, order: r.stops.length + 1 }] };
-    }));
-    setStopModal(null);
-    setStopForm(EMPTY_STOP);
+    setStopSaving(true);
+    try {
+      const currentStops = routeStops[routeId] || [];
+      const terminal     = currentStops.length >= 2 ? currentStops[currentStops.length - 1] : null;
+      const insertOrder  = terminal
+        ? (terminal.stop_order ?? terminal.order)
+        : currentStops.length + 1;
+
+      const res = await createStop({
+        stop_name: stopForm.name,
+        latitude:  stopForm.lat ? parseFloat(stopForm.lat) : null,
+        longitude: stopForm.lng ? parseFloat(stopForm.lng) : null,
+      });
+      await apiClient.post(`/routes/${routeId}/stops`, {
+        stop_id:    res.stop_id,
+        stop_order: insertOrder,
+      });
+
+      // Bump the terminal so it stays last
+      if (terminal) {
+        const terminalId    = terminal.stop_id ?? terminal.id;
+        const terminalOrder = terminal.stop_order ?? terminal.order;
+        await updateRouteStopOrder(routeId, terminalId, terminalOrder + 1);
+      }
+
+      await loadStopsForRoute(routeId);
+      setStopModal(null);
+      setStopForm(EMPTY_STOP);
+      showToast("Stop added");
+    } catch (err) {
+      showToast(err?.message ?? "Failed to add stop", true);
+    } finally {
+      setStopSaving(false);
+    }
   }
 
-  function deleteStop(routeId, stopId) {
-    setRoutes(prev => prev.map(r => {
-      if (r.id !== routeId) return r;
-      return { ...r, stops: r.stops.filter(s => s.id !== stopId).map((s, i) => ({ ...s, order: i + 1 })) };
-    }));
+  async function deleteStop(routeId, stopId) {
+    try {
+      await removeStopFromRoute(routeId, stopId);
+      setRouteStops(prev => ({
+        ...prev,
+        [routeId]: (prev[routeId] || []).filter(s => (s.stop_id ?? s.id) !== stopId),
+      }));
+      showToast("Stop removed");
+    } catch (err) {
+      showToast(err?.message ?? "Failed to remove stop", true);
+    }
   }
 
   const showToast = (msg, isError = false) => {
@@ -569,9 +624,9 @@ export default function RoutesPage() {
   function setTab(id, tab) { setActiveTab(prev => ({ ...prev, [id]: tab })); }
 
   const counts = {
-    total: routes.length,
+    total:  routes.length,
     active: routes.filter(r => r.active).length,
-    stops: routes.reduce((a, r) => a + r.stops.length, 0),
+    stops:  Object.values(routeStops).reduce((a, arr) => a + arr.length, 0),
   };
 
   return (
@@ -598,9 +653,9 @@ export default function RoutesPage() {
 
       {/* ── Stats ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 12 }}>
-        <StatCard label="Total routes"  value={counts.total}  delta="defined"           up={null} />
-        <StatCard label="Active routes" value={counts.active} delta="in service"         up={true} />
-        <StatCard label="Total stops"   value={counts.stops}  delta="across all routes"  up={null} />
+        <StatCard label="Total routes"  value={counts.total}  delta="defined"           accent="#2563EB" icon={<GitBranch size={18} color="#2563EB" />} />
+        <StatCard label="Active routes" value={counts.active} delta="in service"  up={true} accent="#10B981" icon={<CheckCircle size={18} color="#10B981" />} />
+        <StatCard label="Total stops"   value={counts.stops}  delta="across all routes"  accent="#F59E0B" icon={<MapPin size={18} color="#F59E0B" />} />
       </div>
 
       {/* ── Route list ── */}
@@ -615,7 +670,7 @@ export default function RoutesPage() {
 
             {/* Route header row */}
             <div style={{ display: "flex", alignItems: "center", padding: "14px 18px", gap: 12, cursor: "pointer" }}
-              onClick={() => setExpanded(expanded === route.id ? null : route.id)}>
+              onClick={() => toggleRoute(route.id)}>
               <div style={{ width: 38, height: 38, borderRadius: 10, background: route.active ? "#EFF6FF" : "#F1F5F9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke={route.active ? "#2563EB" : "#aaa"} strokeWidth="1.5" strokeLinecap="round">
                   <circle cx="4" cy="14" r="2"/><circle cx="14" cy="14" r="2"/>
@@ -631,7 +686,7 @@ export default function RoutesPage() {
                   </span>
                 </div>
                 <div style={{ fontSize: 11, color: "#aaa", marginTop: 2 }}>
-                  {route.distance} · {route.duration} · {route.stops.length} stops
+                  {route.distance} · {route.duration} · {(routeStops[route.id] ?? route.stops).length} stops
                 </div>
               </div>
 
@@ -639,7 +694,7 @@ export default function RoutesPage() {
               <div style={{ display: "flex", gap: 6 }} onClick={e => e.stopPropagation()}>
                 {/* Map editor */}
                 <button
-                  onClick={() => setMapRoute(route)}
+                  onClick={() => setMapRoute({ ...route, stops: routeStops[route.id] ?? route.stops })}
                   title="Edit route on map"
                   style={{ fontSize: 11, color: "#7C3AED", background: "#F5F3FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontWeight: 600 }}
                 >
@@ -655,49 +710,52 @@ export default function RoutesPage() {
             </div>
 
             {/* Expanded panel */}
-            {expanded === route.id && (
-              <>
-                {/* Tabs */}
-                <div style={{ display: "flex", gap: 0, borderTop: "1px solid #F1F5F9", background: "#F8FAFC" }}>
-                  {[
-                    { id: "stops", label: `Stops (${route.stops.length})` },
-                    { id: "zones", label: "Fare Zones" },
-                  ].map(tab => (
-                    <button key={tab.id} onClick={() => setTab(route.id, tab.id)} style={{
-                      padding: "10px 20px", border: "none", background: "none",
-                      fontSize: 13, fontWeight: getTab(route.id) === tab.id ? 700 : 500,
-                      color: getTab(route.id) === tab.id ? "#2563EB" : "#64748B",
-                      borderBottom: getTab(route.id) === tab.id ? "2px solid #2563EB" : "2px solid transparent",
-                      cursor: "pointer",
-                    }}>{tab.label}</button>
-                  ))}
-                </div>
-
-                {/* Stops tab */}
-                {getTab(route.id) === "stops" && (
-                  <div style={{ borderTop: "1px solid #F1F5F9", padding: "12px 18px 16px" }}>
-
-                    {/* Overlap warning */}
-                    <OverlapWarning routeId={route.id} />
-
-                    <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>Stops ({route.stops.length})</span>
-                      <div style={{ flex: 1 }} />
-                      <button onClick={() => { setStopModal(route.id); setStopForm(EMPTY_STOP); }} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>
-                        + Add Stop
-                      </button>
-                    </div>
-
-                    <StopsList route={route} onDelete={(stopId) => deleteStop(route.id, stopId)} />
+            {expanded === route.id && (() => {
+              const stops = routeStops[route.id] ?? route.stops;
+              const loadingStops = stopsLoading[route.id] ?? false;
+              const routeWithStops = { ...route, stops };
+              return (
+                <>
+                  {/* Tabs */}
+                  <div style={{ display: "flex", gap: 0, borderTop: "1px solid #F1F5F9", background: "#F8FAFC" }}>
+                    {[
+                      { id: "stops", label: `Stops (${stops.length})` },
+                      { id: "zones", label: "Fare Zones" },
+                    ].map(tab => (
+                      <button key={tab.id} onClick={() => setTab(route.id, tab.id)} style={{
+                        padding: "10px 20px", border: "none", background: "none",
+                        fontSize: 13, fontWeight: getTab(route.id) === tab.id ? 700 : 500,
+                        color: getTab(route.id) === tab.id ? "#2563EB" : "#64748B",
+                        borderBottom: getTab(route.id) === tab.id ? "2px solid #2563EB" : "2px solid transparent",
+                        cursor: "pointer",
+                      }}>{tab.label}</button>
+                    ))}
                   </div>
-                )}
 
-                {/* Fare Zones tab */}
-                {getTab(route.id) === "zones" && (
-                  <FareZonesPanel route={route} />
-                )}
-              </>
-            )}
+                  {/* Stops tab */}
+                  {getTab(route.id) === "stops" && (
+                    <div style={{ borderTop: "1px solid #F1F5F9", padding: "12px 18px 16px" }}>
+                      <OverlapWarning routeId={route.id} />
+                      <div style={{ display: "flex", alignItems: "center", marginBottom: 10 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>
+                          Stops ({stops.length}){loadingStops ? " — loading…" : ""}
+                        </span>
+                        <div style={{ flex: 1 }} />
+                        <button onClick={() => { setStopModal(route.id); setStopForm(EMPTY_STOP); }} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>
+                          + Add Stop
+                        </button>
+                      </div>
+                      <StopsList route={routeWithStops} onDelete={(stopId) => deleteStop(route.id, stopId)} />
+                    </div>
+                  )}
+
+                  {/* Fare Zones tab */}
+                  {getTab(route.id) === "zones" && (
+                    <FareZonesPanel route={routeWithStops} />
+                  )}
+                </>
+              );
+            })()}
           </div>
         ))}
       </div>
@@ -727,12 +785,27 @@ export default function RoutesPage() {
 
       {/* ── Add Stop Modal ── */}
       {stopModal && (
-        <Modal title="Add stop" onClose={() => setStopModal(null)} onSave={() => saveStop(stopModal)}>
+        <Modal title="Add stop" onClose={() => { setStopModal(null); setStopForm(EMPTY_STOP); }} onSave={() => saveStop(stopModal)} saving={stopSaving}>
           <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 }}>Stop name</label>
-            <input placeholder="e.g. Hamra Street" value={stopForm.name} onChange={e => setStopForm({ name: e.target.value })}
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 }}>Stop name *</label>
+            <input placeholder="e.g. Hamra Street" value={stopForm.name} onChange={e => setStopForm(p => ({ ...p, name: e.target.value }))}
               style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, boxSizing: "border-box" }} />
           </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 }}>Latitude (optional)</label>
+              <input type="number" step="any" placeholder="e.g. 33.888" value={stopForm.lat} onChange={e => setStopForm(p => ({ ...p, lat: e.target.value }))}
+                style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, boxSizing: "border-box" }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 }}>Longitude (optional)</label>
+              <input type="number" step="any" placeholder="e.g. 35.495" value={stopForm.lng} onChange={e => setStopForm(p => ({ ...p, lng: e.target.value }))}
+                style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, boxSizing: "border-box" }} />
+            </div>
+          </div>
+          <p style={{ fontSize: 11, color: "#94A3B8", marginTop: 10 }}>
+            Coordinates are optional — you can drag the stop marker to the correct position in the Map editor.
+          </p>
         </Modal>
       )}
 
@@ -741,7 +814,7 @@ export default function RoutesPage() {
         <RouteMapEditor
           route={mapRoute}
           onClose={() => setMapRoute(null)}
-          onSaved={() => setMapRoute(null)}
+          onSaved={() => { loadStopsForRoute(mapRoute.id); setMapRoute(null); }}
         />
       )}
 

@@ -74,9 +74,8 @@ function TwoCol({ children }) {
   return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 24px" }}>{children}</div>;
 }
 
-// ── Default settings (used in FRONTEND_ONLY mode) ─────────────────────────────
-
-// Keys match the actual system_settings DB keys
+// Initial form state — overwritten by backend values once the settings load.
+// Keys match the actual system_settings DB keys.
 const DEFAULTS = {
   "fare.base_amount":            "1.50",
   "fare.per_km_rate":            "0.10",

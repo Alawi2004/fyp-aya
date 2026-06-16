@@ -5,12 +5,13 @@ export const createTrip = async (req, res) => {
     const pool = await poolPromise;
     const { vehicle_id, driver_id, route_id, start_time, status } = req.body;
 
+    const startTimeParsed = start_time ? new Date(start_time) : null;
     const result = await pool
       .request()
       .input("vehicle_id", sql.Int,      vehicle_id)
       .input("driver_id",  sql.Int,      driver_id)
       .input("route_id",   sql.Int,      route_id)
-      .input("start_time", sql.DateTime, start_time)
+      .input("start_time", sql.DateTime, startTimeParsed)
       .input("status",     sql.VarChar,  status || "scheduled")
       .query(`
         INSERT INTO trips(vehicle_id,driver_id,route_id,start_time,status)
@@ -109,12 +110,17 @@ export const updateTrip = async (req, res) => {
   try {
     const pool = await poolPromise;
     const { route_id, driver_id, vehicle_id, start_time, status } = req.body;
+    // tedious requires a Date object for sql.DateTime — passing a raw string throws TypeError
+    const startTimeParsed = start_time ? new Date(start_time) : null;
+    if (startTimeParsed && isNaN(startTimeParsed.getTime())) {
+      return res.status(400).json({ error: `Invalid start_time: "${start_time}"` });
+    }
     await pool.request()
-      .input("id",         sql.Int,      req.params.id)
+      .input("id",         sql.Int,      Number(req.params.id))
       .input("route_id",   sql.Int,      route_id   ?? null)
       .input("driver_id",  sql.Int,      driver_id  ?? null)
       .input("vehicle_id", sql.Int,      vehicle_id ?? null)
-      .input("start_time", sql.DateTime, start_time ?? null)
+      .input("start_time", sql.DateTime, startTimeParsed)
       .input("status",     sql.VarChar,  status     ?? null)
       .query(`
         UPDATE trips SET
@@ -127,8 +133,8 @@ export const updateTrip = async (req, res) => {
       `);
     res.json({ message: "Trip updated" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to update trip" });
+    console.error("updateTrip error:", err);
+    res.status(500).json({ error: err?.message ?? "Failed to update trip" });
   }
 };
 

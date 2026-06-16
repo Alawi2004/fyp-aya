@@ -4,11 +4,26 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMap 
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
+// ── Inject pulse keyframes once (shared with DashboardMap) ───────────────────
+const STYLE_ID = '__dm_pulse__';
+if (!document.getElementById(STYLE_ID)) {
+  const s = document.createElement('style');
+  s.id = STYLE_ID;
+  s.textContent = `
+    @keyframes dm-pulse {
+      0%   { transform:scale(.7); opacity:.85; }
+      70%  { transform:scale(1.8); opacity:0; }
+      100% { transform:scale(1.8); opacity:0; }
+    }
+  `;
+  document.head.appendChild(s);
+}
+
 // ─── status colours ──────────────────────────────────────────────────────────
 const STATUS_COLOR = {
   Ongoing:   '#10B981',
   Delayed:   '#F59E0B',
-  Scheduled: '#64748B',
+  Scheduled: '#2563EB',
 };
 
 const ROUTE_COLOR = {
@@ -21,80 +36,125 @@ const ROUTE_COLOR = {
 
 // ─── speed → colour for playback track ───────────────────────────────────────
 function speedColor(speed) {
-  if (speed < 15) return '#EF4444';   // stopped/very slow
-  if (speed < 30) return '#F59E0B';   // slow
-  if (speed < 50) return '#10B981';   // normal
-  return '#3B82F6';                   // fast
+  if (speed < 15) return '#EF4444';
+  if (speed < 30) return '#F59E0B';
+  if (speed < 50) return '#10B981';
+  return '#3B82F6';
 }
 
-// ─── signal-lost marker ───────────────────────────────────────────────────────
-function makeSignalLostIcon(selected = false) {
-  const size = selected ? 36 : 26;
-  return L.divIcon({
-    html: `<div style="
-      width:${size}px;height:${size}px;border-radius:50%;
-      background:#7C3AED;border:3px solid #fff;
-      box-shadow:0 2px 10px rgba(124,58,237,.4),0 0 0 3px rgba(124,58,237,.2);
-      display:flex;align-items:center;justify-content:center;
-      font-size:${selected ? 15 : 11}px;opacity:0.75;
-    ">📡</div>`,
-    className: '',
-    iconSize:    [size, size],
-    iconAnchor:  [size / 2, size / 2],
-    popupAnchor: [0, -(size / 2) - 4],
-  });
-}
-
-// ─── bus marker icon ─────────────────────────────────────────────────────────
+// ─── pulsing bus marker (matching DashboardMap / DriverMapScreen style) ──────
 function makeBusIcon(status, selected, geofenced = false) {
-  const color = STATUS_COLOR[status] || '#888';
-  const size  = selected ? 36 : 26;
-  const emoji = status === 'Scheduled' ? '🕐' : status === 'Delayed' ? '⚠️' : '🚌';
-
-  const baseShadow = selected ? `, 0 0 0 3px ${color}88` : '';
-  const geoRing    = geofenced ? ', 0 0 0 4px #EF4444' : '';
+  const color      = geofenced ? '#EF4444' : (STATUS_COLOR[status] ?? '#64748B');
+  const core       = selected ? 34 : 26;
+  const wrap       = core + 20;
+  const iconSize   = selected ? 15 : 12;
+  const animDur    = geofenced ? '1.0s' : selected ? '1.4s' : '2s';
 
   return L.divIcon({
     html: `
       <div style="
-        width:${size}px; height:${size}px;
-        border-radius:50%;
-        background:${color};
-        border:3px solid #fff;
-        box-shadow:0 2px 10px rgba(0,0,0,.35)${baseShadow}${geoRing};
-        display:flex; align-items:center; justify-content:center;
-        font-size:${selected ? 16 : 12}px;
-        cursor:pointer;
-        transition:all .2s;
-        ${geofenced ? 'animation:geofence-pulse 1.2s ease-out infinite;' : ''}
-      ">${emoji}</div>
-      <style>
-        @keyframes geofence-pulse {
-          0%   { box-shadow: 0 2px 10px rgba(0,0,0,.35)${baseShadow}, 0 0 0 4px #EF4444; }
-          50%  { box-shadow: 0 2px 10px rgba(0,0,0,.35)${baseShadow}, 0 0 0 8px rgba(239,68,68,.3); }
-          100% { box-shadow: 0 2px 10px rgba(0,0,0,.35)${baseShadow}, 0 0 0 4px #EF4444; }
-        }
-      </style>`,
+        position:relative;
+        width:${wrap}px;height:${wrap}px;
+        display:flex;align-items:center;justify-content:center;
+      ">
+        <div style="
+          position:absolute;
+          width:${wrap}px;height:${wrap}px;border-radius:50%;
+          background:${color}33;
+          animation:dm-pulse ${animDur} ease-out infinite;
+        "></div>
+        <div style="
+          position:relative;z-index:1;
+          width:${core}px;height:${core}px;border-radius:50%;
+          background:${color};border:2.5px solid #fff;
+          box-shadow:0 3px 10px ${color}66, 0 1px 4px rgba(0,0,0,.25);
+          display:flex;align-items:center;justify-content:center;
+        ">
+          <svg width="${iconSize}" height="${iconSize}" viewBox="0 0 24 24"
+               fill="none" stroke="white" stroke-width="2.2"
+               stroke-linecap="round" stroke-linejoin="round">
+            <rect x="1" y="3" width="15" height="13" rx="2"/>
+            <path d="M16 8h4l3 3v3h-7V8z"/>
+            <circle cx="5.5" cy="18.5" r="2.5"/>
+            <circle cx="18.5" cy="18.5" r="2.5"/>
+            <line x1="1" y1="12" x2="16" y2="12"/>
+            <line x1="8" y1="3" x2="8" y2="12"/>
+          </svg>
+        </div>
+      </div>`,
     className: '',
-    iconSize:    [size, size],
-    iconAnchor:  [size / 2, size / 2],
-    popupAnchor: [0, -(size / 2) - 4],
+    iconSize:    [wrap, wrap],
+    iconAnchor:  [wrap / 2, wrap / 2],
+    popupAnchor: [0, -(wrap / 2) - 4],
   });
 }
 
-// ─── playback bus marker ──────────────────────────────────────────────────────
-const PLAYBACK_ICON = L.divIcon({
-  html: `<div style="
-    width:34px;height:34px;border-radius:50%;
-    background:#8B5CF6;border:3px solid #fff;
-    box-shadow:0 2px 12px rgba(139,92,246,.5),0 0 0 3px rgba(139,92,246,.3);
-    display:flex;align-items:center;justify-content:center;font-size:16px;
-  ">🚌</div>`,
-  className: '',
-  iconSize:    [34, 34],
-  iconAnchor:  [17, 17],
-  popupAnchor: [0, -20],
-});
+// ─── signal-lost marker ───────────────────────────────────────────────────────
+function makeSignalLostIcon(selected = false) {
+  const core = selected ? 34 : 26;
+  const wrap = core + 20;
+  return L.divIcon({
+    html: `
+      <div style="
+        position:relative;
+        width:${wrap}px;height:${wrap}px;
+        display:flex;align-items:center;justify-content:center;
+      ">
+        <div style="
+          position:absolute;
+          width:${wrap}px;height:${wrap}px;border-radius:50%;
+          background:#7C3AED33;
+          animation:dm-pulse 1.6s ease-out infinite;
+        "></div>
+        <div style="
+          position:relative;z-index:1;
+          width:${core}px;height:${core}px;border-radius:50%;
+          background:#7C3AED;border:2.5px solid #fff;
+          box-shadow:0 3px 10px #7C3AED66, 0 1px 4px rgba(0,0,0,.25);
+          display:flex;align-items:center;justify-content:center;
+          font-size:${selected ? 14 : 10}px;
+        ">📡</div>
+      </div>`,
+    className: '',
+    iconSize:    [wrap, wrap],
+    iconAnchor:  [wrap / 2, wrap / 2],
+    popupAnchor: [0, -(wrap / 2) - 4],
+  });
+}
+
+// ─── playback position marker ────────────────────────────────────────────────
+function makePlaybackIcon() {
+  const core = 32, wrap = core + 20;
+  return L.divIcon({
+    html: `
+      <div style="
+        position:relative;
+        width:${wrap}px;height:${wrap}px;
+        display:flex;align-items:center;justify-content:center;
+      ">
+        <div style="
+          position:absolute;
+          width:${wrap}px;height:${wrap}px;border-radius:50%;
+          background:#8B5CF633;
+          animation:dm-pulse 1.4s ease-out infinite;
+        "></div>
+        <div style="
+          position:relative;z-index:1;
+          width:${core}px;height:${core}px;border-radius:50%;
+          background:#8B5CF6;border:2.5px solid #fff;
+          box-shadow:0 3px 10px #8B5CF666, 0 1px 4px rgba(0,0,0,.25);
+          display:flex;align-items:center;justify-content:center;
+          font-size:16px;
+        ">🚌</div>
+      </div>`,
+    className: '',
+    iconSize:    [wrap, wrap],
+    iconAnchor:  [wrap / 2, wrap / 2],
+    popupAnchor: [0, -(wrap / 2) - 4],
+  });
+}
+
+const PLAYBACK_ICON = makePlaybackIcon();
 
 // ─── fly-to helpers ───────────────────────────────────────────────────────────
 function FlyToSelected({ buses, selectedId }) {
@@ -104,8 +164,24 @@ function FlyToSelected({ buses, selectedId }) {
     if (selectedId === prevId.current) return;
     prevId.current = selectedId;
     const bus = buses.find((b) => b.id === selectedId);
-    if (bus) map.flyTo([bus.lat, bus.lng], Math.max(map.getZoom(), 13), { duration: 0.8 });
+    if (bus?.lat != null && bus?.lng != null)
+      map.flyTo([bus.lat, bus.lng], Math.max(map.getZoom(), 13), { duration: 0.8 });
   }, [selectedId, buses, map]);
+  return null;
+}
+
+function FitRouteBounds({ routePath }) {
+  const map     = useMap();
+  const prevKey = useRef(null);
+  useEffect(() => {
+    if (!routePath || routePath.length < 2) return;
+    const key = `${routePath[0]?.[0]},${routePath[0]?.[1]}`;
+    if (key === prevKey.current) return;
+    prevKey.current = key;
+    try {
+      map.fitBounds(L.latLngBounds(routePath), { padding: [40, 40], maxZoom: 15, animate: true, duration: 0.8 });
+    } catch {}
+  }, [routePath, map]);
   return null;
 }
 
@@ -123,15 +199,16 @@ export default function LiveMap({
   routes,
   selectedId,
   onSelect,
-  geofencedIds   = new Set(),
-  signalLostIds  = new Set(),
-  showHeatmap    = false,
-  heatmapPoints  = [],
-  // Journey Playback props
-  playbackMode   = false,
-  playbackTrack  = [],
-  playbackPos    = null,
-  playbackRoute  = null,
+  geofencedIds      = new Set(),
+  signalLostIds     = new Set(),
+  showHeatmap       = false,
+  heatmapPoints     = [],
+  selectedRoutePath = [],
+  loadingRoute      = false,
+  playbackMode      = false,
+  playbackTrack     = [],
+  playbackPos       = null,
+  playbackRoute     = null,
 }) {
   const center = [33.88, 35.55];
 
@@ -141,29 +218,37 @@ export default function LiveMap({
       zoom={playbackMode ? 12 : 11}
       style={{ width: '100%', height: '100%' }}
       zoomControl={true}
-      attributionControl={true}
+      attributionControl={false}
     >
+      {/* Google Maps road tiles */}
       <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        maxZoom={19}
+        url="https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+        subdomains="0123"
+        maxZoom={20}
       />
 
       {/* ── Normal live-tracking mode ── */}
       {!playbackMode && <>
-        {/* Route polylines */}
-        {routes && routes.map((route) => (
-          <Polyline
-            key={route.name}
-            positions={route.path}
-            color={ROUTE_COLOR[route.name] || '#888'}
-            weight={3}
-            opacity={0.55}
-            dashArray="6 4"
-          />
-        ))}
+        {/* Selected bus route — road-following geometry from OSRM */}
+        {selectedRoutePath.length > 1 && (
+          <>
+            <Polyline
+              positions={selectedRoutePath}
+              color="#93C5FD"
+              weight={7}
+              opacity={0.35}
+            />
+            <Polyline
+              positions={selectedRoutePath}
+              color="#2563EB"
+              weight={4}
+              opacity={0.9}
+              dashArray="12 6"
+            />
+          </>
+        )}
 
-        {/* Heatmap overlay — pt is [lat, lng] or [lat, lng, intensity 0-1] */}
+        {/* Heatmap overlay */}
         {showHeatmap && heatmapPoints.map((pt, i) => {
           const lat       = Array.isArray(pt) ? pt[0] : pt.lat;
           const lng       = Array.isArray(pt) ? pt[1] : pt.lng;
@@ -204,12 +289,12 @@ export default function LiveMap({
                 </div>
                 {signalLostIds.has(bus.id) && (
                   <div style={{ background: '#F5F3FF', border: '1px solid #DDD6FE', borderRadius: 6, padding: '4px 8px', marginBottom: 8, fontSize: 11, color: '#7C3AED', fontWeight: 700 }}>
-                    📡 GPS SIGNAL LOST — No updates received
+                    📡 GPS SIGNAL LOST
                   </div>
                 )}
                 {geofencedIds.has(bus.id) && (
                   <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 6, padding: '4px 8px', marginBottom: 8, fontSize: 11, color: '#DC2626', fontWeight: 700 }}>
-                    ⚠️ GEOFENCE BREACH — Off route corridor
+                    ⚠️ GEOFENCE BREACH
                   </div>
                 )}
                 {[
@@ -218,7 +303,7 @@ export default function LiveMap({
                   ['Status',  bus.status],
                   ['Seats',   bus.seats],
                   ['Speed',   `${bus.speed} km/h`],
-                  ['ETA',     bus.eta],
+                  ['ETA',     bus.trafficInfo?.adjustedEta ?? bus.eta],
                 ].map(([k, v]) => (
                   <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '2px 0', borderBottom: '1px solid #f0f0f0' }}>
                     <span style={{ color: '#888' }}>{k}</span>
@@ -231,11 +316,13 @@ export default function LiveMap({
         ))}
 
         <FlyToSelected buses={buses} selectedId={selectedId} />
+        {selectedRoutePath.length > 1 && !buses.find(b => b.id === selectedId && b.lat != null) && (
+          <FitRouteBounds routePath={selectedRoutePath} />
+        )}
       </>}
 
       {/* ── Journey Playback mode ── */}
       {playbackMode && <>
-        {/* Planned route corridor */}
         {playbackRoute && (
           <Polyline
             positions={playbackRoute.map(p => [p.lat ?? p[0], p.lng ?? p[1]])}
@@ -246,32 +333,31 @@ export default function LiveMap({
           />
         )}
 
-        {/* GPS track coloured by speed — render as segments */}
         {playbackTrack.length > 1 && playbackTrack.slice(0, -1).map((pt, i) => {
           const next = playbackTrack[i + 1];
-          const avgSpeed = (pt.speed + next.speed) / 2;
           return (
             <Polyline
               key={i}
               positions={[[pt.lat, pt.lng], [next.lat, next.lng]]}
-              color={speedColor(avgSpeed)}
+              color={speedColor((pt.speed + next.speed) / 2)}
               weight={4}
               opacity={0.85}
             />
           );
         })}
 
-        {/* Visited waypoints as small dots */}
-        {playbackPos && playbackTrack.slice(0, playbackTrack.findIndex(p => p.lat === playbackPos.lat) + 1).filter((_, i) => i % 5 === 0).map((pt, i) => (
-          <CircleMarker
-            key={i}
-            center={[pt.lat, pt.lng]}
-            radius={3}
-            pathOptions={{ color: speedColor(pt.speed), fillColor: speedColor(pt.speed), fillOpacity: 0.8, weight: 1 }}
-          />
-        ))}
+        {playbackPos && playbackTrack
+          .slice(0, playbackTrack.findIndex(p => p.lat === playbackPos.lat) + 1)
+          .filter((_, i) => i % 5 === 0)
+          .map((pt, i) => (
+            <CircleMarker
+              key={i}
+              center={[pt.lat, pt.lng]}
+              radius={3}
+              pathOptions={{ color: speedColor(pt.speed), fillColor: speedColor(pt.speed), fillOpacity: 0.8, weight: 1 }}
+            />
+          ))}
 
-        {/* Current playback position */}
         {playbackPos && (
           <Marker position={[playbackPos.lat, playbackPos.lng]} icon={PLAYBACK_ICON} zIndexOffset={2000}>
             <Popup>

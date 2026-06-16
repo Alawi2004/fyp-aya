@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { Users, UserCheck, UserMinus, UserX, Wallet } from "lucide-react";
+import { ExportBtn } from "../components/ExportBtn";
 import apiClient from "../api/apiClient";
 import { createUser, updateUser, deleteUserApi } from "../api/endpoints";
 import { Modal } from "../components/Modal";
@@ -573,6 +575,19 @@ export default function PassengersPage() {
           <p style={{ fontSize: 12, color: "#64748B", margin: "2px 0 0" }}>Manage passenger accounts, statuses, and wallet balances</p>
         </div>
         <div style={{ flex: 1 }} />
+        <ExportBtn
+          rows={visible}
+          columns={[
+            { key: "full_name",      label: "Name"           },
+            { key: "email",          label: "Email"          },
+            { key: "phone",          label: "Phone",         value: r => r.phone ?? "—" },
+            { key: "status",         label: "Status"         },
+            { key: "wallet_balance", label: "Wallet Balance", value: r => `$${parseFloat(r.wallet_balance || 0).toFixed(2)}` },
+            { key: "trips",          label: "Trips",         value: r => r.trips ?? 0 },
+          ]}
+          filename={`passengers-${new Date().toISOString().slice(0,10)}.csv`}
+          title="Passengers Report"
+        />
         <button onClick={openAdd} style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
           + Add passenger
         </button>
@@ -580,11 +595,11 @@ export default function PassengersPage() {
 
       {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0,1fr))", gap: 12 }}>
-        <StatCard label="Total passengers" value={counts.total}                              delta="registered"   />
-        <StatCard label="Active"           value={counts.active}                             delta="accounts"     />
-        <StatCard label="Suspended"        value={counts.suspended}                          delta="temporarily"  />
-        <StatCard label="Blocked"          value={counts.blocked}                            delta="permanently"  accent="#DC2626" />
-        <StatCard label="Total balance"    value={`$${counts.balance.toFixed(2)}`}        delta="all wallets"  accent="#7C3AED" />
+        <StatCard label="Total passengers" value={counts.total}                          delta="registered"    accent="#2563EB" icon={<Users size={18} color="#2563EB" />} />
+        <StatCard label="Active"           value={counts.active}                         delta="accounts"      accent="#10B981" icon={<UserCheck size={18} color="#10B981" />} />
+        <StatCard label="Suspended"        value={counts.suspended}                      delta="temporarily"   accent="#F59E0B" icon={<UserMinus size={18} color="#F59E0B" />} />
+        <StatCard label="Blocked"          value={counts.blocked}                        delta="permanently"   accent="#DC2626" icon={<UserX size={18} color="#DC2626" />} />
+        <StatCard label="Total balance"    value={`$${counts.balance.toFixed(2)}`}      delta="all wallets"   accent="#7C3AED" icon={<Wallet size={18} color="#7C3AED" />} />
       </div>
 
       {/* Filter bar */}

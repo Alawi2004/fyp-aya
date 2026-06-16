@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { ExportBtn } from "../components/ExportBtn";
 import { Panel } from "../components/Panel";
 import { DataTable } from "../components/Table";
 import { Modal } from "../components/Modal";
@@ -1448,6 +1449,21 @@ export default function VehiclesPage() {
           </p>
         </div>
         <div style={{ flex: 1 }} />
+        <ExportBtn
+          rows={vehicles}
+          columns={[
+            { key: "plate",       label: "Plate"        },
+            { key: "type",        label: "Type"         },
+            { key: "model",       label: "Model"        },
+            { key: "year",        label: "Year"         },
+            { key: "capacity",    label: "Capacity"     },
+            { key: "status",      label: "Status"       },
+            { key: "driver",      label: "Driver"       },
+            { key: "lastService", label: "Last Service" },
+          ]}
+          filename={`vehicles-${new Date().toISOString().slice(0,10)}.csv`}
+          title="Fleet Report"
+        />
         {tab === "fleet" && (
           <button onClick={openAdd} style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             + Add vehicle

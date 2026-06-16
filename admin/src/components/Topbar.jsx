@@ -7,8 +7,10 @@ const PAGE_LABELS = {
   dashboard:     "Dashboard",
   live:          "Live Tracking",
   camera:        "Passenger Counter",
-  users:         "Users",
+  users:         "All Users",
+  passengers:    "Passengers",
   drivers:       "Drivers",
+  staff:         "Staff Accounts",
   vehicles:      "Vehicles",
   routes:        "Routes & Stops",
   trips:         "Trips",
@@ -16,6 +18,12 @@ const PAGE_LABELS = {
   tickets:       "Tickets",
   notifications: "Notifications",
   ratings:       "Ratings",
+  wallet:        "Wallet",
+  complaints:    "Complaints",
+  issues:        "Issues Inbox",
+  roles:         "Roles & Permissions",
+  auditlog:      "Audit Log",
+  settings:      "System Settings",
 };
 
 function deviceIcon(name = "") {

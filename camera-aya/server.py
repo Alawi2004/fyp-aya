@@ -367,76 +367,80 @@ class PassengerCameraSession:
         t_prev  = time.perf_counter()
 
         while self._running:
-            ret, frame = (self._shared.read() if use_shared
-                          else self._cap.read())
-            if not ret or frame is None:
-                time.sleep(0.02)
-                continue
+            try:
+                ret, frame = (self._shared.read() if use_shared
+                              else self._cap.read())
+                if not ret or frame is None:
+                    time.sleep(0.02)
+                    continue
 
-            h, w = frame.shape[:2]
-            now  = time.perf_counter()
+                h, w = frame.shape[:2]
+                now  = time.perf_counter()
 
-            # Lazily create LineCounter (needs real frame size)
-            with self._lock:
-                if self._line_counter is None:
-                    self._line_counter = LineCounter(frame_w=w, frame_h=h)
+                with self._lock:
+                    if self._line_counter is None:
+                        self._line_counter = LineCounter(frame_w=w, frame_h=h)
 
-            # Track
-            tracks     = self._tracker.track(frame)
-            active_ids = []
+                try:
+                    tracks = self._tracker.track(frame)
+                except Exception:
+                    tracks = []
 
-            with self._lock:
-                lc = self._line_counter
-                for (tid, x1, y1, x2, y2, _conf) in tracks:
-                    active_ids.append(tid)
-                    cx = (x1 + x2) // 2
-                    cy = (y1 + y2) // 2
-                    event = lc.update(tid, cx, cy, now)
-                    if event:
-                        on_bus = lc.current_count
-                        entry  = {
-                            "timestamp": datetime.now().isoformat(timespec="seconds"),
-                            "event":     event.upper(),
-                            "tid":       tid,
-                            "on_bus":    on_bus,
-                        }
-                        self._events.append(entry)
-                        self._recent_events.insert(0, {
-                            "time":     datetime.now().strftime("%H:%M:%S"),
-                            "type":     event,
-                            "track_id": tid,
-                            "count":    on_bus,
-                        })
-                        self._recent_events = self._recent_events[:6]
-                        _forward("/api/camera/passenger-events", {
-                            "bus_id":          self.bus_id,
-                            "event_type":      event.upper(),
-                            "track_id":        tid,
-                            "passenger_count": on_bus,
-                            "available_seats": max(0, self._capacity - on_bus),
-                        })
-                lc.cleanup_stale_tracks(active_ids)
+                active_ids = []
+                with self._lock:
+                    lc = self._line_counter
+                    for (tid, x1, y1, x2, y2, _conf) in tracks:
+                        active_ids.append(tid)
+                        cx = (x1 + x2) // 2
+                        cy = (y1 + y2) // 2
+                        event = lc.update(tid, cx, cy, now)
+                        if event:
+                            on_bus = lc.current_count
+                            self._events.append({
+                                "timestamp": datetime.now().isoformat(timespec="seconds"),
+                                "event":     event.upper(),
+                                "tid":       tid,
+                                "on_bus":    on_bus,
+                            })
+                            self._recent_events.insert(0, {
+                                "time":     datetime.now().strftime("%H:%M:%S"),
+                                "type":     event,
+                                "track_id": tid,
+                                "count":    on_bus,
+                            })
+                            self._recent_events = self._recent_events[:6]
+                            _forward("/api/camera/passenger-events", {
+                                "bus_id":          self.bus_id,
+                                "event_type":      event.upper(),
+                                "track_id":        tid,
+                                "passenger_count": on_bus,
+                                "available_seats": max(0, self._capacity - on_bus),
+                            })
+                    lc.cleanup_stale_tracks(active_ids)
 
-            fps_buf.append(1.0 / max(now - t_prev, 1e-6))
-            t_prev = now
+                fps_buf.append(1.0 / max(now - t_prev, 1e-6))
+                t_prev = now
 
-            with self._lock:
-                self._fps = float(np.mean(fps_buf))
-                fps = self._fps
-                lc  = self._line_counter
-                re  = list(self._recent_events)
+                with self._lock:
+                    self._fps = float(np.mean(fps_buf))
+                    fps = self._fps
+                    lc  = self._line_counter
+                    re  = list(self._recent_events)
 
-            # Draw
-            _pass_draw_zone_bgs(frame, lc)
-            _pass_draw_flash(frame, lc, now)
-            _pass_draw_lines(frame, lc, now)
-            _pass_draw_tracks(frame, tracks, lc)
-            _pass_draw_stats(frame, lc, fps, now)
-            _pass_draw_events(frame, re)
+                _pass_draw_zone_bgs(frame, lc)
+                _pass_draw_flash(frame, lc, now)
+                _pass_draw_lines(frame, lc, now)
+                _pass_draw_tracks(frame, tracks, lc)
+                _pass_draw_stats(frame, lc, fps, now)
+                _pass_draw_events(frame, re)
 
-            _, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
-            with self._lock:
-                self._latest_jpeg = jpeg.tobytes()
+                _, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+                with self._lock:
+                    self._latest_jpeg = jpeg.tobytes()
+
+            except Exception as e:
+                print(f"[PassengerCam][{self.bus_id}] frame error: {e}")
+                time.sleep(0.05)
 
         if self._cap:
             self._cap.release()
@@ -547,119 +551,138 @@ class DriverCameraSession:
         t_prev  = time.perf_counter()
 
         while self._running:
-            ret, frame = (self._shared.read() if use_shared
-                          else self._cap.read())
-            if not ret or frame is None:
-                time.sleep(0.02)
-                continue
+            try:
+                ret, frame = (self._shared.read() if use_shared
+                              else self._cap.read())
+                if not ret or frame is None:
+                    time.sleep(0.02)
+                    continue
 
-            frame = cv2.flip(frame, 1)
-            h, w  = frame.shape[:2]
-            now   = time.perf_counter()
+                frame = cv2.flip(frame, 1)
+                h, w  = frame.shape[:2]
+                now   = time.perf_counter()
 
-            fps_buf.append(1.0 / max(now - t_prev, 1e-6))
-            t_prev = now
-            fps = float(np.mean(fps_buf))
+                fps_buf.append(1.0 / max(now - t_prev, 1e-6))
+                t_prev = now
+                fps = float(np.mean(fps_buf))
 
-            # ── Detect ────────────────────────────────────────────────────────
-            face_results = self._face_det.detect(frame)
-            face_found   = bool(face_results and face_results.multi_face_landmarks)
+                # ── Detect ────────────────────────────────────────────────────
+                ear            = 0.30
+                eyes_closed    = False
+                gaze           = "unknown"
+                face_box       = None
+                perclos        = 0.0
+                perclos_drowsy = False
+                phone_near     = False
+                phone_boxes    = []
+                seatbelt_on    = True
 
-            ear             = 0.30
-            eyes_closed     = False
-            gaze            = "unknown"
-            face_box        = None
-            perclos         = 0.0
-            perclos_drowsy  = False
+                try:
+                    face_results = self._face_det.detect(frame)
+                    face_found   = bool(face_results and face_results.multi_face_landmarks)
+                except Exception:
+                    face_found = False
 
-            if face_found:
-                lm = face_results.multi_face_landmarks[0]
-                _, _, ear, eyes_closed = self._eye_det.compute(lm, w, h)
-                self._eye_det.draw(frame, lm, w, h, eyes_closed)
-                perclos, perclos_drowsy = self._perclos.update(now, ear)
-                gaze     = self._gaze_est.estimate(lm, w, h, frame)
-                face_box = self._face_det.get_face_box(lm, w, h)
-                _drv_draw_face_box(frame, face_box, gaze)
-                _drv_draw_gaze(frame, gaze, face_box)
+                if face_found:
+                    try:
+                        lm = face_results.multi_face_landmarks[0]
+                        _, _, ear, eyes_closed = self._eye_det.compute(lm, w, h)
+                        self._eye_det.draw(frame, lm, w, h, eyes_closed)
+                        perclos, perclos_drowsy = self._perclos.update(now, ear)
+                        gaze     = self._gaze_est.estimate(lm, w, h, frame)
+                        face_box = self._face_det.get_face_box(lm, w, h)
+                        _drv_draw_face_box(frame, face_box, gaze)
+                        _drv_draw_gaze(frame, gaze, face_box)
+                    except Exception:
+                        pass
 
-            phone_near, phone_boxes = self._phone_det.detect(frame, face_box)
-            if phone_boxes:
-                _drv_draw_phones(frame, phone_boxes)
+                try:
+                    phone_near, phone_boxes = self._phone_det.detect(frame, face_box)
+                    if phone_boxes:
+                        _drv_draw_phones(frame, phone_boxes)
+                except Exception:
+                    pass
 
-            seatbelt_on, _sb_conf = self._seatbelt_det.detect(frame, face_box)
+                try:
+                    seatbelt_on, _ = self._seatbelt_det.detect(frame, face_box)
+                except Exception:
+                    pass
 
-            alerts = self._alert_mgr.update(
-                face_detected=face_found,
-                eyes_closed=eyes_closed,
-                gaze=gaze,
-                phone_near=phone_near,
-                now=now,
-                perclos_drowsy=perclos_drowsy,
-                seatbelt_on=seatbelt_on,
-            )
+                alerts = self._alert_mgr.update(
+                    face_detected=face_found,
+                    eyes_closed=eyes_closed,
+                    gaze=gaze,
+                    phone_near=phone_near,
+                    now=now,
+                    perclos_drowsy=perclos_drowsy,
+                    seatbelt_on=seatbelt_on,
+                )
 
-            # ── State + confidence ────────────────────────────────────────────
-            if alerts:
-                raw_state = alerts[0]["type"]
-                state = _ALERT_STATE_MAP.get(raw_state, "distracted")
-            else:
-                state = "focused"
+                # ── State + confidence ────────────────────────────────────────
+                if alerts:
+                    raw_state = alerts[0]["type"]
+                    state = _ALERT_STATE_MAP.get(raw_state, "distracted")
+                else:
+                    state = "focused"
 
-            self._vote_buf.append(state)
-            vote_counts: dict[str, int] = {}
-            for v in self._vote_buf:
-                vote_counts[v] = vote_counts.get(v, 0) + 1
-            top_state  = max(vote_counts, key=vote_counts.get)
-            confidence = int(vote_counts[top_state] / len(self._vote_buf) * 100)
+                self._vote_buf.append(state)
+                vote_counts: dict[str, int] = {}
+                for v in self._vote_buf:
+                    vote_counts[v] = vote_counts.get(v, 0) + 1
+                top_state  = max(vote_counts, key=vote_counts.get)
+                confidence = int(vote_counts[top_state] / len(self._vote_buf) * 100)
 
-            with self._lock:
-                self._status = {
-                    "state":           top_state,
-                    "alert_label":     top_state,
-                    "confidence":      confidence,
-                    "alert":           top_state != "focused",
-                    "face_detected":   face_found,
-                    "eyes_closed":     eyes_closed,
-                    "gaze":            gaze,
-                    "phone_detected":  phone_near,
-                    "ear":             round(ear, 3),
-                    "perclos":         perclos,
-                    "perclos_drowsy":  perclos_drowsy,
-                    "seatbelt_on":     seatbelt_on,
-                    "fps":             round(fps, 1),
-                    "bus_id":          self.bus_id,
-                    "timestamp":       datetime.now().isoformat(),
-                }
-                if top_state != "focused" and top_state != self._prev_alert:
-                    self._alert_history.append({
-                        "type":      top_state,
-                        "timestamp": datetime.now().isoformat(),
-                    })
-                    _forward("/api/camera/driver-alerts", {
-                        "bus_id":     self.bus_id,
-                        "alert_type": top_state,
-                        "confidence": confidence,
-                    })
-                self._prev_alert = top_state
+                with self._lock:
+                    self._status = {
+                        "state":          top_state,
+                        "alert_label":    top_state,
+                        "confidence":     confidence,
+                        "alert":          top_state != "focused",
+                        "face_detected":  face_found,
+                        "eyes_closed":    eyes_closed,
+                        "gaze":           gaze,
+                        "phone_detected": phone_near,
+                        "ear":            round(ear, 3),
+                        "perclos":        perclos,
+                        "perclos_drowsy": perclos_drowsy,
+                        "seatbelt_on":    seatbelt_on,
+                        "fps":            round(fps, 1),
+                        "bus_id":         self.bus_id,
+                        "timestamp":      datetime.now().isoformat(),
+                    }
+                    if top_state != "focused" and top_state != self._prev_alert:
+                        self._alert_history.append({
+                            "type":      top_state,
+                            "timestamp": datetime.now().isoformat(),
+                        })
+                        _forward("/api/camera/driver-alerts", {
+                            "bus_id":     self.bus_id,
+                            "alert_type": top_state,
+                            "confidence": confidence,
+                        })
+                    self._prev_alert = top_state
 
-            for alert in alerts:
-                if alert["new_log"]:
-                    ts = datetime.now().strftime("%H:%M:%S")
-                    self._recent_events.appendleft(
-                        (ts, alert["type"], alert["duration"]))
+                for alert in alerts:
+                    if alert["new_log"]:
+                        ts = datetime.now().strftime("%H:%M:%S")
+                        self._recent_events.appendleft(
+                            (ts, alert["type"], alert["duration"]))
 
-            # ── Draw HUD ──────────────────────────────────────────────────────
-            with self._lock:
-                re = list(self._recent_events)
+                # ── Draw HUD ──────────────────────────────────────────────────
+                with self._lock:
+                    re = list(self._recent_events)
 
-            _drv_draw_status(frame, face_found, eyes_closed, gaze, phone_near, ear)
-            _drv_draw_alerts(frame, alerts)
-            _drv_draw_fps(frame, fps)
-            _drv_draw_event_log(frame, re)
+                _drv_draw_status(frame, face_found, eyes_closed, gaze, phone_near, ear)
+                _drv_draw_fps(frame, fps)
+                _drv_draw_event_log(frame, re)
 
-            _, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
-            with self._lock:
-                self._latest_jpeg = jpeg.tobytes()
+                _, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+                with self._lock:
+                    self._latest_jpeg = jpeg.tobytes()
+
+            except Exception as e:
+                print(f"[DriverCam][{self.bus_id}] frame error: {e}")
+                time.sleep(0.05)
 
         if self._cap:
             self._cap.release()
@@ -891,18 +914,21 @@ def driver_status_spec(bus_id: Optional[str] = Query(default=None)):
 
 # ── WebSocket streaming ───────────────────────────────────────────────────────
 
-async def _stream(websocket: WebSocket, get_frame_fn, interval: float = 0.04):
+async def _stream(websocket: WebSocket, get_frame_fn, interval: float = 0.033):
     await websocket.accept()
+    last_sent: Optional[bytes] = None
     try:
         while True:
             jpeg = get_frame_fn()
-            if jpeg:
+            # Only send when there is a new frame to avoid re-sending the same bytes
+            if jpeg and jpeg is not last_sent:
                 await websocket.send_bytes(jpeg)
+                last_sent = jpeg
             await asyncio.sleep(interval)
     except WebSocketDisconnect:
         pass
-    except Exception as e:
-        print(f"[WS] error: {e}")
+    except Exception:
+        pass
 
 
 @app.websocket("/ws/bus/{bus_id}/passenger")

@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { CalendarDays, Play, Clock, CheckCircle2, AlertTriangle } from "lucide-react";
+import { ExportBtn } from "../components/ExportBtn";
 import { PageLoading, PageError } from "../components/DataStates";
 import { Panel } from "../components/Panel";
 import { DataTable } from "../components/Table";
@@ -46,8 +48,23 @@ const STATUS_COLORS = {
 const TODAY = new Date().toISOString().slice(0, 10);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+function capitalizeStatus(s) {
+  if (!s) return "Scheduled";
+  const lower = s.toLowerCase();
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+}
+
 function normalizeTrip(t) {
-  const dt = t.start_time ? new Date(t.start_time) : null;
+  // Use the date/time fields directly if the backend already split them (timetable endpoint),
+  // otherwise parse start_time in UTC to avoid local-timezone drift.
+  let date = t.date ?? "";
+  let time = t.time ?? "";
+  if (!date && t.start_time) {
+    // Parse as UTC: "2026-06-15T07:00:00.000Z" → date "2026-06-15", time "07:00"
+    const iso = new Date(t.start_time).toISOString();
+    date = iso.slice(0, 10);
+    time = iso.slice(11, 16);
+  }
   return {
     id:         t.trip_id  ?? t.id,
     route_id:   t.route_id   ?? null,
@@ -57,9 +74,9 @@ function normalizeTrip(t) {
     driver:     t.driver_name  ?? t.driver  ?? "",
     vehicle:    t.plate_number ?? t.vehicle ?? "",
     seats:      t.seats ?? `0/${t.capacity ?? 30}`,
-    date:       dt ? dt.toISOString().split("T")[0] : (t.date ?? ""),
-    time:       dt ? dt.toTimeString().slice(0, 5)  : (t.time ?? ""),
-    status:     t.status ? t.status.charAt(0).toUpperCase() + t.status.slice(1) : "Scheduled",
+    date,
+    time,
+    status:     capitalizeStatus(t.status),
   };
 }
 
@@ -108,7 +125,7 @@ function checkFormConflicts(form, allTrips, excludeId = null) {
 // ── Shared tab nav ────────────────────────────────────────────────────────────
 function TabNav({ tabs, active, onChange }) {
   return (
-    <div style={{ display: "flex", gap: 4, background: "#F8FAFC", borderRadius: 10, padding: 4, border: "1px solid #E2E8F0" }}>
+    <div style={{ display: "flex", gap: 4, background: "#DDE3EE", borderRadius: 10, padding: 4, border: "1px solid #C8D2E4" }}>
       {tabs.map(({ id, label, badge }) => (
         <button key={id} onClick={() => onChange(id)} style={{
           padding: "7px 18px", borderRadius: 7, border: "none",
@@ -138,7 +155,7 @@ function TripsListTab({ trips, allTrips, onAdd, onEdit, onDetail }) {
   const visible = trips.filter(t => {
     const matchStatus = filter === "All" || t.status === filter;
     const q = search.toLowerCase();
-    const matchSearch = !q || t.route.toLowerCase().includes(q) || t.driver.toLowerCase().includes(q) || t.id.toLowerCase().includes(q);
+    const matchSearch = !q || t.route.toLowerCase().includes(q) || t.driver.toLowerCase().includes(q) || String(t.id).toLowerCase().includes(q);
     return matchStatus && matchSearch;
   });
 
@@ -228,13 +245,14 @@ function TimetableTab({ routeOpts = [] }) {
       .finally(() => setLoading(false));
   }, [date]);
 
-  const routes = routeOpts.length > 0
-    ? routeOpts.map(r => r.route_name ?? r.name)
-    : [...new Set(trips.map(t => t.route).filter(Boolean))];
+  // Normalize timetable trip statuses
+  const normalizedTrips = trips.map(t => ({ ...t, status: capitalizeStatus(t.status) }));
 
-  const dayTrips = trips.filter(t =>
+  // Only show routes that actually have trips on the selected date
+  const routesWithTrips = [...new Set(normalizedTrips.map(t => t.route).filter(Boolean))];
+
+  const dayTrips = normalizedTrips.filter(t =>
     (routeFilter === "All" || t.route === routeFilter));
-
   const hours = [];
   for (let m = GRID_START; m <= GRID_END; m += 60) {
     hours.push(`${String(m / 60).padStart(2, "0")}:00`);
@@ -243,7 +261,7 @@ function TimetableTab({ routeOpts = [] }) {
   function tripLeft(t)  { return Math.max(0, (timeToMin(t.time) - GRID_START) / 30 * SLOT_W); }
   function tripWidth(t) { return Math.max(SLOT_W, (ROUTE_DURATIONS[t.route] ?? 60) / 30 * SLOT_W); }
 
-  const visibleRoutes = routeFilter === "All" ? routes : [routeFilter];
+  const visibleRoutes = routeFilter === "All" ? routesWithTrips : [routeFilter];
   const totalW = SLOTS * SLOT_W;
 
   return (
@@ -256,7 +274,7 @@ function TimetableTab({ routeOpts = [] }) {
             style={{ padding: "7px 12px", borderRadius: 8, border: "1px solid #E2E8F0", fontSize: 13, outline: "none" }} />
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {["All", ...routes].map(r => (
+          {["All", ...routesWithTrips].map(r => (
             <button key={r} onClick={() => setRouteFilter(r)} style={{
               padding: "5px 12px", borderRadius: 20, fontSize: 11, cursor: "pointer",
               border: routeFilter === r ? "none" : "1px solid #E2E8F0",
@@ -290,8 +308,8 @@ function TimetableTab({ routeOpts = [] }) {
           <div style={{ overflowX: "auto", overflowY: "visible" }}>
             <div style={{ minWidth: LABEL_W + totalW + 24 }}>
               {/* Hour header */}
-              <div style={{ display: "flex", borderBottom: "1px solid #F1F5F9", background: "#FAFAFA" }}>
-                <div style={{ width: LABEL_W, flexShrink: 0, padding: "8px 14px", fontSize: 11, fontWeight: 700, color: "#94A3B8" }}>Route</div>
+              <div style={{ display: "flex", borderBottom: "2px solid #E2E8F0", background: "#F1F5F9" }}>
+                <div style={{ width: LABEL_W, flexShrink: 0, padding: "8px 14px", fontSize: 10, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: ".07em" }}>Route</div>
                 <div style={{ width: totalW, flexShrink: 0, position: "relative", height: 32 }}>
                   {hours.map((h, i) => (
                     <div key={h} style={{
@@ -311,8 +329,8 @@ function TimetableTab({ routeOpts = [] }) {
                 return (
                   <div key={route} style={{
                     display: "flex", alignItems: "center",
-                    borderBottom: ri < visibleRoutes.length - 1 ? "1px solid #F8FAFC" : "none",
-                    background: ri % 2 === 0 ? "#fff" : "#FAFAFA",
+                    borderBottom: ri < visibleRoutes.length - 1 ? "1px solid #E8EDF5" : "none",
+                    background: ri % 2 === 0 ? "#FFFFFF" : "#F8FAFC",
                     minHeight: ROW_H,
                   }}>
                     {/* Route label */}
@@ -833,9 +851,9 @@ function DelaysTab({ delays, loading, error, onRetry }) {
       <Panel title={`${visible.length} delay report${visible.length !== 1 ? "s" : ""}`} noPad>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr style={{ background: "#FAFAFA", borderBottom: "1px solid #F1F5F9" }}>
+            <tr style={{ background: "#F1F5F9", borderBottom: "2px solid #E2E8F0", borderTop: "1px solid #E2E8F0" }}>
               {["Trip", "Route", "Driver", "Vehicle", "Reason", "Delay", "Notes", "Reported At", "Passengers"].map(h => (
-                <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".05em", whiteSpace: "nowrap" }}>{h}</th>
+                <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 10, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: ".07em", whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -843,7 +861,10 @@ function DelaysTab({ delays, loading, error, onRetry }) {
             {visible.map((d, i) => {
               const rc = DELAY_REASON_COLORS[d.reason] ?? DELAY_REASON_COLORS["Other"];
               return (
-                <tr key={d.delay_id} style={{ borderBottom: "1px solid #F8FAFC", background: i % 2 === 0 ? "#fff" : "#FAFAFA" }}>
+                <tr key={d.delay_id} style={{ borderBottom: "1px solid #E8EDF5", background: i % 2 === 0 ? "#FFFFFF" : "#F8FAFC" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#EFF6FF"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = i % 2 === 0 ? "#FFFFFF" : "#F8FAFC"; }}
+              >
                   <td style={{ padding: "12px 14px" }}>
                     <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#2563EB", fontSize: 12 }}>{d.trip_ref}</span>
                   </td>
@@ -1154,24 +1175,28 @@ export default function TripsPage() {
 
   const stats = {
     all:       trips.length,
-    ongoing:   trips.filter(t => t.status === "Ongoing").length,
-    delayed:   trips.filter(t => t.status === "Delayed").length,
-    completed: trips.filter(t => t.status === "Completed").length,
+    ongoing:   trips.filter(t => t.status?.toLowerCase() === "ongoing").length,
+    delayed:   trips.filter(t => t.status?.toLowerCase() === "delayed").length,
+    completed: trips.filter(t => t.status?.toLowerCase() === "completed").length,
   };
 
   async function handleSaveTrip(form) {
     const isEdit = tripModal && tripModal !== false;
+    const start_time = form.date && form.time
+      ? `${form.date}T${form.time}:00`
+      : null;
+
     if (isEdit) {
       try {
         await updateTrip(tripModal.id, {
           route_id:   form.route_id   ?? null,
           driver_id:  form.driver_id  ?? null,
           vehicle_id: form.vehicle_id ?? null,
-          start_time: `${form.date}T${form.time}:00`,
+          start_time,
           status:     form.status.toLowerCase(),
         });
         loadTrips();
-        loadConflicts(); // refresh so resolved conflicts disappear
+        loadConflicts();
         return null;
       } catch (err) {
         return err?.message ?? "Failed to update trip.";
@@ -1182,7 +1207,7 @@ export default function TripsPage() {
           route_id:   form.route_id   ?? null,
           driver_id:  form.driver_id  ?? null,
           vehicle_id: form.vehicle_id ?? null,
-          start_time: `${form.date}T${form.time}:00`,
+          start_time,
           status:     form.status.toLowerCase(),
         });
         loadTrips();
@@ -1221,10 +1246,24 @@ export default function TripsPage() {
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", margin: 0, letterSpacing: "-.3px" }}>Trips</h1>
           <p style={{ fontSize: 12, color: "#64748B", margin: "2px 0 0" }}>
-            {trips.length} trips · {recurring.length} recurring · {conflicts.length} conflict{conflicts.length !== 1 ? "s" : ""} · {delays.length} delay{delays.length !== 1 ? "s" : ""}
+            {trips.length} trips · {stats.delayed} with delayed status · {delays.length} delay report{delays.length !== 1 ? "s" : ""} · {conflicts.length} conflict{conflicts.length !== 1 ? "s" : ""}
           </p>
         </div>
         <div style={{ flex: 1 }} />
+        <ExportBtn
+          rows={trips}
+          columns={[
+            { key: "id",      label: "Trip ID"   },
+            { key: "route",   label: "Route"     },
+            { key: "driver",  label: "Driver"    },
+            { key: "vehicle", label: "Vehicle"   },
+            { key: "date",    label: "Date"      },
+            { key: "time",    label: "Time"      },
+            { key: "status",  label: "Status"    },
+          ]}
+          filename={`trips-${new Date().toISOString().slice(0,10)}.csv`}
+          title="Trips Report"
+        />
         <button onClick={() => setTripModal(false)} style={{
           background: "#2563EB", color: "#fff", border: "none",
           borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer",
@@ -1236,11 +1275,11 @@ export default function TripsPage() {
 
       {/* KPI cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0,1fr))", gap: 12 }}>
-        <StatCard label="Total Trips"  value={stats.all}       delta="loaded"        accent="#2563EB" />
-        <StatCard label="Ongoing"      value={stats.ongoing}   delta="in progress"   accent="#10B981" />
-        <StatCard label="Delayed"      value={stats.delayed}   delta="need attention" up={stats.delayed === 0} accent="#F59E0B" />
-        <StatCard label="Completed"    value={stats.completed} delta="today"          up accent="#059669" />
-        <StatCard label="Conflicts"    value={conflicts.length} delta="detected today" up={conflicts.length === 0} accent="#EF4444" />
+        <StatCard label="Total Trips"      value={stats.all}        delta="all trips loaded"          accent="#2563EB" icon={<CalendarDays size={18} color="#2563EB" />} />
+        <StatCard label="Ongoing"          value={stats.ongoing}    delta="currently running"          accent="#10B981" icon={<Play size={18} color="#10B981" />} />
+        <StatCard label="Delayed Status"   value={stats.delayed}    delta="trips marked as delayed"    up={stats.delayed === 0} accent="#F59E0B" icon={<Clock size={18} color="#F59E0B" />} />
+        <StatCard label="Completed"        value={stats.completed}  delta="finished trips"             up accent="#059669" icon={<CheckCircle2 size={18} color="#059669" />} />
+        <StatCard label="Delay Reports"    value={delays.length}    delta="logged delay incidents"     up={delays.length === 0} accent="#EF4444" icon={<AlertTriangle size={18} color="#EF4444" />} />
       </div>
 
       {/* Tab content */}

@@ -5,9 +5,11 @@ import jwt from "jsonwebtoken";
  * Responds 401 if missing or invalid.
  */
 export const requireAuth = (req, res, next) => {
-  const cookieToken  = req.cookies?.access_token;
   const bearerHeader = req.headers.authorization;
-  const token = cookieToken || (bearerHeader?.startsWith("Bearer ") ? bearerHeader.slice(7) : null);
+  const bearerToken  = bearerHeader?.startsWith("Bearer ") ? bearerHeader.slice(7) : null;
+  const cookieToken  = req.cookies?.access_token;
+  // Prefer explicit Bearer header so the admin dashboard token is never overridden by a stale cookie
+  const token = bearerToken || cookieToken;
 
   if (!token) return res.status(401).json({ error: "Authentication required" });
 

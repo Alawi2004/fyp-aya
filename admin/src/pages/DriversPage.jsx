@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { ExportBtn } from "../components/ExportBtn";
 import { PageLoading, PageError, PageEmpty } from "../components/DataStates";
 import { Panel } from "../components/Panel";
 import { DataTable } from "../components/Table";
@@ -6,7 +7,6 @@ import { Modal } from "../components/Modal";
 import { StatusPill } from "../components/StatusPill";
 import { StatCard } from "../components/StatCard";
 import { useWebSocketCamera } from "../hooks/useWebSocketCamera";
-import { useCounterData } from "../hooks/useCounterData";
 import {
   getDrivers, createDriver, updateDriver,
   getDriverPerformance, getDriverSchedules, updateDriverSchedule,
@@ -176,76 +176,89 @@ function CameraMaxOverlay({ title, onClose, onMinimize, children }) {
   );
 }
 
-// ── Passenger camera panel ───────────────────────────────────────────────────
-function PassengerCamPanel({ busId }) {
-  const { frameUrl, connected } = useWebSocketCamera(busId, "passenger");
-  const [collapsed, setCollapsed] = useState(false);
-  const [maximized, setMaximized] = useState(false);
-
-  const placeholder = (
-    <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
-      <svg width="36" height="36" viewBox="0 0 40 40" fill="none" stroke="#1a5c2e" strokeWidth="1.5" strokeLinecap="round">
-        <rect x="3" y="10" width="34" height="24" rx="4" /><circle cx="20" cy="22" r="6" /><path d="M14 10l3-4h6l3 4" />
-      </svg>
-      <div style={{ fontSize: 11, color: "#2d6a4a", textAlign: "center" }}>
-        Connecting to passenger cam…
-        <div style={{ fontSize: 10, color: "#1a4a34", marginTop: 3 }}>Start camera server: python server.py</div>
-      </div>
-    </div>
-  );
-
-  return (
-    <>
-      {maximized && (
-        <CameraMaxOverlay title={`Passenger Camera — ${busId}`} onClose={() => setMaximized(false)} onMinimize={() => { setMaximized(false); setCollapsed(true); }}>
-          {frameUrl
-            ? <img src={frameUrl} alt="passenger cam" style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#051a0e" }} />
-            : <div style={{ width: "100%", height: "100%", backgroundColor: "#051a0e", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                <svg width="48" height="48" viewBox="0 0 40 40" fill="none" stroke="#1a5c2e" strokeWidth="1.5" strokeLinecap="round"><rect x="3" y="10" width="34" height="24" rx="4" /><circle cx="20" cy="22" r="6" /><path d="M14 10l3-4h6l3 4" /></svg>
-                <div style={{ fontSize: 13, color: "#2d6a4a", fontWeight: 600 }}>Connecting to passenger cam…</div>
-              </div>
-          }
-        </CameraMaxOverlay>
-      )}
-      <Panel title="Passenger Camera" action={
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <StreamBadge connected={connected} label="3-zone counter" />
-          <CamBtn onClick={() => setCollapsed(c => !c)} title={collapsed ? "Expand" : "Collapse"}>{collapsed ? "▲" : "▼"}</CamBtn>
-          <CamBtn onClick={() => setMaximized(true)} title="Maximize">⛶</CamBtn>
-        </div>
-      }>
-        {!collapsed && (
-          <div style={{ width: "100%", aspectRatio: "16/9", background: "#051a0e", borderRadius: 8, overflow: "hidden", position: "relative", border: `2px solid ${connected ? "#059669" : "#1a3a2e"}`, boxShadow: connected ? "0 0 14px #05966933" : "none" }}>
-            {frameUrl ? (
-              <>
-                <img src={frameUrl} alt="passenger cam" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
-                <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(0,0,0,.70)", padding: "3px 9px", borderRadius: 6, fontSize: 10, fontWeight: 700, color: "#e2e8f0" }}>
-                  {busId} · PASSENGER
-                </div>
-              </>
-            ) : placeholder}
-          </div>
-        )}
-      </Panel>
-    </>
-  );
+// ── Driver status + alert-history polling ─────────────────────────────────────
+function useDriverStatus(busId) {
+  const [status,  setStatus]  = useState(null);
+  const [history, setHistory] = useState([]);
+  useEffect(() => {
+    if (!busId) return;
+    let alive = true;
+    async function poll() {
+      try {
+        const [sRes, aRes] = await Promise.all([
+          fetch(`${CAMERA_SERVER_REST}/api/bus/${busId}/driver/status`,  { signal: AbortSignal.timeout(1200) }),
+          fetch(`${CAMERA_SERVER_REST}/api/bus/${busId}/driver/alerts`,   { signal: AbortSignal.timeout(1200) }),
+        ]);
+        if (sRes.ok && alive) setStatus(await sRes.json());
+        if (aRes.ok && alive) {
+          const d = await aRes.json();
+          setHistory(Array.isArray(d.alerts) ? d.alerts : []);
+        }
+      } catch { /* camera server offline */ }
+    }
+    poll();
+    const t = setInterval(poll, 1500);
+    return () => { alive = false; clearInterval(t); };
+  }, [busId]);
+  return { status, history };
 }
+
+// State → display config.  Keys match what server.py returns in `state`.
+const DRIVER_STATE_CFG = {
+  focused:        { label: "Focused",       color: "#059669", bg: "#f0fdf4", border: "#86efac" },
+  drowsy:         { label: "Drowsy",        color: "#d97706", bg: "#fffbeb", border: "#fde68a" },
+  phone_detected: { label: "Phone Use",     color: "#7c3aed", bg: "#f5f3ff", border: "#c4b5fd" },
+  distracted:     { label: "Distracted",    color: "#ea580c", bg: "#fff7ed", border: "#fed7aa" },
+  no_face:        { label: "Face Missing",  color: "#dc2626", bg: "#fef2f2", border: "#fecaca" },
+  seatbelt_off:   { label: "No Seatbelt",  color: "#dc2626", bg: "#fef2f2", border: "#fecaca" },
+  offline:        { label: "No Signal",     color: "#6b7280", bg: "#f9fafb", border: "#e5e7eb" },
+};
 
 // ── Driver camera panel ──────────────────────────────────────────────────────
 function DriverCamPanel({ busId }) {
   const { frameUrl, connected } = useWebSocketCamera(busId, "driver");
   const [collapsed, setCollapsed] = useState(false);
   const [maximized, setMaximized] = useState(false);
+  const { status: ds, history: alertHistory } = useDriverStatus(busId);
 
-  const placeholder = (
-    <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
-      <svg width="36" height="36" viewBox="0 0 40 40" fill="none" stroke="#1e1e5a" strokeWidth="1.5" strokeLinecap="round">
-        <rect x="3" y="10" width="34" height="24" rx="4" /><circle cx="20" cy="22" r="6" /><path d="M14 10l3-4h6l3 4" />
-      </svg>
-      <div style={{ fontSize: 11, color: "#3b4a8a", textAlign: "center" }}>
-        Connecting to driver cam…
-        <div style={{ fontSize: 10, color: "#2d3a7a", marginTop: 3 }}>Start camera server: python server.py</div>
+  // Accurate field names from server.py DriverCameraSession._status
+  const state         = ds?.state          ?? (connected ? "focused" : "offline");
+  const confidence    = ds?.confidence     ?? 0;
+  const faceDetected  = ds?.face_detected  ?? false;
+  const eyesClosed    = ds?.eyes_closed    ?? false;
+  const phoneDetected = ds?.phone_detected ?? false;
+  const seatbeltOn    = ds?.seatbelt_on    ?? true;
+  const gaze          = ds?.gaze           ?? "unknown";
+  const ear           = ds?.ear            ?? null;
+  const perclos       = ds?.perclos        ?? null;
+  const fps           = ds?.fps            ?? null;
+  const isAlert       = ds?.alert          ?? false;
+
+  const stateCfg = DRIVER_STATE_CFG[state] ?? DRIVER_STATE_CFG.focused;
+
+  function MetricBox({ label, value, warn, fmt }) {
+    const display = value !== null && value !== undefined
+      ? (fmt ? fmt(value) : typeof value === "number" ? value.toFixed(2) : String(value))
+      : "—";
+    return (
+      <div style={{ flex: 1, textAlign: "center", padding: "7px 4px", borderRadius: 7,
+                    background: warn ? "#fffbeb" : "#f8fafc",
+                    border: `1px solid ${warn ? "#fde68a" : "#e2e8f0"}` }}>
+        <div style={{ fontSize: 9, color: "#9ca3af", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em" }}>{label}</div>
+        <div style={{ fontSize: 14, fontWeight: 800, color: warn ? "#d97706" : "#0f172a", marginTop: 1 }}>{display}</div>
       </div>
+    );
+  }
+
+  const camPlaceholder = (
+    <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+                  alignItems: "center", justifyContent: "center", gap: 10, background: "#0a0f14" }}>
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="1.5" strokeLinecap="round">
+        <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+        <line x1="1" y1="1" x2="23" y2="23" stroke="#4b5563"/>
+      </svg>
+      <span style={{ fontSize: 12, color: "#4b5563", fontWeight: 600 }}>Driver Camera Offline</span>
+      <span style={{ fontSize: 10, color: "#374151" }}>Start camera server to connect</span>
     </div>
   );
 
@@ -255,13 +268,13 @@ function DriverCamPanel({ busId }) {
         <CameraMaxOverlay title={`Driver Camera — ${busId}`} onClose={() => setMaximized(false)} onMinimize={() => { setMaximized(false); setCollapsed(true); }}>
           {frameUrl
             ? <img src={frameUrl} alt="driver cam" style={{ width: "100%", height: "100%", objectFit: "contain", backgroundColor: "#0a0a1a" }} />
-            : <div style={{ width: "100%", height: "100%", backgroundColor: "#0a0a1a", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            : <div style={{ width: "100%", height: "100%", backgroundColor: "#0a0a1a", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <svg width="48" height="48" viewBox="0 0 40 40" fill="none" stroke="#1e1e5a" strokeWidth="1.5" strokeLinecap="round"><rect x="3" y="10" width="34" height="24" rx="4" /><circle cx="20" cy="22" r="6" /><path d="M14 10l3-4h6l3 4" /></svg>
-                <div style={{ fontSize: 13, color: "#3b4a8a", fontWeight: 600 }}>Connecting to driver cam…</div>
               </div>
           }
         </CameraMaxOverlay>
       )}
+
       <Panel title="Driver Camera" action={
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <StreamBadge connected={connected} label="behaviour analysis" />
@@ -270,86 +283,113 @@ function DriverCamPanel({ busId }) {
         </div>
       }>
         {!collapsed && (
-          <div style={{ width: "100%", aspectRatio: "16/9", background: "#0a0a1a", borderRadius: 8, overflow: "hidden", position: "relative", border: `2px solid ${connected ? "#3b82f6" : "#1e1e3a"}`, boxShadow: connected ? "0 0 14px #3b82f633" : "none" }}>
-            {frameUrl ? (
-              <>
-                <img src={frameUrl} alt="driver cam" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
-                <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(0,0,0,.70)", padding: "3px 9px", borderRadius: 6, fontSize: 10, fontWeight: 700, color: "#e2e8f0" }}>
-                  {busId} · DRIVER
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.1fr) minmax(0,0.9fr)", gap: 14, alignItems: "stretch" }}>
+
+            {/* ── Left: camera feed only ── */}
+            <div style={{ background: "#0a0a1a", borderRadius: 8, overflow: "hidden",
+                          position: "relative", border: `2px solid ${connected ? "#3b82f6" : "#1e1e3a"}`,
+                          boxShadow: connected ? "0 0 10px #3b82f622" : "none",
+                          aspectRatio: "4/3", alignSelf: "start" }}>
+              {frameUrl ? (
+                <>
+                  <img src={frameUrl} alt="driver cam"
+                    style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
+                  <div style={{ position: "absolute", top: 6, left: 6, background: "rgba(0,0,0,.72)",
+                                padding: "2px 8px", borderRadius: 5, fontSize: 9, fontWeight: 700, color: "#e2e8f0" }}>
+                    {busId} · DRIVER
+                  </div>
+                </>
+              ) : camPlaceholder}
+            </div>
+
+            {/* ── Right: status + warnings + metrics + history — matches camera height ── */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, overflow: "hidden",
+                          height: 0, minHeight: "100%" }}>
+
+              {/* Current state badge */}
+              <div style={{ padding: "10px 12px", borderRadius: 9, border: `2px solid ${stateCfg.border}`,
+                            background: stateCfg.bg, display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 20 }}>{state === "focused" ? "✓" : state === "offline" ? "○" : "⚠"}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 9, color: "#6b7280", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em" }}>Driver Status</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: stateCfg.color }}>{stateCfg.label}</div>
                 </div>
-              </>
-            ) : placeholder}
+                {ds && (
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontSize: 9, color: "#9ca3af" }}>Confidence</div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: stateCfg.color }}>{confidence}%</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Active warnings derived from live detections */}
+              {(() => {
+                const warnings = [];
+                if (!faceDetected)  warnings.push({ label: "Face Not Detected",          color: "#dc2626", bg: "#fef2f2", border: "#fecaca" });
+                if (eyesClosed)     warnings.push({ label: "Eyes Closed — Drowsy Risk",  color: "#d97706", bg: "#fffbeb", border: "#fde68a" });
+                if (phoneDetected)  warnings.push({ label: "Phone Detected!",            color: "#7c3aed", bg: "#f5f3ff", border: "#c4b5fd" });
+                if (!seatbeltOn)    warnings.push({ label: "Seatbelt Not Fastened!",     color: "#dc2626", bg: "#fef2f2", border: "#fecaca" });
+                if (gaze && gaze !== "forward" && gaze !== "unknown")
+                                    warnings.push({ label: `Looking ${gaze.charAt(0).toUpperCase() + gaze.slice(1)}`, color: "#ea580c", bg: "#fff7ed", border: "#fed7aa" });
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: ".06em" }}>
+                      Warnings {warnings.length > 0 && <span style={{ color: "#dc2626" }}>({warnings.length})</span>}
+                    </div>
+                    {warnings.length === 0 ? (
+                      <div style={{ padding: "8px 10px", borderRadius: 7, background: "#f0fdf4", border: "1px solid #86efac",
+                                    fontSize: 11, fontWeight: 700, color: "#059669" }}>
+                        ✓ No active warnings
+                      </div>
+                    ) : warnings.map((w, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px",
+                                            background: w.bg, border: `1px solid ${w.border}`, borderRadius: 7 }}>
+                        <span style={{ fontSize: 13, color: w.color, fontWeight: 800, flexShrink: 0 }}>⚠</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: w.color }}>{w.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* Live metrics */}
+              <div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 5 }}>Live Metrics</div>
+                <div style={{ display: "flex", gap: 5 }}>
+                  <MetricBox label="EAR"     value={ear}     warn={ear !== null && ear < 0.22} />
+                  <MetricBox label="PERCLOS" value={perclos} warn={perclos !== null && perclos > 0.15} fmt={v => `${(v * 100).toFixed(0)}%`} />
+                  <MetricBox label="FPS"     value={fps}     warn={fps !== null && fps < 10} fmt={v => v.toFixed(1)} />
+                </div>
+              </div>
+
+              {/* Alert history — fills all remaining height */}
+              <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 5, flexShrink: 0 }}>
+                  Alert History {alertHistory.length > 0 && <span style={{ color: "#d97706" }}>({alertHistory.length})</span>}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3, flex: 1, minHeight: 0, overflowY: "auto" }}>
+                  {alertHistory.length === 0 ? (
+                    <div style={{ fontSize: 11, color: "#d1d5db", fontStyle: "italic" }}>No alerts yet</div>
+                  ) : [...alertHistory].reverse().map((h, i) => {
+                    const cfg = DRIVER_STATE_CFG[h.type] ?? DRIVER_STATE_CFG.focused;
+                    const ts  = h.timestamp ? new Date(h.timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+                    return (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 8px",
+                                            borderRadius: 6, background: cfg.bg, border: `1px solid ${cfg.border}` }}>
+                        <span style={{ width: 5, height: 5, borderRadius: "50%", background: cfg.color, flexShrink: 0 }} />
+                        <span style={{ fontSize: 10, fontWeight: 700, color: cfg.color, flex: 1 }}>{cfg.label}</span>
+                        <span style={{ fontSize: 9, color: "#9ca3af", flexShrink: 0 }}>{ts}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+            </div>
           </div>
         )}
       </Panel>
     </>
-  );
-}
-
-// ── Live passenger count panel ───────────────────────────────────────────────
-function LiveCountPanel({ busId }) {
-  const { counter: counts, events, online, resetCounter } = useCounterData(busId, 2000);
-  const BUS_CAPACITY = 50;
-  const onBus = counts?.on_bus ?? 0;
-  const pct = Math.min(Math.round((onBus / BUS_CAPACITY) * 100), 100);
-  const barColor = pct > 90 ? "#ef5350" : pct > 70 ? "#F59E0B" : "#10B981";
-
-  return (
-    <Panel title="Live passenger count" action={
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: online ? "#10B981" : "#6b7280", display: "inline-block" }} />
-          <span style={{ color: online ? "#059669" : "#6b7280", fontWeight: 600 }}>{online ? "Live" : "Demo"}</span>
-        </span>
-        <span style={{ fontSize: 10, color: "#bbb" }}>{counts?.fps ?? 0} fps</span>
-        <button onClick={resetCounter} style={{ fontSize: 10, color: "#B91C1C", background: "#FEF2F2", border: "none", borderRadius: 6, padding: "3px 8px", cursor: "pointer" }}>Reset</button>
-      </div>
-    }>
-      <div style={{ display: "flex", marginBottom: 14, borderRadius: 8, overflow: "hidden" }}>
-        {[
-          { label: "On bus now", value: onBus,              color: "#2563EB", bg: "#EFF6FF" },
-          { label: "Entered",    value: counts?.entered ?? 0, color: "#059669", bg: "#ECFDF5" },
-          { label: "Exited",     value: counts?.exited  ?? 0, color: "#D97706", bg: "#FFFBEB" },
-        ].map((item, i) => (
-          <div key={item.label} style={{ flex: 1, padding: "12px 8px", background: item.bg, textAlign: "center", borderRight: i < 2 ? "1px solid #fff" : "none" }}>
-            <div style={{ fontSize: 26, fontWeight: 800, color: item.color, lineHeight: 1 }}>{item.value}</div>
-            <div style={{ fontSize: 10, color: item.color, marginTop: 4, fontWeight: 500 }}>{item.label}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#475569", marginBottom: 5 }}>
-          <span>Bus capacity</span>
-          <span style={{ fontWeight: 600, color: barColor }}>{pct}% full</span>
-        </div>
-        <div style={{ height: 10, background: "#f0f0f0", borderRadius: 5, overflow: "hidden" }}>
-          <div style={{ width: `${pct}%`, height: "100%", background: barColor, borderRadius: 5, transition: "width .5s ease" }} />
-        </div>
-        <div style={{ fontSize: 10, color: "#bbb", marginTop: 3, textAlign: "right" }}>{onBus} / {BUS_CAPACITY} seats</div>
-      </div>
-      {counts?.last_event && (
-        <div style={{ padding: "8px 10px", marginBottom: 14, borderRadius: 8, background: counts.last_event.event === "ENTER" ? "#ECFDF5" : "#FFFBEB", display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: counts.last_event.event === "ENTER" ? "#10B981" : "#F59E0B", color: "#fff" }}>{counts.last_event.event}</span>
-          <span style={{ fontSize: 11, color: "#475569" }}>Passenger #{counts.last_event.tid} · {counts.last_event.timestamp?.slice(11, 19)}</span>
-        </div>
-      )}
-      <div style={{ borderTop: "1px solid #f0f0f0", paddingTop: 10 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 6 }}>Recent events</div>
-        <div style={{ maxHeight: 150, overflowY: "auto" }}>
-          {events.length === 0
-            ? <div style={{ fontSize: 11, color: "#bbb", textAlign: "center", padding: "8px 0" }}>No events yet</div>
-            : events.slice(0, 12).map((evt, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", fontSize: 11, borderBottom: i < Math.min(events.length, 12) - 1 ? "1px solid #f7f7f7" : "none" }}>
-                <span style={{ width: 44, textAlign: "center", padding: "1px 0", borderRadius: 8, fontWeight: 700, fontSize: 9, background: evt.event === "ENTER" ? "#ECFDF5" : "#FFFBEB", color: evt.event === "ENTER" ? "#059669" : "#D97706" }}>{evt.event}</span>
-                <span style={{ color: "#64748B" }}>tid #{evt.tid}</span>
-                <span style={{ flex: 1, color: "#bbb", textAlign: "right" }}>{evt.timestamp?.slice(11, 19)}</span>
-                <span style={{ minWidth: 40, textAlign: "right", color: "#2563EB", fontWeight: 600 }}>{evt.on_bus} on bus</span>
-              </div>
-            ))
-          }
-        </div>
-      </div>
-    </Panel>
   );
 }
 
@@ -696,11 +736,7 @@ function OverviewTab({ drivers, selectedBusId, onEdit, onDelete, onViewProfile, 
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <PassengerCamPanel busId={selectedBusId} />
-        <DriverCamPanel busId={selectedBusId} />
-      </div>
-      <LiveCountPanel busId={selectedBusId} />
+      <DriverCamPanel busId={selectedBusId} />
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <input
           placeholder="Search by name or license..."
@@ -1415,13 +1451,27 @@ export default function DriversPage() {
             {drivers.length} total drivers · {drivers.filter((d) => {
               const alert = licenseAlert(d.license_expiry);
               return alert && alert.tier !== "ok";
-            }).length} license alerts · passenger &amp; driver cameras live
+            }).length} license alerts · driver camera live
           </p>
         </div>
         <div style={{ flex: 1 }} />
         {/* Always reserve space so TabNav never shifts position */}
         <div style={{ display: "flex", gap: 10, alignItems: "center", visibility: tab === "Overview" ? "visible" : "hidden", pointerEvents: tab === "Overview" ? "auto" : "none" }}>
           <BusSelector selectedBusId={selectedBusId} onSelect={setSelectedBusId} />
+          <ExportBtn
+            rows={drivers}
+            columns={[
+              { key: "name",           label: "Name"           },
+              { key: "license",        label: "License No."    },
+              { key: "license_expiry", label: "License Expiry" },
+              { key: "phone",          label: "Phone/Email"    },
+              { key: "trips",          label: "Trips"          },
+              { key: "rating",         label: "Rating",        value: r => r.rating ?? "—" },
+              { key: "status",         label: "Status"         },
+            ]}
+            filename={`drivers-${new Date().toISOString().slice(0,10)}.csv`}
+            title="Drivers Report"
+          />
           <button onClick={openAdd} style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", letterSpacing: "-.1px" }}>
             + Add driver
           </button>

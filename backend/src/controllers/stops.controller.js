@@ -30,13 +30,13 @@ export const createStop = async (req, res) => {
     const { stop_name, latitude, longitude } = req.body;
     const pool = await poolPromise;
 
-    await pool.request()
+    const result = await pool.request()
       .input("stop_name", sql.VarChar,       stop_name)
-      .input("latitude",  sql.Decimal(9, 6), latitude)
-      .input("longitude", sql.Decimal(9, 6), longitude)
-      .query("INSERT INTO stops(stop_name,latitude,longitude) VALUES(@stop_name,@latitude,@longitude)");
+      .input("latitude",  sql.Decimal(9, 6), latitude  ?? 33.888)
+      .input("longitude", sql.Decimal(9, 6), longitude ?? 35.495)
+      .query("INSERT INTO stops(stop_name,latitude,longitude) OUTPUT INSERTED.stop_id VALUES(@stop_name,@latitude,@longitude)");
 
-    res.json({ message: "Stop created successfully" });
+    res.status(201).json({ stop_id: result.recordset[0].stop_id, message: "Stop created successfully" });
   } catch (err) {
     console.error("Create stop error:", err);
     res.status(500).json({ error: "Failed to create stop" });

@@ -1,7 +1,7 @@
 import express from "express";
 import {
   getRoutes, getRouteById, updateRoute, createRoute, deleteRoute,
-  getRouteStops, assignStopToRoute, updateStopPosition,
+  getRouteStops, assignStopToRoute, removeStopFromRoute, updateRouteStopOrder, updateStopPosition,
   checkRouteOverlap,
   getWaypoints, saveWaypoints,
   getFareZones, createFareZone, updateFareZone, deleteFareZone,
@@ -216,6 +216,8 @@ router.delete("/:id", requirePermission("routes", "delete"), deleteRoute);
  */
 router.post("/:route_id/stops", assignStopToRoute);
 router.get("/:route_id/stops", getRouteStops);
+router.patch("/:route_id/stops/:stop_id/order", updateRouteStopOrder);
+router.delete("/:route_id/stops/:stop_id", removeStopFromRoute);
 
 // ── Stop position update ──────────────────────────────────────────────────────
 router.put("/stops/:stop_id/position", updateStopPosition);

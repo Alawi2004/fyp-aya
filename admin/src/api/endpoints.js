@@ -56,13 +56,16 @@ export const updateRoute = (id, data) => apiClient.put(`/routes/${id}`, data);
 export const deleteRoute = (id) => apiClient.delete(`/routes/${id}`);
 
 // Stops
-export const getStops           = ()              => apiClient.get('/stops');
-export const getRouteStops      = (routeId)       => apiClient.get(`/routes/${routeId}/stops`);
-export const getStopAmenities   = (stopId)        => apiClient.get(`/stops/${stopId}/amenities`);
-export const updateStopAmenities= (stopId, data)  => apiClient.put(`/stops/${stopId}/amenities`, data);
-export const getStopQR          = (stopId)        => apiClient.get(`/stops/${stopId}/qr`);
-export const checkRouteOverlap  = (routeId)       => apiClient.get(`/routes/${routeId}/overlap`);
-export const updateStopPosition = (stopId, data) => apiClient.put(`/routes/stops/${stopId}/position`, data);
+export const getStops             = ()              => apiClient.get('/stops');
+export const createStop           = (data)          => apiClient.post('/stops', data);
+export const getRouteStops        = (routeId)       => apiClient.get(`/routes/${routeId}/stops`);
+export const removeStopFromRoute    = (routeId, stopId)             => apiClient.delete(`/routes/${routeId}/stops/${stopId}`);
+export const updateRouteStopOrder   = (routeId, stopId, stop_order) => apiClient.patch(`/routes/${routeId}/stops/${stopId}/order`, { stop_order });
+export const getStopAmenities     = (stopId)        => apiClient.get(`/stops/${stopId}/amenities`);
+export const updateStopAmenities  = (stopId, data)  => apiClient.put(`/stops/${stopId}/amenities`, data);
+export const getStopQR            = (stopId)        => apiClient.get(`/stops/${stopId}/qr`);
+export const checkRouteOverlap    = (routeId)       => apiClient.get(`/routes/${routeId}/overlap`);
+export const updateStopPosition   = (stopId, data)  => apiClient.put(`/routes/stops/${stopId}/position`, data);
 
 // Waypoints
 export const getWaypoints     = (routeId)     => apiClient.get(`/routes/${routeId}/waypoints`);

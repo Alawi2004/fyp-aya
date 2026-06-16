@@ -24,6 +24,7 @@ import PassengersPage   from "./pages/PassengersPage";
 import AuditLogPage        from "./pages/AuditLogPage";
 import SystemSettingsPage  from "./pages/SystemSettingsPage";
 import IssuesPage          from "./pages/IssuesPage";
+import RolesPage           from "./pages/RolesPage";
 
 export default function App() {
   return (
@@ -73,6 +74,7 @@ function AppShell() {
     staff:         <StaffPage />,
     complaints:    <ComplaintsPage />,
     issues:        <IssuesPage />,
+    roles:         <RolesPage />,
   };
 
   return (
@@ -270,7 +272,7 @@ function AppShell() {
           <main style={{
             flex: 1,
             overflowY: "auto",
-            padding: "28px 32px 40px",
+            padding: "14px 22px 20px",
             background: "#F8FAFC",
           }}>
             {PAGES[activePage] ?? <DashboardPage onNavigate={setActivePage} />}

@@ -1,5 +1,6 @@
 // pages/TicketsPage.jsx
 import { useState, useEffect } from "react";
+import { ExportBtn } from "../components/ExportBtn";
 import { Panel } from "../components/Panel";
 import { DataTable } from "../components/Table";
 import { StatCard } from "../components/StatCard";
@@ -183,13 +184,32 @@ export default function TicketsPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", margin: 0, letterSpacing: "-.3px" }}>
-          Tickets
-        </h1>
-        <p style={{ fontSize: 12, color: "#64748B", margin: "2px 0 0" }}>
-          All bookings and reservations
-        </p>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", margin: 0, letterSpacing: "-.3px" }}>
+            Tickets
+          </h1>
+          <p style={{ fontSize: 12, color: "#64748B", margin: "2px 0 0" }}>
+            All bookings and reservations
+          </p>
+        </div>
+        <div style={{ flex: 1 }} />
+        <ExportBtn
+          rows={filtered}
+          columns={[
+            { key: "id",        label: "Ticket ID"  },
+            { key: "passenger", label: "Passenger"  },
+            { key: "trip",      label: "Trip"       },
+            { key: "route",     label: "Route"      },
+            { key: "seat",      label: "Seat"       },
+            { key: "date",      label: "Date"       },
+            { key: "time",      label: "Time"       },
+            { key: "amount",    label: "Fare"       },
+            { key: "status",    label: "Status"     },
+          ]}
+          filename={`tickets-${new Date().toISOString().slice(0,10)}.csv`}
+          title="Tickets Report"
+        />
       </div>
 
       {cancelError && (

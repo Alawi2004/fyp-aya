@@ -72,10 +72,8 @@ export function TripModal({ trip, allTrips = [], onClose, onSave, routeOpts = []
 
   async function handleSave() {
     setError(null);
-    if (!form.date || !form.time)  { setError("Date and time are required."); return; }
-    if (!form.route_id)            { setError("Please select a route."); return; }
-    if (!form.driver_id)           { setError("Please select a driver."); return; }
-    if (!form.vehicle_id)          { setError("Please select a vehicle."); return; }
+    if (!form.date || !form.time) { setError("Date and time are required."); return; }
+    if (!form.route_id)           { setError("Please select a route."); return; }
     setSaving(true);
     const err = await onSave(form);
     setSaving(false);

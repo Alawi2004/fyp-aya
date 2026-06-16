@@ -2,13 +2,13 @@ import { useState } from "react";
 import {
   LayoutDashboard, MapPin, Camera, Users, UserCheck, UserRound,
   Bus, GitBranch, CalendarDays, BarChart3,
-  Ticket, Bell, Star, LogOut, ChevronRight, Wallet, Shield, BadgeCheck, MessageSquareWarning, ScrollText, Settings, ClipboardList,
+  Ticket, Bell, Star, ChevronRight, Wallet, Shield, BadgeCheck, MessageSquareWarning, ScrollText, Settings, ClipboardList,
 } from "lucide-react";
 
 const NAV = [
   { section: "Overview" },
   { id: "dashboard",     label: "Dashboard",        icon: LayoutDashboard, badge: null },
-  { id: "live",          label: "Live Tracking",     icon: MapPin,          badge: 8    },
+  { id: "live",          label: "Live Tracking",     icon: MapPin,          badge: null },
   { id: "camera",        label: "Passenger Counter", icon: Camera,          badge: null },
   { section: "People" },
   { id: "users",         label: "All Users",         icon: Users,           badge: null },
@@ -28,6 +28,7 @@ const NAV = [
   { id: "complaints",    label: "Complaints",        icon: MessageSquareWarning,   badge: null },
   { id: "issues",        label: "Issues Inbox",      icon: ClipboardList,          badge: null },
   { section: "Admin" },
+  { id: "roles",     label: "Roles & Permissions", icon: Shield,      badge: null },
   { id: "auditlog",  label: "Audit Log",           icon: ScrollText,  badge: null },
   { id: "settings",  label: "System Settings",     icon: Settings,    badge: null },
 ];
@@ -55,38 +56,6 @@ export default function Sidebar({ activePage, onNavigate, collapsed }) {
       boxShadow: "2px 0 12px rgba(0,0,0,.03)",
     }}>
 
-      {/* ── Logo ── */}
-      <div style={{
-        padding: collapsed ? "18px 0" : "18px 16px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: collapsed ? "center" : "flex-start",
-        gap: 10,
-        borderBottom: "1px solid #F1F5F9",
-        flexShrink: 0,
-        minHeight: 64,
-      }}>
-        <div style={{
-          width: 36, height: 36,
-          borderRadius: 10,
-          background: "linear-gradient(135deg, #2563EB, #1D4ED8)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          boxShadow: "0 4px 14px rgba(37,99,235,.30)",
-          flexShrink: 0,
-        }}>
-          <Bus size={18} color="#fff" strokeWidth={2.2} />
-        </div>
-        {!collapsed && (
-          <div style={{ overflow: "hidden", whiteSpace: "nowrap" }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: "#0F172A", letterSpacing: "-.4px" }}>
-              Yalla Transit
-            </div>
-            <div style={{ fontSize: 10, color: "#2563EB", fontWeight: 600, letterSpacing: ".5px", marginTop: 1 }}>
-              TRANSIT SYSTEM
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* ── Nav ── */}
       <nav style={{ flex: 1, padding: "10px 0", overflowY: "auto", overflowX: "hidden" }}>
@@ -201,61 +170,6 @@ export default function Sidebar({ activePage, onNavigate, collapsed }) {
         })}
       </nav>
 
-      {/* ── User footer ── */}
-      <div style={{
-        padding:    collapsed ? "12px 0" : "10px 12px",
-        borderTop:  "1px solid #F1F5F9",
-        flexShrink: 0,
-      }}>
-        {collapsed ? (
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <div style={{
-              width: 34, height: 34, borderRadius: "50%",
-              background: "linear-gradient(135deg, #2563EB, #7C3AED)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 12, fontWeight: 700, color: "#fff",
-              boxShadow: "0 2px 8px rgba(37,99,235,.25)",
-            }}>
-              AD
-            </div>
-          </div>
-        ) : (
-          <div style={{
-            display:      "flex",
-            alignItems:   "center",
-            gap:          10,
-            padding:      "9px 10px",
-            borderRadius: 10,
-            background:   "#F8FAFC",
-            border:       "1px solid #F1F5F9",
-            cursor:       "pointer",
-            transition:   "background .14s",
-          }}
-            onMouseEnter={e => e.currentTarget.style.background = "#F1F5F9"}
-            onMouseLeave={e => e.currentTarget.style.background = "#F8FAFC"}
-          >
-            <div style={{
-              width: 32, height: 32, borderRadius: "50%",
-              background: "linear-gradient(135deg, #2563EB, #7C3AED)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 11, fontWeight: 700, color: "#fff",
-              flexShrink: 0,
-              boxShadow: "0 2px 6px rgba(37,99,235,.22)",
-            }}>
-              AD
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "#0F172A", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                Admin User
-              </div>
-              <div style={{ fontSize: 10, color: "#94A3B8" }}>
-                Administrator
-              </div>
-            </div>
-            <LogOut size={14} color="#CBD5E1" style={{ flexShrink: 0 }} />
-          </div>
-        )}
-      </div>
     </aside>
   );
 }

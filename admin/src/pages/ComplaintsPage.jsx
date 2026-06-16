@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { ExportBtn } from "../components/ExportBtn";
 import { Panel } from "../components/Panel";
 import { Modal } from "../components/Modal";
 import { StatCard } from "../components/StatCard";
@@ -370,6 +371,21 @@ export default function ComplaintsPage() {
           </p>
         </div>
         <div style={{ flex: 1 }} />
+        <ExportBtn
+          rows={visible}
+          columns={[
+            { key: "id",          label: "ID"          },
+            { key: "title",       label: "Title"       },
+            { key: "category",    label: "Category"    },
+            { key: "priority",    label: "Priority"    },
+            { key: "status",      label: "Status"      },
+            { key: "passenger",   label: "Passenger",  value: r => r.passenger ?? "—" },
+            { key: "created_at",  label: "Submitted",  value: r => r.created_at ? new Date(r.created_at).toLocaleString() : "—" },
+            { key: "assigned_to", label: "Assigned To", value: r => r.assigned_to ?? "—" },
+          ]}
+          filename={`complaints-${new Date().toISOString().slice(0,10)}.csv`}
+          title="Complaints Report"
+        />
         <button onClick={() => setCreateOpen(true)} style={{
           background: "#2563EB", color: "#fff", border: "none",
           borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer",

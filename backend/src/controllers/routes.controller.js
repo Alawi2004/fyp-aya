@@ -159,6 +159,39 @@ export const getRouteStops = async (req, res) => {
   }
 };
 
+export const updateRouteStopOrder = async (req, res) => {
+  try {
+    const { route_id, stop_id } = req.params;
+    const { stop_order } = req.body;
+    if (stop_order == null) return res.status(400).json({ error: "stop_order required" });
+    const pool = await poolPromise;
+    await pool.request()
+      .input("route_id",   sql.Int, route_id)
+      .input("stop_id",    sql.Int, stop_id)
+      .input("stop_order", sql.Int, stop_order)
+      .query("UPDATE route_stops SET stop_order=@stop_order WHERE route_id=@route_id AND stop_id=@stop_id");
+    res.json({ message: "Stop order updated" });
+  } catch (err) {
+    console.error("[updateRouteStopOrder]", err.message);
+    res.status(500).json({ error: "Failed to update stop order" });
+  }
+};
+
+export const removeStopFromRoute = async (req, res) => {
+  try {
+    const { route_id, stop_id } = req.params;
+    const pool = await poolPromise;
+    await pool.request()
+      .input("route_id", sql.Int, route_id)
+      .input("stop_id",  sql.Int, stop_id)
+      .query("DELETE FROM route_stops WHERE route_id=@route_id AND stop_id=@stop_id");
+    res.json({ message: "Stop removed from route" });
+  } catch (err) {
+    console.error("[removeStopFromRoute]", err.message);
+    res.status(500).json({ error: "Failed to remove stop from route" });
+  }
+};
+
 // ── Route overlap detection ───────────────────────────────────────────────────
 
 export const checkRouteOverlap = async (req, res) => {

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Wallet, Plus, Filter, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
+import { ExportBtn } from "../components/ExportBtn";
 import { Modal } from "../components/Modal";
 import { StatCard } from "../components/StatCard";
 import apiClient from "../api/apiClient";
@@ -927,6 +928,18 @@ export default function WalletPage() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <ExportBtn
+            rows={recharges}
+            columns={[
+              { key: "user_name",     label: "Passenger",  value: r => r.user_name ?? "—"                                     },
+              { key: "amount",        label: "Amount",     value: r => `$${parseFloat(r.amount || 0).toFixed(2)}`             },
+              { key: "location_name", label: "Location",   value: r => r.location_name ?? "—"                                 },
+              { key: "tx_ref",        label: "Tx Ref",     value: r => r.tx_ref ?? "—"                                        },
+              { key: "created_at",    label: "Date",       value: r => r.created_at ? new Date(r.created_at).toLocaleString() : "—" },
+            ]}
+            filename={`wallet-recharges-${new Date().toISOString().slice(0,10)}.csv`}
+            title="Wallet Recharges Report"
+          />
           {tab === "recharge" && (
             <button onClick={() => { setForm(EMPTY_FORM); setFormErr({}); setModalOpen(true); }} style={{
               display: "flex", alignItems: "center", gap: 8,

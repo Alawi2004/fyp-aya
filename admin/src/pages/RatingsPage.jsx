@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
+import { Star, MessageSquare, ThumbsUp, ThumbsDown } from "lucide-react";
+import { ExportBtn } from "../components/ExportBtn";
 import { Panel } from "../components/Panel";
 import { StatCard } from "../components/StatCard";
 import { getRatings } from "../api/endpoints";
@@ -195,6 +197,21 @@ export default function RatingsPage() {
           <p style={{ fontSize: 12, color: "#64748B", margin: "2px 0 0" }}>Passenger reviews broken down by driver, route, and passenger</p>
         </div>
         <div style={{ flex: 1 }} />
+        <ExportBtn
+          rows={filtered}
+          columns={[
+            { key: "id",        label: "ID"        },
+            { key: "passenger", label: "Passenger" },
+            { key: "trip",      label: "Trip"      },
+            { key: "route",     label: "Route"     },
+            { key: "driver",    label: "Driver"    },
+            { key: "rating",    label: "Rating"    },
+            { key: "comment",   label: "Comment"   },
+            { key: "date",      label: "Date"      },
+          ]}
+          filename={`ratings-${new Date().toISOString().slice(0,10)}.csv`}
+          title="Ratings & Feedback Report"
+        />
         <TabNav
           tabs={[
             { id: "all",       label: "All Reviews" },
@@ -209,10 +226,10 @@ export default function RatingsPage() {
 
       {/* KPI cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
-        <StatCard label="Avg rating"    value={overallAvg.toFixed(1)} delta="out of 5"       up={overallAvg >= 4} />
-        <StatCard label="Total reviews" value={ratings.length}         delta="all time"        up={null} />
-        <StatCard label="5-star"        value={fiveStars}              delta={`${ratings.length ? Math.round(fiveStars/ratings.length*100) : 0}% of total`} up={true} />
-        <StatCard label="1–2 star"      value={lowStars}               delta="need attention"  up={lowStars === 0} accent="#EF4444" />
+        <StatCard label="Avg rating"    value={overallAvg.toFixed(1)} delta="out of 5"       up={overallAvg >= 4} accent="#F59E0B" icon={<Star size={18} color="#F59E0B" />} />
+        <StatCard label="Total reviews" value={ratings.length}         delta="all time"        accent="#2563EB" icon={<MessageSquare size={18} color="#2563EB" />} />
+        <StatCard label="5-star"        value={fiveStars}              delta={`${ratings.length ? Math.round(fiveStars/ratings.length*100) : 0}% of total`} up={true} accent="#10B981" icon={<ThumbsUp size={18} color="#10B981" />} />
+        <StatCard label="1–2 star"      value={lowStars}               delta="need attention"  up={lowStars === 0} accent="#EF4444" icon={<ThumbsDown size={18} color="#EF4444" />} />
       </div>
 
       {/* ── All Reviews ── */}

@@ -13,19 +13,33 @@ export const getTripsDashboard = async (req, res) => {
 export const getDashboardStats = async (req, res) => {
   try {
     const pool = await poolPromise;
-    const [usersResult, tripsResult, vehiclesResult, allVehiclesResult, ratingsResult] = await Promise.all([
+    const [usersR, tripsR, vehiclesR, allVehiclesR, ratingsR, revenueR, complaintsR, driversR] = await Promise.all([
       pool.request().query("SELECT COUNT(*) AS total FROM users"),
       pool.request().query("SELECT COUNT(*) AS total FROM trips WHERE LOWER(status) IN ('ongoing','active')"),
       pool.request().query("SELECT COUNT(*) AS total FROM vehicles WHERE LOWER(status)='active'"),
       pool.request().query("SELECT COUNT(*) AS total FROM vehicles WHERE status != 'deleted'"),
       pool.request().query("SELECT AVG(CAST(rating AS FLOAT)) AS avg_rating FROM ratings"),
+      pool.request().query(`
+        SELECT ISNULL(SUM(amount), 0) AS total
+        FROM wallet_transactions
+        WHERE type = 'debit'
+          AND CAST(created_at AS DATE) = CAST(GETUTCDATE() AS DATE)
+      `),
+      pool.request().query(`
+        SELECT COUNT(*) AS total FROM complaints
+        WHERE LOWER(status) NOT IN ('resolved', 'closed')
+      `),
+      pool.request().query("SELECT COUNT(*) AS total FROM drivers WHERE is_deleted = 0"),
     ]);
     res.json({
-      totalUsers:     usersResult.recordset[0].total,
-      activeTrips:    tripsResult.recordset[0].total,
-      activeVehicles: vehiclesResult.recordset[0].total,
-      totalVehicles:  allVehiclesResult.recordset[0].total,
-      avgRating:      ratingsResult.recordset[0].avg_rating || 0,
+      totalUsers:        usersR.recordset[0].total,
+      activeTrips:       tripsR.recordset[0].total,
+      activeVehicles:    vehiclesR.recordset[0].total,
+      totalVehicles:     allVehiclesR.recordset[0].total,
+      avgRating:         ratingsR.recordset[0].avg_rating || 0,
+      todayRevenue:      Number(revenueR.recordset[0].total) || 0,
+      pendingComplaints: complaintsR.recordset[0].total,
+      totalDrivers:      driversR.recordset[0].total,
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch dashboard stats" });
@@ -54,7 +68,7 @@ export const getDashboardOverview = async (req, res) => {
         // 1. Active / non-completed trips
         pool.request().query(`
           SELECT TOP 5
-            t.trip_id, t.status, t.start_time,
+            t.trip_id, t.route_id, t.status, t.start_time,
             r.route_name, r.start_location, r.end_location,
             u.full_name AS driver_name,
             v.plate_number, v.capacity,
@@ -165,8 +179,9 @@ export const getDashboardOverview = async (req, res) => {
       const pax = t.passengers ?? 0;
       const st  = t.start_time ? new Date(t.start_time) : null;
       return {
-        id:     `TRP-${String(t.trip_id).padStart(3, "0")}`,
-        route:  t.route_name ?? "—",
+        id:       `TRP-${String(t.trip_id).padStart(3, "0")}`,
+        route_id: t.route_id ?? null,
+        route:    t.route_name ?? "—",
         name:   (t.start_location && t.end_location)
                   ? `${t.start_location} → ${t.end_location}`
                   : t.route_name ?? "—",

@@ -1,26 +1,30 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import apiClient from "../api/apiClient";
+import { getRouteStops, updateRouteStopOrder, removeStopFromRoute } from "../api/endpoints";
 
-// ── Custom div-icons (avoids Vite default-icon path issue) ────────────────────
+// ── Custom div-icons ───────────────────────────────────────────────────────────
 
-const makeStopIcon = (order) =>
-  L.divIcon({
+const makeStopIcon = (order, isFirst, isLast) => {
+  const color = isFirst ? '#10B981' : isLast ? '#EF4444' : '#2563EB';
+  const size  = (isFirst || isLast) ? 22 : 18;
+  return L.divIcon({
     html: `<div style="
-      width:26px;height:26px;border-radius:50%;
-      background:#2563EB;border:3px solid #fff;
+      width:${size}px;height:${size}px;border-radius:50%;
+      background:#fff;border:2.5px solid ${color};
       box-shadow:0 2px 8px rgba(0,0,0,.3);
       display:flex;align-items:center;justify-content:center;
-      font-size:10px;font-weight:800;color:#fff;
+      font-size:9px;font-weight:800;color:${color};
       font-family:Inter,system-ui,sans-serif;
     ">${order}</div>`,
     className: "",
-    iconSize: [26, 26],
-    iconAnchor: [13, 13],
+    iconSize:   [size, size],
+    iconAnchor: [size / 2, size / 2],
   });
+};
 
 const waypointIcon = L.divIcon({
   html: `<div style="
@@ -29,22 +33,24 @@ const waypointIcon = L.divIcon({
     box-shadow:0 1px 4px rgba(0,0,0,.25);
   "></div>`,
   className: "",
-  iconSize: [12, 12],
+  iconSize:   [12, 12],
   iconAnchor: [6, 6],
 });
 
-// ── Click handler: adds waypoints when add-mode is on ─────────────────────────
+// ── Map click handler ──────────────────────────────────────────────────────────
 
-function MapClickHandler({ active, onAdd }) {
+// mode: "waypoint" | "stop" | null
+function MapClickHandler({ mode, onWaypointClick, onStopClick }) {
   useMapEvents({
     click(e) {
-      if (active) onAdd(e.latlng.lat, e.latlng.lng);
+      if (mode === "waypoint") onWaypointClick(e.latlng.lat, e.latlng.lng);
+      else if (mode === "stop") onStopClick(e.latlng.lat, e.latlng.lng);
     },
   });
   return null;
 }
 
-// ── Default coords spread across Beirut when stops have no coordinates ─────────
+// ── Default positions spread across Beirut ────────────────────────────────────
 
 function defaultPos(index, total) {
   const s = { lat: 33.892, lng: 35.503 };
@@ -54,27 +60,45 @@ function defaultPos(index, total) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  RouteMapEditor — rendered as a portal into document.body so it reliably
-//  covers the full viewport regardless of the parent stacking context.
+//  RouteMapEditor
 // ══════════════════════════════════════════════════════════════════════════════
 
 export default function RouteMapEditor({ route, onClose, onSaved }) {
-  const [stops,     setStops]     = useState([]);
-  const [waypoints, setWaypoints] = useState([]);
-  const [addMode,   setAddMode]   = useState(false);
-  const [saving,    setSaving]    = useState(false);
-  const [toast,     setToast]     = useState(null);
+  const [stops,      setStops]      = useState([]);
+  const [waypoints,  setWaypoints]  = useState([]);
+  const [mode,       setMode]       = useState(null); // "waypoint" | "stop" | null
+  const [saving,     setSaving]     = useState(false);
+  const [toast,      setToast]      = useState(null);
 
+  // Pending stop: set when user clicks the map in "stop" mode
+  const [pendingPos,  setPendingPos]  = useState(null); // { lat, lng }
+  const [pendingName, setPendingName] = useState("");
+  const [addingStop,  setAddingStop]  = useState(false);
+  const nameInputRef = useRef(null);
+
+  // Load stops + waypoints fresh from the API
   useEffect(() => {
-    const raw = route.stops ?? [];
-    const normalised = raw.map((s, i) => ({
-      id:    s.id ?? s.stop_id ?? i,
-      name:  s.name ?? s.stop_name ?? `Stop ${i + 1}`,
-      lat:   parseFloat(s.latitude  ?? s.lat)  || defaultPos(i, raw.length).lat,
-      lng:   parseFloat(s.longitude ?? s.lng)  || defaultPos(i, raw.length).lng,
-      order: s.order ?? s.stop_order ?? i,
-    }));
-    setStops(normalised.sort((a, b) => a.order - b.order));
+    getRouteStops(route.id)
+      .then(data => {
+        const raw = data || [];
+        setStops(raw.map((s, i) => ({
+          id:    s.stop_id ?? i,
+          name:  s.stop_name ?? s.name ?? `Stop ${i + 1}`,
+          lat:   parseFloat(s.latitude  ?? s.lat)  || defaultPos(i, raw.length).lat,
+          lng:   parseFloat(s.longitude ?? s.lng)  || defaultPos(i, raw.length).lng,
+          order: s.stop_order ?? s.order ?? i,
+        })).sort((a, b) => a.order - b.order));
+      })
+      .catch(() => {
+        const raw = route.stops ?? [];
+        setStops(raw.map((s, i) => ({
+          id:    s.id ?? s.stop_id ?? i,
+          name:  s.name ?? s.stop_name ?? `Stop ${i + 1}`,
+          lat:   parseFloat(s.latitude  ?? s.lat)  || defaultPos(i, raw.length).lat,
+          lng:   parseFloat(s.longitude ?? s.lng)  || defaultPos(i, raw.length).lng,
+          order: s.order ?? s.stop_order ?? i,
+        })).sort((a, b) => a.order - b.order));
+      });
 
     apiClient.get(`/routes/${route.id}/waypoints`)
       .then(data => setWaypoints((data || []).map(w => ({
@@ -82,27 +106,124 @@ export default function RouteMapEditor({ route, onClose, onSaved }) {
         lng: parseFloat(w.longitude),
       }))))
       .catch(() => setWaypoints([]));
-  }, [route]);
+  }, [route.id]);
+
+  // Auto-focus the name input when a pending stop position is set
+  useEffect(() => {
+    if (pendingPos) setTimeout(() => nameInputRef.current?.focus(), 50);
+  }, [pendingPos]);
 
   const center = stops.length
     ? [stops.reduce((s, p) => s + p.lat, 0) / stops.length,
        stops.reduce((s, p) => s + p.lng, 0) / stops.length]
     : [33.888, 35.495];
 
-  const moveStop = useCallback((id, lat, lng) =>
+  const moveStop     = useCallback((id, lat, lng) =>
     setStops(prev => prev.map(s => s.id === id ? { ...s, lat, lng } : s)), []);
-
-  const addWaypoint = useCallback((lat, lng) =>
+  const addWaypoint  = useCallback((lat, lng) =>
     setWaypoints(prev => [...prev, { lat, lng }]), []);
-
   const moveWaypoint = useCallback((i, lat, lng) =>
     setWaypoints(prev => prev.map((w, idx) => idx === i ? { lat, lng } : w)), []);
-
   const deleteWaypoint = useCallback((i) =>
     setWaypoints(prev => prev.filter((_, idx) => idx !== i)), []);
 
+  // Remove a stop from the route and re-number the rest
+  async function removeStop(stopId) {
+    try {
+      await removeStopFromRoute(route.id, stopId);
+      setStops(prev => {
+        const renumbered = prev
+          .filter(s => s.id !== stopId)
+          .map((s, i) => ({ ...s, order: i + 1 }));
+        // Update orders in DB for any stop that shifted
+        prev.filter(s => s.id !== stopId).forEach((s, i) => {
+          if (s.order !== i + 1) updateRouteStopOrder(route.id, s.id, i + 1).catch(() => {});
+        });
+        return renumbered;
+      });
+      showToast("Stop removed");
+    } catch (e) {
+      showToast("Failed to remove stop: " + e.message);
+    }
+  }
+
+  // Swap a stop with its neighbour (direction: -1 = up, +1 = down)
+  async function shiftStop(index, direction) {
+    const other = index + direction;
+    if (other < 0 || other >= stops.length) return;
+    const a = stops[index];
+    const b = stops[other];
+    // Swap orders optimistically
+    setStops(prev =>
+      prev.map(s => {
+        if (s.id === a.id) return { ...s, order: b.order };
+        if (s.id === b.id) return { ...s, order: a.order };
+        return s;
+      }).sort((x, y) => x.order - y.order)
+    );
+    // Persist both orders
+    await Promise.all([
+      updateRouteStopOrder(route.id, a.id, b.order),
+      updateRouteStopOrder(route.id, b.id, a.order),
+    ]).catch(e => showToast("Reorder failed: " + e.message));
+  }
+
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
 
+  // Called when user clicks the map in "stop" mode
+  function handleStopClick(lat, lng) {
+    setPendingPos({ lat, lng });
+    setPendingName("");
+  }
+
+  // Confirm the pending stop: create in DB, assign to route, update local state.
+  // When 2+ stops already exist the new stop is inserted before the terminal (last stop).
+  async function confirmAddStop() {
+    if (!pendingName.trim() || addingStop) return;
+    setAddingStop(true);
+    try {
+      const terminal     = stops.length >= 2 ? stops[stops.length - 1] : null;
+      const insertOrder  = terminal ? terminal.order : stops.length + 1;
+
+      const res = await apiClient.post("/stops", {
+        stop_name: pendingName.trim(),
+        latitude:  pendingPos.lat,
+        longitude: pendingPos.lng,
+      });
+      await apiClient.post(`/routes/${route.id}/stops`, {
+        stop_id:    res.stop_id,
+        stop_order: insertOrder,
+      });
+
+      // Bump the terminal so it stays last
+      if (terminal) {
+        await updateRouteStopOrder(route.id, terminal.id, terminal.order + 1);
+      }
+
+      setStops(prev => {
+        const updated = terminal
+          ? prev.map(s => s.id === terminal.id ? { ...s, order: s.order + 1 } : s)
+          : prev;
+        return [...updated, {
+          id:    res.stop_id,
+          name:  pendingName.trim(),
+          lat:   pendingPos.lat,
+          lng:   pendingPos.lng,
+          order: insertOrder,
+        }].sort((a, b) => a.order - b.order);
+      });
+
+      setPendingPos(null);
+      setPendingName("");
+      showToast("Stop added");
+    } catch (e) {
+      showToast("Failed to add stop: " + e.message);
+    } finally {
+      setAddingStop(false);
+    }
+  }
+
+  // Save stop positions + waypoints
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -119,22 +240,26 @@ export default function RouteMapEditor({ route, onClose, onSaved }) {
     }
   };
 
-  const stopLine   = stops.map(s => [s.lat, s.lng]);
-  const allPoints  = [...stopLine, ...waypoints.map(w => [w.lat, w.lng])];
+  function toggleMode(m) {
+    setMode(prev => prev === m ? null : m);
+    setPendingPos(null);
+  }
 
-  // ── Rendered as a portal into document.body ──────────────────────────────────
+  const stopLine = stops.map(s => [s.lat, s.lng]);
+
   return createPortal(
     <div style={{
       position: "fixed", inset: 0, zIndex: 9999,
       display: "flex", flexDirection: "column",
       background: "#fff", fontFamily: "'Inter', system-ui, sans-serif",
     }}>
+
       {/* Toast */}
       {toast && (
         <div style={{
           position: "absolute", top: 72, left: "50%", transform: "translateX(-50%)",
           background: "#1E293B", color: "#fff", borderRadius: 8,
-          padding: "10px 20px", fontSize: 13, fontWeight: 600, zIndex: 10,
+          padding: "10px 20px", fontSize: 13, fontWeight: 600, zIndex: 10000,
           boxShadow: "0 4px 16px rgba(0,0,0,.2)",
         }}>{toast}</div>
       )}
@@ -142,7 +267,7 @@ export default function RouteMapEditor({ route, onClose, onSaved }) {
       {/* Toolbar */}
       <div style={{
         height: 56, background: "#fff", borderBottom: "1px solid #E2E8F0",
-        display: "flex", alignItems: "center", padding: "0 20px", gap: 12, flexShrink: 0,
+        display: "flex", alignItems: "center", padding: "0 20px", gap: 10, flexShrink: 0,
         boxShadow: "0 1px 4px rgba(0,0,0,.06)",
       }}>
         <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748B", fontSize: 22, lineHeight: 1, padding: "0 8px 0 0" }}>←</button>
@@ -156,19 +281,31 @@ export default function RouteMapEditor({ route, onClose, onSaved }) {
           </div>
         </div>
 
-        <button onClick={() => setAddMode(m => !m)} style={{
+        {/* Add Stop mode */}
+        <button onClick={() => toggleMode("stop")} style={{
           padding: "7px 14px", borderRadius: 8,
-          border: `1.5px solid ${addMode ? "#2563EB" : "#E2E8F0"}`,
-          background: addMode ? "#EFF6FF" : "#fff",
-          color: addMode ? "#2563EB" : "#374151",
+          border: `1.5px solid ${mode === "stop" ? "#10B981" : "#E2E8F0"}`,
+          background: mode === "stop" ? "#ECFDF5" : "#fff",
+          color: mode === "stop" ? "#059669" : "#374151",
           fontWeight: 600, fontSize: 13, cursor: "pointer",
         }}>
-          {addMode ? "✓ Click map to add" : "+ Add Waypoint"}
+          {mode === "stop" ? "✓ Click to place stop" : "+ Add Stop"}
+        </button>
+
+        {/* Add Waypoint mode */}
+        <button onClick={() => toggleMode("waypoint")} style={{
+          padding: "7px 14px", borderRadius: 8,
+          border: `1.5px solid ${mode === "waypoint" ? "#2563EB" : "#E2E8F0"}`,
+          background: mode === "waypoint" ? "#EFF6FF" : "#fff",
+          color: mode === "waypoint" ? "#2563EB" : "#374151",
+          fontWeight: 600, fontSize: 13, cursor: "pointer",
+        }}>
+          {mode === "waypoint" ? "✓ Click to add waypoint" : "+ Add Waypoint"}
         </button>
 
         {waypoints.length > 0 && (
           <button onClick={() => setWaypoints([])} style={{ padding: "7px 12px", borderRadius: 8, border: "1px solid #FECACA", background: "#FEF2F2", color: "#DC2626", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-            Clear ({waypoints.length})
+            Clear waypoints ({waypoints.length})
           </button>
         )}
 
@@ -184,16 +321,68 @@ export default function RouteMapEditor({ route, onClose, onSaved }) {
       {/* Body */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
 
-        {/* Map — height must be explicit for Leaflet to initialize */}
+        {/* Map */}
         <div style={{ flex: 1, position: "relative", height: "calc(100vh - 56px)" }}>
-          {addMode && (
+
+          {/* Mode hint banner */}
+          {mode && !pendingPos && (
             <div style={{
               position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)",
-              background: "#2563EB", color: "#fff", borderRadius: 20,
+              background: mode === "stop" ? "#059669" : "#2563EB", color: "#fff", borderRadius: 20,
               padding: "5px 16px", fontSize: 12, fontWeight: 600, zIndex: 1000,
               pointerEvents: "none",
             }}>
-              Click anywhere to add a waypoint
+              {mode === "stop" ? "Click the map to place a new stop" : "Click anywhere to add a waypoint"}
+            </div>
+          )}
+
+          {/* Pending stop name form */}
+          {pendingPos && (
+            <div style={{
+              position: "absolute", top: "50%", left: "50%",
+              transform: "translate(-50%, -50%)",
+              zIndex: 2000, background: "#fff", borderRadius: 12,
+              padding: "20px 22px", boxShadow: "0 8px 32px rgba(0,0,0,.22)",
+              minWidth: 280, border: "1px solid #E2E8F0",
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 4 }}>Name this stop</div>
+              <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 12 }}>
+                {pendingPos.lat.toFixed(5)}, {pendingPos.lng.toFixed(5)}
+              </div>
+              <input
+                ref={nameInputRef}
+                placeholder="e.g. Hamra Street"
+                value={pendingName}
+                onChange={e => setPendingName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === "Enter") confirmAddStop();
+                  if (e.key === "Escape") { setPendingPos(null); setPendingName(""); }
+                }}
+                style={{
+                  width: "100%", padding: "9px 12px",
+                  border: "1px solid #E2E8F0", borderRadius: 8,
+                  fontSize: 13, boxSizing: "border-box", marginBottom: 14, outline: "none",
+                }}
+              />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => { setPendingPos(null); setPendingName(""); }}
+                  style={{ flex: 1, padding: "8px", borderRadius: 7, border: "1px solid #E2E8F0", background: "#fff", fontSize: 13, cursor: "pointer" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmAddStop}
+                  disabled={!pendingName.trim() || addingStop}
+                  style={{
+                    flex: 1, padding: "8px", borderRadius: 7, border: "none",
+                    background: !pendingName.trim() || addingStop ? "#93C5FD" : "#059669",
+                    color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                  }}
+                >
+                  {addingStop ? "Adding…" : "Add Stop"}
+                </button>
+              </div>
             </div>
           )}
 
@@ -201,25 +390,34 @@ export default function RouteMapEditor({ route, onClose, onSaved }) {
             center={center}
             zoom={13}
             style={{ height: "100%", width: "100%" }}
+            attributionControl={false}
           >
             <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution="© OpenStreetMap contributors"
+              url="https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+              subdomains="0123"
+              maxZoom={20}
             />
-            <MapClickHandler active={addMode} onAdd={addWaypoint} />
+            <MapClickHandler
+              mode={pendingPos ? null : mode}
+              onWaypointClick={addWaypoint}
+              onStopClick={handleStopClick}
+            />
 
-            {/* Route line through stops */}
+            {/* Route polyline */}
             {stopLine.length > 1 && (
-              <Polyline positions={stopLine} color="#2563EB" weight={4} opacity={0.85} />
+              <>
+                <Polyline positions={stopLine} color="#93C5FD" weight={7} opacity={0.35} />
+                <Polyline positions={stopLine} color="#2563EB" weight={4} opacity={0.9} dashArray="12 6" />
+              </>
             )}
 
-            {/* Stop markers — draggable, use e.target in dragend (no ref needed) */}
+            {/* Stop markers — draggable */}
             {stops.map((stop, i) => (
               <Marker
                 key={stop.id}
                 position={[stop.lat, stop.lng]}
                 draggable
-                icon={makeStopIcon(i + 1)}
+                icon={makeStopIcon(i + 1, i === 0, i === stops.length - 1)}
                 eventHandlers={{
                   dragend(e) {
                     const { lat, lng } = e.target.getLatLng();
@@ -245,9 +443,7 @@ export default function RouteMapEditor({ route, onClose, onSaved }) {
                     const { lat, lng } = e.target.getLatLng();
                     moveWaypoint(i, lat, lng);
                   },
-                  contextmenu() {
-                    deleteWaypoint(i);
-                  },
+                  contextmenu() { deleteWaypoint(i); },
                 }}
               >
                 <Tooltip direction="top" offset={[0, -8]}>
@@ -259,17 +455,61 @@ export default function RouteMapEditor({ route, onClose, onSaved }) {
         </div>
 
         {/* Sidebar */}
-        <div style={{ width: 220, borderLeft: "1px solid #E2E8F0", background: "#F8FAFC", overflowY: "auto", flexShrink: 0 }}>
-          <div style={{ padding: "14px 14px 8px", borderBottom: "1px solid #F1F5F9" }}>
+        <div style={{ width: 260, borderLeft: "1px solid #E2E8F0", background: "#F8FAFC", overflowY: "auto", flexShrink: 0 }}>
+
+          <div style={{ padding: "14px 14px 10px", borderBottom: "1px solid #F1F5F9" }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>
               Stops ({stops.length})
             </div>
-            {stops.map((s, i) => (
-              <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "6px 8px", borderRadius: 7, marginBottom: 3, background: "#fff", border: "1px solid #E2E8F0" }}>
-                <div style={{ width: 18, height: 18, borderRadius: "50%", background: "#2563EB", color: "#fff", fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i + 1}</div>
-                <span style={{ fontSize: 11, color: "#374151", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
-              </div>
-            ))}
+            {stops.length === 0
+              ? <p style={{ fontSize: 11, color: "#94A3B8" }}>None yet. Click "+ Add Stop" then click the map.</p>
+              : stops.map((s, i) => (
+                <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 6px", borderRadius: 7, marginBottom: 3, background: "#fff", border: "1px solid #E2E8F0" }}>
+                  {/* Colour dot */}
+                  <div style={{
+                    width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
+                    background: i === 0 ? "#10B981" : i === stops.length - 1 ? "#EF4444" : "#2563EB",
+                    color: "#fff", fontSize: 9, fontWeight: 800,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>{i + 1}</div>
+
+                  {/* Name */}
+                  <span style={{ fontSize: 11, color: "#374151", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+
+                  {/* Reorder up */}
+                  <button
+                    onClick={() => shiftStop(i, -1)}
+                    disabled={i === 0}
+                    title="Move up"
+                    style={{
+                      background: "none", border: "none", cursor: i === 0 ? "default" : "pointer",
+                      color: i === 0 ? "#CBD5E1" : "#64748B", fontSize: 12, lineHeight: 1, padding: "2px 3px",
+                    }}
+                  >▲</button>
+
+                  {/* Reorder down */}
+                  <button
+                    onClick={() => shiftStop(i, 1)}
+                    disabled={i === stops.length - 1}
+                    title="Move down"
+                    style={{
+                      background: "none", border: "none", cursor: i === stops.length - 1 ? "default" : "pointer",
+                      color: i === stops.length - 1 ? "#CBD5E1" : "#64748B", fontSize: 12, lineHeight: 1, padding: "2px 3px",
+                    }}
+                  >▼</button>
+
+                  {/* Remove */}
+                  <button
+                    onClick={() => removeStop(s.id)}
+                    title="Remove stop from route"
+                    style={{
+                      background: "none", border: "none", cursor: "pointer",
+                      color: "#EF4444", fontSize: 14, lineHeight: 1, padding: "2px 3px",
+                    }}
+                  >×</button>
+                </div>
+              ))
+            }
           </div>
 
           <div style={{ padding: "12px 14px", borderBottom: "1px solid #F1F5F9" }}>
@@ -277,7 +517,7 @@ export default function RouteMapEditor({ route, onClose, onSaved }) {
               Waypoints ({waypoints.length})
             </div>
             {waypoints.length === 0
-              ? <p style={{ fontSize: 11, color: "#94A3B8" }}>None yet. Enable "Add Waypoint" then click the map.</p>
+              ? <p style={{ fontSize: 11, color: "#94A3B8" }}>None yet. Enable "+ Add Waypoint" then click the map.</p>
               : waypoints.map((wp, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", borderRadius: 7, marginBottom: 3, background: "#fff", border: "1px solid #E2E8F0" }}>
                   <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#64748B", flexShrink: 0 }} />
@@ -288,16 +528,18 @@ export default function RouteMapEditor({ route, onClose, onSaved }) {
             }
           </div>
 
-          <div style={{ padding: "12px 14px", fontSize: 11, color: "#94A3B8", lineHeight: 1.6 }}>
+          <div style={{ padding: "12px 14px", fontSize: 11, color: "#94A3B8", lineHeight: 1.7 }}>
             <strong style={{ color: "#475569" }}>Tips:</strong><br />
-            • Drag blue stop markers to reposition GPS<br />
-            • Click "+ Add Waypoint" then click map to add path points<br />
+            • <strong style={{ color: "#059669" }}>+ Add Stop</strong> → click map → name it<br />
+            • ▲ ▼ to reorder · × to remove a stop<br />
+            • <strong style={{ color: "#2563EB" }}>+ Add Waypoint</strong> → shapes the road path<br />
+            • Drag any marker to reposition it<br />
             • Right-click a waypoint to delete it<br />
-            • Hit "Save" when done
+            • <strong style={{ color: "#0F172A" }}>Save</strong> to persist positions + waypoints
           </div>
         </div>
       </div>
     </div>,
-    document.body   // ← portal target
+    document.body
   );
 }

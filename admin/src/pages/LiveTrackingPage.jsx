@@ -1,6 +1,6 @@
 // pages/LiveTrackingPage.jsx
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { getTripGpsLogs, getGpsHeatmap, getLiveGps, getTrips } from '../api/endpoints';
+import { getTripGpsLogs, getGpsHeatmap, getLiveGps, getTrips, getWaypoints, getRouteStops } from '../api/endpoints';
 
 // ── WebSocket GPS stream (admin "subscribe_all") ──────────────────────────────
 const WS_URL = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api')
@@ -46,214 +46,8 @@ import { createPortal } from 'react-dom';
 import { StatusPill } from '../components/StatusPill';
 import LiveMap from '../components/map/LiveMap';
 
-// ─── Route paths (real Lebanese road coordinates) ────────────────────────────
-// Each path is an array of [lat, lng] waypoints along Lebanese highways
+// ─── Mock bus data removed — using real backend data only ────────────────────
 
-const ROUTES = [
-  {
-    name: 'Route 12A',
-    label: 'Beirut ↔ Jounieh',
-    path: [
-      [33.8938, 35.5018], // Beirut
-      [33.9100, 35.5150],
-      [33.9280, 35.5340],
-      [33.9450, 35.5620],
-      [33.9566, 35.5901],
-      [33.9700, 35.6050],
-      [33.9806, 35.6178], // Jounieh
-    ],
-  },
-  {
-    name: 'Route 7B',
-    label: 'Beirut ↔ Byblos',
-    path: [
-      [33.8938, 35.5018], // Beirut
-      [33.9280, 35.5340],
-      [33.9806, 35.6178], // Jounieh
-      [34.0300, 35.6350],
-      [34.0800, 35.6440],
-      [34.1208, 35.6484], // Byblos
-    ],
-  },
-  {
-    name: 'Route 3C',
-    label: 'Beirut ↔ Zahlé',
-    path: [
-      [33.8938, 35.5018], // Beirut
-      [33.8800, 35.5500],
-      [33.8700, 35.6200],
-      [33.8600, 35.7200],
-      [33.8520, 35.8200],
-      [33.8481, 35.9019], // Zahlé
-    ],
-  },
-  {
-    name: 'Route 5D',
-    label: 'Beirut ↔ Sidon',
-    path: [
-      [33.8938, 35.5018], // Beirut
-      [33.8600, 35.4900],
-      [33.8200, 35.4600],
-      [33.7400, 35.4300],
-      [33.6500, 35.4000],
-      [33.5614, 35.3670], // Sidon
-    ],
-  },
-  {
-    name: 'Route 9E',
-    label: 'Beirut ↔ Batroun',
-    path: [
-      [33.8938, 35.5018], // Beirut
-      [33.9806, 35.6178], // Jounieh
-      [34.1208, 35.6484], // Byblos
-      [34.1800, 35.6530],
-      [34.2200, 35.6560],
-      [34.2567, 35.6578], // Batroun
-    ],
-  },
-];
-
-// ─── Mock bus data with real Lebanese coordinates ─────────────────────────────
-
-const INITIAL_BUSES = [
-  {
-    id: 'TRP-041',
-    route: 'Route 12A',
-    routeLabel: 'Beirut → Jounieh',
-    driver: 'Karim Moussa',
-    vehicle: 'BUS-01',
-    status: 'Ongoing',
-    seats: '24/30',
-    passengerCount: 24,
-    capacity: 30,
-    speed: 42,
-    lat: 33.9450,
-    lng: 35.5620,
-    eta: '14:15',
-    // direction: small delta applied each tick to simulate movement
-    _dlat:  0.00012,
-    _dlng:  0.00018,
-  },
-  {
-    id: 'TRP-038',
-    route: 'Route 7B',
-    routeLabel: 'Jounieh → Byblos',
-    driver: 'Lara Abi Nader',
-    vehicle: 'BUS-05',
-    status: 'Delayed',
-    seats: '18/20',
-    passengerCount: 18,
-    capacity: 20,
-    speed: 15,
-    lat: 34.0300,
-    lng: 35.6350,
-    eta: '14:42',
-    _dlat:  0.00004,
-    _dlng:  0.00006,
-  },
-  {
-    id: 'TRP-029',
-    route: 'Route 3C',
-    routeLabel: 'Beirut → Zahlé',
-    driver: 'Joe Pharaon',
-    vehicle: 'BUS-09',
-    status: 'Ongoing',
-    seats: '40/40',
-    passengerCount: 40,
-    capacity: 40,
-    speed: 55,
-    lat: 33.8650,
-    lng: 35.7200,
-    eta: '13:58',
-    _dlat: -0.00008,
-    _dlng:  0.00020,
-  },
-  {
-    id: 'TRP-033',
-    route: 'Route 5D',
-    routeLabel: 'Beirut Terminal',
-    driver: 'Maya Salameh',
-    vehicle: 'BUS-02',
-    status: 'Scheduled',
-    seats: '11/30',
-    passengerCount: 11,
-    capacity: 30,
-    speed: 0,
-    lat: 33.8938,
-    lng: 35.5018,
-    eta: '14:30',
-    _dlat: 0,
-    _dlng: 0,
-  },
-  {
-    id: 'TRP-045',
-    route: 'Route 9E',
-    routeLabel: 'Byblos → Batroun',
-    driver: 'Rami Khoury',
-    vehicle: 'BUS-11',
-    status: 'Ongoing',
-    seats: '22/30',
-    passengerCount: 22,
-    capacity: 30,
-    speed: 38,
-    lat: 34.1800,
-    lng: 35.6530,
-    eta: '15:05',
-    _dlat:  0.00010,
-    _dlng:  0.00005,
-  },
-  {
-    id: 'TRP-041B',
-    route: 'Route 12A',
-    routeLabel: 'Jounieh → Beirut',
-    driver: 'Hassan Nasser',
-    vehicle: 'BUS-03',
-    status: 'Ongoing',
-    seats: '19/30',
-    passengerCount: 19,
-    capacity: 30,
-    speed: 48,
-    lat: 33.9806,
-    lng: 35.6178,
-    eta: '14:20',
-    _dlat: -0.00014,
-    _dlng: -0.00020,
-  },
-  {
-    id: 'TRP-047',
-    route: 'Route 3C',
-    routeLabel: 'Zahlé → Beirut',
-    driver: 'Sara Khoury',
-    vehicle: 'BUS-07',
-    status: 'Delayed',
-    seats: '25/40',
-    passengerCount: 25,
-    capacity: 40,
-    speed: 8,
-    lat: 33.8510,
-    lng: 35.8700,
-    eta: '15:30',
-    _dlat: -0.00003,
-    _dlng: -0.00008,
-  },
-  {
-    id: 'TRP-050',
-    route: 'Route 7B',
-    routeLabel: 'Beirut → Byblos',
-    driver: 'Fadi Gemayel',
-    vehicle: 'BUS-12',
-    status: 'Ongoing',
-    seats: '30/45',
-    passengerCount: 30,
-    capacity: 45,
-    speed: 62,
-    lat: 33.9280,
-    lng: 35.5340,
-    eta: '14:55',
-    _dlat:  0.00016,
-    _dlng:  0.00014,
-  },
-];
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -263,65 +57,21 @@ const STATUS_COLOR = {
   Scheduled: '#64748B',
 };
 
-const TRAFFIC_WINDOWS = {
-  peak_am: { label: 'AM peak', factor: 1.28 },
-  midday:  { label: 'Midday flow', factor: 1.05 },
-  peak_pm: { label: 'PM peak', factor: 1.34 },
-  late:    { label: 'Late evening', factor: 0.92 },
-};
-
-const ROUTE_HINTS = {
-  'Route 12A': {
-    peak_am: 'Expect coastal slowdown around Nahr El Kalb.',
-    midday: 'Coastal road is moving normally toward Jounieh.',
-    peak_pm: 'Jounieh return traffic is building near Dbayeh.',
-    late: 'Fast coastal segment with lighter evening flow.',
-  },
-  'Route 7B': {
-    peak_am: 'Northbound congestion likely after Jounieh interchange.',
-    midday: 'Byblos corridor is mostly clear.',
-    peak_pm: 'Heavy merge traffic expected near Casino du Liban.',
-    late: 'Longer open stretches make this one of the faster routes now.',
-  },
-  'Route 3C': {
-    peak_am: 'Mountain climb out of Beirut is slowing ETA.',
-    midday: 'Inland section is steady with moderate climb traffic.',
-    peak_pm: 'Inbound Beirut approach is congested near Mkalles.',
-    late: 'Zahle corridor is flowing with minimal bottlenecks.',
-  },
-  'Route 5D': {
-    peak_am: 'Airport approach traffic may add a few minutes.',
-    midday: 'Southbound coastal movement is stable.',
-    peak_pm: 'Sidon return traffic is dense on the Beirut edge.',
-    late: 'Evening south corridor is relatively open.',
-  },
-  'Route 9E': {
-    peak_am: 'North coastal bottlenecks may slow Batroun arrivals.',
-    midday: 'Batroun corridor is moving at near-normal speed.',
-    peak_pm: 'Evening congestion likely around Byblos and Jounieh.',
-    late: 'Long-haul coastal run is clear for now.',
-  },
-};
-
-function getTrafficWindow(date = new Date()) {
-  const hour = date.getHours();
-  if (hour >= 7 && hour < 10) return 'peak_am';
-  if (hour >= 10 && hour < 16) return 'midday';
-  if (hour >= 16 && hour < 20) return 'peak_pm';
-  return 'late';
-}
-
+// ETA helpers
 function parseEtaToMinutes(eta) {
-  const [hours, minutes] = eta.split(':').map(Number);
-  return (hours || 0) * 60 + (minutes || 0);
+  if (!eta || eta === '—') return 0;
+  const m = String(eta).match(/(\d+)\s*m/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+function minutesToEta(mins) {
+  const m = Math.round(Math.max(0, mins));
+  if (m === 0) return '—';
+  if (m < 60) return `${m}m`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
 }
 
-function minutesToEta(totalMinutes) {
-  const normalized = ((Math.round(totalMinutes) % 1440) + 1440) % 1440;
-  const hours = String(Math.floor(normalized / 60)).padStart(2, '0');
-  const mins = String(normalized % 60).padStart(2, '0');
-  return `${hours}:${mins}`;
-}
+// Route path definitions (used for geofence checks and playback)
+const ROUTES = [];
 
 function seatMeta(bus) {
   const available = Math.max(0, bus.capacity - bus.passengerCount);
@@ -330,6 +80,23 @@ function seatMeta(bus) {
   if (available <= 4 || ratio >= 0.8) return { available, label: `${available} seats left`, color: '#D97706', bg: '#FFFBEB' };
   return { available, label: `${available} seats available`, color: '#059669', bg: '#ECFDF5' };
 }
+
+const TRAFFIC_WINDOWS = {
+  morning_peak:   { label: 'Morning Peak',   factor: 1.25 },
+  midday:         { label: 'Midday',          factor: 1.0  },
+  evening_peak:   { label: 'Evening Peak',    factor: 1.3  },
+  off_peak:       { label: 'Off-Peak',        factor: 0.9  },
+};
+
+function getTrafficWindow(date) {
+  const h = date.getHours();
+  if (h >= 7  && h < 10) return 'morning_peak';
+  if (h >= 10 && h < 16) return 'midday';
+  if (h >= 16 && h < 20) return 'evening_peak';
+  return 'off_peak';
+}
+
+const ROUTE_HINTS = {};
 
 function trafficMeta(bus, date = new Date()) {
   const windowKey = getTrafficWindow(date);
@@ -351,6 +118,8 @@ const _STATUS_MAP = { ongoing:'Ongoing', active:'Ongoing', boarding:'Ongoing', d
 function tripToBus(t) {
   return {
     id:           'TRP-' + String(t.trip_id).padStart(3, '0'),
+    trip_id:      t.trip_id,
+    route_id:     t.route_id ?? null,
     route:        t.route_name  || 'Unknown Route',
     routeLabel:   t.start_location && t.end_location ? `${t.start_location} → ${t.end_location}` : t.route_name || '',
     driver:       t.driver_name || 'Unassigned',
@@ -360,8 +129,8 @@ function tripToBus(t) {
     passengerCount: 0,
     capacity:     t.capacity || 40,
     speed:        0,
-    lat:          33.8938,
-    lng:          35.5018,
+    lat:          null,
+    lng:          null,
     eta:          '—',
     _dlat: 0, _dlng: 0,
   };
@@ -745,8 +514,8 @@ function JourneyPlayback({ buses, onClose }) {
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 export default function LiveTrackingPage() {
-  const [buses,       setBuses]       = useState(() => INITIAL_BUSES.map((bus) => enrichBus(bus)));
-  const [selected,    setSelected]    = useState(INITIAL_BUSES[0].id);
+  const [buses,       setBuses]       = useState([]);
+  const [selected,    setSelected]    = useState(null);
   const [filter,      setFilter]      = useState('All');
   const [geofencedIds,  setGeofencedIds]  = useState(() => new Set());
   const [geoAlerts,     setGeoAlerts]     = useState([]);
@@ -756,7 +525,10 @@ export default function LiveTrackingPage() {
   const [signalLostIds,   setSignalLostIds]   = useState(() => new Set());
   const [signalAlerts,    setSignalAlerts]     = useState([]);
   const [showSignalAlerts, setShowSignalAlerts] = useState(true);
-  const busesRef = useRef(INITIAL_BUSES);
+  const busesRef = useRef([]);
+
+  const [selectedRoute,   setSelectedRoute]   = useState([]);
+  const [loadingRoute,    setLoadingRoute]    = useState(false);
 
   const [showPlayback,    setShowPlayback]    = useState(false);
   const [showHeatmap,     setShowHeatmap]     = useState(false);
@@ -779,17 +551,65 @@ export default function LiveTrackingPage() {
                    : [];
         const activeSet = new Set(['ongoing','active','boarding','delayed','scheduled']);
         const active = rows.filter(t => activeSet.has((t.status || '').toLowerCase()));
-        if (active.length === 0) return; // keep INITIAL_BUSES as fallback
         const realBuses = active.map(t => enrichBus(tripToBus(t)));
         setBuses(realBuses);
-        setSelected(realBuses[0].id);
+        if (realBuses.length > 0) setSelected(realBuses[0].id);
         // Prime lastSeen so no false signal-loss alerts on first load
         active.forEach(t => {
           lastSeenRef.current['TRP-' + String(t.trip_id).padStart(3, '0')] = Date.now();
         });
       })
-      .catch(() => {}); // keep INITIAL_BUSES on error
+      .catch(() => {}); // stay empty on error — no mock fallback
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Fetch route geometry when selected bus or its route_id changes ──────────
+  // Derive route_id so the effect doesn't re-run on every GPS position update
+  const _selectedRouteId = buses.find(b => b.id === selected)?.route_id ?? null;
+  useEffect(() => {
+    if (!_selectedRouteId) { setSelectedRoute([]); return; }
+    let cancelled = false;
+    setLoadingRoute(true);
+
+    Promise.all([
+      getWaypoints(_selectedRouteId).catch(() => []),
+      getRouteStops(_selectedRouteId).catch(() => []),
+    ]).then(async ([wps, stops]) => {
+      if (cancelled) return;
+      const raw = (Array.isArray(wps) && wps.length >= 2 ? wps : stops) ?? [];
+      const pts = raw.map(p => {
+        const lat = parseFloat(p.latitude ?? p.lat);
+        const lng = parseFloat(p.longitude ?? p.lng);
+        return isNaN(lat) || isNaN(lng) ? null : { lat, lng };
+      }).filter(Boolean);
+
+      if (pts.length < 2) { setSelectedRoute([]); setLoadingRoute(false); return; }
+
+      const sampled = pts.length <= 25 ? pts : (() => {
+        const step = (pts.length - 1) / 24;
+        return Array.from({ length: 25 }, (_, i) => pts[Math.round(i * step)]);
+      })();
+
+      const coordStr = sampled.map(p => `${p.lng},${p.lat}`).join(';');
+      try {
+        const resp = await fetch(
+          `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson`,
+          { signal: AbortSignal.timeout(8000) }
+        );
+        const json = await resp.json();
+        if (!cancelled && json.code === 'Ok' && json.routes?.[0]?.geometry?.coordinates?.length) {
+          setSelectedRoute(json.routes[0].geometry.coordinates.map(([lng, lat]) => [lat, lng]));
+          setLoadingRoute(false);
+          return;
+        }
+      } catch { /* fall through to straight-line fallback */ }
+
+      if (!cancelled) {
+        setSelectedRoute(pts.map(p => [p.lat, p.lng]));
+        setLoadingRoute(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [selected, _selectedRouteId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── WebSocket GPS stream ──────────────────────────────────────────────────
   useAdminGpsStream((msg) => {
@@ -853,6 +673,7 @@ export default function LiveTrackingPage() {
 
     busList.forEach((bus) => {
       if (bus.status === 'Scheduled') return;
+      if (bus.lat == null || bus.lng == null) return;
       const dist = distToRoutePath(bus.lat, bus.lng, bus.route);
       if (dist > GEOFENCE_RADIUS_M) {
         breached.add(bus.id);
@@ -961,7 +782,7 @@ export default function LiveTrackingPage() {
   const activeSignalAlerts = signalAlerts.filter((a) => !a.dismissed);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
       {/* Journey Playback overlay */}
       {showPlayback && <JourneyPlayback buses={buses} onClose={() => setShowPlayback(false)} />}
@@ -1146,115 +967,80 @@ export default function LiveTrackingPage() {
       )}
 
       {/* Stat pills */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {[
-          { label: 'Active buses',   value: counts.Ongoing,   color: '#10B981', bg: '#ECFDF5' },
-          { label: 'Delayed',        value: counts.Delayed,   color: '#F59E0B', bg: '#FFFBEB' },
-          { label: 'Scheduled',      value: counts.Scheduled, color: '#64748B', bg: '#F1F5F9' },
-          { label: 'Total passengers',
-            value: buses.reduce((s, b) => s + b.passengerCount, 0),
-            color: '#2563EB', bg: '#EFF6FF' },
-          { label: 'Seats available',
-            value: buses.reduce((s, b) => s + b.seatInfo.available, 0),
-            color: '#059669', bg: '#ECFDF5' },
+          { label: 'Active',      value: counts.Ongoing,   color: '#10B981', bg: '#ECFDF5' },
+          { label: 'Delayed',     value: counts.Delayed,   color: '#F59E0B', bg: '#FFFBEB' },
+          { label: 'Scheduled',   value: counts.Scheduled, color: '#64748B', bg: '#F1F5F9' },
+          { label: 'Passengers',  value: buses.reduce((s, b) => s + b.passengerCount, 0), color: '#2563EB', bg: '#EFF6FF' },
+          { label: 'Seats free',  value: buses.reduce((s, b) => s + b.seatInfo.available, 0), color: '#059669', bg: '#ECFDF5' },
         ].map(({ label, value, color, bg }) => (
-          <div key={label} style={{ padding: '8px 16px', borderRadius: 10,
+          <div key={label} style={{ padding: '6px 14px', borderRadius: 9,
                                      backgroundColor: bg, border: `1px solid ${color}33` }}>
-            <div style={{ fontSize: 20, fontWeight: 800, color }}>{value}</div>
-            <div style={{ fontSize: 11, color: '#666', marginTop: 1 }}>{label}</div>
+            <div style={{ fontSize: 17, fontWeight: 800, color }}>{value}</div>
+            <div style={{ fontSize: 10, color: '#666', marginTop: 1 }}>{label}</div>
           </div>
         ))}
       </div>
 
       {/* Map + list */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 14, height: 560 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 14,
+                    height: `calc(100vh - ${selectedBus ? 358 : 262}px)`, minHeight: 380 }}>
 
         {/* Map panel */}
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12,
                       overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '10px 16px 8px', borderBottom: '1px solid #F1F5F9' }}>
-            {/* Row 1 — title + bus dropdown + heatmap toggle */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#0F172A', flexShrink: 0 }}>
-                GPS map — Lebanon
-                {showHeatmap && <span style={{ fontSize: 11, fontWeight: 500, color: '#DC2626', marginLeft: 8 }}>· Heatmap active</span>}
-              </span>
+          <div style={{ padding: '8px 14px', borderBottom: '1px solid #F1F5F9',
+                        display: 'flex', alignItems: 'center', gap: 10 }}>
 
-              {/* Bus selector dropdown */}
-              <select
-                value={selected || ''}
-                onChange={(e) => setSelected(e.target.value || buses[0]?.id)}
-                style={{
-                  flex: 1, minWidth: 0, maxWidth: 280,
-                  padding: '5px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                  border: '1.5px solid #E2E8F0', background: '#F8FAFC', color: '#0F172A',
-                  cursor: 'pointer', outline: 'none',
-                  appearance: 'auto',
-                }}
-              >
-                {buses.map((bus) => (
-                  <option key={bus.id} value={bus.id}>
-                    {bus.id} — {bus.route} ({bus.status})
-                  </option>
-                ))}
-              </select>
+            {/* Title */}
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', flexShrink: 0 }}>
+              GPS map
+              {loadingRoute && <span style={{ fontSize: 11, fontWeight: 500, color: '#2563EB', marginLeft: 8 }}>· Loading route…</span>}
+            </span>
 
-              <button
-                onClick={() => setShowHeatmap((h) => !h)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
-                  padding: '5px 13px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                  border: `1.5px solid ${showHeatmap ? '#FCA5A5' : '#E2E8F0'}`,
-                  background: showHeatmap ? '#FEF2F2' : '#F8FAFC',
-                  color: showHeatmap ? '#DC2626' : '#64748B',
-                  transition: 'all .15s',
-                }}
-              >
-                🌡️ {showHeatmap ? 'Heatmap ON' : 'Heatmap'}
-              </button>
+            {/* Bus selector */}
+            <select
+              value={selected || ''}
+              onChange={(e) => setSelected(e.target.value || buses[0]?.id)}
+              style={{
+                flex: 1, minWidth: 0,
+                padding: '5px 10px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                border: '1.5px solid #E2E8F0', background: '#F8FAFC', color: '#0F172A',
+                cursor: 'pointer', outline: 'none',
+              }}
+            >
+              {buses.map((bus) => (
+                <option key={bus.id} value={bus.id}>
+                  {bus.id} — {bus.route} ({bus.status})
+                </option>
+              ))}
+            </select>
+
+            {/* Status legend */}
+            <div style={{ display: 'flex', gap: 12, flexShrink: 0 }}>
+              {[['#10B981', 'Ongoing'], ['#F59E0B', 'Delayed'], ['#64748B', 'Scheduled'], ['#7C3AED', 'No signal']].map(([c, l]) => (
+                <span key={l} style={{ fontSize: 10, color: '#64748B', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: c, display: 'inline-block', flexShrink: 0 }} />
+                  {l}
+                </span>
+              ))}
             </div>
-
-            {/* Row 2 — context-sensitive legend */}
-            {showHeatmap ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 10, color: '#94A3B8', fontWeight: 500 }}>Low</span>
-                <div style={{
-                  height: 6, width: 100, borderRadius: 3,
-                  background: 'linear-gradient(to right, #10B981, #F59E0B, #DC2626)',
-                }} />
-                <span style={{ fontSize: 10, color: '#94A3B8', fontWeight: 500 }}>High density</span>
-                {heatmapLoading && (
-                  <span style={{ fontSize: 10, color: '#2563EB', marginLeft: 4 }}>Loading…</span>
-                )}
-                {!heatmapLoading && heatmapFetched && (
-                  <span style={{ fontSize: 10, color: '#94A3B8', marginLeft: 4 }}>
-                    — {heatmapPoints.length} cells · real GPS data
-                  </span>
-                )}
-              </div>
-            ) : (
-              <div style={{ display: 'flex', gap: 14 }}>
-                {[['#10B981', 'Ongoing'], ['#F59E0B', 'Delayed'], ['#94A3B8', 'Scheduled'], ['#7C3AED', 'No signal']].map(([c, l]) => (
-                  <span key={l} style={{ fontSize: 10, color: '#64748B', display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: c, display: 'inline-block', flexShrink: 0 }} />
-                    {l}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
 
-          {/* Leaflet map fills the remaining space */}
+          {/* Leaflet map */}
           <div style={{ flex: 1, position: 'relative' }}>
             <LiveMap
-              buses={filteredBuses}
-              routes={ROUTES}
+              buses={filteredBuses.filter(b => b.lat != null && b.lng != null)}
+              routes={[]}
               selectedId={selected}
               onSelect={setSelected}
               geofencedIds={geofencedIds}
               signalLostIds={signalLostIds}
-              showHeatmap={showHeatmap}
-              heatmapPoints={heatmapPoints}
+              showHeatmap={false}
+              heatmapPoints={[]}
+              selectedRoutePath={selectedRoute}
+              loadingRoute={loadingRoute}
             />
           </div>
         </div>
@@ -1263,115 +1049,156 @@ export default function LiveTrackingPage() {
         <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12,
                       overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '10px 14px', borderBottom: '1px solid #F1F5F9',
-                        fontSize: 13, fontWeight: 600, color: '#0F172A' }}>
+                        fontSize: 13, fontWeight: 700, color: '#0F172A' }}>
             {filteredBuses.length === buses.length
               ? `All buses (${buses.length})`
               : `${filter} (${filteredBuses.length})`}
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto' }}>
+            {filteredBuses.length === 0 && (
+              <div style={{ padding: '24px 14px', textAlign: 'center', color: '#94A3B8', fontSize: 12 }}>
+                {buses.length === 0 ? 'Loading trips from backend…' : `No ${filter.toLowerCase()} trips`}
+              </div>
+            )}
             {filteredBuses.map((bus) => (
               <div
                 key={bus.id}
                 onClick={() => setSelected(bus.id)}
                 style={{
-                  padding: '10px 14px',
-                  borderBottom: '1px solid #f7f7f7',
+                  padding: '8px 12px',
+                  borderBottom: '1px solid #F7F7F7',
                   cursor: 'pointer',
                   background: selected === bus.id ? '#EFF6FF' : 'transparent',
                   borderLeft: selected === bus.id ? '3px solid #2563EB' : '3px solid transparent',
                   transition: 'background .15s',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%',
+                {/* Row 1: ID + status */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%',
                                   background: STATUS_COLOR[bus.status], flexShrink: 0 }} />
-                  <span style={{ fontWeight: 700, fontSize: 12, color: '#0F172A', flex: 1 }}>
-                    {bus.id}
-                  </span>
+                  <span style={{ fontWeight: 700, fontSize: 12, color: '#0F172A', flex: 1 }}>{bus.id}</span>
                   <StatusPill status={bus.status} />
                 </div>
-                <div style={{ fontSize: 11, color: '#444', marginBottom: 2, fontWeight: 500 }}>
+                {/* Row 2: route */}
+                <div style={{ fontSize: 11, color: '#374151', marginBottom: 2, fontWeight: 500,
+                               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {bus.route} · {bus.routeLabel}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748B' }}>
-                  <span>{bus.driver}</span>
+                {/* Row 3: driver | vehicle */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#64748B', marginBottom: 3 }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '55%' }}>{bus.driver}</span>
                   <span>{bus.vehicle}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginTop: 3 }}>
-                  <span style={{ color: '#2563EB', fontWeight: 600 }}>ETA {bus.trafficInfo.adjustedEta}</span>
-                  <span style={{ color: '#555' }}>{bus.seats} · {bus.speed} km/h</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 10, marginTop: 6 }}>
-                  <span style={{ color: '#64748B' }}>{bus.trafficInfo.trafficLabel}</span>
-                  <span style={{ padding: '2px 8px', borderRadius: 999, background: bus.seatInfo.bg, color: bus.seatInfo.color, fontWeight: 700 }}>
+                {/* Row 4: ETA + seat pill */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 11, color: '#2563EB', fontWeight: 700 }}>ETA {bus.trafficInfo.adjustedEta}</span>
+                  <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 999,
+                                  background: bus.seatInfo.bg, color: bus.seatInfo.color, fontWeight: 700, flexShrink: 0 }}>
                     {bus.seatInfo.label}
                   </span>
                 </div>
-                <div style={{ fontSize: 10, color: '#64748B', marginTop: 5 }}>
-                  {bus.trafficInfo.hint}
-                </div>
-
-                {/* Passenger fill bar */}
-                <div style={{ marginTop: 5, height: 3, borderRadius: 2,
-                               backgroundColor: '#e5e7eb', overflow: 'hidden' }}>
+                {/* Capacity bar */}
+                <div style={{ marginTop: 5, height: 2, borderRadius: 1, backgroundColor: '#E5E7EB', overflow: 'hidden' }}>
                   <div style={{
-                    height: '100%', borderRadius: 2,
+                    height: '100%', borderRadius: 1,
                     width: `${(bus.passengerCount / bus.capacity) * 100}%`,
-                    backgroundColor: bus.passengerCount / bus.capacity > 0.9
-                      ? '#ef4444' : bus.passengerCount / bus.capacity > 0.6
-                      ? '#f59e0b' : '#22c55e',
+                    backgroundColor: bus.passengerCount / bus.capacity > 0.9 ? '#EF4444'
+                                   : bus.passengerCount / bus.capacity > 0.6 ? '#F59E0B' : '#22C55E',
                     transition: 'width .3s',
                   }} />
                 </div>
               </div>
             ))}
           </div>
-
-          {/* Selected bus detail */}
-          {selectedBus && (
-            <div style={{ padding: '12px 14px', borderTop: '1px solid #f0f0f0', background: '#fafffe' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#555', marginBottom: 8,
-                             textTransform: 'uppercase', letterSpacing: '.04em' }}>
-                Selected bus details
-              </div>
-              <div style={{ marginBottom: 10, padding: '10px 12px', borderRadius: 10, background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 5 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#0F172A' }}>Passenger app seat estimate</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: selectedBus.seatInfo.bg, color: selectedBus.seatInfo.color }}>
-                    {selectedBus.seatInfo.label}
-                  </span>
-                </div>
-                <div style={{ fontSize: 10, color: '#64748B', marginBottom: 4 }}>
-                  Derived from live passenger count camera feed and vehicle capacity.
-                </div>
-                <div style={{ fontSize: 10, color: '#64748B' }}>
-                  Traffic hint: {selectedBus.trafficInfo.hint}
-                </div>
-              </div>
-              {[
-                ['Trip ID',  selectedBus.id],
-                ['Route',    `${selectedBus.route} — ${selectedBus.routeLabel}`],
-                ['Driver',   selectedBus.driver],
-                ['Vehicle',  selectedBus.vehicle],
-                ['Seats',    selectedBus.seats],
-                ['Available', `${selectedBus.seatInfo.available} estimated seats`],
-                ['Speed',    `${selectedBus.speed} km/h`],
-                ['ETA',      selectedBus.trafficInfo.adjustedEta],
-                ['Traffic',  selectedBus.trafficInfo.trafficLabel],
-                ['Position', `${selectedBus.lat.toFixed(4)}°N, ${selectedBus.lng.toFixed(4)}°E`],
-              ].map(([k, v]) => (
-                <div key={k} style={{ display: 'flex', justifyContent: 'space-between',
-                                       fontSize: 11, padding: '3px 0', borderBottom: '1px solid #f0f0f0' }}>
-                  <span style={{ color: '#64748B' }}>{k}</span>
-                  <span style={{ fontWeight: 600, color: '#0F172A', textAlign: 'right',
-                                  maxWidth: '60%', wordBreak: 'break-all' }}>{v}</span>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
+
+      {/* ── Selected trip detail card ─────────────────────────────────────────── */}
+      {selectedBus && (
+        <div style={{
+          background: '#fff',
+          border: '1px solid #E2E8F0',
+          borderRadius: 12,
+          padding: '14px 20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0,
+          overflow: 'hidden',
+        }}>
+          {/* Trip ID + status badge */}
+          <div style={{ paddingRight: 18, borderRight: '1px solid #F1F5F9', marginRight: 18, flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
+              <span style={{ width: 9, height: 9, borderRadius: '50%',
+                              background: STATUS_COLOR[selectedBus.status] || '#64748B', flexShrink: 0 }} />
+              <span style={{ fontSize: 15, fontWeight: 800, color: '#0F172A' }}>{selectedBus.id}</span>
+            </div>
+            <StatusPill status={selectedBus.status} />
+          </div>
+
+          {/* Route name + label */}
+          <div style={{ paddingRight: 18, borderRight: '1px solid #F1F5F9', marginRight: 18, flex: '0 0 180px', minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', marginBottom: 2,
+                           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {selectedBus.route}
+            </div>
+            <div style={{ fontSize: 11, color: '#64748B',
+                           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {selectedBus.routeLabel || '—'}
+            </div>
+          </div>
+
+          {/* Metric columns */}
+          {[
+            { label: 'Driver',   value: selectedBus.driver },
+            { label: 'Vehicle',  value: selectedBus.vehicle },
+            { label: 'Speed',    value: `${selectedBus.speed} km/h` },
+            { label: 'ETA',      value: selectedBus.trafficInfo.adjustedEta },
+            { label: 'Seats',    value: selectedBus.seatInfo.label,
+                                  valueColor: selectedBus.seatInfo.color },
+            { label: 'Position', value: selectedBus.lat != null
+                ? `${selectedBus.lat.toFixed(4)}°N, ${selectedBus.lng.toFixed(4)}°E`
+                : 'Awaiting GPS…' },
+          ].map(({ label, value, valueColor }, i, arr) => (
+            <div key={label} style={{
+              paddingLeft: 18,
+              paddingRight: i < arr.length - 1 ? 18 : 0,
+              borderRight: i < arr.length - 1 ? '1px solid #F1F5F9' : 'none',
+              flexShrink: 0,
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: valueColor || '#0F172A',
+                             whiteSpace: 'nowrap', marginBottom: 3 }}>
+                {value}
+              </div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: '#94A3B8',
+                             textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                {label}
+              </div>
+            </div>
+          ))}
+
+          {/* Capacity bar */}
+          <div style={{ marginLeft: 18, flex: 1, minWidth: 80 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: '#94A3B8',
+                           textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 5 }}>
+              Capacity
+            </div>
+            <div style={{ height: 6, borderRadius: 3, background: '#E5E7EB', overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', borderRadius: 3,
+                width: `${(selectedBus.passengerCount / selectedBus.capacity) * 100}%`,
+                background: selectedBus.passengerCount / selectedBus.capacity > 0.9 ? '#EF4444'
+                           : selectedBus.passengerCount / selectedBus.capacity > 0.6 ? '#F59E0B' : '#10B981',
+                transition: 'width .3s',
+              }} />
+            </div>
+            <div style={{ fontSize: 10, color: '#64748B', marginTop: 3 }}>
+              {selectedBus.passengerCount} / {selectedBus.capacity} passengers
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

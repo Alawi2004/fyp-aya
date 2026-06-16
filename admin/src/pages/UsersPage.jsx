@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
+import { Users, UserRound, UserCheck, Shield, BadgeCheck } from "lucide-react";
 import { PageLoading, PageError, PageEmpty } from "../components/DataStates";
 import { Panel } from "../components/Panel";
 import { DataTable } from "../components/Table";
 import { Modal } from "../components/Modal";
 import { StatusPill } from "../components/StatusPill";
 import { StatCard } from "../components/StatCard";
-import { getUsers, createUser, updateUser, deleteUserApi, getPassengerHeatmap, getDriverSchedules, updateDriverSchedule, getDrivers, getDriverPerformance, adminAdjustWallet } from "../api/endpoints";
+import { getUsers, createUser, updateUser, deleteUserApi, getPassengerHeatmap, getDriverSchedules, updateDriverSchedule, getDrivers, getDriverPerformance, adminAdjustWallet, getAuditLogs } from "../api/endpoints";
 
 const ROLES = ["Passenger", "Driver", "Admin", "Staff"];
 
@@ -27,53 +28,6 @@ const SHIFT_CONFIG = {
   vacation:  { label: "Vacation",  time: "",             color: "#10B981", bg: "#ECFDF5" },
 };
 
-const ROUTES_LIST = [
-  "Route 1 — Central ↔ Airport",
-  "Route 2 — North Terminal ↔ Downtown",
-  "Route 3 — East Gate ↔ Mall",
-  "Route 4 — West Campus ↔ Hospital",
-  "Route 5 — Industrial ↔ CBD",
-];
-const TRIP_STATUS = ["Completed", "Completed", "Completed", "Cancelled", "Completed"];
-
-function seedTrips(userId) {
-  const hash = String(userId).split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-  return Array.from({ length: 6 }, (_, i) => {
-    const d = new Date("2026-05-05");
-    d.setDate(d.getDate() - (i * 4 + (hash % 3)));
-    const fare = (1.5 + ((hash + i * 7) % 30) * 0.1).toFixed(2);
-    return {
-      id: `T-${1000 + hash % 100 + i}`,
-      date: d.toISOString().slice(0, 10),
-      route: ROUTES_LIST[(hash + i * 3) % ROUTES_LIST.length],
-      fare: `$${fare}`,
-      status: TRIP_STATUS[(hash + i) % TRIP_STATUS.length],
-    };
-  });
-}
-
-function seedAdminActivity(userId) {
-  const hash = String(userId).split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-  const actions = [
-    "Updated driver license for Karim Moussa",
-    "Added new vehicle BUS-14 (Mercedes Sprinter)",
-    "Created user account for new passenger",
-    "Reviewed and resolved rating complaint #R-112",
-    "Modified route 12A — added 2 stops",
-    "Approved wallet top-up request ($ 150)",
-    "Generated monthly analytics report",
-    "Updated RBAC permissions for Finance Officer role",
-  ];
-  return Array.from({ length: 5 }, (_, i) => {
-    const d = new Date("2026-05-05");
-    d.setDate(d.getDate() - i * 2);
-    return {
-      action: actions[(hash + i) % actions.length],
-      date: d.toISOString().slice(0, 10),
-      time: `${9 + ((hash + i * 3) % 9)}:${String((hash * i) % 60).padStart(2, "0")}`,
-    };
-  });
-}
 
 function calcScore(d) {
   const onTime = d.on_time_pct * 0.40;
@@ -579,7 +533,20 @@ const ADMIN_MODULES = [
 function AdminProfile({ user, onClose, onEdit }) {
   const rs       = ROLE_STYLE.Admin;
   const initials = user.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-  const activity = seedAdminActivity(user.id);
+  const [activity, setActivity] = useState([]);
+
+  useEffect(() => {
+    getAuditLogs({ user_id: user.id, limit: 5 })
+      .then(d => {
+        const rows = d?.data ?? (Array.isArray(d) ? d : []);
+        setActivity(rows.map(r => ({
+          action: r.action ?? r.description ?? "Action performed",
+          date:   r.created_at ? r.created_at.slice(0, 10) : "—",
+          time:   r.created_at ? new Date(r.created_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "—",
+        })));
+      })
+      .catch(() => {});
+  }, [user.id]);
 
   return (
     <ProfileDrawer onClose={onClose}>
@@ -1300,11 +1267,11 @@ export default function UsersPage() {
 
       {/* KPI cards — always visible */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0,1fr))", gap: 12 }}>
-        <StatCard label="Total users"  value={counts.all}        delta="registered"   />
-        <StatCard label="Passengers"   value={counts.passengers}  delta="active"       />
-        <StatCard label="Drivers"      value={counts.drivers}     delta="on platform"  />
-        <StatCard label="Admins"       value={counts.admins}      delta="system users" />
-        <StatCard label="Staff"        value={counts.staff}       delta="top-up agents" accent="#059669" />
+        <StatCard label="Total users"  value={counts.all}        delta="registered"    accent="#2563EB" icon={<Users size={18} color="#2563EB" />} />
+        <StatCard label="Passengers"   value={counts.passengers} delta="active"         accent="#7C3AED" icon={<UserRound size={18} color="#7C3AED" />} />
+        <StatCard label="Drivers"      value={counts.drivers}    delta="on platform"    accent="#0EA5E9" icon={<UserCheck size={18} color="#0EA5E9" />} />
+        <StatCard label="Admins"       value={counts.admins}     delta="system users"   accent="#EF4444" icon={<Shield size={18} color="#EF4444" />} />
+        <StatCard label="Staff"        value={counts.staff}      delta="top-up agents"  accent="#059669" icon={<BadgeCheck size={18} color="#059669" />} />
       </div>
 
       {/* Passenger Activity tab */}
