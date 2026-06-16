@@ -21,7 +21,7 @@ const ARRIVAL_RADIUS_M   = 50;
 const APPROACH_RADIUS_M  = 200;
 const DEVIATION_RADIUS_M = 150;
 const SPEED_KMH          = 25;
-const BROADCAST_MS       = 10000;
+const BROADCAST_MS       = 5000;
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const haversine = (lat1, lon1, lat2, lon2) => {
@@ -250,6 +250,8 @@ const DriverMapScreen = ({ navigation, route }) => {
   const displayRouteName = paramRouteName ?? activeTrip?.routeName ?? null;
   const displayBusNumber = paramBusNumber || activeTrip?.busNumber || '';
 
+  const centeredRef = useRef(false);
+
   // ── GPS: get location immediately, independent of tripId ──
   useEffect(() => {
     let sub;
@@ -258,15 +260,22 @@ const DriverMapScreen = ({ navigation, route }) => {
       if (status !== 'granted') { setGpsError(true); return; }
       // Quick first fix at High accuracy, then watch at navigation-grade accuracy.
       const loc = await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.High });
-      setLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+      const pos = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+      setLocation(pos);
+      // Center the map on the driver's actual position the first time.
+      if (!centeredRef.current) {
+        centeredRef.current = true;
+        mapRef.current?.animateToRegion(
+          { ...pos, latitudeDelta: 0.022, longitudeDelta: 0.022 },
+          400,
+        );
+      }
       // Watch for updates — distanceInterval:0 so it fires on time alone even
       // when the bus is stationary (Android needs BOTH time + distance otherwise).
       // BestForNavigation forces the GPS chip (~5m) instead of wifi/cell (~100m+).
       sub = await ExpoLocation.watchPositionAsync(
         { accuracy: ExpoLocation.Accuracy.BestForNavigation, timeInterval: 5000, distanceInterval: 0 },
         l => {
-          // Ignore coarse network fixes that would jump the pin far away
-          if (l.coords.accuracy != null && l.coords.accuracy > 100) return;
           setLocation({ latitude: l.coords.latitude, longitude: l.coords.longitude });
         }
       );

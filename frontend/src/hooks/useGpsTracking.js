@@ -33,11 +33,6 @@ export function useGpsTracking(tripId) {
           distanceInterval: 0,          // fire on time alone — not requiring movement
         },
         ({ coords }) => {
-          // Drop low-quality fixes (network estimates can report 1000m+ accuracy)
-          if (coords.accuracy != null && coords.accuracy > 100) {
-            console.log('[GPS] skipped low-accuracy fix:', Math.round(coords.accuracy), 'm');
-            return;
-          }
           console.log('[GPS] sending trip_id:', tripId, coords.latitude, coords.longitude, '±', Math.round(coords.accuracy ?? 0), 'm');
           apiClient.post('/gps', {
             trip_id:   tripId,
