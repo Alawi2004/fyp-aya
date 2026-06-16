@@ -204,7 +204,7 @@ export const unfreezeWallet     = (id, data) => apiClient.post(`/wallet/${id}/un
 export const getFreezeLog       = ()         => apiClient.get('/wallet/freeze-log');
 
 // Complaints
-export const getComplaints      = ()         => apiClient.get('/complaints');
-export const createComplaint    = (data)     => apiClient.post('/complaints', data);
-export const updateComplaint    = (id, data) => apiClient.put(`/complaints/${id}`, data);
-export const addComplaintComment = (id, data) => apiClient.post(`/complaints/${id}/comments`, data);
+export const getComplaints           = ()         => apiClient.get('/complaints');
+export const createComplaint         = (data)     => apiClient.post('/complaints', data);
+export const updateComplaintStatus   = (id, data) => apiClient.patch(`/complaints/${id}/status`, data);
+export const addComplaintComment     = (id, data) => apiClient.post(`/complaints/${id}/comments`, data);

@@ -5,7 +5,22 @@ import { Modal } from "../components/Modal";
 import { StatCard } from "../components/StatCard";
 import { StatusPill } from "../components/StatusPill";
 import { useAuth } from "../context/AuthContext";
-import { getComplaints, createComplaint, updateComplaint, addComplaintComment, getDrivers, getRoutes } from "../api/endpoints";
+import { getComplaints, createComplaint, updateComplaintStatus, addComplaintComment, getDrivers, getRoutes } from "../api/endpoints";
+
+// ── Status mapping (backend ↔ frontend display) ───────────────────────────────
+const STATUS_FROM_API = {
+  submitted:    "Open",
+  under_review: "In Progress",
+  assigned:     "In Progress",
+  resolved:     "Resolved",
+  closed:       "Closed",
+};
+const STATUS_TO_API = {
+  "Open":        "submitted",
+  "In Progress": "under_review",
+  "Resolved":    "resolved",
+  "Closed":      "closed",
+};
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const PRIORITIES = ["Critical", "High", "Medium", "Low"];
@@ -79,14 +94,14 @@ function ComplaintDetail({ complaint, onClose, onUpdate, onAddComment }) {
   const [assignee,    setAssignee]    = useState(complaint.assigned_to ?? "");
 
   function handleStatusUpdate() {
-    onUpdate(complaint.id, { status: newStatus, assigned_to: assignee || null });
+    onUpdate(complaint.complaint_id, { status: newStatus, assigned_to: assignee || null });
   }
 
   function handleComment() {
     if (!newComment.trim()) return;
     const author  = user?.full_name ?? user?.email ?? "Admin";
     const comment = { author, text: newComment.trim(), time: new Date().toISOString() };
-    onAddComment(complaint.id, comment);
+    onAddComment(complaint.complaint_id, comment);
     setNewComment("");
   }
 
@@ -184,12 +199,12 @@ function ComplaintDetail({ complaint, onClose, onUpdate, onAddComment }) {
               Save Changes
             </button>
             {complaint.status !== "Resolved" && (
-              <button onClick={() => { onUpdate(complaint.id, { status: "Resolved" }); setNewStatus("Resolved"); }} style={{ padding: "9px 18px", background: "#ECFDF5", color: "#059669", border: "1px solid #A7F3D0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              <button onClick={() => { onUpdate(complaint.complaint_id, { status: "Resolved" }); setNewStatus("Resolved"); }} style={{ padding: "9px 18px", background: "#ECFDF5", color: "#059669", border: "1px solid #A7F3D0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                 ✓ Resolve
               </button>
             )}
             {complaint.status !== "Closed" && (
-              <button onClick={() => { onUpdate(complaint.id, { status: "Closed" }); setNewStatus("Closed"); }} style={{ padding: "9px 18px", background: "#F8FAFC", color: "#64748B", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              <button onClick={() => { onUpdate(complaint.complaint_id, { status: "Closed" }); setNewStatus("Closed"); }} style={{ padding: "9px 18px", background: "#F8FAFC", color: "#64748B", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                 Close
               </button>
             )}
@@ -330,12 +345,13 @@ export default function ComplaintsPage() {
         const rows = Array.isArray(d) ? d : [];
         setComplaints(rows.map(c => ({
           ...c,
-          id:          c.id          ?? c.tracking_code ?? String(c.complaint_id),
+          id:          c.tracking_code ?? String(c.complaint_id),
           passenger:   c.passenger   ?? c.submitted_by_name ?? "—",
           assigned_to: c.assigned_to ?? c.assigned_to_name  ?? null,
           created_at:  c.created_at  ?? c.submitted_at      ?? null,
           comments:    c.comments    ?? [],
           photo_url:   c.photo_url   ?? null,
+          status:      STATUS_FROM_API[c.status] ?? c.status,
         })));
       })
       .catch(() => setComplaints([]));
@@ -374,15 +390,18 @@ export default function ComplaintsPage() {
     setComplaints(prev => [newC, ...prev]);
   }
 
-  function handleUpdate(id, patch) {
-    updateComplaint(id, { ...patch, updated_at: new Date().toISOString() }).catch(() => {});
-    setComplaints(prev => prev.map(c => c.id === id ? { ...c, ...patch, updated_at: new Date().toISOString() } : c));
+  function handleUpdate(cid, patch) {
+    if (patch.status) {
+      const apiStatus = STATUS_TO_API[patch.status] ?? patch.status;
+      updateComplaintStatus(cid, { status: apiStatus }).catch(() => {});
+    }
+    setComplaints(prev => prev.map(c => c.complaint_id === cid ? { ...c, ...patch, updated_at: new Date().toISOString() } : c));
     setDetail(prev => prev ? { ...prev, ...patch } : prev);
   }
 
-  function handleAddComment(id, comment) {
-    addComplaintComment(id, comment).catch(() => {});
-    setComplaints(prev => prev.map(c => c.id === id ? { ...c, comments: [...(c.comments ?? []), comment] } : c));
+  function handleAddComment(cid, comment) {
+    addComplaintComment(cid, comment).catch(() => {});
+    setComplaints(prev => prev.map(c => c.complaint_id === cid ? { ...c, comments: [...(c.comments ?? []), comment] } : c));
     setDetail(prev => prev ? { ...prev, comments: [...(prev.comments ?? []), comment] } : prev);
   }
 

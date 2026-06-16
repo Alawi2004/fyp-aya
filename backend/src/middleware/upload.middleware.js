@@ -3,19 +3,26 @@ import { BlobServiceClient, StorageSharedKeyCredential } from "@azure/storage-bl
 import dotenv from "dotenv";
 dotenv.config();
 
-const account   = process.env.AZURE_STORAGE_ACCOUNT_NAME;
-const accountKey = process.env.AZURE_STORAGE_ACCOUNT_KEY;
-const containerName = process.env.AZURE_STORAGE_VEHICLE_CONTAINER || "vehicle-photos";
+const account        = process.env.AZURE_STORAGE_ACCOUNT_NAME;
+const accountKey     = process.env.AZURE_STORAGE_ACCOUNT_KEY;
+const containerName  = process.env.AZURE_STORAGE_VEHICLE_CONTAINER || "vehicle-photos";
 
-const sharedKeyCredential = new StorageSharedKeyCredential(account, accountKey);
-export const blobServiceClient = new BlobServiceClient(
-  `https://${account}.blob.core.windows.net`,
-  sharedKeyCredential
-);
-export const vehicleContainer = blobServiceClient.getContainerClient(containerName);
+let blobServiceClientInstance = null;
+let vehicleContainerInstance  = null;
 
-// Ensure container exists (public read access for images)
-vehicleContainer.createIfNotExists({ access: "blob" }).catch(() => {});
+function getBlobClient() {
+  if (!blobServiceClientInstance) {
+    if (!account || !accountKey) throw new Error("Azure Storage env vars not set");
+    const cred = new StorageSharedKeyCredential(account, accountKey);
+    blobServiceClientInstance = new BlobServiceClient(`https://${account}.blob.core.windows.net`, cred);
+    vehicleContainerInstance  = blobServiceClientInstance.getContainerClient(containerName);
+    vehicleContainerInstance.createIfNotExists({ access: "blob" }).catch(() => {});
+  }
+  return { blobServiceClient: blobServiceClientInstance, vehicleContainer: vehicleContainerInstance };
+}
+
+export const blobServiceClient = new Proxy({}, { get: (_, p) => getBlobClient().blobServiceClient[p] });
+export const vehicleContainer  = new Proxy({}, { get: (_, p) => getBlobClient().vehicleContainer[p] });
 
 // Use memory storage — we stream the buffer to Azure ourselves
 export const uploadPhoto = multer({

@@ -22,7 +22,7 @@ const NAV = [
   { section: "Reports" },
   { id: "analytics",     label: "Analytics",         icon: BarChart3,              badge: null },
   { id: "tickets",       label: "Tickets",           icon: Ticket,                 badge: null },
-  { id: "notifications", label: "Notifications",     icon: Bell,                   badge: 3    },
+  { id: "notifications", label: "Notifications",     icon: Bell,                   badge: null },
   { id: "ratings",       label: "Ratings",           icon: Star,                   badge: null },
   { id: "wallet",        label: "Wallet",            icon: Wallet,                 badge: null },
   { id: "complaints",    label: "Complaints",        icon: MessageSquareWarning,   badge: null },

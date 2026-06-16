@@ -879,7 +879,8 @@ export const sendOtp = async (req, res) => {
       .query("INSERT INTO otp_codes(email, code, purpose, expires_at) VALUES(@email, @code, @purpose, @expires_at)");
 
     // Fire-and-forget — don't block the HTTP response waiting on SMTP
-    if (process.env.SMTP_HOST && process.env.SMTP_USER) {
+    const smtpConfigured = !!(process.env.SMTP_HOST && process.env.SMTP_USER);
+    if (smtpConfigured) {
       sendOTPEmail(email, code)
         .then(() => console.log(`[otp] sent to ${email}`))
         .catch(err => console.error("[otp] email send failed:", err.message));
@@ -887,7 +888,12 @@ export const sendOtp = async (req, res) => {
       console.log(`[otp] dev mode — code for ${email}: ${code}`);
     }
 
-    return res.json({ message: "Verification code sent" });
+    // In dev mode (no SMTP), surface the code directly so the mobile app can
+    // display it without needing a real email inbox.
+    return res.json({
+      message: "Verification code sent",
+      ...(!smtpConfigured && { dev_code: code }),
+    });
   } catch (err) {
     console.error("[otp] sendOtp error:", err.message);
     return res.status(500).json({ error: "Could not send verification code. Please try again." });
