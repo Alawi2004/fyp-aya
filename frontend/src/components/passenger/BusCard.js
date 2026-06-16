@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, PURPLE } from '../../constants/colors';
 import { THEME } from '../../constants/theme';
+import apiClient from '../../api/apiClient';
 
 const STATUS_CONFIG = {
   active:    { label: 'On Time',   bg: COLORS.secondaryLight, text: COLORS.secondary, dot: COLORS.secondary },
@@ -26,6 +27,19 @@ const TYPE_LABEL = {
 };
 
 const BusCard = ({ bus, onPress }) => {
+  const [photoUrl, setPhotoUrl] = useState(null);
+
+  useEffect(() => {
+    if (!bus.vehicle_id) return;
+    apiClient.get(`/vehicles/${bus.vehicle_id}/photos`)
+      .then(r => {
+        const photos = Array.isArray(r.data) ? r.data : [];
+        const pick = photos.find(p => p.slot === 'exterior') ?? photos[0];
+        if (pick?.url) setPhotoUrl(pick.url);
+      })
+      .catch(() => {});
+  }, [bus.vehicle_id]);
+
   const seatsLeft = bus.totalSeats - bus.bookedSeats;
   const seatPct = seatsLeft / bus.totalSeats;
   const seatColor = seatPct <= 0.1 ? COLORS.danger : seatPct <= 0.3 ? COLORS.warning : COLORS.secondary;
@@ -40,7 +54,11 @@ const BusCard = ({ bus, onPress }) => {
       {/* Top row */}
       <View style={styles.topRow}>
         <View style={styles.busIconWrap}>
-          <Ionicons name={vehicleIcon} size={22} color={PURPLE.primary} />
+          {photoUrl ? (
+            <Image source={{ uri: photoUrl }} style={styles.busPhoto} resizeMode="cover" />
+          ) : (
+            <Ionicons name={vehicleIcon} size={22} color={PURPLE.primary} />
+          )}
         </View>
         <View style={styles.busInfo}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -157,6 +175,11 @@ const styles = StyleSheet.create({
     backgroundColor: PURPLE.light,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  busPhoto: {
+    width: 48,
+    height: 48,
   },
   busInfo: { flex: 1 },
   busName: {

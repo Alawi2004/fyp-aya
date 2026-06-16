@@ -217,6 +217,7 @@ export const getAvailableDrivers = async (req, res) => {
           u.phone,
           ISNULL(rs.avg_rating,    0.0) AS avg_rating,
           ISNULL(rs.total_ratings, 0)   AS total_ratings,
+          lv.vehicle_id,
           veh.plate_number,
           veh.color,
           veh.model,

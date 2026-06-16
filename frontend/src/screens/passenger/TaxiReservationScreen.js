@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   ScrollView,
   Modal,
@@ -25,7 +26,7 @@ import { useApp } from "../../context/AppContext";
 import GradientFill from "../../components/common/GradientFill";
 import FadeInView from "../../components/common/FadeInView";
 import PressableScale from "../../components/common/PressableScale";
-import {
+import apiClient, {
   getAvailableDrivers,
   createTaxiReservation,
   expandMapUrl as apiExpandMapUrl,
@@ -589,6 +590,7 @@ const TaxiReservationScreen = ({ navigation, route }) => {
   const [vehicleType, setVehicleType] = useState("sedan");
   const [drivers, setDrivers] = useState(null);
   const [driversLoading, setDriversLoading] = useState(false);
+  const [driverVehiclePhotos, setDriverVehiclePhotos] = useState({});
   const [selectedDriverId, setSelectedDriverId] = useState(null);
   const fetchTimerRef = useRef(null);
 
@@ -808,6 +810,21 @@ const TaxiReservationScreen = ({ navigation, route }) => {
       ) {
         setSelectedDriverId(null);
       }
+      // Fetch vehicle exterior photos for each driver that has a vehicle
+      const photoMap = {};
+      await Promise.all(
+        list
+          .filter((d) => d.vehicle_id)
+          .map(async (d) => {
+            try {
+              const pr = await apiClient.get(`/vehicles/${d.vehicle_id}/photos`);
+              const photos = Array.isArray(pr.data) ? pr.data : [];
+              const pick = photos.find((p) => p.slot === 'exterior') ?? photos[0];
+              if (pick?.url) photoMap[d.driver_id] = pick.url;
+            } catch {}
+          })
+      );
+      setDriverVehiclePhotos(photoMap);
     } catch {
       setDrivers([]);
     } finally {
@@ -1635,6 +1652,7 @@ const TaxiReservationScreen = ({ navigation, route }) => {
                     driverDist != null
                       ? Math.max(1, Math.round((driverDist / 30) * 60))
                       : null;
+                  const vehiclePhoto = driverVehiclePhotos[d.driver_id] ?? null;
                   return (
                     <FadeInView key={d.driver_id} index={Math.min(di, 6)}>
                       <PopIn active={isSelected}>
@@ -1652,14 +1670,22 @@ const TaxiReservationScreen = ({ navigation, route }) => {
                               isSelected && styles.driverAvatarSelected,
                             ]}
                           >
-                            <Text
-                              style={[
-                                styles.driverInitials,
-                                isSelected && { color: COLORS.white },
-                              ]}
-                            >
-                              {initials}
-                            </Text>
+                            {vehiclePhoto ? (
+                              <Image
+                                source={{ uri: vehiclePhoto }}
+                                style={styles.driverVehiclePhoto}
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <Text
+                                style={[
+                                  styles.driverInitials,
+                                  isSelected && { color: COLORS.white },
+                                ]}
+                              >
+                                {initials}
+                              </Text>
+                            )}
                           </View>
                           <View style={{ flex: 1 }}>
                             <Text style={styles.driverName}>{d.name}</Text>
@@ -2612,6 +2638,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.border,
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+  },
+  driverVehiclePhoto: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   driverAvatarAny: {
     backgroundColor: COLORS.background,

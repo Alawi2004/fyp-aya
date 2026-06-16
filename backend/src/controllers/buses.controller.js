@@ -7,6 +7,7 @@ export const getBuses = async (req, res) => {
     const result = await pool.request().query(`
       SELECT
         t.trip_id                                               AS _id,
+        v.vehicle_id,
         v.model                                                 AS name,
         LOWER(ISNULL(v.vehicle_type, 'bus'))                    AS type,
         r.route_name                                            AS route,
