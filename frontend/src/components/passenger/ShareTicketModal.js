@@ -10,7 +10,7 @@ import * as Print from 'expo-print';
 import { File, Paths } from 'expo-file-system';
 import { Ionicons } from '@expo/vector-icons';
 import ShareTicketCard from './ShareTicketCard';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 
 // ── Main modal ────────────────────────────────────────────────────────────────
 const ShareTicketModal = ({ visible, onClose, booking, ticket, passengerName, user, boardingQr }) => {
@@ -71,7 +71,7 @@ const ShareTicketModal = ({ visible, onClose, booking, ticket, passengerName, us
       // Move the auto-named temp file to a readable filename before sharing
       const busName  = (bus.name || 'Ticket').replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
       const dateSlug = booking?.date ? new Date(booking.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
-      const filename = `${busName}_Seat${seat}_${dateSlug}.pdf`;
+      const filename = `${busName}_Seat${seat}_${dateSlug}_${Date.now()}.pdf`;
       const namedFile = new File(Paths.cache, filename);
       new File(tempUri).move(namedFile);
 
@@ -204,9 +204,9 @@ const styles = StyleSheet.create({
   actionWrap: { paddingHorizontal: 16 },
   pdfBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    backgroundColor: COLORS.danger,
+    backgroundColor: PURPLE.primary,
     borderRadius: 16, paddingVertical: 16,
-    shadowColor: COLORS.danger,
+    shadowColor: PURPLE.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
   },

@@ -7,11 +7,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Defs, LinearGradient as SvgGradient, Stop, Rect } from 'react-native-svg';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 import { sendOtpApi } from '../../api/authApi';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const BRAND = ['#1E3A8A', '#4338CA', '#7C3AED'];
+const BRAND = PURPLE.gradient;
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -65,8 +65,8 @@ const Field = ({
     }).start();
   }, [focused, value]);
 
-  const borderColor = error ? COLORS.danger : focused ? COLORS.primary : COLORS.border;
-  const tint = error ? COLORS.danger : focused ? COLORS.primary : COLORS.textMuted;
+  const borderColor = error ? COLORS.danger : focused ? PURPLE.primary : COLORS.border;
+  const tint = error ? COLORS.danger : focused ? PURPLE.primary : COLORS.textMuted;
   const labelLeft = icon ? 44 : 14;
 
   return (
@@ -127,8 +127,8 @@ const PickerField = ({ icon, label, value, onPress, error, active }) => {
     }).start();
   }, [value, active]);
 
-  const borderColor = error ? COLORS.danger : active ? COLORS.primary : COLORS.border;
-  const tint = error ? COLORS.danger : active ? COLORS.primary : COLORS.textMuted;
+  const borderColor = error ? COLORS.danger : active ? PURPLE.primary : COLORS.border;
+  const tint = error ? COLORS.danger : active ? PURPLE.primary : COLORS.textMuted;
   const labelLeft = icon ? 44 : 14;
 
   return (
@@ -332,7 +332,7 @@ const PassengerRegisterScreen = ({ navigation }) => {
               transform: [{ scale: intro[0].interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
             }]}>
               <View style={styles.logoCircle}>
-                <Ionicons name="person-add" size={34} color={COLORS.primary} />
+                <Ionicons name="person-add" size={34} color={PURPLE.primary} />
               </View>
             </Animated.View>
             <Animated.Text style={[styles.brand, sect(1)]}>Create Account</Animated.Text>
@@ -441,7 +441,7 @@ const PassengerRegisterScreen = ({ navigation }) => {
                         <Text style={[styles.dropdownItemText, form.birthMonth === m && styles.dropdownItemTextActive]}>
                           {m}
                         </Text>
-                        {form.birthMonth === m ? <Ionicons name="checkmark" size={17} color={COLORS.primary} /> : null}
+                        {form.birthMonth === m ? <Ionicons name="checkmark" size={17} color={PURPLE.primary} /> : null}
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
@@ -461,7 +461,7 @@ const PassengerRegisterScreen = ({ navigation }) => {
                         <Text style={[styles.dropdownItemText, form.birthYear === y && styles.dropdownItemTextActive]}>
                           {y}
                         </Text>
-                        {form.birthYear === y ? <Ionicons name="checkmark" size={17} color={COLORS.primary} /> : null}
+                        {form.birthYear === y ? <Ionicons name="checkmark" size={17} color={PURPLE.primary} /> : null}
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
@@ -477,7 +477,7 @@ const PassengerRegisterScreen = ({ navigation }) => {
                 style={[styles.signInBtn, { marginTop: 8, transform: [{ scale: btnScale }], opacity: loading ? 0.85 : 1 }]}
               >
                 <View style={styles.signInBg} pointerEvents="none">
-                  <GradientFill id="regBtnGrad" colors={['#2563EB', '#7C3AED']} radius={16} />
+                  <GradientFill id="regBtnGrad" colors={PURPLE.gradient} radius={16} />
                 </View>
                 {loading ? (
                   <ActivityIndicator color={COLORS.white} />
@@ -504,7 +504,7 @@ const PassengerRegisterScreen = ({ navigation }) => {
                 activeOpacity={0.85}
               >
                 <Text style={styles.signupText}>Sign in instead</Text>
-                <Ionicons name="log-in-outline" size={17} color={COLORS.primary} />
+                <Ionicons name="log-in-outline" size={17} color={PURPLE.primary} />
               </TouchableOpacity>
 
               <View style={styles.secureRow}>
@@ -599,9 +599,9 @@ const styles = StyleSheet.create({
     paddingVertical: 13, paddingHorizontal: 16,
     borderBottomWidth: 1, borderBottomColor: COLORS.background,
   },
-  dropdownItemActive: { backgroundColor: COLORS.primaryLight },
+  dropdownItemActive: { backgroundColor: PURPLE.light },
   dropdownItemText: { fontSize: 15, color: COLORS.textPrimary, fontWeight: '600' },
-  dropdownItemTextActive: { color: COLORS.primary, fontWeight: '800' },
+  dropdownItemTextActive: { color: PURPLE.primary, fontWeight: '800' },
 
   /* Submit button */
   signInBtn: {
@@ -619,10 +619,10 @@ const styles = StyleSheet.create({
   dividerText: { fontSize: 12, color: COLORS.textMuted, fontWeight: '600' },
   signupBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    height: 54, borderRadius: 16, borderWidth: 1.5, borderColor: COLORS.primaryMid,
-    backgroundColor: COLORS.primaryLight,
+    height: 54, borderRadius: 16, borderWidth: 1.5, borderColor: PURPLE.midStrong,
+    backgroundColor: PURPLE.light,
   },
-  signupText: { fontSize: 15, fontWeight: '800', color: COLORS.primary },
+  signupText: { fontSize: 15, fontWeight: '800', color: PURPLE.primary },
   secureRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 18 },
   secureText: { fontSize: 12, color: COLORS.textMuted, fontWeight: '500' },
 });

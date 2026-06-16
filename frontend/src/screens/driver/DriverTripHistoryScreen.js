@@ -1,20 +1,24 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, FlatList, StyleSheet, TouchableOpacity,
-  StatusBar, ActivityIndicator, RefreshControl, ScrollView,
+  View, Text, FlatList, StyleSheet,
+  StatusBar, RefreshControl,
 } from 'react-native';
-import useHeaderInsets from '../../hooks/useHeaderInsets';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
+import GradientFill from '../../components/common/GradientFill';
+import FadeInView from '../../components/common/FadeInView';
+import PressableScale from '../../components/common/PressableScale';
+import { SkeletonCardList } from '../../components/common/Skeleton';
 import { getDriverTripsApi } from '../../api/driverApi';
 
 const STATUS_CFG = {
   completed: { label: 'Completed', bg: COLORS.secondaryLight, text: COLORS.secondary, icon: 'checkmark-circle'  },
   cancelled: { label: 'Cancelled', bg: COLORS.dangerLight,    text: COLORS.danger,    icon: 'close-circle'      },
-  upcoming:  { label: 'Upcoming',  bg: COLORS.primaryLight,   text: COLORS.primary,   icon: 'time-outline'      },
-  confirmed: { label: 'Scheduled', bg: COLORS.primaryLight,   text: COLORS.primary,   icon: 'calendar-outline'  },
-  boarded:   { label: 'Boarding',  bg: COLORS.primaryLight,   text: COLORS.primary,   icon: 'people-outline'    },
-  ongoing:   { label: 'Active',    bg: COLORS.warningLight ?? COLORS.primaryLight, text: COLORS.warning ?? COLORS.primary, icon: 'radio-button-on' },
+  upcoming:  { label: 'Upcoming',  bg: PURPLE.mid,            text: PURPLE.primary,   icon: 'time-outline'      },
+  confirmed: { label: 'Scheduled', bg: PURPLE.mid,            text: PURPLE.primary,   icon: 'calendar-outline'  },
+  boarded:   { label: 'Boarding',  bg: PURPLE.mid,            text: PURPLE.primary,   icon: 'people-outline'    },
+  ongoing:   { label: 'Active',    bg: COLORS.warningLight,   text: COLORS.warning,   icon: 'radio-button-on'   },
 };
 
 const UPCOMING_STATUSES = ['upcoming', 'confirmed', 'boarded'];
@@ -64,12 +68,21 @@ function normaliseTrip(t) {
   };
 }
 
+const FILTERS = [
+  { key: 'all',       label: 'All'       },
+  { key: 'upcoming',  label: 'Upcoming'  },
+  { key: 'ongoing',   label: 'Active'    },
+  { key: 'completed', label: 'Completed' },
+  { key: 'cancelled', label: 'Cancelled' },
+];
+
 const DriverTripHistoryScreen = ({ navigation }) => {
-  const headerInsets = useHeaderInsets();
+  const insets = useSafeAreaInsets();
   const [trips,      setTrips]      = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter,     setFilter]     = useState('all');
+  const [error,      setError]      = useState(null);
 
   const loadTrips = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -77,7 +90,10 @@ const DriverTripHistoryScreen = ({ navigation }) => {
       const res  = await getDriverTripsApi();
       const data = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.trips) ? res.data.trips : []);
       setTrips(data.map(normaliseTrip));
-    } catch {
+      setError(null);
+    } catch (err) {
+      // Surface the real reason so "not connected" is distinguishable from "no trips"
+      setError(err?.response?.data?.error || err?.message || 'Could not reach the server.');
       setTrips([]);
     } finally {
       setLoading(false);
@@ -98,93 +114,95 @@ const DriverTripHistoryScreen = ({ navigation }) => {
   const cancelledCnt = trips.filter(t => t.status === 'cancelled').length;
   const upcomingCnt  = trips.filter(t => UPCOMING_STATUSES.includes(t.status)).length;
 
-  const renderItem = ({ item }) => {
+  const renderItem = ({ item, index }) => {
     const cfg  = STATUS_CFG[item.status] || STATUS_CFG.upcoming;
     const fill = item.totalSeats > 0 ? item.passengers / item.totalSeats : 0;
 
     return (
-      <View style={styles.card}>
-        <View style={styles.cardTop}>
-          <View style={styles.cardIconWrap}>
-            <Ionicons name="bus" size={16} color={COLORS.primary} />
+      <FadeInView index={index}>
+        <View style={styles.card}>
+          <View style={styles.cardTop}>
+            <View style={styles.cardIconWrap}>
+              <Ionicons name="bus" size={16} color={PURPLE.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardRoute}>{item.routeName}</Text>
+              <Text style={styles.cardBus}>{item.busNumber} · {item.date}</Text>
+            </View>
+            <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
+              <Ionicons name={cfg.icon} size={10} color={cfg.text} />
+              <Text style={[styles.statusText, { color: cfg.text }]}>{cfg.label}</Text>
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.cardRoute}>{item.routeName}</Text>
-            <Text style={styles.cardBus}>{item.busNumber} · {item.date}</Text>
-          </View>
-          <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
-            <Ionicons name={cfg.icon} size={10} color={cfg.text} />
-            <Text style={[styles.statusText, { color: cfg.text }]}>{cfg.label}</Text>
-          </View>
-        </View>
 
-        <View style={styles.journey}>
-          <View style={styles.journeyStop}>
-            <View style={[styles.jDot, { backgroundColor: COLORS.secondary }]} />
-            <View>
-              <Text style={styles.jLbl}>FROM</Text>
-              <Text style={styles.jPlace}>{item.origin}</Text>
-              <Text style={styles.jTime}>{item.departureTime}</Text>
+          {/* Vertical timeline — wraps gracefully for long location names */}
+          <View style={styles.journey}>
+            <View style={styles.rail}>
+              <View style={[styles.jDot, { backgroundColor: COLORS.secondary }]} />
+              <View style={styles.railLine} />
+              <View style={[styles.jDot, { backgroundColor: COLORS.danger }]} />
             </View>
-          </View>
-          <View style={styles.journeyMid}>
-            <View style={styles.jLine} />
-            <View style={styles.jChip}>
-              <Ionicons name="arrow-forward" size={10} color={COLORS.primary} />
-            </View>
-            <View style={styles.jLine} />
-          </View>
-          <View style={[styles.journeyStop, { alignItems: 'flex-end' }]}>
-            <View style={[styles.jDot, { backgroundColor: COLORS.danger }]} />
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.jLbl}>TO</Text>
-              <Text style={styles.jPlace}>{item.destination}</Text>
-              <Text style={styles.jTime}>{item.arrivalTime}</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.pillRow}>
-          <View style={styles.pill}>
-            <Ionicons name="people-outline" size={11} color={COLORS.textMuted} />
-            <Text style={styles.pillText}>{item.passengers} pax</Text>
-          </View>
-          <View style={styles.pill}>
-            <Ionicons name="hourglass-outline" size={11} color={COLORS.textMuted} />
-            <Text style={styles.pillText}>{item.duration}</Text>
-          </View>
-          {item.status === 'completed' && item.earnings > 0 && (
-            <View style={[styles.pill, { backgroundColor: COLORS.secondaryLight }]}>
-              <Ionicons name="cash-outline" size={11} color={COLORS.secondary} />
-              <Text style={[styles.pillText, { color: COLORS.secondary }]}>${item.earnings.toFixed(2)}</Text>
-            </View>
-          )}
-          {item.totalSeats > 0 && item.status === 'completed' && (
-            <View style={styles.fillWrap}>
-              <View style={styles.fillBar}>
-                <View style={[styles.fillFill, {
-                  width: `${fill * 100}%`,
-                  backgroundColor: fill >= 0.85 ? COLORS.danger : fill >= 0.6 ? COLORS.warning : COLORS.secondary,
-                }]} />
+            <View style={styles.journeyCol}>
+              <View style={styles.journeyStop}>
+                <Text style={styles.jLbl}>FROM</Text>
+                <Text style={styles.jPlace} numberOfLines={2}>{item.origin}</Text>
+                <Text style={styles.jTime}>{item.departureTime}</Text>
               </View>
-              <Text style={styles.fillPct}>{Math.round(fill * 100)}%</Text>
+              <View style={styles.journeyStop}>
+                <Text style={styles.jLbl}>TO</Text>
+                <Text style={styles.jPlace} numberOfLines={2}>{item.destination}</Text>
+                <Text style={styles.jTime}>{item.arrivalTime}</Text>
+              </View>
             </View>
-          )}
+          </View>
+
+          <View style={styles.pillRow}>
+            <View style={styles.pill}>
+              <Ionicons name="people-outline" size={11} color={COLORS.textMuted} />
+              <Text style={styles.pillText}>{item.passengers} pax</Text>
+            </View>
+            <View style={styles.pill}>
+              <Ionicons name="hourglass-outline" size={11} color={COLORS.textMuted} />
+              <Text style={styles.pillText}>{item.duration}</Text>
+            </View>
+            {item.status === 'completed' && item.earnings > 0 && (
+              <View style={[styles.pill, { backgroundColor: COLORS.secondaryLight }]}>
+                <Ionicons name="cash-outline" size={11} color={COLORS.secondary} />
+                <Text style={[styles.pillText, { color: COLORS.secondary }]}>${item.earnings.toFixed(2)}</Text>
+              </View>
+            )}
+            {item.totalSeats > 0 && item.status === 'completed' && (
+              <View style={styles.fillWrap}>
+                <View style={styles.fillBar}>
+                  <View style={[styles.fillFill, {
+                    width: `${fill * 100}%`,
+                    backgroundColor: fill >= 0.85 ? COLORS.danger : fill >= 0.6 ? COLORS.warning : COLORS.secondary,
+                  }]} />
+                </View>
+                <Text style={styles.fillPct}>{Math.round(fill * 100)}%</Text>
+              </View>
+            )}
+          </View>
         </View>
-      </View>
+      </FadeInView>
     );
   };
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE.deep} />
 
-      <View style={[styles.header, headerInsets]}>
-        <View style={styles.headerDecor} />
-        <View style={styles.headerTop}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+      {/* ── Gradient hero ── */}
+      <View style={styles.header}>
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <GradientFill id="driverHistHero" colors={PURPLE.gradient} vertical />
+          <View style={styles.headerDecor} />
+        </View>
+
+        <View style={[styles.headerTop, { paddingTop: insets.top + 8 }]}>
+          <PressableScale style={styles.backBtn} onPress={() => navigation.goBack()} scaleTo={0.88}>
             <Ionicons name="arrow-back" size={20} color={COLORS.white} />
-          </TouchableOpacity>
+          </PressableScale>
           <View style={{ alignItems: 'center' }}>
             <Text style={styles.headerTitle}>Trip History</Text>
             <Text style={styles.headerSub}>${totalEarned.toFixed(2)} total · {completedCnt} trips done</Text>
@@ -194,10 +212,10 @@ const DriverTripHistoryScreen = ({ navigation }) => {
 
         <View style={styles.summaryRow}>
           {[
-            { icon: 'checkmark-circle', label: 'Completed', value: completedCnt,                    color: COLORS.secondary          },
-            { icon: 'calendar-outline', label: 'Upcoming',  value: upcomingCnt,                     color: 'rgba(255,255,255,0.9)'   },
-            { icon: 'close-circle',     label: 'Cancelled', value: cancelledCnt,                    color: COLORS.danger             },
-            { icon: 'cash-outline',     label: 'Earned',    value: `$${totalEarned.toFixed(0)}`,    color: 'rgba(255,255,255,0.9)'   },
+            { icon: 'checkmark-circle', label: 'Completed', value: completedCnt,                 color: '#A7F3D0'               },
+            { icon: 'calendar-outline', label: 'Upcoming',  value: upcomingCnt,                  color: 'rgba(255,255,255,0.95)' },
+            { icon: 'close-circle',     label: 'Cancelled', value: cancelledCnt,                 color: '#FCA5A5'               },
+            { icon: 'cash-outline',     label: 'Earned',    value: `$${totalEarned.toFixed(0)}`, color: 'rgba(255,255,255,0.95)' },
           ].map((s, i) => (
             <View key={s.label} style={[styles.summaryCell, i < 3 && styles.summaryCellBorder]}>
               <Ionicons name={s.icon} size={14} color={s.color} />
@@ -208,30 +226,26 @@ const DriverTripHistoryScreen = ({ navigation }) => {
         </View>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterWrap} contentContainerStyle={styles.filterContent}>
-        {[
-          { key: 'all',       label: 'All'       },
-          { key: 'upcoming',  label: 'Upcoming'  },
-          { key: 'ongoing',   label: 'Active'    },
-          { key: 'completed', label: 'Completed' },
-          { key: 'cancelled', label: 'Cancelled' },
-        ].map(f => (
-          <TouchableOpacity
+      <View style={styles.filterWrap}>
+        {FILTERS.map(f => (
+          <PressableScale
             key={f.key}
             style={[styles.filterBtn, filter === f.key && styles.filterBtnActive]}
             onPress={() => setFilter(f.key)}
+            scaleTo={0.92}
           >
-            <Text style={[styles.filterText, filter === f.key && styles.filterTextActive]}>
+            <Text
+              style={[styles.filterText, filter === f.key && styles.filterTextActive]}
+              numberOfLines={1}
+            >
               {f.label}
             </Text>
-          </TouchableOpacity>
+          </PressableScale>
         ))}
-      </ScrollView>
+      </View>
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-        </View>
+        <SkeletonCardList count={5} />
       ) : (
         <FlatList
           data={filtered}
@@ -243,14 +257,31 @@ const DriverTripHistoryScreen = ({ navigation }) => {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => { setRefreshing(true); loadTrips(true); }}
-              colors={[COLORS.primary]}
-              tintColor={COLORS.primary}
+              colors={[PURPLE.primary]}
+              tintColor={PURPLE.primary}
             />
           }
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
-              <Ionicons name="receipt-outline" size={38} color={COLORS.textMuted} />
-              <Text style={styles.emptyText}>No trips found</Text>
+              <View style={[styles.emptyIcon, error && { backgroundColor: COLORS.dangerLight }]}>
+                <Ionicons
+                  name={error ? 'cloud-offline-outline' : 'receipt-outline'}
+                  size={38}
+                  color={error ? COLORS.danger : PURPLE.primary}
+                />
+              </View>
+              <Text style={styles.emptyText}>{error ? "Couldn't load trips" : 'No trips found'}</Text>
+              {error ? (
+                <>
+                  <Text style={styles.emptySub}>{error}</Text>
+                  <PressableScale style={styles.retryBtn} onPress={() => loadTrips()} scaleTo={0.94}>
+                    <Ionicons name="refresh" size={15} color={COLORS.white} />
+                    <Text style={styles.retryText}>Retry</Text>
+                  </PressableScale>
+                </>
+              ) : (
+                <Text style={styles.emptySub}>Your assigned trips will appear here.</Text>
+              )}
             </View>
           }
         />
@@ -263,13 +294,15 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
 
   header: {
-    backgroundColor: COLORS.headerBg,
+    backgroundColor: PURPLE.deep,
     overflow: 'hidden',
+    borderBottomLeftRadius: 26,
+    borderBottomRightRadius: 26,
   },
   headerDecor: {
-    position: 'absolute', top: -50, right: -50,
+    position: 'absolute', top: -60, right: -50,
     width: 190, height: 190, borderRadius: 95,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(255,255,255,0.07)',
   },
   headerTop: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -277,42 +310,44 @@ const styles = StyleSheet.create({
   },
   backBtn: {
     width: 40, height: 40, borderRadius: 13,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center', justifyContent: 'center',
   },
   headerTitle: { fontSize: 17, fontWeight: '800', color: COLORS.white },
-  headerSub: { fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 2, fontWeight: '500' },
+  headerSub: { fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 2, fontWeight: '500' },
   summaryRow: {
-    flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.18)', paddingVertical: 12,
+    flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.16)', paddingVertical: 12,
   },
   summaryCell: { flex: 1, alignItems: 'center', gap: 3 },
-  summaryCellBorder: { borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.1)' },
+  summaryCellBorder: { borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.12)' },
   summaryVal: { fontSize: 16, fontWeight: '900' },
-  summaryLbl: { fontSize: 9, color: 'rgba(255,255,255,0.5)', fontWeight: '600', textTransform: 'uppercase' },
+  summaryLbl: { fontSize: 9, color: 'rgba(255,255,255,0.6)', fontWeight: '600', textTransform: 'uppercase' },
 
-  filterWrap:    { paddingVertical: 14 },
-  filterContent: { flexDirection: 'row', gap: 8, paddingHorizontal: 14 },
-  filterBtn: {
-    paddingHorizontal: 16, paddingVertical: 8,
-    borderRadius: 999, backgroundColor: COLORS.surfaceAlt,
-    borderWidth: 1, borderColor: 'transparent',
+  filterWrap: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 8,
+    paddingHorizontal: 14, paddingTop: 14, paddingBottom: 6,
   },
-  filterBtnActive: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primaryMid },
-  filterText: { fontSize: 12, fontWeight: '700', color: COLORS.textMuted },
-  filterTextActive: { color: COLORS.primary },
+  filterBtn: {
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 999, backgroundColor: COLORS.white,
+    borderWidth: 1.5, borderColor: PURPLE.midStrong,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  filterBtnActive: { backgroundColor: PURPLE.primary, borderColor: PURPLE.primary },
+  filterText: { fontSize: 12, fontWeight: '700', color: PURPLE.primary },
+  filterTextActive: { color: COLORS.white },
 
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { paddingHorizontal: 14, paddingBottom: 24 },
 
   card: {
     backgroundColor: COLORS.white, borderRadius: 18, padding: 14, marginBottom: 10,
-    shadowColor: '#64748B', shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.07, shadowRadius: 8, elevation: 3,
+    shadowColor: PURPLE.deep, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.09, shadowRadius: 12, elevation: 3,
   },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
   cardIconWrap: {
     width: 38, height: 38, borderRadius: 12,
-    backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: PURPLE.light, alignItems: 'center', justifyContent: 'center',
   },
   cardRoute: { fontSize: 13, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.1 },
   cardBus: { fontSize: 10, color: COLORS.textMuted, marginTop: 1, fontWeight: '600' },
@@ -322,22 +357,20 @@ const styles = StyleSheet.create({
   },
   statusText: { fontSize: 10, fontWeight: '700' },
 
+  /* Vertical timeline */
   journey: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row', gap: 10,
     paddingBottom: 12, marginBottom: 10,
     borderBottomWidth: 1, borderBottomColor: COLORS.border,
   },
-  journeyStop: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
-  jDot: { width: 8, height: 8, borderRadius: 4, marginTop: 12 },
+  rail: { width: 10, alignItems: 'center', paddingTop: 4 },
+  railLine: { width: 2, flex: 1, minHeight: 16, backgroundColor: COLORS.border, marginVertical: 4, borderRadius: 1 },
+  journeyCol: { flex: 1, gap: 12 },
+  journeyStop: {},
+  jDot: { width: 9, height: 9, borderRadius: 5 },
   jLbl: { fontSize: 9, fontWeight: '700', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: 0.4 },
-  jPlace: { fontSize: 12, fontWeight: '800', color: COLORS.textPrimary, marginTop: 2 },
+  jPlace: { fontSize: 12, fontWeight: '800', color: COLORS.textPrimary, marginTop: 2, lineHeight: 16 },
   jTime: { fontSize: 10, color: COLORS.textSecondary, fontWeight: '500', marginTop: 1 },
-  journeyMid: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 5 },
-  jLine: { width: 10, height: 1.5, backgroundColor: COLORS.border },
-  jChip: {
-    width: 20, height: 20, borderRadius: 6,
-    backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
-  },
 
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' },
   pill: {
@@ -351,8 +384,18 @@ const styles = StyleSheet.create({
   fillFill: { height: '100%', borderRadius: 99 },
   fillPct: { fontSize: 10, fontWeight: '700', color: COLORS.textMuted },
 
-  emptyWrap: { alignItems: 'center', paddingTop: 56, gap: 10 },
-  emptyText: { fontSize: 14, color: COLORS.textMuted, fontWeight: '600' },
+  emptyWrap: { alignItems: 'center', paddingTop: 56, gap: 14 },
+  emptyIcon: {
+    width: 80, height: 80, borderRadius: 26,
+    backgroundColor: PURPLE.light, alignItems: 'center', justifyContent: 'center',
+  },
+  emptyText: { fontSize: 15, color: COLORS.textPrimary, fontWeight: '800' },
+  emptySub: { fontSize: 12, color: COLORS.textMuted, fontWeight: '500', textAlign: 'center', paddingHorizontal: 40, marginTop: -6 },
+  retryBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6,
+    backgroundColor: PURPLE.primary, borderRadius: 12, paddingHorizontal: 18, paddingVertical: 10,
+  },
+  retryText: { fontSize: 13, fontWeight: '800', color: COLORS.white },
 });
 
 export default DriverTripHistoryScreen;

@@ -6,7 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 import { getDriverNotificationsApi, markNotificationReadApi } from '../../api/driverApi';
 
 // ── Type config ───────────────────────────────────────────────────────────────
@@ -14,7 +14,7 @@ const TYPE_CFG = {
   delay:     { icon: 'time-outline',           bg: COLORS.warningLight,  color: COLORS.warningDark,  border: COLORS.warningMid },
   emergency: { icon: 'alert-circle-outline',   bg: COLORS.dangerLight,   color: COLORS.dangerDark,   border: COLORS.dangerMid  },
   warning:   { icon: 'warning-outline',        bg: COLORS.warningLight,  color: COLORS.warning,      border: COLORS.warningMid },
-  info:      { icon: 'notifications-outline',  bg: COLORS.primaryLight,  color: COLORS.primary,      border: COLORS.primaryMid },
+  info:      { icon: 'notifications-outline',  bg: PURPLE.light,  color: PURPLE.primary,      border: PURPLE.midStrong },
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -106,7 +106,7 @@ export default function DriverNotificationsScreen({ navigation }) {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.driverPrimary} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE.primary} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -131,7 +131,7 @@ export default function DriverNotificationsScreen({ navigation }) {
       {/* Body */}
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={COLORS.driverPrimary} />
+          <ActivityIndicator size="large" color={PURPLE.primary} />
           <Text style={styles.loadingText}>Loading notifications…</Text>
         </View>
       ) : (
@@ -144,8 +144,8 @@ export default function DriverNotificationsScreen({ navigation }) {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => { setRefreshing(true); load(true); }}
-              tintColor={COLORS.driverPrimary}
-              colors={[COLORS.driverPrimary]}
+              tintColor={PURPLE.primary}
+              colors={[PURPLE.primary]}
             />
           }
           ListEmptyComponent={
@@ -174,7 +174,7 @@ export default function DriverNotificationsScreen({ navigation }) {
 const styles = StyleSheet.create({
   screen:       { flex: 1, backgroundColor: COLORS.background },
   header: {
-    backgroundColor: COLORS.driverPrimary,
+    backgroundColor: PURPLE.primary,
     paddingHorizontal: 16, paddingVertical: 14,
     flexDirection: 'row', alignItems: 'center',
   },

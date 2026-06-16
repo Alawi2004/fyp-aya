@@ -30,7 +30,11 @@
 
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { registerPushToken, registerFcmToken } from '../api/apiClient';
+
+// Expo Go removed Android push notifications in SDK 53 — skip registration there
+const IS_EXPO_GO = Constants.executionEnvironment === 'storeClient';
 import { getWalletApi } from '../api/walletApi';
 import { getBookingsApi, cancelBookingApi } from '../api/bookingApi';
 import { cancelTaxiReservation } from '../api/apiClient';
@@ -56,8 +60,9 @@ export const AppProvider = ({ children }) => {
     return () => { cancelled = true; };
   }, [role, user]);
 
-  // Register push tokens on mount (Expo + raw FCM) — best-effort, no throw
+  // Register push tokens on mount — skipped in Expo Go (removed in SDK 53)
   useEffect(() => {
+    if (IS_EXPO_GO) return;
     (async () => {
       try {
         const { status } = await Notifications.getPermissionsAsync();
@@ -66,16 +71,14 @@ export const AppProvider = ({ children }) => {
           : (await Notifications.requestPermissionsAsync()).status === 'granted';
         if (!granted) return;
 
-        // 1. Expo push token (routes through Expo's proxy → FCM/APNs)
         const { data: expoToken } = await Notifications.getExpoPushTokenAsync();
         if (expoToken) await registerPushToken(expoToken).catch(() => {});
 
-        // 2. Raw device token (FCM on Android, APNs on iOS) for direct delivery
         const { data: deviceToken, type } = await Notifications.getDevicePushTokenAsync();
         if (deviceToken && (type === 'firebase' || type === 'ios')) {
           await registerFcmToken(deviceToken).catch(() => {});
         }
-      } catch { /* entirely best-effort */ }
+      } catch { /* best-effort */ }
     })();
   }, []);
 

@@ -8,11 +8,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Defs, LinearGradient as SvgGradient, Stop, Rect, Circle, Path } from 'react-native-svg';
 import { useAuth } from '../../context/AuthContext';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 import { sendOtpApi } from '../../api/authApi';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const BRAND = ['#1E3A8A', '#4338CA', '#7C3AED'];
+const BRAND = PURPLE.gradient;
 
 // ── SVG gradient fill that measures its own box (reliable on iOS) ─────────────
 const GradientFill = ({ id, colors, radius = 0, vertical = false }) => {
@@ -53,7 +53,7 @@ const LogoMark = ({ size = 76 }) => (
     {/* rounded badge */}
     <Rect x="6" y="6" width="88" height="88" rx="26" fill="url(#logoG)" />
     {/* bus body */}
-    <Rect x="28" y="26" width="44" height="40" rx="11" fill={COLORS.primary} />
+    <Rect x="28" y="26" width="44" height="40" rx="11" fill={PURPLE.primary} />
     {/* windows */}
     <Rect x="34" y="33" width="13" height="11" rx="3.5" fill="#FFFFFF" />
     <Rect x="53" y="33" width="13" height="11" rx="3.5" fill="#FFFFFF" />
@@ -63,8 +63,8 @@ const LogoMark = ({ size = 76 }) => (
     <Circle cx="38" cy="70" r="6" fill="#1E293B" />
     <Circle cx="62" cy="70" r="6" fill="#1E293B" />
     {/* motion lines */}
-    <Path d="M14 40 H24" stroke={COLORS.primary} strokeWidth="4" strokeLinecap="round" />
-    <Path d="M16 52 H24" stroke={COLORS.primary} strokeWidth="4" strokeLinecap="round" opacity="0.6" />
+    <Path d="M14 40 H24" stroke={PURPLE.primary} strokeWidth="4" strokeLinecap="round" />
+    <Path d="M16 52 H24" stroke={PURPLE.primary} strokeWidth="4" strokeLinecap="round" opacity="0.6" />
   </Svg>
 );
 
@@ -83,8 +83,8 @@ const Field = ({ icon, label, value, onChangeText, secure, keyboardType, error, 
     }).start();
   }, [focused, value]);
 
-  const borderColor = error ? COLORS.danger : focused ? COLORS.primary : COLORS.border;
-  const tint = error ? COLORS.danger : focused ? COLORS.primary : COLORS.textMuted;
+  const borderColor = error ? COLORS.danger : focused ? PURPLE.primary : COLORS.border;
+  const tint = error ? COLORS.danger : focused ? PURPLE.primary : COLORS.textMuted;
 
   return (
     <View style={{ marginBottom: error ? 6 : 16 }}>
@@ -289,7 +289,7 @@ const LoginScreen = ({ navigation }) => {
                 style={[styles.signInBtn, { transform: [{ scale: btnScale }], opacity: loading ? 0.85 : 1 }]}
               >
                 <View style={styles.signInBg} pointerEvents="none">
-                  <GradientFill id="btnGrad" colors={['#2563EB', '#7C3AED']} radius={16} />
+                  <GradientFill id="btnGrad" colors={PURPLE.gradient} radius={16} />
                 </View>
                 {loading ? (
                   <ActivityIndicator color={COLORS.white} />
@@ -316,7 +316,7 @@ const LoginScreen = ({ navigation }) => {
                 activeOpacity={0.85}
               >
                 <Text style={styles.signupText}>Create an account</Text>
-                <Ionicons name="person-add-outline" size={17} color={COLORS.primary} />
+                <Ionicons name="person-add-outline" size={17} color={PURPLE.primary} />
               </TouchableOpacity>
 
               <View style={styles.secureRow}>
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
   errText: { fontSize: 12, color: COLORS.danger, fontWeight: '600' },
 
   forgot: { alignSelf: 'flex-end', marginTop: 2, marginBottom: 18 },
-  forgotText: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
+  forgotText: { fontSize: 13, fontWeight: '700', color: PURPLE.primary },
 
   /* Sign In button */
   signInBtn: {
@@ -402,10 +402,10 @@ const styles = StyleSheet.create({
   dividerText: { fontSize: 12, color: COLORS.textMuted, fontWeight: '600' },
   signupBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    height: 54, borderRadius: 16, borderWidth: 1.5, borderColor: COLORS.primaryMid,
-    backgroundColor: COLORS.primaryLight,
+    height: 54, borderRadius: 16, borderWidth: 1.5, borderColor: PURPLE.midStrong,
+    backgroundColor: PURPLE.light,
   },
-  signupText: { fontSize: 15, fontWeight: '800', color: COLORS.primary },
+  signupText: { fontSize: 15, fontWeight: '800', color: PURPLE.primary },
   secureRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 18 },
   secureText: { fontSize: 12, color: COLORS.textMuted, fontWeight: '500' },
 });

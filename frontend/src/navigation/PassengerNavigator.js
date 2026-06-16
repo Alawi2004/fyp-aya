@@ -2,9 +2,10 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS } from '../constants/colors';
+import { COLORS, PURPLE } from '../constants/colors';
+import PressableScale from '../components/common/PressableScale';
 
 import HomeScreen from '../screens/passenger/HomeScreen';
 import BusTrackingScreen from '../screens/passenger/BusTrackingScreen';
@@ -73,41 +74,38 @@ const TAB_CONFIG = {
   ProfileStack: { label: 'Profile', icon: 'person',  iconOutline: 'person-outline'  },
 };
 
-const CustomTabBar = ({ state, descriptors, navigation }) => {
+const CustomTabBar = ({ state, navigation }) => {
   const insets = useSafeAreaInsets();
   return (
-  <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-    {state.routes.map((route, index) => {
-      const isFocused = state.index === index;
-      const cfg = TAB_CONFIG[route.name] || {};
+    <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+      {state.routes.map((route, index) => {
+        const isFocused = state.index === index;
+        const cfg = TAB_CONFIG[route.name] || {};
 
-      const onPress = () => {
-        const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-        if (!isFocused && !event.defaultPrevented) {
-          navigation.navigate(route.name);
-        }
-      };
+        const onPress = () => {
+          const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+          if (!isFocused && !event.defaultPrevented) {
+            navigation.navigate(route.name);
+          }
+        };
 
-      return (
-        <View key={route.key} style={styles.tabItem}>
-          <View
-            onTouchEnd={onPress}
-            style={[styles.tabBtn, isFocused && styles.tabBtnActive]}
-          >
-            <Ionicons
-              name={isFocused ? cfg.icon : cfg.iconOutline}
-              size={22}
-              color={isFocused ? COLORS.primary : COLORS.textMuted}
-            />
+        return (
+          <PressableScale key={route.key} style={styles.tabItem} onPress={onPress} scaleTo={0.88}>
+            {isFocused && <View style={styles.tabIndicator} />}
+            <View style={[styles.tabBtn, isFocused && styles.tabBtnActive]}>
+              <Ionicons
+                name={isFocused ? cfg.icon : cfg.iconOutline}
+                size={21}
+                color={isFocused ? COLORS.white : COLORS.textMuted}
+              />
+            </View>
             <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
               {cfg.label}
             </Text>
-            {isFocused && <View style={styles.tabIndicator} />}
-          </View>
-        </View>
-      );
-    })}
-  </View>
+          </PressableScale>
+        );
+      })}
+    </View>
   );
 };
 
@@ -127,36 +125,44 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     backgroundColor: COLORS.white,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingTop: 8,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    paddingTop: 12,
     paddingHorizontal: 8,
-    shadowColor: '#1E293B',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 16,
+    shadowColor: PURPLE.deep,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 20,
   },
-  tabItem: { flex: 1, alignItems: 'center' },
+  tabItem: {
+    flex: 1, alignItems: 'center',
+    paddingTop: 6,
+  },
+  // Slim accent bar that sits at the very top edge of the active tab.
+  tabIndicator: {
+    position: 'absolute',
+    top: 0, width: 28, height: 3,
+    borderRadius: 2, backgroundColor: PURPLE.primary,
+  },
   tabBtn: {
+    width: 50, height: 34, borderRadius: 13,
     alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 6, paddingHorizontal: 16,
-    borderRadius: 14, position: 'relative',
   },
   tabBtnActive: {
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: PURPLE.primary,
+    shadowColor: PURPLE.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 5,
   },
   tabLabel: {
     fontSize: 11, fontWeight: '600',
-    color: COLORS.textMuted, marginTop: 3,
+    color: COLORS.textMuted, marginTop: 5,
   },
   tabLabelActive: {
-    color: COLORS.primary, fontWeight: '700',
-  },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: -6, width: 4, height: 4,
-    borderRadius: 2, backgroundColor: COLORS.primary,
+    color: PURPLE.primary, fontWeight: '800',
   },
 });
 

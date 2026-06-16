@@ -6,6 +6,8 @@ import {
   cancelTrip,
   getTripPassengers,
   getDriverEarnings,
+  getDriverVehicle,
+  createServiceRequest,
   reportIssue,
   sendEmergency,
   updateLocation,
@@ -116,6 +118,8 @@ router.get("/trips/:id/passengers", getTripPassengers);
  *         description: Earnings data
  */
 router.get("/earnings", getDriverEarnings);
+router.get("/vehicle",  getDriverVehicle);
+router.post("/service-request", createServiceRequest);
 
 /**
  * @swagger

@@ -6,13 +6,13 @@ import {
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 
 const MENU_SECTIONS = [
   {
     title: 'Activity',
     items: [
-      { icon: 'time-outline',       label: 'Trip History',     screen: 'DriverTripHistory', color: COLORS.primary   },
+      { icon: 'time-outline',       label: 'Trip History',     screen: 'DriverTripHistory', color: PURPLE.primary   },
       { icon: 'star-outline',       label: 'My Ratings',       screen: 'Ratings',           color: COLORS.warning   },
       { icon: 'cash-outline',       label: 'Earnings',         screen: 'Earnings',          color: COLORS.secondary },
     ],
@@ -20,7 +20,7 @@ const MENU_SECTIONS = [
   {
     title: 'Vehicle',
     items: [
-      { icon: 'car-outline',        label: 'Vehicle Status',   screen: 'VehicleStatus',     color: COLORS.primary   },
+      { icon: 'car-outline',        label: 'Vehicle Status',   screen: 'VehicleStatus',     color: PURPLE.primary   },
       { icon: 'document-text-outline', label: 'Report Issue',  screen: 'IssueReport',       color: COLORS.warning   },
       { icon: 'warning-outline',    label: 'Emergency SOS',    screen: 'Emergency',         color: COLORS.danger    },
     ],
@@ -28,7 +28,7 @@ const MENU_SECTIONS = [
   {
     title: 'Account',
     items: [
-      { icon: 'notifications-outline', label: 'Notifications', screen: 'NotificationsStack',  color: COLORS.primary   },
+      { icon: 'notifications-outline', label: 'Notifications', screen: 'NotificationsStack',  color: PURPLE.primary   },
       { icon: 'help-circle-outline', label: 'Help & Support',  screen: 'DriverHelpSupport',  color: COLORS.secondary },
       { icon: 'log-out-outline',    label: 'Sign Out',         screen: '__logout__',        color: COLORS.danger    },
     ],
@@ -60,7 +60,7 @@ const DriverProfileScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE.deep} />
 
       {/* Header */}
       <View style={[styles.header, headerInsets]}>
@@ -98,7 +98,7 @@ const DriverProfileScreen = ({ navigation }) => {
       {/* Stats */}
       <View style={styles.statsRow}>
         {[
-          { label: 'Trips Done',  value: '612', icon: 'receipt-outline',  color: COLORS.primary   },
+          { label: 'Trips Done',  value: '612', icon: 'receipt-outline',  color: PURPLE.primary   },
           { label: 'Avg Rating',  value: '4.8', icon: 'star',             color: COLORS.warning   },
           { label: 'On Time',     value: '94%', icon: 'time-outline',     color: COLORS.secondary },
           { label: 'Earned',      value: '$18k', icon: 'cash-outline',    color: COLORS.secondary },
@@ -121,7 +121,7 @@ const DriverProfileScreen = ({ navigation }) => {
         >
           <View style={styles.vehicleLeft}>
             <View style={styles.vehicleIcon}>
-              <Ionicons name="bus" size={20} color={COLORS.primary} />
+              <Ionicons name="bus" size={20} color={PURPLE.primary} />
             </View>
             <View>
               <Text style={styles.vehicleTitle}>Assigned Vehicle</Text>
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
 
   /* Header */
   header: {
-    backgroundColor: COLORS.headerBg,
+    backgroundColor: PURPLE.deep,
     paddingBottom: 0, overflow: 'hidden',
   },
   headerDecor1: {
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
   },
   avatarWrap: {
     width: 56, height: 56, borderRadius: 18,
-    backgroundColor: COLORS.primary,
+    backgroundColor: PURPLE.primary,
     alignItems: 'center', justifyContent: 'center',
   },
   avatarText: { fontSize: 20, fontWeight: '900', color: COLORS.white },
@@ -229,11 +229,11 @@ const styles = StyleSheet.create({
   },
   profileBadgeText: { fontSize: 10, fontWeight: '700', color: COLORS.secondary },
   idChip: {
-    alignItems: 'center', backgroundColor: COLORS.primaryLight,
+    alignItems: 'center', backgroundColor: PURPLE.light,
     borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8,
   },
   idLabel: { fontSize: 9, color: COLORS.textMuted, fontWeight: '700', textTransform: 'uppercase' },
-  idValue: { fontSize: 13, fontWeight: '800', color: COLORS.primary, marginTop: 2 },
+  idValue: { fontSize: 13, fontWeight: '800', color: PURPLE.primary, marginTop: 2 },
 
   /* Stats */
   statsRow: {
@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
   vehicleLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   vehicleIcon: {
     width: 44, height: 44, borderRadius: 14,
-    backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: PURPLE.light, alignItems: 'center', justifyContent: 'center',
   },
   vehicleTitle: { fontSize: 11, color: COLORS.textMuted, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3 },
   vehicleId: { fontSize: 14, fontWeight: '800', color: COLORS.textPrimary, marginTop: 2 },

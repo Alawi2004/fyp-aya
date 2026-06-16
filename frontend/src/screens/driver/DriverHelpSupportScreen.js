@@ -5,13 +5,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 
 const FAQS = [
   {
     section: 'Trips & Schedule',
     icon: 'calendar-outline',
-    color: COLORS.primary,
+    color: PURPLE.primary,
     items: [
       {
         q: 'How do I start a trip?',
@@ -100,7 +100,7 @@ const CONTACT_CARDS = [
     label: 'Dispatch Hotline',
     value: '+60 3-1234 5678',
     sub: 'Available 24/7',
-    color: COLORS.primary,
+    color: PURPLE.primary,
     onPress: () => Linking.openURL('tel:+60312345678'),
   },
   {
@@ -156,7 +156,7 @@ const DriverHelpSupportScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE.deep} />
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
 
   header: {
-    backgroundColor: COLORS.headerBg,
+    backgroundColor: PURPLE.deep,
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingBottom: 18,
   },
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
   /* Footer */
   footerNote: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 8,
-    backgroundColor: COLORS.primaryLight, borderRadius: 12, padding: 12, marginTop: 4,
+    backgroundColor: PURPLE.light, borderRadius: 12, padding: 12, marginTop: 4,
   },
   footerText: { flex: 1, fontSize: 12, color: COLORS.textSecondary, lineHeight: 18 },
 });

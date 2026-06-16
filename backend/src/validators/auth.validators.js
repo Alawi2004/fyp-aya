@@ -80,7 +80,13 @@ export const disable2faSchema = z.object({
 
 export const sendOtpSchema = z.object({
   email:   z.string().trim().email("Invalid email").toLowerCase(),
-  purpose: z.enum(["register", "login_verify"]).optional(),
+  purpose: z.enum(["register", "login_verify", "reset_password"]).optional(),
+});
+
+export const resetPasswordOtpSchema = z.object({
+  email:        z.string().trim().email("Invalid email").toLowerCase(),
+  otp:          z.string().length(6, "Code must be 6 digits").regex(/^\d+$/, "Code must be numeric"),
+  new_password: z.string().min(8, "Password must be at least 8 characters").max(128),
 });
 
 export const verifyOtpSchema = z.object({

@@ -6,7 +6,7 @@ import {
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import { Ionicons } from '@expo/vector-icons';
 import Button from '../../components/common/Button';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 import { reportDelayApi } from '../../api/driverApi';
 
 const DELAY_REASONS = [
@@ -54,7 +54,7 @@ const DelayReportScreen = ({ navigation, route }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE.deep} />
 
       {/* Header */}
       <View style={[styles.header, headerInsets]}>
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   scroll: { padding: 16 },
 
   /* Header */
-  header: { backgroundColor: COLORS.headerBg, overflow: 'hidden' },
+  header: { backgroundColor: PURPLE.deep, overflow: 'hidden' },
   headerDecor: {
     position: 'absolute', top: -50, right: -50,
     width: 190, height: 190, borderRadius: 95,

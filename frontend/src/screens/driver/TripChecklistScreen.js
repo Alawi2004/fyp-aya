@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 import { submitChecklistApi, startTripApi } from '../../api/driverApi';
 
 const ITEMS = [
@@ -62,7 +62,7 @@ const TripChecklistScreen = ({ navigation, route }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE.deep} />
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
@@ -85,7 +85,7 @@ const TripChecklistScreen = ({ navigation, route }) => {
           <View style={styles.tripCard}>
             <View style={styles.tripCardLeft}>
               <View style={styles.tripIconWrap}>
-                <Ionicons name="bus" size={20} color={COLORS.primary} />
+                <Ionicons name="bus" size={20} color={PURPLE.primary} />
               </View>
               <View>
                 <Text style={styles.tripRoute}>{tripInfo.routeName}</Text>
@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
 
   header: {
-    backgroundColor: COLORS.headerBg,
+    backgroundColor: PURPLE.deep,
     paddingHorizontal: 20,
     paddingBottom: 20,
     flexDirection: 'row',
@@ -194,15 +194,15 @@ const styles = StyleSheet.create({
   tripCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
   tripIconWrap: {
     width: 42, height: 42, borderRadius: 13,
-    backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: PURPLE.light, alignItems: 'center', justifyContent: 'center',
   },
   tripRoute: { fontSize: 14, fontWeight: '800', color: COLORS.textPrimary },
   tripMeta: { fontSize: 11, color: COLORS.textMuted, marginTop: 2, fontWeight: '600' },
   journeyChip: {
-    backgroundColor: COLORS.primaryLight, borderRadius: 10,
+    backgroundColor: PURPLE.light, borderRadius: 10,
     paddingHorizontal: 12, paddingVertical: 7,
   },
-  journeyChipText: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
+  journeyChipText: { fontSize: 12, fontWeight: '700', color: PURPLE.primary },
 
   sectionLabel: {
     fontSize: 11, fontWeight: '700', color: COLORS.textMuted,
@@ -245,8 +245,8 @@ const styles = StyleSheet.create({
 
   startBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: COLORS.primary, borderRadius: 16, paddingVertical: 16, marginTop: 4,
-    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 },
+    backgroundColor: PURPLE.primary, borderRadius: 16, paddingVertical: 16, marginTop: 4,
+    shadowColor: PURPLE.primary, shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3, shadowRadius: 10, elevation: 6,
   },
   startBtnDisabled: {

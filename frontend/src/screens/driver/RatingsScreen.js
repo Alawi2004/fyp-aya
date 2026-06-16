@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
 import { getDriverRatingsApi } from '../../api/driverApi';
 
@@ -99,7 +99,7 @@ const RatingsScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE.deep} />
 
       {/* Header */}
       <View style={[styles.header, headerInsets]}>
@@ -149,7 +149,7 @@ const RatingsScreen = ({ navigation }) => {
                 </View>
                 {average >= 4.5 && (
                   <View style={styles.badge}>
-                    <Ionicons name="trophy-outline" size={13} color={COLORS.primary} />
+                    <Ionicons name="trophy-outline" size={13} color={PURPLE.primary} />
                     <Text style={styles.badgeText}>Top Driver</Text>
                   </View>
                 )}
@@ -189,8 +189,8 @@ const RatingsScreen = ({ navigation }) => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => { setRefreshing(true); load(true); }}
-            tintColor={COLORS.driverPrimary ?? COLORS.primary}
-            colors={[COLORS.driverPrimary ?? COLORS.primary]}
+            tintColor={PURPLE.primary ?? PURPLE.primary}
+            colors={[PURPLE.primary ?? PURPLE.primary]}
           />
         }
         ListEmptyComponent={
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
 
   header: {
-    backgroundColor: COLORS.headerBg,
+    backgroundColor: PURPLE.deep,
     overflow: 'hidden',
   },
   headerDecor: {
@@ -278,22 +278,22 @@ const styles = StyleSheet.create({
   cardTop:      { flexDirection: 'row', alignItems: 'center', gap: 10 },
   avatar: {
     width: 40, height: 40, borderRadius: 13,
-    backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: PURPLE.light, alignItems: 'center', justifyContent: 'center',
   },
-  avatarText:   { fontSize: 16, fontWeight: '800', color: COLORS.primary },
+  avatarText:   { fontSize: 16, fontWeight: '800', color: PURPLE.primary },
   passengerName:{ fontSize: 13, fontWeight: '700', color: COLORS.textPrimary },
   ratingMeta:   { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   metaDot:      { width: 3, height: 3, borderRadius: 1.5, backgroundColor: COLORS.border },
   routeChip: {
-    backgroundColor: COLORS.primaryLight, borderRadius: 999,
+    backgroundColor: PURPLE.light, borderRadius: 999,
     paddingHorizontal: 7, paddingVertical: 2,
   },
-  routeChipText: { fontSize: 10, fontWeight: '700', color: COLORS.primary },
+  routeChipText: { fontSize: 10, fontWeight: '700', color: PURPLE.primary },
   dateText:      { fontSize: 10, color: COLORS.textMuted, fontWeight: '500' },
   commentBubble: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 6,
     backgroundColor: COLORS.surfaceAlt, borderRadius: 10, padding: 10, marginTop: 10,
-    borderLeftWidth: 3, borderLeftColor: COLORS.primary,
+    borderLeftWidth: 3, borderLeftColor: PURPLE.primary,
   },
   commentText:  { flex: 1, fontSize: 12, color: COLORS.textSecondary, lineHeight: 18, fontStyle: 'italic', fontWeight: '500' },
 

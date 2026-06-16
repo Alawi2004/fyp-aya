@@ -1,25 +1,20 @@
 import multer from "multer";
 import path   from "path";
-import fs     from "fs";
-import { fileURLToPath } from "url";
+import { BlobServiceClient, StorageSharedKeyCredential } from "@azure/storage-blob";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// ── Azure Blob client ─────────────────────────────────────────────────────────
 
-// Resolve to <project-root>/uploads/complaint-photos/
-const UPLOAD_DIR = path.join(__dirname, "../../../uploads/complaint-photos");
+const ACCOUNT_NAME = process.env.AZURE_STORAGE_ACCOUNT_NAME;
+const ACCOUNT_KEY  = process.env.AZURE_STORAGE_ACCOUNT_KEY;
+const CONTAINER    = process.env.AZURE_STORAGE_COMPLAINT_CONTAINER || "complaint-photos";
 
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+function getBlobClient() {
+  if (!ACCOUNT_NAME || !ACCOUNT_KEY) return null;
+  const credential = new StorageSharedKeyCredential(ACCOUNT_NAME, ACCOUNT_KEY);
+  return new BlobServiceClient(`https://${ACCOUNT_NAME}.blob.core.windows.net`, credential);
 }
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
-  filename: (req, file, cb) => {
-    const userId = req.user?.user_id ?? "unknown";
-    const ext    = path.extname(file.originalname).toLowerCase() || ".jpg";
-    cb(null, `complaint-${userId}-${Date.now()}${ext}`);
-  },
-});
+// ── Multer (memory storage — buffer is uploaded to Azure, never touches disk) ─
 
 function fileFilter(_req, file, cb) {
   const allowed = /^image\/(jpeg|png|webp|gif)$/;
@@ -30,10 +25,46 @@ function fileFilter(_req, file, cb) {
   }
 }
 
-export const uploadComplaintPhoto = multer({
-  storage,
+const _multer = multer({
+  storage: multer.memoryStorage(),
   fileFilter,
   limits: { fileSize: 8 * 1024 * 1024 }, // 8 MB max
 }).single("photo");
 
-export const COMPLAINT_UPLOAD_BASE_URL = "/uploads/complaint-photos";
+// ── Two-step middleware: parse multipart → upload buffer to Azure ─────────────
+
+export const uploadComplaintPhoto = (req, res, next) => {
+  _multer(req, res, async (err) => {
+    if (err) return next(err);
+    if (!req.file) return next(); // photo is optional
+
+    const blobClient = getBlobClient();
+    if (!blobClient) {
+      // Azure not configured — skip upload, treat as no photo
+      console.warn("[blob] AZURE_STORAGE_ACCOUNT_NAME / KEY not set — photo discarded");
+      req.file = null;
+      return next();
+    }
+
+    try {
+      const userId  = req.user?.user_id ?? "unknown";
+      const ext     = path.extname(req.file.originalname).toLowerCase() || ".jpg";
+      const blobName = `complaint-${userId}-${Date.now()}${ext}`;
+
+      const containerClient = blobClient.getContainerClient(CONTAINER);
+      await containerClient.createIfNotExists({ access: "blob" });
+
+      const blockBlobClient = containerClient.getBlockBlobClient(blobName);
+      await blockBlobClient.uploadData(req.file.buffer, {
+        blobHTTPHeaders: { blobContentType: req.file.mimetype },
+      });
+
+      // Attach full public URL so the controller just reads req.file.azureUrl
+      req.file.azureUrl = blockBlobClient.url;
+      next();
+    } catch (azureErr) {
+      console.error("[blob] upload failed:", azureErr.message);
+      next(azureErr);
+    }
+  });
+};

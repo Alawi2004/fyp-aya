@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 
 const EMERGENCY_TYPES = [
   { id: 'accident',  label: 'Road Accident',    icon: 'warning-outline',      color: COLORS.danger,  bg: COLORS.dangerLight   },
@@ -121,7 +121,7 @@ const EmergencyScreen = ({ navigation }) => {
             { icon: 'person-outline',    label: 'Driver ID',    val: 'DRV-042' },
           ].map(s => (
             <View key={s.label} style={styles.infoItem}>
-              <Ionicons name={s.icon} size={14} color={COLORS.primary} />
+              <Ionicons name={s.icon} size={14} color={PURPLE.primary} />
               <Text style={styles.infoLabel}>{s.label}</Text>
               <Text style={styles.infoVal}>{s.val}</Text>
             </View>
@@ -155,7 +155,7 @@ const EmergencyScreen = ({ navigation }) => {
 
         {/* Note */}
         <View style={styles.noteCard}>
-          <Ionicons name="information-circle-outline" size={16} color={COLORS.primary} />
+          <Ionicons name="information-circle-outline" size={16} color={PURPLE.primary} />
           <Text style={styles.noteText}>
             Your GPS location, bus ID, and driver details will be shared automatically when the SOS is triggered.
           </Text>
@@ -251,10 +251,10 @@ const styles = StyleSheet.create({
   /* Note */
   noteCard: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 10,
-    backgroundColor: COLORS.primaryLight, borderRadius: 14,
-    padding: 14, borderWidth: 1, borderColor: COLORS.primaryMid,
+    backgroundColor: PURPLE.light, borderRadius: 14,
+    padding: 14, borderWidth: 1, borderColor: PURPLE.midStrong,
   },
-  noteText: { flex: 1, fontSize: 12, color: COLORS.primary, fontWeight: '600', lineHeight: 18 },
+  noteText: { flex: 1, fontSize: 12, color: PURPLE.primary, fontWeight: '600', lineHeight: 18 },
 });
 
 export default EmergencyScreen;

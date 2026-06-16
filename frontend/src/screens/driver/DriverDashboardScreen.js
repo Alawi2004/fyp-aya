@@ -2,18 +2,20 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal,
   Alert, Platform, StatusBar, Animated, ActivityIndicator, RefreshControl,
+  PanResponder,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 import { getDriverTripsApi, startTripApi, completeTripApi, cancelTripApi } from '../../api/driverApi';
+import { useGpsTracking } from '../../hooks/useGpsTracking';
 
 const TRIP_STATUS = [
   { key: 'idle',       label: 'Not Started', icon: 'ellipse-outline',    color: COLORS.textMuted   },
   { key: 'active',     label: 'Trip Active',  icon: 'radio-button-on',   color: COLORS.secondary   },
   { key: 'break',      label: 'On Break',     icon: 'pause-circle',      color: COLORS.warning     },
-  { key: 'completed',  label: 'Completed',    icon: 'checkmark-circle',  color: COLORS.primary     },
+  { key: 'completed',  label: 'Completed',    icon: 'checkmark-circle',  color: PURPLE.primary     },
 ];
 
 function formatTime(dateStr) {
@@ -44,13 +46,13 @@ function normaliseTrip(t) {
 
 const STATUS_CFG = {
   // real backend values
-  confirmed: { label: 'Upcoming',  bg: COLORS.primaryLight,   text: COLORS.primary,   dot: COLORS.primary   },
-  boarded:   { label: 'Boarding',  bg: COLORS.primaryLight,   text: COLORS.primary,   dot: COLORS.primary   },
+  confirmed: { label: 'Upcoming',  bg: PURPLE.light,   text: PURPLE.primary,   dot: PURPLE.primary   },
+  boarded:   { label: 'Boarding',  bg: PURPLE.light,   text: PURPLE.primary,   dot: PURPLE.primary   },
   ongoing:   { label: 'Active',    bg: COLORS.secondaryLight, text: COLORS.secondary, dot: COLORS.secondary },
   completed: { label: 'Completed', bg: COLORS.surfaceAlt,     text: COLORS.textMuted, dot: COLORS.textMuted },
   cancelled: { label: 'Cancelled', bg: COLORS.dangerLight,    text: COLORS.danger,    dot: COLORS.danger    },
   // legacy / fallback values
-  upcoming:  { label: 'Upcoming',  bg: COLORS.primaryLight,   text: COLORS.primary,   dot: COLORS.primary   },
+  upcoming:  { label: 'Upcoming',  bg: PURPLE.light,   text: PURPLE.primary,   dot: PURPLE.primary   },
   active:    { label: 'Active',    bg: COLORS.secondaryLight, text: COLORS.secondary, dot: COLORS.secondary },
 };
 
@@ -61,6 +63,52 @@ const isDoneStatus      = (s) => ['completed', 'cancelled', 'closed'].includes(s
 
 // ── Trip Detail Modal ────────────────────────────────────────────────────────
 const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd, onOpenMap, onCancel, onManifest }) => {
+  // Hooks must come before any early return
+  const sheetY    = useRef(new Animated.Value(600)).current;
+  const dragBase  = useRef(0);
+
+  useEffect(() => {
+    Animated.spring(sheetY, {
+      toValue:         0,
+      useNativeDriver: false,
+      friction:        10,
+      tension:         60,
+    }).start();
+  }, [sheetY]);
+
+  const swipePan = useRef(
+    PanResponder.create({
+      // Attached only to the handle strip — never fights the ScrollView
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        sheetY.stopAnimation((val) => { dragBase.current = val; });
+      },
+      onPanResponderMove: (_, { dy }) => {
+        sheetY.setValue(Math.max(0, dragBase.current + dy));
+      },
+      onPanResponderRelease: (_, { dy, vy }) => {
+        const projected = dragBase.current + dy;
+        if (projected > 120 || vy > 0.4) {
+          Animated.timing(sheetY, {
+            toValue:         700,
+            duration:        200,
+            useNativeDriver: false,
+          }).start(() => {
+            sheetY.setValue(600);
+            onClose();
+          });
+        } else {
+          Animated.spring(sheetY, {
+            toValue:         0,
+            useNativeDriver: false,
+            friction:        9,
+            tension:         70,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
   if (!trip) return null;
 
   const isLoading = actionLoading === trip.trip_id;
@@ -74,7 +122,7 @@ const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd,
     <Modal
       visible
       transparent
-      animationType="slide"
+      animationType="none"
       onRequestClose={onClose}
     >
       {/* Full-screen flex column: overlay (flex:1) + sheet at bottom */}
@@ -88,8 +136,10 @@ const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd,
         />
 
         {/* Bottom sheet */}
-        <View style={[modalStyles.sheet, { paddingBottom: (insets?.bottom ?? 0) + 20 }]}>
-          <View style={modalStyles.handle} />
+        <Animated.View style={[modalStyles.sheet, { paddingBottom: (insets?.bottom ?? 0) + 20, transform: [{ translateY: sheetY }] }]}>
+          <View style={modalStyles.handleArea} {...swipePan.panHandlers}>
+            <View style={modalStyles.handle} />
+          </View>
 
           <ScrollView
             showsVerticalScrollIndicator={false}
@@ -100,7 +150,7 @@ const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd,
             {/* Header row */}
             <View style={modalStyles.header}>
               <View style={modalStyles.busIcon}>
-                <Ionicons name="bus" size={20} color={COLORS.primary} />
+                <Ionicons name="bus" size={20} color={PURPLE.primary} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={modalStyles.routeName}>{trip.routeName}</Text>
@@ -112,28 +162,22 @@ const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd,
               </View>
             </View>
 
-            {/* Journey */}
+            {/* Journey — vertical timeline */}
             <View style={modalStyles.journeyRow}>
-              <View style={modalStyles.journeyStop}>
+              <View style={modalStyles.rail}>
                 <View style={[modalStyles.journeyDot, { backgroundColor: COLORS.secondary }]} />
+                <View style={modalStyles.railLine} />
+                <View style={[modalStyles.journeyDot, { backgroundColor: COLORS.danger }]} />
+              </View>
+              <View style={modalStyles.journeyCol}>
                 <View>
                   <Text style={modalStyles.journeyLbl}>FROM</Text>
-                  <Text style={modalStyles.journeyPlace}>{trip.origin}</Text>
+                  <Text style={modalStyles.journeyPlace} numberOfLines={2}>{trip.origin}</Text>
                   <Text style={modalStyles.journeyTime}>{trip.departureTime}</Text>
                 </View>
-              </View>
-              <View style={modalStyles.journeyMid}>
-                <View style={modalStyles.jLine} />
-                <View style={modalStyles.jChip}>
-                  <Ionicons name="bus-outline" size={11} color={COLORS.primary} />
-                </View>
-                <View style={modalStyles.jLine} />
-              </View>
-              <View style={[modalStyles.journeyStop, { alignItems: 'flex-end' }]}>
-                <View style={[modalStyles.journeyDot, { backgroundColor: COLORS.danger }]} />
-                <View style={{ alignItems: 'flex-end' }}>
+                <View>
                   <Text style={modalStyles.journeyLbl}>TO</Text>
-                  <Text style={modalStyles.journeyPlace}>{trip.destination}</Text>
+                  <Text style={modalStyles.journeyPlace} numberOfLines={2}>{trip.destination}</Text>
                   <Text style={modalStyles.journeyTime}>{trip.arrivalTime}</Text>
                 </View>
               </View>
@@ -152,7 +196,7 @@ const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd,
                 <Text style={[modalStyles.statVal, { color: COLORS.secondary }]}>${trip.earnings.toFixed(2)}</Text>
               </View>
               <View style={modalStyles.stat}>
-                <Ionicons name="map-outline" size={14} color={COLORS.primary} />
+                <Ionicons name="map-outline" size={14} color={PURPLE.primary} />
                 <Text style={modalStyles.statLbl}>Stops</Text>
                 <Text style={modalStyles.statVal}>{trip.stops}</Text>
               </View>
@@ -180,7 +224,7 @@ const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd,
                   onPress={() => onOpenMap(trip)}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="navigate" size={16} color={COLORS.primary} />
+                  <Ionicons name="navigate" size={16} color={PURPLE.primary} />
                   <Text style={modalStyles.mapBtnText}>Open Map</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -231,13 +275,13 @@ const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd,
               onPress={() => onManifest(trip)}
               activeOpacity={0.85}
             >
-              <Ionicons name="people-outline" size={16} color={COLORS.primary} />
+              <Ionicons name="people-outline" size={16} color={PURPLE.primary} />
               <Text style={modalStyles.manifestBtnText}>View Passenger Manifest</Text>
             </TouchableOpacity>
 
             <View style={{ height: 8 }} />
           </ScrollView>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -248,16 +292,23 @@ const modalStyles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     paddingTop: 16, paddingHorizontal: 20,
-    maxHeight: '85%',
+    maxHeight: '65%',
+  },
+  handleArea: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    paddingTop: 14,
+    paddingBottom: 20,
+    marginHorizontal: -20,
+    paddingHorizontal: 20,
   },
   handle: {
     width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.border,
-    alignSelf: 'center', marginBottom: 16,
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
   busIcon: {
     width: 44, height: 44, borderRadius: 13,
-    backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: PURPLE.light, alignItems: 'center', justifyContent: 'center',
   },
   routeName: { fontSize: 15, fontWeight: '800', color: COLORS.textPrimary },
   busNum:    { fontSize: 12, color: COLORS.textMuted, fontWeight: '600', marginTop: 2 },
@@ -269,21 +320,17 @@ const modalStyles = StyleSheet.create({
   statusText: { fontSize: 11, fontWeight: '700' },
 
   journeyRow: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row', gap: 12,
     paddingVertical: 14, marginBottom: 14,
     borderTopWidth: 1, borderBottomWidth: 1, borderColor: COLORS.border,
   },
-  journeyStop: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
-  journeyDot:  { width: 8, height: 8, borderRadius: 4, marginTop: 13 },
+  rail: { width: 10, alignItems: 'center', paddingTop: 4 },
+  railLine: { width: 2, flex: 1, minHeight: 16, backgroundColor: COLORS.border, marginVertical: 4, borderRadius: 1 },
+  journeyCol: { flex: 1, gap: 12 },
+  journeyDot:  { width: 9, height: 9, borderRadius: 5 },
   journeyLbl:  { fontSize: 9, fontWeight: '700', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
-  journeyPlace:{ fontSize: 13, fontWeight: '800', color: COLORS.textPrimary, marginTop: 2 },
+  journeyPlace:{ fontSize: 13, fontWeight: '800', color: COLORS.textPrimary, marginTop: 2, lineHeight: 17 },
   journeyTime: { fontSize: 11, color: COLORS.textSecondary, fontWeight: '500', marginTop: 1 },
-  journeyMid:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6 },
-  jLine:  { width: 14, height: 1.5, backgroundColor: COLORS.border },
-  jChip:  {
-    width: 24, height: 24, borderRadius: 8,
-    backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
-  },
 
   statRow: { flexDirection: 'row', marginBottom: 12 },
   stat:    { flex: 1, alignItems: 'center', gap: 4 },
@@ -304,10 +351,10 @@ const modalStyles = StyleSheet.create({
   actionRow: { flexDirection: 'row', gap: 10 },
   mapBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: COLORS.primaryLight, borderRadius: 14, paddingVertical: 15,
-    borderWidth: 1.5, borderColor: COLORS.primary,
+    backgroundColor: PURPLE.light, borderRadius: 14, paddingVertical: 15,
+    borderWidth: 1.5, borderColor: PURPLE.primary,
   },
-  mapBtnText: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
+  mapBtnText: { fontSize: 14, fontWeight: '700', color: PURPLE.primary },
   endBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     backgroundColor: COLORS.danger, borderRadius: 14, paddingVertical: 15,
@@ -331,10 +378,10 @@ const modalStyles = StyleSheet.create({
 
   manifestBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    borderWidth: 1.5, borderColor: COLORS.primary, borderRadius: 14, paddingVertical: 13,
-    marginTop: 10, backgroundColor: COLORS.primaryLight,
+    borderWidth: 1.5, borderColor: PURPLE.primary, borderRadius: 14, paddingVertical: 13,
+    marginTop: 10, backgroundColor: PURPLE.light,
   },
-  manifestBtnText: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
+  manifestBtnText: { fontSize: 14, fontWeight: '700', color: PURPLE.primary },
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -452,6 +499,7 @@ const DriverDashboardScreen = ({ navigation }) => {
   }, [loadTrips]);
 
   const activeTrip    = trips.find(t => isActiveStatus(t.status));
+  useGpsTracking(activeTrip?.trip_id ?? null);
   const upcomingCount = trips.filter(t => !isActiveStatus(t.status) && !isDoneStatus(t.status)).length;
   const doneToday     = trips.filter(t => isDoneStatus(t.status)).length;
   const earnedToday   = trips.filter(t => isDoneStatus(t.status)).reduce((s, t) => s + t.earnings, 0);
@@ -475,7 +523,7 @@ const DriverDashboardScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.headerBg} />
+      <StatusBar barStyle="light-content" backgroundColor={PURPLE.deep} />
 
       {/* ─── Header ─── */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
@@ -536,8 +584,8 @@ const DriverDashboardScreen = ({ navigation }) => {
       <View style={styles.statsStrip}>
         {[
           { icon: 'radio-button-on', label: 'Active',   value: activeTrip ? '1' : '0', color: COLORS.secondary },
-          { icon: 'time-outline',    label: 'Upcoming', value: String(upcomingCount),   color: COLORS.primary   },
-          { icon: 'checkmark-circle',label: 'Done',     value: String(doneToday),       color: COLORS.primary   },
+          { icon: 'time-outline',    label: 'Upcoming', value: String(upcomingCount),   color: PURPLE.primary   },
+          { icon: 'checkmark-circle',label: 'Done',     value: String(doneToday),       color: PURPLE.primary   },
           { icon: 'cash-outline',    label: 'Earned',   value: `$${earnedToday.toFixed(0)}`, color: COLORS.secondary },
         ].map((s, i) => (
           <View key={s.label} style={[styles.statItem, i < 3 && styles.statBorder]}>
@@ -550,7 +598,7 @@ const DriverDashboardScreen = ({ navigation }) => {
 
       {loading && trips.length === 0 ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={COLORS.driverPrimary ?? COLORS.primary} />
+          <ActivityIndicator size="large" color={PURPLE.primary ?? PURPLE.primary} />
         </View>
       ) : null}
 
@@ -561,8 +609,8 @@ const DriverDashboardScreen = ({ navigation }) => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => { setRefreshing(true); loadTrips(true); }}
-            colors={[COLORS.primary]}
-            tintColor={COLORS.primary}
+            colors={[PURPLE.primary]}
+            tintColor={PURPLE.primary}
           />
         }
       >
@@ -571,9 +619,9 @@ const DriverDashboardScreen = ({ navigation }) => {
           {/* ─── Quick Actions ─── */}
           <View style={styles.actionsRow}>
             {[
-              { icon: 'navigate',      label: 'Navigate',   color: COLORS.primary,    bg: COLORS.primaryLight,   onPress: () => navigation.navigate('TripChecklist')   },
+              { icon: 'navigate',      label: 'Navigate',   color: PURPLE.primary,    bg: PURPLE.light,   onPress: () => navigation.navigate('TripChecklist')   },
               { icon: 'qr-code',       label: 'Scan QR',    color: COLORS.secondary,  bg: COLORS.secondaryLight, onPress: () => navigation.navigate('PassengerVerify')  },
-              { icon: 'calendar',      label: 'Schedule',   color: COLORS.primary,    bg: COLORS.primaryLight,   onPress: () => navigation.navigate('WeeklySchedule')   },
+              { icon: 'calendar',      label: 'Schedule',   color: PURPLE.primary,    bg: PURPLE.light,   onPress: () => navigation.navigate('WeeklySchedule')   },
               { icon: 'warning',       label: 'Emergency',  color: COLORS.danger,     bg: COLORS.dangerLight,    onPress: () => navigation.navigate('Emergency')        },
             ].map(a => (
               <TouchableOpacity key={a.label} style={styles.actionBtn} activeOpacity={0.8} onPress={a.onPress}>
@@ -599,14 +647,14 @@ const DriverDashboardScreen = ({ navigation }) => {
             >
               <View style={styles.bannerLeft}>
                 <View style={styles.bannerLiveDot} />
-                <View>
-                  <Text style={styles.bannerTitle}>Active Trip in Progress</Text>
-                  <Text style={styles.bannerSub}>{activeTrip.origin} → {activeTrip.destination}</Text>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.bannerTitle} numberOfLines={1}>Active Trip in Progress</Text>
+                  <Text style={styles.bannerSub} numberOfLines={1}>{activeTrip.origin} → {activeTrip.destination}</Text>
                 </View>
               </View>
               <View style={styles.bannerBtn}>
                 <Ionicons name="map" size={13} color={COLORS.white} />
-                <Text style={styles.bannerBtnText}>Open Map</Text>
+                <Text style={styles.bannerBtnText} numberOfLines={1}>Open Map</Text>
               </View>
             </TouchableOpacity>
           )}
@@ -634,7 +682,7 @@ const DriverDashboardScreen = ({ navigation }) => {
                 {/* Card header */}
                 <View style={styles.tripCardHeader}>
                   <View style={styles.tripIconWrap}>
-                    <Ionicons name="bus" size={18} color={COLORS.primary} />
+                    <Ionicons name="bus" size={18} color={PURPLE.primary} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.tripRouteName}>{trip.routeName}</Text>
@@ -646,28 +694,22 @@ const DriverDashboardScreen = ({ navigation }) => {
                   </View>
                 </View>
 
-                {/* Journey */}
+                {/* Journey — vertical timeline (responsive for long stop names) */}
                 <View style={styles.journeyRow}>
-                  <View style={styles.journeyStop}>
+                  <View style={styles.rail}>
                     <View style={[styles.journeyDot, { backgroundColor: COLORS.secondary }]} />
+                    <View style={styles.railLine} />
+                    <View style={[styles.journeyDot, { backgroundColor: COLORS.danger }]} />
+                  </View>
+                  <View style={styles.journeyCol}>
                     <View>
                       <Text style={styles.journeyLbl}>FROM</Text>
-                      <Text style={styles.journeyPlace}>{trip.origin}</Text>
+                      <Text style={styles.journeyPlace} numberOfLines={2}>{trip.origin}</Text>
                       <Text style={styles.journeyTime}>{trip.departureTime}</Text>
                     </View>
-                  </View>
-                  <View style={styles.journeyMid}>
-                    <View style={styles.jLine} />
-                    <View style={styles.jChip}>
-                      <Ionicons name="bus-outline" size={11} color={COLORS.primary} />
-                    </View>
-                    <View style={styles.jLine} />
-                  </View>
-                  <View style={[styles.journeyStop, { alignItems: 'flex-end' }]}>
-                    <View style={[styles.journeyDot, { backgroundColor: COLORS.danger }]} />
-                    <View style={{ alignItems: 'flex-end' }}>
+                    <View>
                       <Text style={styles.journeyLbl}>TO</Text>
-                      <Text style={styles.journeyPlace}>{trip.destination}</Text>
+                      <Text style={styles.journeyPlace} numberOfLines={2}>{trip.destination}</Text>
                       <Text style={styles.journeyTime}>{trip.arrivalTime}</Text>
                     </View>
                   </View>
@@ -737,7 +779,7 @@ const styles = StyleSheet.create({
 
   /* Header */
   header: {
-    backgroundColor: COLORS.headerBg,
+    backgroundColor: PURPLE.deep,
     paddingHorizontal: 20,
     paddingBottom: 16,
     overflow: 'hidden',
@@ -773,7 +815,7 @@ const styles = StyleSheet.create({
   avatarOnline: {
     position: 'absolute', bottom: 1, right: 1,
     width: 11, height: 11, borderRadius: 5.5,
-    backgroundColor: COLORS.secondary, borderWidth: 2, borderColor: COLORS.headerBg,
+    backgroundColor: COLORS.secondary, borderWidth: 2, borderColor: PURPLE.deep,
   },
 
   /* Status control */
@@ -825,15 +867,16 @@ const styles = StyleSheet.create({
   /* Active banner */
   activeBanner: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: COLORS.primary, borderRadius: 16, padding: 14, marginBottom: 16,
-    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 },
+    backgroundColor: PURPLE.primary, borderRadius: 16, padding: 14, marginBottom: 16,
+    shadowColor: PURPLE.primary, shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3, shadowRadius: 10, elevation: 6,
   },
-  bannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  bannerLiveDot: { width: 9, height: 9, borderRadius: 4.5, backgroundColor: COLORS.secondary },
+  bannerLeft: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  bannerLiveDot: { width: 9, height: 9, borderRadius: 4.5, backgroundColor: COLORS.secondary, flexShrink: 0 },
   bannerTitle: { fontSize: 13, fontWeight: '800', color: COLORS.white },
   bannerSub: { fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 2, fontWeight: '500' },
   bannerBtn: {
+    flexShrink: 0, marginLeft: 10,
     flexDirection: 'row', alignItems: 'center', gap: 5,
     backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7,
@@ -843,7 +886,7 @@ const styles = StyleSheet.create({
   /* Section header */
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   sectionTitle: { fontSize: 15, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.2 },
-  sectionLink: { fontSize: 12, fontWeight: '700', color: COLORS.primary },
+  sectionLink: { fontSize: 12, fontWeight: '700', color: PURPLE.primary },
 
   /* Trip card */
   tripCard: {
@@ -854,7 +897,7 @@ const styles = StyleSheet.create({
   tripCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
   tripIconWrap: {
     width: 40, height: 40, borderRadius: 12,
-    backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: PURPLE.light, alignItems: 'center', justifyContent: 'center',
   },
   tripRouteName: { fontSize: 13, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.1 },
   tripBusNum: { fontSize: 11, color: COLORS.textMuted, marginTop: 1, fontWeight: '600' },
@@ -865,23 +908,19 @@ const styles = StyleSheet.create({
   tripStatusDot: { width: 5, height: 5, borderRadius: 2.5 },
   tripStatusText: { fontSize: 10, fontWeight: '700' },
 
-  /* Journey */
+  /* Journey — vertical timeline */
   journeyRow: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row', gap: 12,
     paddingBottom: 12, marginBottom: 10,
     borderBottomWidth: 1, borderBottomColor: COLORS.border,
   },
-  journeyStop: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
-  journeyDot: { width: 8, height: 8, borderRadius: 4, marginTop: 13 },
+  rail: { width: 10, alignItems: 'center', paddingTop: 4 },
+  railLine: { width: 2, flex: 1, minHeight: 16, backgroundColor: COLORS.border, marginVertical: 4, borderRadius: 1 },
+  journeyCol: { flex: 1, gap: 12 },
+  journeyDot: { width: 9, height: 9, borderRadius: 5 },
   journeyLbl: { fontSize: 9, fontWeight: '700', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
-  journeyPlace: { fontSize: 13, fontWeight: '800', color: COLORS.textPrimary, marginTop: 2 },
+  journeyPlace: { fontSize: 13, fontWeight: '800', color: COLORS.textPrimary, marginTop: 2, lineHeight: 17 },
   journeyTime: { fontSize: 11, color: COLORS.textSecondary, fontWeight: '500', marginTop: 1 },
-  journeyMid: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6 },
-  jLine: { width: 12, height: 1.5, backgroundColor: COLORS.border },
-  jChip: {
-    width: 22, height: 22, borderRadius: 7,
-    backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center',
-  },
 
   /* Footer */
   tripFooter: { flexDirection: 'row', alignItems: 'center', gap: 10 },
