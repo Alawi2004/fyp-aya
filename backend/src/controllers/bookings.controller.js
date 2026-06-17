@@ -374,9 +374,13 @@ export const verifyTicket = async (req, res) => {
             AND used_at IS NULL
         `);
 
+      const passengerId = Number.parseInt(passengerQr.payload.sub, 10);
+      // Find an active ticket for a currently in-progress trip belonging to
+      // this passenger. Fall back to any confirmed ticket if no trip is active
+      // yet (e.g. driver verifies before departure).
       const passengerResult = await pool
         .request()
-        .input("userId", sql.Int, Number.parseInt(passengerQr.payload.sub, 10))
+        .input("userId", sql.Int, passengerId)
         .query(`
           SELECT TOP 1
             u.user_id,
@@ -385,17 +389,30 @@ export const verifyTicket = async (req, res) => {
             t.ticket_id,
             t.trip_id,
             t.seat_number,
-            t.status
+            t.status AS ticket_status,
+            tr.status AS trip_status
           FROM users u
-          LEFT JOIN tickets t ON t.user_id = u.user_id
+          JOIN tickets t ON t.user_id = u.user_id
+          JOIN trips   tr ON tr.trip_id = t.trip_id
           WHERE u.user_id = @userId
-          ORDER BY t.ticket_id DESC
+            AND t.status  = 'confirmed'
+            AND tr.status IN ('scheduled', 'in_progress', 'ongoing')
+          ORDER BY
+            CASE tr.status WHEN 'in_progress' THEN 0 ELSE 1 END,
+            t.ticket_id DESC
         `);
+
+      if (!passengerResult.recordset[0]) {
+        return res.status(404).json({
+          valid: false,
+          message: "No active ticket found for this passenger",
+        });
+      }
 
       return res.json({
         valid: true,
         mode: "rotating_passenger_qr",
-        passenger: passengerResult.recordset[0] || { user_id: Number.parseInt(passengerQr.payload.sub, 10) },
+        passenger: passengerResult.recordset[0],
       });
     }
 

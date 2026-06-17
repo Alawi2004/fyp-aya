@@ -7,6 +7,8 @@ import { StatCard } from "../components/StatCard";
 import { StatusPill } from "../components/StatusPill";
 import { getTickets } from "../api/endpoints";
 import apiClient from "../api/apiClient";
+import { useSettings } from "../context/SettingsContext";
+import { fmtMoney } from "../utils/fmt";
 
 function normalizeTicket(t) {
   const dt = t.booking_time || t.created_at
@@ -19,7 +21,7 @@ function normalizeTicket(t) {
     seat: t.seat_number ?? t.seat ?? "",
     date: dt ? dt.toISOString().split("T")[0] : (t.date ?? ""),
     time: dt ? dt.toTimeString().slice(0, 5) : (t.time ?? ""),
-    amount: t.amount ? `$${t.amount}` : (t.amount_display ?? "$0.00"),
+    amount: parseFloat(t.amount ?? t.amount_display ?? 0) || 0,
     status: t.status
       ? t.status.charAt(0).toUpperCase() + t.status.slice(1)
       : "Confirmed",
@@ -36,6 +38,7 @@ const TICKET_STATUS_STYLE = {
 
 
 export default function TicketsPage() {
+  const { currency } = useSettings();
   const [tickets,      setTickets]      = useState([]);
   const [search,       setSearch]       = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -81,8 +84,7 @@ export default function TicketsPage() {
     cancelled: tickets.filter((t) => t.status === "Cancelled").length,
     revenue: tickets
       .filter((t) => t.status !== "Cancelled")
-      .reduce((s, t) => s + parseFloat(t.amount.replace("$", "")), 0)
-      .toFixed(2),
+      .reduce((s, t) => s + (t.amount || 0), 0),
   };
 
   const columns = [
@@ -118,7 +120,7 @@ export default function TicketsPage() {
     {
       key: "amount",
       label: "Fare",
-      render: (v) => <span style={{ fontWeight: 600 }}>{v}</span>,
+      render: (v) => <span style={{ fontWeight: 600 }}>{fmtMoney(v, currency)}</span>,
     },
     {
       key: "status",
@@ -246,7 +248,7 @@ export default function TicketsPage() {
         />
         <StatCard
           label="Fare collected"
-          value={`$${counts.revenue}`}
+          value={fmtMoney(counts.revenue, currency)}
           delta="total revenue"
           up={true}
         />

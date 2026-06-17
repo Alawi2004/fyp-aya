@@ -26,7 +26,7 @@ export const sendGpsLocation = async (req, res) => {
       .input("trip_id",   sql.Int,          trip_id)
       .input("latitude",  sql.Decimal(9, 6), latitude)
       .input("longitude", sql.Decimal(9, 6), longitude)
-      .query(`INSERT INTO gps_logs(trip_id, latitude, longitude) VALUES(@trip_id, @latitude, @longitude)`);
+      .query(`INSERT INTO gps_logs(trip_id, latitude, longitude, recorded_at) VALUES(@trip_id, @latitude, @longitude, GETDATE())`);
 
     res.status(201).json({ message: "GPS location saved" });
 

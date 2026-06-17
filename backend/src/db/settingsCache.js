@@ -12,9 +12,9 @@ let lastLoaded = 0;
 let loadPromise = null;
 
 const DEFAULTS = {
-  maintenance_mode:         "false",
-  maintenance_allowed_ips:  "",
-  force_2fa_enabled:        "false",
+  "maintenance.mode":        "false",
+  "maintenance_allowed_ips": "",
+  "force_2fa_enabled":       "false",
 };
 
 export async function getSetting(key) {
@@ -23,7 +23,7 @@ export async function getSetting(key) {
 }
 
 export async function isMaintenance() {
-  return (await getSetting("maintenance_mode")) === "true";
+  return (await getSetting("maintenance.mode")) === "true";
 }
 
 export async function isForce2FA() {
@@ -54,7 +54,7 @@ async function _load() {
   try {
     const pool   = await poolPromise;
     const result = await pool.request().query(
-      "SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('maintenance_mode','maintenance_allowed_ips','force_2fa_enabled')"
+      "SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('maintenance.mode','maintenance_allowed_ips','force_2fa_enabled')"
     );
 
     const map = { ...DEFAULTS };

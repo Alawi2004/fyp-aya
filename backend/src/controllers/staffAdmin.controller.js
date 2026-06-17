@@ -321,11 +321,14 @@ export const getReconciliation = async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PUT /api/staff/reconciliation/:id         ← ADMIN ONLY
+// :id may be a reconciliation_id (existing record) or a staff user_id (new
+// record — getReconciliation returns staff_id when no record exists yet).
+// When the record doesn't exist it is auto-created (UPSERT behaviour).
 // ─────────────────────────────────────────────────────────────────────────────
 export const updateReconciliation = async (req, res) => {
   const id      = parseInt(req.params.id, 10);
   const adminId = req.user.user_id;
-  const { actual_amount, status, notes } = req.body;
+  const { actual_amount, status, notes, date } = req.body;
 
   const VALID_STATUSES = ["pending", "matched", "discrepancy", "approved", "shortage", "excess"];
   if (status && !VALID_STATUSES.includes(status)) {
@@ -335,15 +338,56 @@ export const updateReconciliation = async (req, res) => {
   try {
     const pool = await poolPromise;
 
-    const existing = await pool.request()
+    // Try to find the record by its own PK first
+    let existing = await pool.request()
       .input("id", sql.Int, id)
       .query("SELECT reconciliation_id FROM staff_reconciliation WHERE reconciliation_id = @id");
 
-    if (!existing.recordset[0]) return res.status(404).json({ error: "Reconciliation record not found" });
+    let reconciliationId = existing.recordset[0]?.reconciliation_id;
+
+    // If not found by reconciliation_id, treat id as staff_id and upsert for
+    // the given date (or today). This covers the case where getReconciliation
+    // returns staff_id when no reconciliation record exists yet.
+    if (!reconciliationId) {
+      const reconcDate = date || new Date().toISOString().slice(0, 10);
+
+      const byStaff = await pool.request()
+        .input("staffId", sql.Int,  id)
+        .input("date",    sql.Date, reconcDate)
+        .query("SELECT reconciliation_id FROM staff_reconciliation WHERE staff_id = @staffId AND reconciliation_date = @date");
+
+      if (byStaff.recordset[0]) {
+        reconciliationId = byStaff.recordset[0].reconciliation_id;
+      } else {
+        // Compute expected cash from cash top-ups for this staff/date
+        const expectedRes = await pool.request()
+          .input("staffId", sql.Int,  id)
+          .input("date",    sql.Date, reconcDate)
+          .query(`
+            SELECT ISNULL(SUM(CASE WHEN LOWER(ISNULL(payment_method,'')) = 'cash' THEN amount ELSE 0 END), 0) AS expected_amount
+            FROM staff_top_ups
+            WHERE processed_by_staff_id = @staffId
+              AND CAST(created_at AS DATE) = @date
+              AND status = 'completed'
+          `);
+        const expectedAmt = parseFloat(expectedRes.recordset[0]?.expected_amount || 0);
+
+        const inserted = await pool.request()
+          .input("staffId",  sql.Int,           id)
+          .input("date",     sql.Date,           reconcDate)
+          .input("expected", sql.Decimal(10, 2), expectedAmt)
+          .query(`
+            INSERT INTO staff_reconciliation (staff_id, reconciliation_date, expected_amount, status)
+            OUTPUT INSERTED.reconciliation_id
+            VALUES (@staffId, @date, @expected, 'pending')
+          `);
+        reconciliationId = inserted.recordset[0].reconciliation_id;
+      }
+    }
 
     const sets = ["reviewed_by = @adminId", "reviewed_at = GETUTCDATE()"];
     const r2   = pool.request()
-      .input("id",      sql.Int, id)
+      .input("id",      sql.Int, reconciliationId)
       .input("adminId", sql.Int, adminId);
 
     if (actual_amount !== undefined) {

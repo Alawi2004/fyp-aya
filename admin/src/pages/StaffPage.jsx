@@ -9,6 +9,8 @@ import {
   getStaffTransactions, getSuspiciousTransactions,
   getReconciliation, submitReconciliation,
 } from "../api/endpoints";
+import { useSettings } from "../context/SettingsContext";
+import { fmtMoney } from "../utils/fmt";
 
 // ── Flag config ───────────────────────────────────────────────────────────────
 const FLAG_CONFIG = {
@@ -97,6 +99,7 @@ function LimitsModal({ staff, onClose, onSave }) {
 
 // ── Accounts tab ──────────────────────────────────────────────────────────────
 function AccountsTab({ staff, onToggleStatus, onEditLimits }) {
+  const { currency } = useSettings();
   const columns = [
     {
       key: "name", label: "Staff Member",
@@ -120,7 +123,7 @@ function AccountsTab({ staff, onToggleStatus, onEditLimits }) {
       render: (v, row) => (
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>{v} top-ups</div>
-          <div style={{ fontSize: 11, color: "#64748B" }}>${row.today_total.toLocaleString()}</div>
+          <div style={{ fontSize: 11, color: "#64748B" }}>{fmtMoney(row.today_total, currency)}</div>
         </div>
       ),
     },
@@ -128,8 +131,8 @@ function AccountsTab({ staff, onToggleStatus, onEditLimits }) {
       key: "daily_limit", label: "Limits",
       render: (v, row) => (
         <div style={{ fontSize: 11, color: "#475569" }}>
-          <div>Daily: <strong>${v.toLocaleString()}</strong></div>
-          <div>Per-TX: <strong>${row.tx_limit}</strong></div>
+          <div>Daily: <strong>{fmtMoney(v, currency)}</strong></div>
+          <div>Per-TX: <strong>{fmtMoney(row.tx_limit, currency)}</strong></div>
         </div>
       ),
     },
@@ -179,6 +182,7 @@ function AccountsTab({ staff, onToggleStatus, onEditLimits }) {
 
 // ── Transactions tab ──────────────────────────────────────────────────────────
 function TransactionsTab({ transactions, showSuspiciousOnly, onToggle }) {
+  const { currency } = useSettings();
   const [search, setSearch] = useState("");
 
   const rows = transactions.filter(t => {
@@ -212,7 +216,7 @@ function TransactionsTab({ transactions, showSuspiciousOnly, onToggle }) {
     { key: "passenger", label: "Passenger", render: v => <span style={{ fontSize: 12 }}>{v}</span> },
     {
       key: "amount", label: "Amount",
-      render: v => <span style={{ fontSize: 13, fontWeight: 700, color: "#059669" }}>${v.toFixed(2)}</span>,
+      render: v => <span style={{ fontSize: 13, fontWeight: 700, color: "#059669" }}>{fmtMoney(v, currency)}</span>,
     },
     { key: "method",   label: "Method",   render: v => <span style={{ fontSize: 11, color: "#475569" }}>{v}</span> },
     { key: "location", label: "Location", render: v => <span style={{ fontSize: 11, color: "#475569" }}>{v}</span> },
@@ -259,6 +263,7 @@ function TransactionsTab({ transactions, showSuspiciousOnly, onToggle }) {
 
 // ── Suspicious tab ────────────────────────────────────────────────────────────
 function SuspiciousTab({ transactions, staff }) {
+  const { currency } = useSettings();
   const suspicious = transactions.filter(t => t.flags.length > 0);
 
   // Group by staff
@@ -368,7 +373,7 @@ function SuspiciousTab({ transactions, staff }) {
                     </div>
                   </td>
                   <td style={{ padding: "10px 14px", fontSize: 12 }}>{t.passenger}</td>
-                  <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 700, color: "#DC2626" }}>${t.amount.toFixed(2)}</td>
+                  <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 700, color: "#DC2626" }}>{fmtMoney(t.amount, currency)}</td>
                   <td style={{ padding: "10px 14px", fontSize: 11, color: "#64748B" }}>{t.location}</td>
                   <td style={{ padding: "10px 14px" }}>
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -395,6 +400,7 @@ const RECON_STATUS = {
 };
 
 function SubmitCashModal({ record, onClose, onSubmit }) {
+  const { currency } = useSettings();
   const [reported, setReported] = useState("");
   const [notes,    setNotes]    = useState("");
 
@@ -412,7 +418,7 @@ function SubmitCashModal({ record, onClose, onSubmit }) {
       </p>
       <div style={{ padding: "12px 16px", background: "#F8FAFC", borderRadius: 10, border: "1px solid #E2E8F0", marginBottom: 16 }}>
         <div style={{ fontSize: 12, color: "#94A3B8", marginBottom: 4 }}>System Expected Cash</div>
-        <div style={{ fontSize: 24, fontWeight: 800, color: "#0F172A" }}>${record.expected.toFixed(2)}</div>
+        <div style={{ fontSize: 24, fontWeight: 800, color: "#0F172A" }}>{fmtMoney(record.expected, currency)}</div>
         <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>{record.cash_txns} cash transaction{record.cash_txns !== 1 ? "s" : ""}</div>
       </div>
       <div style={{ marginBottom: 14 }}>
@@ -429,7 +435,7 @@ function SubmitCashModal({ record, onClose, onSubmit }) {
           const color = diff === 0 ? "#059669" : diff < 0 ? "#DC2626" : "#D97706";
           return (
             <div style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color }}>
-              {diff === 0 ? "✓ Matches system exactly" : diff < 0 ? `⚠ Shortage of $${Math.abs(diff).toFixed(2)}` : `⚠ Excess of $${diff.toFixed(2)}`}
+              {diff === 0 ? "✓ Matches system exactly" : diff < 0 ? `⚠ Shortage of ${fmtMoney(Math.abs(diff), currency)}` : `⚠ Excess of ${fmtMoney(diff, currency)}`}
             </div>
           );
         })()}
@@ -444,6 +450,7 @@ function SubmitCashModal({ record, onClose, onSubmit }) {
 }
 
 function ReconciliationTab({ reconciliation, onSubmit }) {
+  const { currency } = useSettings();
   const [date,        setDate]        = useState("2026-05-08");
   const [submitTarget,setSubmitTarget]= useState(null);
 
@@ -464,20 +471,20 @@ function ReconciliationTab({ reconciliation, onSubmit }) {
       @media print{@page{margin:15mm}}</style></head><body>
       <h2>Daily Cash Reconciliation — ${date}</h2>
       <p>Generated: ${new Date().toLocaleString()} · ${rows.length} staff members</p>
-      <table><thead><tr><th>Staff</th><th>Station</th><th>Cash Txns</th><th>Expected ($)</th><th>Reported ($)</th><th>Discrepancy</th><th>Status</th></tr></thead>
+      <table><thead><tr><th>Staff</th><th>Station</th><th>Cash Txns</th><th>Expected (${currency})</th><th>Reported (${currency})</th><th>Discrepancy</th><th>Status</th></tr></thead>
       <tbody>${rows.map(r => `<tr>
         <td>${r.staff}</td><td>${r.station}</td><td>${r.cash_txns}</td>
-        <td>${r.expected.toFixed(2)}</td>
-        <td>${r.reported !== null ? r.reported.toFixed(2) : "—"}</td>
+        <td>${fmtMoney(r.expected, currency)}</td>
+        <td>${r.reported !== null ? fmtMoney(r.reported, currency) : "—"}</td>
         <td class="${r.discrepancy === 0 ? "matched" : r.discrepancy < 0 ? "shortage" : "excess"}">
-          ${r.discrepancy !== null ? (r.discrepancy >= 0 ? "+" : "") + r.discrepancy.toFixed(2) : "—"}
+          ${r.discrepancy !== null ? (r.discrepancy >= 0 ? "+" : "") + fmtMoney(Math.abs(r.discrepancy), currency) : "—"}
         </td>
         <td>${RECON_STATUS[r.status]?.label ?? r.status}</td>
       </tr>`).join("")}</tbody>
       <tfoot><tr><td colspan="3"><strong>Totals</strong></td>
-        <td><strong>${totalExpected.toFixed(2)}</strong></td>
-        <td><strong>${totalReported.toFixed(2)}</strong></td>
-        <td class="${totalDiscrep === 0 ? "matched" : totalDiscrep < 0 ? "shortage" : "excess"}"><strong>${totalDiscrep >= 0 ? "+" : ""}${totalDiscrep.toFixed(2)}</strong></td>
+        <td><strong>${fmtMoney(totalExpected, currency)}</strong></td>
+        <td><strong>${fmtMoney(totalReported, currency)}</strong></td>
+        <td class="${totalDiscrep === 0 ? "matched" : totalDiscrep < 0 ? "shortage" : "excess"}"><strong>${totalDiscrep >= 0 ? "+" : ""}${fmtMoney(Math.abs(totalDiscrep), currency)}</strong></td>
         <td></td></tr></tfoot></table></body></html>`;
     const win = window.open("", "_blank", "width=900,height=600");
     if (!win) return;
@@ -506,9 +513,9 @@ function ReconciliationTab({ reconciliation, onSubmit }) {
 
       {/* KPI cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
-        <StatCard label="Expected Cash"    value={`$${totalExpected.toFixed(0)}`} delta="from cash top-ups" accent="#2563EB" />
-        <StatCard label="Reported Cash"    value={`$${totalReported.toFixed(0)}`} delta={`${rows.length - pending} submitted`} accent="#10B981" />
-        <StatCard label="Net Discrepancy"  value={`${totalDiscrep >= 0 ? "+" : ""}$${totalDiscrep.toFixed(2)}`} delta={totalDiscrep === 0 ? "balanced" : "needs review"} up={totalDiscrep === 0} accent={totalDiscrep === 0 ? "#10B981" : "#EF4444"} />
+        <StatCard label="Expected Cash"    value={fmtMoney(totalExpected, currency)} delta="from cash top-ups" accent="#2563EB" />
+        <StatCard label="Reported Cash"    value={fmtMoney(totalReported, currency)} delta={`${rows.length - pending} submitted`} accent="#10B981" />
+        <StatCard label="Net Discrepancy"  value={(totalDiscrep >= 0 ? "+" : "") + fmtMoney(Math.abs(totalDiscrep), currency)} delta={totalDiscrep === 0 ? "balanced" : "needs review"} up={totalDiscrep === 0} accent={totalDiscrep === 0 ? "#10B981" : "#EF4444"} />
         <StatCard label="Pending"          value={pending} delta="not yet submitted" up={pending === 0} accent="#F59E0B" />
       </div>
 
@@ -549,16 +556,16 @@ function ReconciliationTab({ reconciliation, onSubmit }) {
                     {/* Cash txns */}
                     <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 600, color: "#0F172A", textAlign: "center" }}>{r.cash_txns}</td>
                     {/* Expected */}
-                    <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 700, color: "#0F172A" }}>${r.expected.toFixed(2)}</td>
+                    <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 700, color: "#0F172A" }}>{fmtMoney(r.expected, currency)}</td>
                     {/* Reported */}
                     <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 700, color: r.reported !== null ? "#0F172A" : "#94A3B8" }}>
-                      {r.reported !== null ? `$${r.reported.toFixed(2)}` : "—"}
+                      {r.reported !== null ? fmtMoney(r.reported, currency) : "—"}
                     </td>
                     {/* Discrepancy */}
                     <td style={{ padding: "12px 14px" }}>
                       {r.discrepancy !== null ? (
                         <span style={{ fontSize: 13, fontWeight: 800, color: rs.color }}>
-                          {r.discrepancy === 0 ? "—" : (r.discrepancy > 0 ? "+" : "") + `$${r.discrepancy.toFixed(2)}`}
+                          {r.discrepancy === 0 ? "—" : (r.discrepancy > 0 ? "+" : "") + fmtMoney(Math.abs(r.discrepancy), currency)}
                         </span>
                       ) : <span style={{ color: "#94A3B8", fontSize: 12 }}>—</span>}
                     </td>
@@ -586,11 +593,11 @@ function ReconciliationTab({ reconciliation, onSubmit }) {
             <tfoot>
               <tr style={{ borderTop: "2px solid #E2E8F0", background: "#F8FAFC" }}>
                 <td colSpan={3} style={{ padding: "10px 14px", fontSize: 12, fontWeight: 700, color: "#0F172A" }}>Totals</td>
-                <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 800, color: "#0F172A" }}>${totalExpected.toFixed(2)}</td>
-                <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 800, color: "#0F172A" }}>${totalReported.toFixed(2)}</td>
+                <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 800, color: "#0F172A" }}>{fmtMoney(totalExpected, currency)}</td>
+                <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 800, color: "#0F172A" }}>{fmtMoney(totalReported, currency)}</td>
                 <td style={{ padding: "10px 14px" }}>
                   <span style={{ fontSize: 13, fontWeight: 800, color: totalDiscrep === 0 ? "#059669" : totalDiscrep < 0 ? "#DC2626" : "#D97706" }}>
-                    {totalDiscrep === 0 ? "Balanced" : (totalDiscrep > 0 ? "+" : "") + `$${totalDiscrep.toFixed(2)}`}
+                    {totalDiscrep === 0 ? "Balanced" : (totalDiscrep > 0 ? "+" : "") + fmtMoney(Math.abs(totalDiscrep), currency)}
                   </span>
                 </td>
                 <td colSpan={2} />
@@ -606,7 +613,7 @@ function ReconciliationTab({ reconciliation, onSubmit }) {
           record={submitTarget}
           onClose={() => setSubmitTarget(null)}
           onSubmit={(id, reported, notes) => {
-            onSubmit(id, reported, notes);
+            onSubmit(id, reported, notes, date);
             setSubmitTarget(null);
           }}
         />
@@ -617,6 +624,7 @@ function ReconciliationTab({ reconciliation, onSubmit }) {
 
 // ── Main StaffPage ────────────────────────────────────────────────────────────
 export default function StaffPage() {
+  const { currency } = useSettings();
   const [tab,          setTab]          = useState("accounts");
   const [staff,        setStaff]        = useState([]);
   const [transactions, setTransactions] = useState([]);
@@ -643,30 +651,44 @@ export default function StaffPage() {
   const disabledCount = staff.filter(s => s.status === "Disabled").length;
   const todayTotal    = staff.reduce((s, a) => s + a.today_total, 0);
 
-  function handleToggleStatus(member) {
+  async function handleToggleStatus(member) {
     const next = member.status === "Active" ? "Disabled" : "Active";
     setStaff(prev => prev.map(s => s.id === member.id ? { ...s, status: next } : s));
-    updateStaffAccount(member.id, { status: next }).catch(() => {});
+    try {
+      await updateStaffAccount(member.id, { status: next });
+    } catch (err) {
+      setStaff(prev => prev.map(s => s.id === member.id ? { ...s, status: member.status } : s));
+      alert(err?.message ?? "Failed to update account status");
+    }
   }
 
-  function handleSaveLimits(daily, perTx) {
-    setStaff(prev => prev.map(s => s.id === limitsTarget.id ? { ...s, daily_limit: daily, tx_limit: perTx } : s));
-    updateStaffAccount(limitsTarget.id, { daily_limit: daily, tx_limit: perTx }).catch(() => {});
+  async function handleSaveLimits(daily, perTx) {
+    const target = limitsTarget;
+    setStaff(prev => prev.map(s => s.id === target.id ? { ...s, daily_limit: daily, tx_limit: perTx } : s));
     setLimitsTarget(null);
+    try {
+      await updateStaffAccount(target.id, { daily_limit: daily, tx_limit: perTx });
+    } catch (err) {
+      setStaff(prev => prev.map(s => s.id === target.id ? { ...s, daily_limit: target.daily_limit, tx_limit: target.tx_limit } : s));
+      alert(err?.message ?? "Failed to save transaction limits");
+    }
   }
 
   const pendingRecon = reconciliation.filter(r => r.status === "pending").length;
 
-  function handleSubmitRecon(id, reported, _notes) {
-    const diff = (() => {
-      const rec = reconciliation.find(r => r.id === id);
-      return reported - (rec?.expected ?? 0);
-    })();
+  async function handleSubmitRecon(id, reported, _notes, date) {
+    const prevRec = reconciliation.find(r => r.id === id);
+    const diff = reported - (prevRec?.expected ?? 0);
     const status = diff === 0 ? "matched" : diff < 0 ? "shortage" : "excess";
     setReconciliation(prev => prev.map(r =>
       r.id === id ? { ...r, reported, discrepancy: parseFloat(diff.toFixed(2)), status } : r
     ));
-    submitReconciliation(id, { reported, status }).catch(() => {});
+    try {
+      await submitReconciliation(id, { actual_amount: reported, status, date });
+    } catch (err) {
+      setReconciliation(prev => prev.map(r => r.id === id ? prevRec : r));
+      alert(err?.message ?? "Failed to submit reconciliation");
+    }
   }
 
   const tabs = [
@@ -717,7 +739,7 @@ export default function StaffPage() {
         />
         <StatCard
           label="Today's Volume"
-          value={`$${todayTotal.toLocaleString()}`}
+          value={fmtMoney(todayTotal, currency)}
           delta={`${transactions.filter(t => t.time.startsWith("2026-05-05")).length} transactions`}
           accent="#7C3AED"
           icon={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" strokeWidth="2" strokeLinecap="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>}

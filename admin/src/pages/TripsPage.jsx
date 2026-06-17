@@ -508,8 +508,14 @@ function RecurringTab({ recurring, onAdd, onEdit, onDelete, onToggle, routeOpts 
   async function handleSave() {
     if (!form.route || !form.driver || !form.time) return;
     if (editRec) {
+      const prevRec = editRec;
       onEdit({ ...editRec, ...form });
-      updateRecurringSchedule(editRec.id, form).catch(() => {});
+      try {
+        await updateRecurringSchedule(editRec.id, form);
+      } catch (err) {
+        onEdit(prevRec);
+        alert(err?.message ?? "Failed to update recurring schedule");
+      }
     } else {
       const payload = { ...form, active_from: TODAY, next_run: TODAY };
       try {
@@ -584,12 +590,27 @@ function RecurringTab({ recurring, onAdd, onEdit, onDelete, onToggle, routeOpts 
                     <div style={{ display: "flex", gap: 6 }}>
                       <button onClick={() => openEdit(r)} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 9px", cursor: "pointer" }}>Edit</button>
                       <button
-                        onClick={() => { onToggle(r.id); updateRecurringSchedule(r.id, { status: active ? "Paused" : "Active" }).catch(() => {}); }}
+                        onClick={async () => {
+                          onToggle(r.id);
+                          try {
+                            await updateRecurringSchedule(r.id, { status: active ? "Paused" : "Active" });
+                          } catch (err) {
+                            onToggle(r.id);
+                            alert(err?.message ?? "Failed to update schedule status");
+                          }
+                        }}
                         style={{ fontSize: 11, color: active ? "#D97706" : "#059669", background: active ? "#FFFBEB" : "#ECFDF5", border: "none", borderRadius: 6, padding: "4px 9px", cursor: "pointer" }}>
                         {active ? "Pause" : "Resume"}
                       </button>
                       <button
-                        onClick={() => { onDelete(r.id); deleteRecurringSchedule(r.id).catch(() => {}); }}
+                        onClick={async () => {
+                          try {
+                            await deleteRecurringSchedule(r.id);
+                            onDelete(r.id);
+                          } catch (err) {
+                            alert(err?.message ?? "Failed to delete schedule");
+                          }
+                        }}
                         style={{ fontSize: 11, color: "#DC2626", background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 9px", cursor: "pointer" }}>
                         Delete
                       </button>

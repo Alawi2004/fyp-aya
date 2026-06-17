@@ -1,5 +1,6 @@
 import { poolPromise, sql } from "../db/db.js";
 import { ensureAuthTables } from "../db/featureSetup.js";
+import { invalidateSettingsCache } from "../db/settingsCache.js";
 
 // ── GET /api/settings  (all) or  /api/settings?category=fare ─────────────────
 export const getSettings = async (req, res) => {
@@ -62,6 +63,7 @@ export const updateSettings = async (req, res) => {
         `);
     }
 
+    invalidateSettingsCache();
     res.json({ message: "Settings updated", count: Object.keys(updates).length });
   } catch (err) {
     console.error(err);

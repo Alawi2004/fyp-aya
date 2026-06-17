@@ -5,9 +5,10 @@ import {
 } from "lucide-react";
 import apiClient from "../api/apiClient";
 import { C, cardStyle } from "../styles/themes";
+import { useSettings } from "../context/SettingsContext";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
-const fmt     = (n) => n != null ? `$${parseFloat(n).toFixed(2)}` : "—";
+const fmt     = (n, cur = "USD") => n != null ? `${cur} ${parseFloat(n).toFixed(2)}` : "—";
 const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 const fmtTime = (iso) => iso ? new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "—";
 const fmtFull = (iso) => iso ? `${fmtDate(iso)}, ${fmtTime(iso)}` : "—";
@@ -27,14 +28,15 @@ const discColor = (diff) => {
   return              { color: C.danger,    bg: C.dangerBg };
 };
 
-const discLabel = (diff) => {
+const discLabel = (diff, cur = "USD") => {
   if (diff == null) return "—";
   if (diff === 0)   return "Balanced";
-  return `${diff > 0 ? "+" : ""}${fmt(Math.abs(diff))} ${diff > 0 ? "over" : "short"}`;
+  return `${diff > 0 ? "+" : ""}${fmt(Math.abs(diff), cur)} ${diff > 0 ? "over" : "short"}`;
 };
 
 // ─── ShiftHistoryPage ────────────────────────────────────────────────────────
 export default function ShiftHistoryPage() {
+  const { currency } = useSettings();
   const [shifts,    setShifts]    = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [detailRow, setDetailRow] = useState(null);
@@ -74,7 +76,7 @@ export default function ShiftHistoryPage() {
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 20 }}>
         <SummaryCard icon={Hash}       label="Total Shifts"       value={closed.length}    color={C.info}    bg="#EFF6FF" />
-        <SummaryCard icon={TrendingUp} label="Total Collected"    value={fmt(totalAmount)} color={C.primary} bg={C.primaryLight} accent />
+        <SummaryCard icon={TrendingUp} label="Total Collected"    value={fmt(totalAmount, currency)} color={C.primary} bg={C.primaryLight} accent />
         <SummaryCard icon={DollarSign} label="Total Transactions" value={totalTx}          color={C.success} bg={C.successBg} />
       </div>
 
@@ -192,7 +194,7 @@ export default function ShiftHistoryPage() {
                     {/* Collected */}
                     <td style={{ padding: "10px 10px", textAlign: "right" }}>
                       <span style={{ fontSize: 13, fontWeight: 800, color: C.primary }}>
-                        {fmt(s.total_collected)}
+                        {fmt(s.total_collected, currency)}
                       </span>
                     </td>
 
@@ -251,6 +253,7 @@ function SummaryCard({ icon: Icon, label, value, color, bg, accent }) {
 
 // ─── Detail modal ─────────────────────────────────────────────────────────────
 function DetailModal({ shift: s, onClose }) {
+  const { currency } = useSettings();
   const dc = discColor(s.cash_difference);
 
   const rows = [
@@ -261,13 +264,13 @@ function DetailModal({ shift: s, onClose }) {
     ["Opened At",          fmtFull(s.opened_at)],
     ["Closed At",          fmtFull(s.closed_at)],
     ["Duration",           fmtDuration(s.opened_at, s.closed_at)],
-    ["Opening Cash",       fmt(s.opening_cash)],
+    ["Opening Cash",       fmt(s.opening_cash, currency)],
     ["Total Transactions", s.total_transactions ?? "—"],
-    ["Total Collected",    fmt(s.total_collected)],
-    ["Cash Collected",     fmt(s.cash_collected)],
-    ["Expected Closing",   fmt(s.expected_cash)],
-    ["Reported Closing",   fmt(s.closing_cash)],
-    ["Discrepancy",        discLabel(s.cash_difference)],
+    ["Total Collected",    fmt(s.total_collected, currency)],
+    ["Cash Collected",     fmt(s.cash_collected, currency)],
+    ["Expected Closing",   fmt(s.expected_cash, currency)],
+    ["Reported Closing",   fmt(s.closing_cash, currency)],
+    ["Discrepancy",        discLabel(s.cash_difference, currency)],
   ];
 
   return (
@@ -290,7 +293,7 @@ function DetailModal({ shift: s, onClose }) {
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 18px", background: dc.bg, borderBottom: `1px solid ${dc.color}33` }}>
             <AlertTriangle size={13} color={dc.color} />
             <span style={{ fontSize: 12, fontWeight: 700, color: dc.color }}>
-              Cash {s.cash_difference > 0 ? "overage" : "shortage"}: {fmt(Math.abs(s.cash_difference))}
+              Cash {s.cash_difference > 0 ? "overage" : "shortage"}: {fmt(Math.abs(s.cash_difference), currency)}
             </span>
           </div>
         )}

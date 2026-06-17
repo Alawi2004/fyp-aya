@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ShiftProvider } from "./context/ShiftContext";
 import { OfflineProvider } from "./context/OfflineContext";
+import { SettingsProvider } from "./context/SettingsContext";
 import Sidebar       from "./components/Sidebar";
 import Topbar        from "./components/Topbar";
 import OfflineBanner from "./components/OfflineBanner";
@@ -133,13 +134,15 @@ function LoginWithRedirect() {
 export default function App() {
   return (
     <AuthProvider>
-      <ShiftProvider>
-        <OfflineProvider>
-          <BrowserRouter>
-            <InnerApp />
-          </BrowserRouter>
-        </OfflineProvider>
-      </ShiftProvider>
+      <SettingsProvider>
+        <ShiftProvider>
+          <OfflineProvider>
+            <BrowserRouter>
+              <InnerApp />
+            </BrowserRouter>
+          </OfflineProvider>
+        </ShiftProvider>
+      </SettingsProvider>
     </AuthProvider>
   );
 }

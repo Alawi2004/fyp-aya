@@ -6,6 +6,8 @@ import {
 import useHeaderInsets from '../../hooks/useHeaderInsets';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, PURPLE } from '../../constants/colors';
+import { sendEmergencyApi } from '../../api/driverApi';
+import { useAuth } from '../../context/AuthContext';
 
 const EMERGENCY_TYPES = [
   { id: 'accident',  label: 'Road Accident',    icon: 'warning-outline',      color: COLORS.danger,  bg: COLORS.dangerLight   },
@@ -16,12 +18,14 @@ const EMERGENCY_TYPES = [
   { id: 'other',     label: 'Other',             icon: 'alert-circle-outline', color: COLORS.textSecondary, bg: COLORS.surfaceAlt },
 ];
 
-const EmergencyScreen = ({ navigation }) => {
+const EmergencyScreen = ({ navigation, route }) => {
   const headerInsets = useHeaderInsets();
+  const { user } = useAuth();
   const pulseAnim    = useRef(new Animated.Value(1)).current;
   const ringAnim     = useRef(new Animated.Value(1)).current;
   const [selected, setSelected]   = useState(null);
   const [triggered, setTriggered] = useState(false);
+  const [sending, setSending]     = useState(false);
 
   useEffect(() => {
     const p1 = Animated.loop(
@@ -54,15 +58,24 @@ const EmergencyScreen = ({ navigation }) => {
         {
           text: 'Send SOS Now',
           style: 'destructive',
-          onPress: () => {
-            setTriggered(true);
-            setTimeout(() => {
+          onPress: async () => {
+            setSending(true);
+            try {
+              await sendEmergencyApi({
+                trip_id: route?.params?.trip_id ?? null,
+                message: selected.label,
+              });
+              setTriggered(true);
               Alert.alert(
                 'SOS Alert Sent',
                 'Emergency services and management have been notified. Stay calm — help is on the way.',
                 [{ text: 'OK', onPress: () => navigation.goBack() }]
               );
-            }, 1500);
+            } catch {
+              Alert.alert('Failed to Send', 'Could not reach the server. Please call emergency services directly.');
+            } finally {
+              setSending(false);
+            }
           },
         },
       ]

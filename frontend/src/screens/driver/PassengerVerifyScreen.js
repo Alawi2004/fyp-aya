@@ -8,9 +8,11 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, PURPLE } from '../../constants/colors';
 import { scanQrApi } from '../../api/driverApi';
+import { useApp } from '../../context/AppContext';
 
 const PassengerVerifyScreen = ({ navigation, route }) => {
   const headerInsets = useHeaderInsets();
+  const { currency } = useApp();
   const tripId = route?.params?.tripId ?? null;
 
   const [permission, requestPermission] = useCameraPermissions();
@@ -208,7 +210,7 @@ const PassengerVerifyScreen = ({ navigation, route }) => {
                 label="Fare"
                 value={
                   scanData.fare_deducted
-                    ? `$${scanData.amount_deducted?.toFixed(2)} deducted`
+                    ? `${currency} ${scanData.amount_deducted?.toFixed(2)} deducted`
                     : scanData.fare_insufficient
                     ? 'Insufficient balance'
                     : '—'

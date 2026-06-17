@@ -3,6 +3,8 @@ import { Download, Printer, Calendar, BarChart3, Bus, Trophy } from "lucide-reac
 import { Panel } from "../components/Panel";
 import { StatCard } from "../components/StatCard";
 import apiClient from "../api/apiClient";
+import { useSettings } from "../context/SettingsContext";
+import { fmtMoney, fmtMoneyRound } from "../utils/fmt";
 import {
   getRevenueReport,
   getPassengerHeatmap,
@@ -271,18 +273,21 @@ const TD = { padding: "10px 12px", fontSize: 13, color: "#374151" };
 
 // ── Overview tab ───────────────────────────────────────────────────────────────
 
-const OVERVIEW_COLS = [
-  { label: "Route",       key: "route"   },
-  { label: "Description", key: "name"    },
-  { label: "Trips",       key: "trips"   },
-  { label: "Revenue ($)", get: r => Number(r.revenue).toLocaleString() },
-  { label: "Avg Load %",  get: r => (r.load ?? r.load_pct ?? 0) + "%" },
-];
+function makeOverviewCols(currency) {
+  return [
+    { label: "Route",       key: "route"   },
+    { label: "Description", key: "name"    },
+    { label: "Trips",       key: "trips"   },
+    { label: `Revenue (${currency})`, get: r => Number(r.revenue).toLocaleString() },
+    { label: "Avg Load %",  get: r => (r.load ?? r.load_pct ?? 0) + "%" },
+  ];
+}
 
-function OverviewTab({ range, revenueRows, topRoutes, hourlyLoad, kpi, loading }) {
+function OverviewTab({ range, revenueRows, revenueTrendRows, topRoutes, hourlyLoad, kpi, loading, currency }) {
   const barData     = groupRevenue(revenueRows, range);
-  const monthlyData = groupMonthly(revenueRows);
+  const monthlyData = groupMonthly(revenueTrendRows.length ? revenueTrendRows : revenueRows);
   const peakHour    = hourlyLoad.length ? hourlyLoad.reduce((p, c) => c.value > p.value ? c : p, { label:"—", value:0 }) : null;
+  const OVERVIEW_COLS = makeOverviewCols(currency);
 
   const doCSV = () => exportCSV(topRoutes, OVERVIEW_COLS, `top-routes-${Date.now()}.csv`);
   const doPDF = () => exportPDF("Top Routes by Revenue", `Range: ${range}`, OVERVIEW_COLS, topRoutes);
@@ -294,7 +299,7 @@ function OverviewTab({ range, revenueRows, topRoutes, hourlyLoad, kpi, loading }
           [0,1,2,3].map(i => <div key={i} style={{ background: "#F8FAFC", borderRadius: 14, padding: 18 }}><Skeleton height={20} style={{ marginBottom: 10 }} /><Skeleton height={32} width="60%" /></div>)
         ) : (
           <>
-            <StatCard label="Total Revenue"    value={`$${kpi.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} delta="this period" up accent="#2563EB" />
+            <StatCard label="Total Revenue"    value={fmtMoneyRound(kpi.revenue, currency)} delta="this period" up accent="#2563EB" />
             <StatCard label="Tickets Sold"     value={kpi.passengers.toLocaleString()} delta="passengers" up accent="#10B981" />
             <StatCard label="Trips Completed"  value={kpi.trips.toLocaleString()}       delta="this period" up accent="#7C3AED" />
             <StatCard label="Peak Load Hour"   value={peakHour?.label ?? "—"}           delta={peakHour ? `${peakHour.value}% capacity` : "no data"} accent="#F59E0B" />
@@ -308,7 +313,7 @@ function OverviewTab({ range, revenueRows, topRoutes, hourlyLoad, kpi, loading }
           {!loading && barData.length > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, paddingTop: 10, borderTop: "1px solid #F1F5F9", fontSize: 12 }}>
               <span style={{ color: "#64748B" }}>Total</span>
-              <span style={{ fontWeight: 700, color: "#0F172A" }}>${barData.reduce((s, d) => s + d.value, 0).toLocaleString()}</span>
+              <span style={{ fontWeight: 700, color: "#0F172A" }}>{fmtMoneyRound(barData.reduce((s, d) => s + d.value, 0), currency)}</span>
             </div>
           )}
         </Panel>
@@ -346,7 +351,7 @@ function OverviewTab({ range, revenueRows, topRoutes, hourlyLoad, kpi, loading }
                     <td style={{ ...TD, fontWeight: 700, color: "#2563EB" }}>{r.route}</td>
                     <td style={{ ...TD, color: "#475569" }}>{r.name}</td>
                     <td style={TD}>{r.trips}</td>
-                    <td style={{ ...TD, fontWeight: 600 }}>${Number(r.revenue).toLocaleString()}</td>
+                    <td style={{ ...TD, fontWeight: 600 }}>{fmtMoneyRound(r.revenue, currency)}</td>
                     <td style={TD}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <div style={{ flex: 1, height: 6, background: "#F1F5F9", borderRadius: 3 }}>
@@ -816,22 +821,30 @@ const RANGE_OPTIONS = ["This week", "Last 30 days", "Last 3 months"];
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function AnalyticsPage() {
+  const { currency } = useSettings();
   const [tab,   setTab]   = useState("overview");
   const [range, setRange] = useState("This week");
   const [loading, setLoading] = useState(true);
 
-  const [revenueRows,  setRevenueRows]  = useState([]);
-  const [topRoutes,    setTopRoutes]    = useState([]);
-  const [hourlyLoad,   setHourlyLoad]   = useState([]);
-  const [kpi,          setKpi]          = useState({ revenue: 0, passengers: 0, trips: 0 });
-  const [driverPerf,   setDriverPerf]   = useState([]);
-  const [vehicleUtil,  setVehicleUtil]  = useState([]);
+  const [revenueRows,      setRevenueRows]      = useState([]);
+  const [revenueTrendRows, setRevenueTrendRows] = useState([]);
+  const [topRoutes,        setTopRoutes]        = useState([]);
+  const [hourlyLoad,       setHourlyLoad]       = useState([]);
+  const [kpi,              setKpi]              = useState({ revenue: 0, passengers: 0, trips: 0 });
+  const [driverPerf,       setDriverPerf]       = useState([]);
+  const [vehicleUtil,      setVehicleUtil]      = useState([]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     const { from, to } = rangeToFromTo(range);
 
     const HOUR_LABELS = { 6:"6am",7:"7am",8:"8am",9:"9am",10:"10am",11:"11am",12:"12pm",13:"1pm",14:"2pm",15:"3pm",16:"4pm",17:"5pm",18:"6pm" };
+
+    const from3m = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+    // Always fetch 3 months of revenue for the trend chart, independent of the selected range
+    getRevenueReport(from3m, to)
+      .then(res => setRevenueTrendRows(res?.data ?? res ?? []))
+      .catch(() => {});
 
     await Promise.allSettled([
       getRevenueReport(from, to).then(res => {
@@ -923,7 +936,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Tab content */}
-      {tab === "overview"  && <OverviewTab        range={range} revenueRows={revenueRows} topRoutes={topRoutes} hourlyLoad={hourlyLoad} kpi={kpi} loading={loading} />}
+      {tab === "overview"  && <OverviewTab        range={range} revenueRows={revenueRows} revenueTrendRows={revenueTrendRows} topRoutes={topRoutes} hourlyLoad={hourlyLoad} kpi={kpi} loading={loading} currency={currency} />}
       {tab === "drivers"   && <DriverPerformanceTab range={range} driverPerf={driverPerf} loading={loading} />}
       {tab === "vehicles"  && <VehicleUtilizationTab range={range} vehicleUtil={vehicleUtil} loading={loading} />}
       {tab === "schedule"  && <ScheduledReportsTab />}

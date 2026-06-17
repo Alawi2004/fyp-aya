@@ -5,9 +5,10 @@ import { Modal } from "../components/Modal";
 import { StatCard } from "../components/StatCard";
 import apiClient from "../api/apiClient";
 import { getWalletStatuses, freezeWallet, unfreezeWallet, getFreezeLog } from "../api/endpoints";
+import { useSettings } from "../context/SettingsContext";
+import { fmtMoney } from "../utils/fmt";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const fmt     = n => `$${parseFloat(n ?? 0).toFixed(2)}`;
 const fmtDate = d => d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
 const fmtShort = d => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—";
 
@@ -32,14 +33,14 @@ const FREEZE_REASONS = [
 const EMPTY_FORM = { user_id: "", amount: "", location_name: "", tx_ref: "", notes: "" };
 const LOW_BALANCE_THRESHOLD = 25;
 
-function deltaMeta(current, previous) {
+function deltaMeta(current, previous, currency = "USD") {
   const diff = current - previous;
   const pct = previous > 0 ? (diff / previous) * 100 : 0;
   return {
     diff,
     pct,
     up: diff <= 0,
-    label: `${diff >= 0 ? "+" : ""}${fmt(diff)} vs last month`,
+    label: `${diff >= 0 ? "+" : ""}${fmtMoney(diff, currency)} vs last month`,
   };
 }
 
@@ -72,6 +73,8 @@ function TabNav({ active, onChange, alertCount }) {
 
 // ── Freeze Wallet Modal ───────────────────────────────────────────────────────
 function FreezeModal({ wallet, onClose, onConfirm }) {
+  const { currency } = useSettings();
+  const fmt = n => fmtMoney(n, currency);
   const [reason, setReason] = useState("Fraud Investigation");
   const [notes,  setNotes]  = useState("");
 
@@ -124,6 +127,8 @@ function FreezeModal({ wallet, onClose, onConfirm }) {
 
 // ── Unfreeze Wallet Modal ─────────────────────────────────────────────────────
 function UnfreezeModal({ wallet, onClose, onConfirm }) {
+  const { currency } = useSettings();
+  const fmt = n => fmtMoney(n, currency);
   const [notes, setNotes] = useState("");
 
   return (
@@ -170,6 +175,8 @@ function UnfreezeModal({ wallet, onClose, onConfirm }) {
 
 // ── Freeze Management Tab ─────────────────────────────────────────────────────
 function FreezeManagementTab({ wallets, freezeLog, onFreeze, onUnfreeze }) {
+  const { currency } = useSettings();
+  const fmt = n => fmtMoney(n, currency);
   const [search,      setSearch]      = useState("");
   const [frozenOnly,  setFrozenOnly]  = useState(false);
   const [freezeTarget,  setFreezeTarget]  = useState(null);
@@ -394,6 +401,8 @@ function FreezeManagementTab({ wallets, freezeLog, onFreeze, onUnfreeze }) {
 }
 
 function WalletInsights({ wallets, alerts, spendSummary }) {
+  const { currency } = useSettings();
+  const fmt = n => fmtMoney(n, currency);
   const enrichedAlerts = alerts
     .map((alert) => {
       const wallet = wallets.find((w) => w.user_id === alert.user_id);
@@ -409,7 +418,7 @@ function WalletInsights({ wallets, alerts, spendSummary }) {
 
   const totalCurrentSpend  = spendSummary?.current?.total  ?? spendRows.reduce((s, r) => s + (r.current  ?? r.spent  ?? 0), 0);
   const totalPreviousSpend = spendSummary?.previous?.total ?? spendRows.reduce((s, r) => s + (r.previous ?? r.last_month_spent ?? 0), 0);
-  const spendDelta = deltaMeta(totalCurrentSpend, totalPreviousSpend);
+  const spendDelta = deltaMeta(totalCurrentSpend, totalPreviousSpend, currency);
   const increasedSpenders = spendRows.filter((r) => (r.current ?? r.spent ?? 0) > (r.previous ?? r.last_month_spent ?? 0)).length;
 
   return (
@@ -516,6 +525,8 @@ function WalletInsights({ wallets, alerts, spendSummary }) {
 
 // ── Balance Alerts Tab ────────────────────────────────────────────────────────
 function AlertsTab({ alerts, threshold, onNotify }) {
+  const { currency } = useSettings();
+  const fmt = n => fmtMoney(n, currency);
   const critical = alerts.filter(a => a.balance < threshold * 0.4);
   const warning  = alerts.filter(a => a.balance >= threshold * 0.4 && a.balance < threshold);
 
@@ -537,8 +548,8 @@ function AlertsTab({ alerts, threshold, onNotify }) {
             <div style={{ flex: 1, height: 6, background: "#E2E8F0", borderRadius: 3, overflow: "hidden" }}>
               <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: 3, transition: "width .4s" }} />
             </div>
-            <span style={{ fontSize: 12, fontWeight: 800, color }}>${a.balance.toFixed(2)}</span>
-            <span style={{ fontSize: 10, color: "#94A3B8" }}>/ ${threshold} threshold</span>
+            <span style={{ fontSize: 12, fontWeight: 800, color }}>{fmt(a.balance)}</span>
+            <span style={{ fontSize: 10, color: "#94A3B8" }}>/ {fmt(threshold)} threshold</span>
           </div>
         </div>
         <div style={{ flexShrink: 0, display: "flex", gap: 8, alignItems: "center" }}>
@@ -555,9 +566,9 @@ function AlertsTab({ alerts, threshold, onNotify }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
-        <StatCard label="Below Threshold" value={alerts.length}     delta={`< $${threshold} balance`}    up={alerts.length === 0} accent="#EF4444" />
-        <StatCard label="Critical"        value={critical.length}   delta={`< $${Math.round(threshold * 0.4)} balance`} up={critical.length === 0} accent="#DC2626" />
-        <StatCard label="Warning"         value={warning.length}    delta={`$${Math.round(threshold * 0.4)}–$${threshold}`} up={warning.length === 0} accent="#D97706" />
+        <StatCard label="Below Threshold" value={alerts.length}     delta={`< ${fmt(threshold)} balance`}    up={alerts.length === 0} accent="#EF4444" />
+        <StatCard label="Critical"        value={critical.length}   delta={`< ${fmt(threshold * 0.4)} balance`} up={critical.length === 0} accent="#DC2626" />
+        <StatCard label="Warning"         value={warning.length}    delta={`${fmt(threshold * 0.4)}–${fmt(threshold)}`} up={warning.length === 0} accent="#D97706" />
         <StatCard label="Notified"        value={alerts.filter(a => a.notified).length} delta="alerts sent" accent="#10B981" />
       </div>
 
@@ -577,14 +588,14 @@ function AlertsTab({ alerts, threshold, onNotify }) {
 
       {/* Threshold info */}
       <div style={{ padding: "12px 16px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 10, fontSize: 12, color: "#1E40AF" }}>
-        <strong>Alert threshold: ${threshold}</strong> — passengers below this balance receive an in-app warning and push notification.
+        <strong>Alert threshold: {fmt(threshold)}</strong> — passengers below this balance receive an in-app warning and push notification.
       </div>
 
       {/* Critical */}
       {critical.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: "#DC2626", textTransform: "uppercase", letterSpacing: ".06em" }}>
-            Critical (balance below ${Math.round(threshold * 0.4)})
+            Critical (balance below {fmt(threshold * 0.4)})
           </div>
           {critical.map(a => <AlertRow key={a.user_id} a={a} />)}
         </div>
@@ -594,7 +605,7 @@ function AlertsTab({ alerts, threshold, onNotify }) {
       {warning.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: "#D97706", textTransform: "uppercase", letterSpacing: ".06em" }}>
-            Warning (balance ${Math.round(threshold * 0.4)}–${threshold})
+            Warning (balance {fmt(threshold * 0.4)}–{fmt(threshold)})
           </div>
           {warning.map(a => <AlertRow key={a.user_id} a={a} />)}
         </div>
@@ -613,6 +624,8 @@ function AlertsTab({ alerts, threshold, onNotify }) {
 
 // ── Spend Summary Tab ─────────────────────────────────────────────────────────
 function SummaryTab({ summary }) {
+  const { currency } = useSettings();
+  const fmt = n => fmtMoney(n, currency);
   // Guard: summary may be empty array before data loads
   if (!summary || Array.isArray(summary) || !summary.current || !summary.previous) {
     return (
@@ -624,9 +637,9 @@ function SummaryTab({ summary }) {
   }
 
   const { current, previous, per_passenger } = summary;
-  const totalDelta = deltaMeta(current.total, previous.total);
-  const tripDelta  = deltaMeta(current.transactions, previous.transactions);
-  const avgDelta   = deltaMeta(current.avg_per_trip, previous.avg_per_trip);
+  const totalDelta = deltaMeta(current.total, previous.total, currency);
+  const tripDelta  = deltaMeta(current.transactions, previous.transactions, currency);
+  const avgDelta   = deltaMeta(current.avg_per_trip, previous.avg_per_trip, currency);
 
   const maxVal = Math.max(...(per_passenger ?? []).map(p => Math.max(p.current ?? 0, p.previous ?? 0)), 1);
 
@@ -727,6 +740,8 @@ const inp = { width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", b
 
 // ── Main WalletPage ───────────────────────────────────────────────────────────
 export default function WalletPage() {
+  const { currency } = useSettings();
+  const fmt = n => fmtMoney(n, currency);
   const [tab,       setTab]       = useState("recharge");
   const [users,     setUsers]     = useState([]);
   const [recharges, setRecharges] = useState([]);
@@ -932,7 +947,7 @@ export default function WalletPage() {
             rows={recharges}
             columns={[
               { key: "user_name",     label: "Passenger",  value: r => r.user_name ?? "—"                                     },
-              { key: "amount",        label: "Amount",     value: r => `$${parseFloat(r.amount || 0).toFixed(2)}`             },
+              { key: "amount",        label: "Amount",     value: r => fmtMoney(r.amount || 0, currency)                   },
               { key: "location_name", label: "Location",   value: r => r.location_name ?? "—"                                 },
               { key: "tx_ref",        label: "Tx Ref",     value: r => r.tx_ref ?? "—"                                        },
               { key: "created_at",    label: "Date",       value: r => r.created_at ? new Date(r.created_at).toLocaleString() : "—" },

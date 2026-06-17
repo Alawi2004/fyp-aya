@@ -8,6 +8,8 @@ import {
 import { Panel }     from "../components/Panel";
 import DashboardMap  from "../components/map/DashboardMap";
 import { TripModal } from "../components/TripModal";
+import { useSettings } from "../context/SettingsContext";
+import { fmtMoneyRound } from "../utils/fmt";
 import {
   getDashboardStats, getDashboardOverview, getEmergencyAlerts,
   createTrip, getRoutes, getDrivers, getVehicles,
@@ -109,6 +111,7 @@ function QuickTile({ label, value, sub, icon, iconBg, accent = "#2563EB", onClic
 }
 
 export default function DashboardPage({ onNavigate }) {
+  const { currency } = useSettings();
   const today = new Date().toLocaleDateString("en-GB", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
@@ -129,9 +132,12 @@ export default function DashboardPage({ onNavigate }) {
   const [routeOpts,     setRouteOpts]     = useState([]);
   const [driverOpts,    setDriverOpts]    = useState([]);
   const [vehicleOpts,   setVehicleOpts]   = useState([]);
+  const [statsError,    setStatsError]    = useState(null);
 
   useEffect(() => {
-    getDashboardStats().then(d => setStats(d)).catch(() => {});
+    getDashboardStats()
+      .then(d => { setStats(d); setStatsError(null); })
+      .catch(err => setStatsError(err?.message ?? "Failed to load dashboard stats"));
     getDashboardOverview().then(d => {
       if (d.trips) setTrips(d.trips ?? []);
     }).catch(() => {});
@@ -163,6 +169,26 @@ export default function DashboardPage({ onNavigate }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, animation: "fadeIn .3s ease" }}>
+
+      {/* ── Backend connectivity error ─────────────────────────── */}
+      {statsError && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "10px 16px", borderRadius: 10,
+          background: "#FEF2F2", border: "1px solid #FECACA",
+        }}>
+          <AlertTriangle size={15} color="#EF4444" style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: 13, color: "#B91C1C", fontWeight: 600 }}>
+            Could not load dashboard data — {statsError}
+          </span>
+          <button
+            onClick={() => getDashboardStats().then(d => { setStats(d); setStatsError(null); }).catch(err => setStatsError(err?.message ?? "Failed to load"))}
+            style={{ marginLeft: "auto", fontSize: 12, color: "#EF4444", background: "#FEE2E2", border: "none", borderRadius: 6, padding: "4px 12px", cursor: "pointer", fontWeight: 600 }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* ── 1. Header ──────────────────────────────────────────── */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -207,7 +233,7 @@ export default function DashboardPage({ onNavigate }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
         <QuickTile
           label="Today's Revenue"
-          value={`$${Number(stats.todayRevenue || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+          value={fmtMoneyRound(stats.todayRevenue || 0, currency)}
           sub="View Analytics →"
           accent="#10B981"
           iconBg="#F0FDF4"

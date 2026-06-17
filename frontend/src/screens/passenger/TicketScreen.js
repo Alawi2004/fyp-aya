@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Button from '../../components/common/Button';
 import ShareTicketModal from '../../components/passenger/ShareTicketModal';
 import { useAuth } from '../../context/AuthContext';
+import { useApp } from '../../context/AppContext';
 import { COLORS, PURPLE } from '../../constants/colors';
 import GradientFill from '../../components/common/GradientFill';
 import { formatDateTime } from '../../utils/formatters';
@@ -53,6 +54,7 @@ const TicketScreen = ({ route, navigation }) => {
   const headerInsets        = useHeaderInsets();
   const { booking }         = route.params;
   const { user }            = useAuth();
+  const { currency }        = useApp();
 
   // A booking can hold several seats — each gets its own ticket record,
   // its own rotating QR, and its own share/PDF. Fall back to a single
@@ -203,7 +205,7 @@ const TicketScreen = ({ route, navigation }) => {
               booking.type === 'taxi'
                 ? { label: 'VEHICLE', value: booking.vehicleLabel ?? 'Taxi', highlight: false }
                 : { label: 'SEAT',    value: activeTicket.seat_number,        highlight: false },
-              { label: 'FARE',   value: `$${parseFloat(activeTicket.amount ?? booking.price).toFixed(2)}`, highlight: true },
+              { label: 'FARE',   value: `${currency} ${parseFloat(activeTicket.amount ?? booking.price).toFixed(2)}`, highlight: true },
               { label: 'DATE',   value: formatDateTime(booking.date), highlight: false },
               { label: 'STATUS', value: 'Confirmed', highlight: true, green: true },
             ].map((d) => (

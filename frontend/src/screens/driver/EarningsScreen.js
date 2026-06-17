@@ -14,13 +14,14 @@ import PressableScale from '../../components/common/PressableScale';
 import { SkeletonCardList } from '../../components/common/Skeleton';
 import CountUp from '../../components/common/CountUp';
 import { getDriverTripsApi } from '../../api/driverApi';
+import { useApp } from '../../context/AppContext';
 
 const PERIODS = ['Today', 'Week', 'Month', 'All Time'];
 
 // Distinct colors for the by-route breakdown segments
 const SEG_COLORS = [PURPLE.primary, COLORS.secondary, COLORS.warning, '#EC4899', '#0EA5E9', COLORS.textMuted];
 
-const fmtMoney = (n) => `$${Number(n || 0).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const fmtMoney = (n, currency = 'USD') => `${currency} ${Number(n || 0).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const fmtDate = (d) => {
   if (!d) return '—';
@@ -58,6 +59,7 @@ function normalise(t) {
 
 const EarningsScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
+  const { currency } = useApp();
   const [trips,     setTrips]     = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
@@ -135,7 +137,7 @@ const EarningsScreen = ({ navigation }) => {
           <td>${fmtDate(t.start)} ${fmtTime(t.start)}</td>
           <td>${t.pax}</td>
           <td>${fmtDur(t.durationMin)}</td>
-          <td style="color:#7C3AED;font-weight:700">${fmtMoney(t.amount)}</td>
+          <td style="color:#7C3AED;font-weight:700">${fmtMoney(t.amount, currency)}</td>
         </tr>`).join('');
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
         <style>
@@ -156,11 +158,11 @@ const EarningsScreen = ({ navigation }) => {
         <div class="header"><h1>Earnings Report</h1>
           <p>Generated ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
           <div class="badge">${period}</div></div>
-        <div class="total"><div class="lbl">Total Earned</div><div class="amt">${fmtMoney(total)}</div></div>
+        <div class="total"><div class="lbl">Total Earned</div><div class="amt">${fmtMoney(total, currency)}</div></div>
         <div class="stats">
           <div class="card"><div class="v">${count}</div><div class="l">Trips</div></div>
           <div class="card"><div class="v">${totalPax}</div><div class="l">Passengers</div></div>
-          <div class="card"><div class="v">${fmtMoney(perTrip)}</div><div class="l">Per Trip</div></div>
+          <div class="card"><div class="v">${fmtMoney(perTrip, currency)}</div><div class="l">Per Trip</div></div>
         </div>
         <h2>Trip Earnings</h2>
         <table><thead><tr><th>Route</th><th>Journey</th><th>Date</th><th>Pax</th><th>Duration</th><th>Amount</th></tr></thead>
@@ -183,7 +185,7 @@ const EarningsScreen = ({ navigation }) => {
   const SUMMARY = [
     { icon: 'receipt-outline',  label: 'Trips',      value: String(count),       bg: PURPLE.light,         color: PURPLE.primary   },
     { icon: 'people-outline',   label: 'Passengers', value: String(totalPax),    bg: COLORS.secondaryLight, color: COLORS.secondary },
-    { icon: 'trending-up',      label: 'Per Trip',   value: fmtMoney(perTrip),   bg: COLORS.warningLight,   color: COLORS.warning   },
+    { icon: 'trending-up',      label: 'Per Trip',   value: fmtMoney(perTrip, currency),   bg: COLORS.warningLight,   color: COLORS.warning   },
   ];
 
   return (
@@ -217,13 +219,13 @@ const EarningsScreen = ({ navigation }) => {
         <View style={styles.balanceBlock}>
           <Text style={styles.balanceLbl}>Total Earned · {period}</Text>
           <View style={styles.balanceRow}>
-            <Text style={styles.balanceCurrency}>$</Text>
+            <Text style={styles.balanceCurrency}>{currency}</Text>
             <CountUp value={total} decimals={2} style={styles.balanceAmt} />
           </View>
           {count > 0 && (
             <View style={styles.perTripChip}>
               <Ionicons name="trending-up" size={11} color={COLORS.white} />
-              <Text style={styles.perTripText}>{fmtMoney(perTrip)} / trip avg · {count} trip{count !== 1 ? 's' : ''}</Text>
+              <Text style={styles.perTripText}>{fmtMoney(perTrip, currency)} / trip avg · {count} trip{count !== 1 ? 's' : ''}</Text>
             </View>
           )}
         </View>
@@ -287,7 +289,7 @@ const EarningsScreen = ({ navigation }) => {
                         <View key={i} style={styles.legendRow}>
                           <View style={[styles.legendDot, { backgroundColor: b.color }]} />
                           <Text style={styles.legendText} numberOfLines={1}>{b.route}</Text>
-                          <Text style={styles.legendAmt}>{fmtMoney(b.amt)}</Text>
+                          <Text style={styles.legendAmt}>{fmtMoney(b.amt, currency)}</Text>
                           <Text style={styles.legendPct}>{b.pct.toFixed(0)}%</Text>
                         </View>
                       ))}
@@ -328,7 +330,7 @@ const EarningsScreen = ({ navigation }) => {
                         </View>
                       </View>
                       <View style={styles.txRight}>
-                        <Text style={styles.txAmount}>+{fmtMoney(t.amount)}</Text>
+                        <Text style={styles.txAmount}>+{fmtMoney(t.amount, currency)}</Text>
                         <Ionicons name="chevron-forward" size={15} color={COLORS.textMuted} />
                       </View>
                     </PressableScale>
@@ -353,7 +355,7 @@ const EarningsScreen = ({ navigation }) => {
               <View style={StyleSheet.absoluteFill} pointerEvents="none">
                 <GradientFill id="earnSheet" colors={['#6D28D9', '#8B5CF6']} radius={20} vertical={false} />
               </View>
-              <Text style={styles.sheetAmount}>+{fmtMoney(selected.amount)}</Text>
+              <Text style={styles.sheetAmount}>+{fmtMoney(selected.amount, currency)}</Text>
               <Text style={styles.sheetAmountSub}>{selected.route}</Text>
               <View style={styles.sheetStatusPill}>
                 <Ionicons name="checkmark-circle" size={13} color={COLORS.white} />

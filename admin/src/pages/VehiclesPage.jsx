@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { ExportBtn } from "../components/ExportBtn";
 import { Panel } from "../components/Panel";
+import { useSettings } from "../context/SettingsContext";
+import { fmtMoney } from "../utils/fmt";
 import { DataTable } from "../components/Table";
 import { Modal } from "../components/Modal";
 import { StatCard } from "../components/StatCard";
@@ -196,6 +198,7 @@ function VehicleStatusPill({ status }) {
 // VEHICLE PROFILE DRAWER
 // ══════════════════════════════════════════════════════════════════════════════
 function VehicleProfile({ vehicle, docs, mlog, fuelLog, photos, onClose, onEdit, onPhotoUpload, onPhotoRemove, onAddRecord }) {
+  const { currency } = useSettings();
   const doc     = docs.find(d => d.plate === vehicle.plate) ?? {};
   const history = [...mlog].filter(r => r.plate === vehicle.plate).sort((a, b) => new Date(b.date) - new Date(a.date));
   const fuelHistory = [...fuelLog].filter(r => r.plate === vehicle.plate).sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -217,11 +220,16 @@ function VehicleProfile({ vehicle, docs, mlog, fuelLog, photos, onClose, onEdit,
   const EMPTY_REC = { date: "", type: "Oil Change", mechanic: "", cost: "", odometer: "", notes: "", next_service: "" };
   const [recForm, setRecForm] = useState(EMPTY_REC);
 
-  function handleAddRecord() {
+  async function handleAddRecord() {
     if (!recForm.date || !recForm.mechanic) return;
-    onAddRecord({ id: Date.now(), plate: vehicle.plate, ...recForm, cost: parseFloat(recForm.cost) || 0, odometer: parseInt(recForm.odometer) || 0 });
-    setRecForm(EMPTY_REC);
-    setAddingRecord(false);
+    try {
+      await addMaintenanceRecord({ plate: vehicle.plate, ...recForm });
+      onAddRecord({ id: Date.now(), plate: vehicle.plate, ...recForm, cost: parseFloat(recForm.cost) || 0, odometer: parseInt(recForm.odometer) || 0 });
+      setRecForm(EMPTY_REC);
+      setAddingRecord(false);
+    } catch (err) {
+      alert(err?.message ?? "Failed to save maintenance record");
+    }
   }
 
   // Photo helpers
@@ -311,7 +319,7 @@ function VehicleProfile({ vehicle, docs, mlog, fuelLog, photos, onClose, onEdit,
           <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
             <InfoTile label="Photos" value={`${photoCount}/${PHOTO_SLOTS.length}`} />
             <InfoTile label="Fuel Entries" value={fuelHistory.length} />
-            <InfoTile label="Fuel Spend" value={`$${totalFuelCost.toFixed(0)}`} />
+            <InfoTile label="Fuel Spend" value={fmtMoney(totalFuelCost, currency)} />
             <InfoTile label="Fuel Efficiency" value={fuelEfficiency.kmPerLiter ? `${fuelEfficiency.kmPerLiter.toFixed(1)} km/L` : "â€”"} />
           </div>
         </div>
@@ -426,7 +434,7 @@ function VehicleProfile({ vehicle, docs, mlog, fuelLog, photos, onClose, onEdit,
                       {r.next_service && <div style={{ fontSize: 10, color: "#64748B", marginTop: 2 }}>Next service: {fmtDate(r.next_service)}</div>}
                     </div>
                     <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: "#059669" }}>{r.cost ? `$${r.cost.toLocaleString()}` : "—"}</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: "#059669" }}>{r.cost ? fmtMoney(r.cost, currency) : "—"}</div>
                       <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>{fmtDate(r.date)}</div>
                     </div>
                   </div>
@@ -458,7 +466,7 @@ function VehicleProfile({ vehicle, docs, mlog, fuelLog, photos, onClose, onEdit,
                     {row.notes && <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 3 }}>{row.notes}</div>}
                   </div>
                   <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: "#059669" }}>${Number(row.cost || 0).toFixed(2)}</div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: "#059669" }}>{fmtMoney(row.cost || 0, currency)}</div>
                     <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 3 }}>Fuel fill-up</div>
                   </div>
                 </div>
@@ -664,10 +672,14 @@ function ExpiryAlertsTab({ docs, onUpdateDocs }) {
     setForm({ reg_expiry: doc.reg_expiry ?? "", ins_expiry: doc.ins_expiry ?? "", road_expiry: doc.road_expiry ?? "" });
   }
 
-  function handleSave() {
-    onUpdateDocs(editTarget, form);
-    updateVehicleDocs(editTarget, form).catch(() => {});
-    setEditTarget(null);
+  async function handleSave() {
+    try {
+      await updateVehicleDocs(editTarget, form);
+      onUpdateDocs(editTarget, form);
+      setEditTarget(null);
+    } catch (err) {
+      alert(err?.message ?? "Failed to update vehicle documents");
+    }
   }
 
   function DocCell({ badge }) {
@@ -800,6 +812,7 @@ function ExpiryAlertsTab({ docs, onUpdateDocs }) {
 // TAB 3 — Maintenance Log
 // ══════════════════════════════════════════════════════════════════════════════
 function MaintenanceTab({ log, vehicles, onAdd }) {
+  const { currency } = useSettings();
   const [plateFilter, setPlateFilter] = useState("All");
   const [modalOpen,   setModalOpen]   = useState(false);
   const EMPTY = { plate: "", date: "", type: "Oil Change", mechanic: "", cost: "", odometer: "", notes: "", next_service: "" };
@@ -813,13 +826,17 @@ function MaintenanceTab({ log, vehicles, onAdd }) {
     .filter(r => r.date?.startsWith("2026"))
     .reduce((s, r) => s + (r.cost ?? 0), 0);
 
-  function handleSave() {
+  async function handleSave() {
     if (!form.plate || !form.date || !form.mechanic) return;
-    const record = { id: Date.now(), ...form, cost: parseFloat(form.cost) || 0, odometer: parseInt(form.odometer) || 0 };
-    onAdd(record);
-    addMaintenanceRecord(form).catch(() => {});
-    setModalOpen(false);
-    setForm(EMPTY);
+    try {
+      await addMaintenanceRecord(form);
+      const record = { id: Date.now(), ...form, cost: parseFloat(form.cost) || 0, odometer: parseInt(form.odometer) || 0 };
+      onAdd(record);
+      setModalOpen(false);
+      setForm(EMPTY);
+    } catch (err) {
+      alert(err?.message ?? "Failed to save maintenance record");
+    }
   }
 
   return (
@@ -827,7 +844,7 @@ function MaintenanceTab({ log, vehicles, onAdd }) {
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
         <StatCard label="Total Records"    value={log.length}            delta="all time"         accent="#2563EB" />
-        <StatCard label="Cost This Year"   value={`$${totalCost2026}`}   delta="maintenance spend" accent="#7C3AED" />
+        <StatCard label="Cost This Year"   value={fmtMoney(totalCost2026, currency)}   delta="maintenance spend" accent="#7C3AED" />
         <StatCard label="Vehicles Covered" value={plates.length}         delta="in log"            accent="#10B981" />
         <StatCard label="Due for Service"  value={log.filter(r => r.next_service && daysUntil(r.next_service) <= 30 && daysUntil(r.next_service) >= 0).length} delta="within 30 days" up={false} accent="#F59E0B" />
       </div>
@@ -879,7 +896,7 @@ function MaintenanceTab({ log, vehicles, onAdd }) {
                     </td>
                     <td style={{ padding: "12px 14px", fontSize: 12 }}>{r.mechanic}</td>
                     <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 700, color: "#0F172A" }}>
-                      {r.cost ? `$${r.cost.toLocaleString()}` : "—"}
+                      {r.cost ? fmtMoney(r.cost, currency) : "—"}
                     </td>
                     <td style={{ padding: "12px 14px", fontSize: 12, color: "#475569" }}>
                       {r.odometer ? `${r.odometer.toLocaleString()} km` : "—"}
@@ -967,6 +984,7 @@ function MaintenanceTab({ log, vehicles, onAdd }) {
 // TAB 4 — Vehicle Photos
 // ══════════════════════════════════════════════════════════════════════════════
 function FuelTab({ vehicles, fuelLog, onAdd }) {
+  const { currency } = useSettings();
   const [plateFilter, setPlateFilter] = useState("All");
   const [modalOpen, setModalOpen] = useState(false);
   const EMPTY = { plate: "", date: "", liters: "", cost: "", odometer: "", station: "", notes: "" };
@@ -997,19 +1015,23 @@ function FuelTab({ vehicles, fuelLog, onAdd }) {
   const avgEfficiency = efficiencyRows.length ? (efficiencyRows.reduce((sum, row) => sum + row.kmPerLiter, 0) / efficiencyRows.length) : 0;
   const lowEfficiency = efficiencyRows.filter((row) => row.kmPerLiter > 0 && row.kmPerLiter < 10).length;
 
-  function handleSave() {
+  async function handleSave() {
     if (!form.plate || !form.date || !form.liters || !form.odometer) return;
-    const row = {
-      id: Date.now(),
-      ...form,
-      liters:   parseFloat(form.liters)     || 0,
-      cost:     parseFloat(form.cost)       || 0,
-      odometer: parseInt(form.odometer, 10) || 0,
-    };
-    onAdd(row);
-    addFuelRecord(form).catch(() => {});
-    setForm(EMPTY);
-    setModalOpen(false);
+    try {
+      await addFuelRecord(form);
+      const row = {
+        id: Date.now(),
+        ...form,
+        liters:   parseFloat(form.liters)     || 0,
+        cost:     parseFloat(form.cost)       || 0,
+        odometer: parseInt(form.odometer, 10) || 0,
+      };
+      onAdd(row);
+      setForm(EMPTY);
+      setModalOpen(false);
+    } catch (err) {
+      alert(err?.message ?? "Failed to save fuel record");
+    }
   }
 
   return (
@@ -1017,7 +1039,7 @@ function FuelTab({ vehicles, fuelLog, onAdd }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
         <StatCard label="Fill-Ups" value={fuelLog.length} delta="logged refuels" accent="#2563EB" />
         <StatCard label="Fuel Volume" value={`${totalLiters.toFixed(0)} L`} delta="tracked liters" accent="#0EA5E9" />
-        <StatCard label="Fuel Cost" value={`$${totalCost.toFixed(0)}`} delta="recorded spend" accent="#7C3AED" />
+        <StatCard label="Fuel Cost" value={fmtMoney(totalCost, currency)} delta="recorded spend" accent="#7C3AED" />
         <StatCard label="Avg Efficiency" value={avgEfficiency ? `${avgEfficiency.toFixed(1)} km/L` : "—"} delta={lowEfficiency ? `${lowEfficiency} vehicles below 10 km/L` : "healthy efficiency"} up={lowEfficiency === 0} accent="#10B981" />
       </div>
 
@@ -1078,7 +1100,7 @@ function FuelTab({ vehicles, fuelLog, onAdd }) {
                 <td style={{ padding: "12px 14px", fontSize: 12 }}>{fmtDate(row.date)}</td>
                 <td style={{ padding: "12px 14px", fontSize: 12 }}>{row.station || "—"}</td>
                 <td style={{ padding: "12px 14px", fontSize: 12 }}>{row.liters} L</td>
-                <td style={{ padding: "12px 14px", fontSize: 12 }}>${Number(row.cost || 0).toFixed(2)}</td>
+                <td style={{ padding: "12px 14px", fontSize: 12 }}>{fmtMoney(row.cost || 0, currency)}</td>
                 <td style={{ padding: "12px 14px", fontSize: 12 }}>{Number(row.odometer || 0).toLocaleString()} km</td>
                 <td style={{ padding: "12px 14px", fontSize: 11, color: "#64748B" }}>{row.notes || "—"}</td>
               </tr>

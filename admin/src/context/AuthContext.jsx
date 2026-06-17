@@ -126,6 +126,9 @@ export function AuthProvider({ children }) {
       if (data.requires_2fa) {
         return { ok: false, requires_2fa: true, temp_token: data.temp_token };
       }
+      if (!["admin", "super_admin"].includes(data.user?.role)) {
+        throw new Error("Access denied. This portal is for administrators only.");
+      }
       persist(data.user);
       storeToken(data.access_token);
       return { ok: true };
@@ -142,6 +145,9 @@ export function AuthProvider({ children }) {
     setError(null);
     try {
       const data = await apiPost("/auth/verify-2fa", { temp_token: tempToken, totp_code: totpCode });
+      if (!["admin", "super_admin"].includes(data.user?.role)) {
+        throw new Error("Access denied. This portal is for administrators only.");
+      }
       persist(data.user);
       storeToken(data.access_token);
       return { ok: true };

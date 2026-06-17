@@ -570,7 +570,7 @@ const VEHICLE_TYPES = [
 
 const TaxiReservationScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
-  const { refreshBookings, updateBalance, walletBalance } = useApp();
+  const { refreshBookings, updateBalance, walletBalance, currency } = useApp();
   const { fromStop, toStop, tripSummary } = route?.params ?? {};
 
   const [pickup, setPickup] = useState(fromStop?.stop_name ?? "");
@@ -1304,10 +1304,10 @@ const TaxiReservationScreen = ({ navigation, route }) => {
                           active && { color: v.color },
                         ]}
                       >
-                        from ${v.base.toFixed(2)}
+                        from {currency} {v.base.toFixed(2)}
                       </Text>
                       <Text style={styles.vehiclePerKm}>
-                        ${v.perKm.toFixed(2)}/km
+                        {currency} {v.perKm.toFixed(2)}/km
                       </Text>
                     </View>
                     {active && (
@@ -1334,8 +1334,8 @@ const TaxiReservationScreen = ({ navigation, route }) => {
             const insufficient = walletBalance < fare;
             const fareText =
               estimatedFare != null
-                ? `$${estimatedFare.toFixed(2)}`
-                : `$${selVehicle.base.toFixed(2)} + $${selVehicle.perKm.toFixed(
+                ? `${currency} ${estimatedFare.toFixed(2)}`
+                : `${currency} ${selVehicle.base.toFixed(2)} + ${currency} ${selVehicle.perKm.toFixed(
                     2
                   )}/km`;
             return (
@@ -1370,8 +1370,8 @@ const TaxiReservationScreen = ({ navigation, route }) => {
                   </Bump>
                   {distanceKm != null && (
                     <Text style={styles.fareDistance}>
-                      {distanceKm.toFixed(1)} km · ${selVehicle.base.toFixed(2)}{" "}
-                      base + ${(selVehicle.perKm * distanceKm).toFixed(2)}
+                      {distanceKm.toFixed(1)} km · {currency} {selVehicle.base.toFixed(2)}{" "}
+                      base + {currency} {(selVehicle.perKm * distanceKm).toFixed(2)}
                     </Text>
                   )}
                   <View style={styles.fareBalanceRow}>
@@ -1386,7 +1386,7 @@ const TaxiReservationScreen = ({ navigation, route }) => {
                         insufficient && styles.fareBalanceInsufficient,
                       ]}
                     >
-                      Wallet: ${walletBalance.toFixed(2)}
+                      Wallet: {currency} {walletBalance.toFixed(2)}
                       {insufficient ? "  ⚠ Insufficient" : ""}
                     </Text>
                   </View>

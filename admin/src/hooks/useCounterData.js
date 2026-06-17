@@ -4,7 +4,7 @@ import { CAMERA_REST_URL } from '../config/camera';
 const CAMERA_SERVER_REST = CAMERA_REST_URL;
 
 const makeDemoEvent = (onBus) => ({
-  event:     Math.random() > 0.35 ? 'ENTER' : 'EXIT',
+  event:     Math.random() > 0.35 ? 'ENTRY' : 'EXIT',
   tid:       Math.floor(Math.random() * 900) + 100,
   frame:     Math.floor(Math.random() * 10000),
   on_bus:    onBus,

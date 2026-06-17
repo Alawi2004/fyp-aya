@@ -7,6 +7,8 @@ import { StatCard } from "../components/StatCard";
 import { getRoutes, createRoute, updateRoute, deleteRoute, getRouteStops, createStop, removeStopFromRoute, updateRouteStopOrder } from "../api/endpoints";
 import apiClient from "../api/apiClient";
 import RouteMapEditor from "./RouteMapEditor";
+import { useSettings } from "../context/SettingsContext";
+import { fmtMoney } from "../utils/fmt";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -83,6 +85,7 @@ function StopsList({ route, onDelete }) {
 // ── Fare Zones panel ──────────────────────────────────────────────────────────
 
 function FareZonesPanel({ route }) {
+  const { currency } = useSettings();
   const [zones,    setZones]    = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editZone, setEditZone] = useState(null);
@@ -127,20 +130,28 @@ function FareZonesPanel({ route }) {
 
   const deleteZone = async (zoneId) => {
     if (!confirm("Delete this fare zone?")) return;
-    await apiClient.delete(`/routes/${route.id}/fare-zones/${zoneId}`).catch(() => {});
-    setZones(prev => prev.filter(z => z.zone_id !== zoneId));
-    showToast("Zone deleted");
+    try {
+      await apiClient.delete(`/routes/${route.id}/fare-zones/${zoneId}`);
+      setZones(prev => prev.filter(z => z.zone_id !== zoneId));
+      showToast("Zone deleted");
+    } catch (e) {
+      showToast("Error: " + (e.message ?? "Failed to delete zone"));
+    }
   };
 
   const toggleStopInZone = async (zone, stop) => {
     const inZone = zone.stops?.some(s => s.stop_id === stop.id || s.stop_id === stop.stop_id);
     const stopId = stop.id ?? stop.stop_id;
-    if (inZone) {
-      await apiClient.delete(`/routes/${route.id}/fare-zones/${zone.zone_id}/stops/${stopId}`).catch(() => {});
-      setZones(prev => prev.map(z => z.zone_id !== zone.zone_id ? z : { ...z, stops: z.stops.filter(s => s.stop_id !== stopId) }));
-    } else {
-      await apiClient.post(`/routes/${route.id}/fare-zones/${zone.zone_id}/stops`, { stop_id: stopId }).catch(() => {});
-      setZones(prev => prev.map(z => z.zone_id !== zone.zone_id ? z : { ...z, stops: [...(z.stops || []), { stop_id: stopId, stop_name: stop.name ?? stop.stop_name }] }));
+    try {
+      if (inZone) {
+        await apiClient.delete(`/routes/${route.id}/fare-zones/${zone.zone_id}/stops/${stopId}`);
+        setZones(prev => prev.map(z => z.zone_id !== zone.zone_id ? z : { ...z, stops: z.stops.filter(s => s.stop_id !== stopId) }));
+      } else {
+        await apiClient.post(`/routes/${route.id}/fare-zones/${zone.zone_id}/stops`, { stop_id: stopId });
+        setZones(prev => prev.map(z => z.zone_id !== zone.zone_id ? z : { ...z, stops: [...(z.stops || []), { stop_id: stopId, stop_name: stop.name ?? stop.stop_name }] }));
+      }
+    } catch (e) {
+      showToast("Error: " + (e.message ?? "Failed to update zone stops"));
     }
   };
 
@@ -226,7 +237,7 @@ function FareZonesPanel({ route }) {
             onClick={() => setExpanded(expanded === z.zone_id ? null : z.zone_id)}>
             <div style={{ width: 12, height: 12, borderRadius: "50%", background: z.zone_color, flexShrink: 0 }} />
             <span style={{ fontWeight: 700, fontSize: 13, color: "#0F172A", flex: 1 }}>{z.zone_name}</span>
-            <span style={{ fontWeight: 800, fontSize: 14, color: "#059669" }}>${parseFloat(z.base_fare).toFixed(2)}</span>
+            <span style={{ fontWeight: 800, fontSize: 14, color: "#059669" }}>{fmtMoney(z.base_fare, currency)}</span>
             <span style={{ fontSize: 11, color: "#94A3B8" }}>{(z.stops || []).length} stops</span>
             <button onClick={e => { e.stopPropagation(); openEdit(z); }} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>Edit</button>
             <button onClick={e => { e.stopPropagation(); deleteZone(z.zone_id); }} style={{ fontSize: 11, color: "#DC2626", background: "#FEF2F2", border: "none", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>Delete</button>
@@ -274,7 +285,7 @@ function FareZonesPanel({ route }) {
               <div key={z.zone_id} style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: z.zone_color }} />
                 <span style={{ fontSize: 12, color: "#1E40AF", fontWeight: 500 }}>
-                  {z.zone_name}: <strong>${parseFloat(z.base_fare).toFixed(2)}</strong>
+                  {z.zone_name}: <strong>{fmtMoney(z.base_fare, currency)}</strong>
                 </span>
               </div>
             ))}

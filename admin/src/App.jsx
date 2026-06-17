@@ -2,6 +2,7 @@ import { useState } from "react";
 import Sidebar from "./components/Sidebar";
 import Topbar from "./components/Topbar";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { SettingsProvider } from "./context/SettingsContext";
 import LoginPage from "./pages/LoginPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 
@@ -76,6 +77,7 @@ function AppShell() {
   };
 
   return (
+    <SettingsProvider>
     <>
       {/* ── Global styles ─────────────────────────────────────────── */}
       <style>{`
@@ -278,5 +280,6 @@ function AppShell() {
         </div>
       </div>
     </>
+    </SettingsProvider>
   );
 }

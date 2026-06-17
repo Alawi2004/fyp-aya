@@ -821,7 +821,7 @@ const AlternativeChip = ({ alt, label, selected, onPress }) => (
 // ── Main Screen ────────────────────────────────────────────────────────────────
 const TripPlannerScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
-  const { walletBalance } = useApp();
+  const { walletBalance, currency } = useApp();
 
   const [stops, setStops] = useState([]);
   const [loadingStops, setLoadingStops] = useState(false);
@@ -1680,9 +1680,9 @@ const TripPlannerScreen = ({ navigation, route }) => {
                             },
                           ]}
                         >
-                          ${walletBalance.toFixed(2)}
+                          {currency} {walletBalance.toFixed(2)}
                         </Text>
-                        <Text style={styles.fareStatSub}>USD</Text>
+                        <Text style={styles.fareStatSub}>{currency}</Text>
                       </View>
                     </View>
 
@@ -1717,7 +1717,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
                         />
                         <View style={{ flex: 1 }}>
                           <Text style={styles.fareWarningText}>
-                            Your wallet is ${shortfall.toFixed(2)} short for
+                            Your wallet is {currency} {shortfall.toFixed(2)} short for
                             this trip. Top up before booking.
                           </Text>
                         </View>

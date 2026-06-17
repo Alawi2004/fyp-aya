@@ -65,7 +65,7 @@ const MenuItem = ({ icon, label, value, onPress, danger = false, rightEl, last =
 const ProfileScreen = ({ navigation }) => {
   const headerInsets = useHeaderInsets();
   const { user, setUser, logout } = useAuth();
-  const { walletBalance, updateBalance, bookings, refreshBookings } = useApp();
+  const { walletBalance, updateBalance, bookings, refreshBookings, currency } = useApp();
 
   const [refreshing, setRefreshing] = useState(false);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -201,7 +201,7 @@ const ProfileScreen = ({ navigation }) => {
           {/* Stats row */}
           <View style={styles.statsRow}>
             <View style={styles.stat}>
-              <StatValue>${(walletBalance ?? 0).toFixed(2)}</StatValue>
+              <StatValue>{currency} {(walletBalance ?? 0).toFixed(2)}</StatValue>
               <Text style={styles.statLabel}>Balance</Text>
             </View>
             <View style={styles.statDivider} />
@@ -231,7 +231,7 @@ const ProfileScreen = ({ navigation }) => {
             <MenuItem
               icon="wallet-outline"
               label="My Wallet"
-              value={`$${(walletBalance ?? 0).toFixed(2)} available`}
+              value={`${currency} ${(walletBalance ?? 0).toFixed(2)} available`}
               onPress={() => navigation.push('Wallet')}
             />
             <MenuItem

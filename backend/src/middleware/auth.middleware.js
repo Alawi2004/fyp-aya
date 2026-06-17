@@ -53,12 +53,12 @@ export const requireStaffOnly = (req, res, next) => {
 };
 
 /**
- * Requires the authenticated user to have ONLY the role 'admin'.
- * Staff members are blocked from admin-exclusive endpoints.
+ * Requires the authenticated user to have the role 'admin' or 'super_admin'.
+ * Staff members and passengers are blocked from admin-exclusive endpoints.
  */
 export const requireAdminOnly = (req, res, next) => {
   requireAuth(req, res, () => {
-    if (req.user?.role !== "admin") {
+    if (!["admin", "super_admin"].includes(req.user?.role)) {
       return res.status(403).json({
         error: "Forbidden — admin access only",
       });

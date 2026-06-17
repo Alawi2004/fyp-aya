@@ -32,8 +32,8 @@ export const createRating = async (req, res) => {
   try {
     const { trip_id, rating, comment } = req.body;
     const user_id = req.user.user_id;
-    if (!rating) {
-      return res.status(400).json({ error: "rating is required" });
+    if (!rating || Number(rating) < 1 || Number(rating) > 5) {
+      return res.status(400).json({ error: "Rating must be 1–5" });
     }
 
     // Coerce trip_id safely: only a positive integer is valid, otherwise NULL.

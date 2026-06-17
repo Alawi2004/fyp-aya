@@ -1,4 +1,4 @@
-export const formatCurrency = (amount) => `$${parseFloat(amount || 0).toFixed(2)}`;
+export const formatCurrency = (amount, currency = 'USD') => `${currency} ${parseFloat(amount || 0).toFixed(2)}`;
 export const formatDate = (date) => new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 export const formatTime = (date) => new Date(date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 export const formatDateTime = (date) => `${formatDate(date)} · ${formatTime(date)}`;

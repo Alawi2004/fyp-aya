@@ -379,30 +379,47 @@ export default function ComplaintsPage() {
     closed:     complaints.filter(c => c.status === "Closed").length,
   };
 
-  function handleCreate(form) {
-    const newC = {
-      id: `CMP-${String(complaints.length + 1).padStart(3, "0")}`,
-      ...form, status: "Open", assigned_to: null,
-      created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-      comments: [],
-    };
-    createComplaint(form).catch(() => {});
-    setComplaints(prev => [newC, ...prev]);
+  async function handleCreate(form) {
+    try {
+      const res = await createComplaint(form);
+      const newC = {
+        complaint_id: res?.complaint_id ?? res?.id ?? Date.now(),
+        id: res?.complaint_id ?? res?.id ?? `CMP-${String(complaints.length + 1).padStart(3, "0")}`,
+        ...form, status: "Open", assigned_to: null,
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        comments: [],
+      };
+      setComplaints(prev => [newC, ...prev]);
+    } catch (err) {
+      alert(err?.message ?? "Failed to create complaint");
+    }
   }
 
-  function handleUpdate(cid, patch) {
-    if (patch.status) {
-      const apiStatus = STATUS_TO_API[patch.status] ?? patch.status;
-      updateComplaintStatus(cid, { status: apiStatus }).catch(() => {});
-    }
+  async function handleUpdate(cid, patch) {
+    const prevComplaints = complaints.slice();
+    const prevDetail = detail;
     setComplaints(prev => prev.map(c => c.complaint_id === cid ? { ...c, ...patch, updated_at: new Date().toISOString() } : c));
     setDetail(prev => prev ? { ...prev, ...patch } : prev);
+    if (patch.status) {
+      const apiStatus = STATUS_TO_API[patch.status] ?? patch.status;
+      try {
+        await updateComplaintStatus(cid, { status: apiStatus });
+      } catch (err) {
+        setComplaints(prevComplaints);
+        setDetail(prevDetail);
+        alert(err?.message ?? "Failed to update complaint status");
+      }
+    }
   }
 
-  function handleAddComment(cid, comment) {
-    addComplaintComment(cid, comment).catch(() => {});
-    setComplaints(prev => prev.map(c => c.complaint_id === cid ? { ...c, comments: [...(c.comments ?? []), comment] } : c));
-    setDetail(prev => prev ? { ...prev, comments: [...(prev.comments ?? []), comment] } : prev);
+  async function handleAddComment(cid, comment) {
+    try {
+      await addComplaintComment(cid, comment);
+      setComplaints(prev => prev.map(c => c.complaint_id === cid ? { ...c, comments: [...(c.comments ?? []), comment] } : c));
+      setDetail(prev => prev ? { ...prev, comments: [...(prev.comments ?? []), comment] } : prev);
+    } catch (err) {
+      alert(err?.message ?? "Failed to add comment");
+    }
   }
 
   return (

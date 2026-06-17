@@ -508,7 +508,7 @@ const ScanLine = () => {
 };
 
 // ── Count-up balance (isolated so re-renders don't touch the whole screen) ───
-const AnimatedBalance = ({ value, style }) => {
+const AnimatedBalance = ({ value, style, currency = 'USD' }) => {
   const anim = useRef(new Animated.Value(0)).current;
   const [display, setDisplay] = useState(0);
   useEffect(() => {
@@ -524,7 +524,7 @@ const AnimatedBalance = ({ value, style }) => {
   const [whole, cents] = display.toFixed(2).split(".");
   return (
     <Text style={style}>
-      <Text>$</Text>
+      <Text>{currency} </Text>
       {whole}
       <Text style={{ fontSize: 26 }}>.{cents}</Text>
     </Text>
@@ -535,7 +535,7 @@ const WalletScreen = () => {
   const navigation = useNavigation();
   const headerInsets = useHeaderInsets(12);
   const insets = useSafeAreaInsets();
-  const { walletBalance, updateBalance } = useApp();
+  const { walletBalance, updateBalance, currency } = useApp();
   const { user } = useAuth();
   const [walletId, setWalletId] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -755,7 +755,7 @@ const WalletScreen = () => {
     const lines = [
       "🧾 YALLA TRANSIT — WALLET RECEIPT",
       `Type: ${isCredit ? "Top-Up (Credit)" : "Payment (Debit)"}`,
-      `Amount: ${isCredit ? "+" : "-"}$${parseFloat(t.amount).toFixed(2)}`,
+      `Amount: ${isCredit ? "+" : "-"}${currency} ${parseFloat(t.amount).toFixed(2)}`,
       `Description: ${t.description ?? "—"}`,
       t.location_name ? `Location: ${t.location_name}` : null,
       t.tx_ref ? `Reference: ${t.tx_ref}` : null,
@@ -794,7 +794,7 @@ const WalletScreen = () => {
       <body>
         <div class="brand">YALLA WALLET</div>
         <div class="title">Transaction Receipt</div>
-        <div class="amt">${isCredit ? "+" : "-"}$${parseFloat(t.amount).toFixed(
+        <div class="amt">${isCredit ? "+" : "-"}${currency} ${parseFloat(t.amount).toFixed(
       2
     )}</div>
         <div class="type">${
@@ -985,6 +985,7 @@ const WalletScreen = () => {
               <AnimatedBalance
                 value={walletBalance}
                 style={styles.balanceAmount}
+                currency={currency}
               />
             </View>
 
@@ -1013,7 +1014,7 @@ const WalletScreen = () => {
               <Ionicons name="trending-up" size={16} color={COLORS.danger} />
             </View>
             <Bump trigger={totalSpent} style={{ alignSelf: "flex-start" }}>
-              <Text style={styles.statValue}>${totalSpent.toFixed(2)}</Text>
+              <Text style={styles.statValue}>{currency} {totalSpent.toFixed(2)}</Text>
             </Bump>
             <Text style={styles.statLabel}>Total Spent</Text>
           </View>
@@ -1481,7 +1482,7 @@ const WalletScreen = () => {
                           },
                         ]}
                       >
-                        {group.total >= 0 ? "+" : "−"}$
+                        {group.total >= 0 ? "+" : "−"}{currency}{" "}
                         {Math.abs(group.total).toFixed(2)}
                       </Text>
                     </View>
@@ -1536,7 +1537,7 @@ const WalletScreen = () => {
                                   },
                                 ]}
                               >
-                                {isCredit ? "+" : "-"}$
+                                {isCredit ? "+" : "-"}{currency}{" "}
                                 {parseFloat(t.amount).toFixed(2)}
                               </Text>
                               <Text style={styles.txTime}>
@@ -1775,7 +1776,7 @@ const WalletScreen = () => {
                           />
                         </View>
                         <Text style={styles.receiptHeaderAmount}>
-                          {isCredit ? "+" : "-"}$
+                          {isCredit ? "+" : "-"}{currency}{" "}
                           {parseFloat(selectedTx.amount).toFixed(2)}
                         </Text>
                         <Text style={styles.receiptHeaderType}>

@@ -6,6 +6,8 @@ import { createUser, updateUser, deleteUserApi } from "../api/endpoints";
 import { Modal } from "../components/Modal";
 import { Panel } from "../components/Panel";
 import { StatCard } from "../components/StatCard";
+import { useSettings } from "../context/SettingsContext";
+import { fmtMoney } from "../utils/fmt";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -65,6 +67,7 @@ const TRIP_STATUS_STYLE = {
 };
 
 function TripDetailPanel({ trip, passenger, onBack }) {
+  const { currency } = useSettings();
   const tripSt     = TRIP_STATUS_STYLE[trip.trip_status?.toLowerCase()]      || TRIP_STATUS_STYLE.upcoming;
   const bookingSt  = TRIP_STATUS_STYLE[trip.ui_status ?? trip.trip_status?.toLowerCase()] || TRIP_STATUS_STYLE.upcoming;
 
@@ -78,7 +81,7 @@ function TripDetailPanel({ trip, passenger, onBack }) {
   ].filter(Boolean).join(" · ") || "—";
 
   const fareLabel = trip.fare != null
-    ? `$${fmt(trip.fare)}` + (trip.seat_count > 1 ? ` × ${trip.seat_count} seats` : "")
+    ? fmtMoney(trip.fare, currency) + (trip.seat_count > 1 ? ` × ${trip.seat_count} seats` : "")
     : "—";
 
   const bookedAt = trip.booking_time
@@ -144,6 +147,7 @@ function TripDetailPanel({ trip, passenger, onBack }) {
 }
 
 function PassengerProfileDrawer({ passenger, onClose, onEdit, onWallet }) {
+  const { currency } = useSettings();
   const [tickets,      setTickets]      = useState(null);
   const [ticketsError, setTicketsError] = useState(null);
   const [selectedTrip, setSelectedTrip] = useState(null);
@@ -213,7 +217,7 @@ function PassengerProfileDrawer({ passenger, onClose, onEdit, onWallet }) {
                 {[
                   { label: "National ID",    value: nationalId },
                   { label: "Date of Birth",  value: passenger.birth_date ? relDate(passenger.birth_date) : "—" },
-                  { label: "Wallet Balance", value: `$${fmt(passenger.wallet_balance)}`, accent: "#059669" },
+                  { label: "Wallet Balance", value: fmtMoney(passenger.wallet_balance, currency), accent: "#059669" },
                   { label: "Phone",          value: passenger.phone || "—" },
                   { label: "Joined",         value: relDate(passenger.created_at) },
                   { label: "Total Trips",    value: passenger.trip_count ?? 0 },
@@ -267,7 +271,7 @@ function PassengerProfileDrawer({ passenger, onClose, onEdit, onWallet }) {
                           </div>
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0 }}>
-                          {t.fare != null && <div style={{ fontSize: 12, fontWeight: 700, color: "#059669", marginBottom: 4 }}>${fmt(t.fare)}</div>}
+                          {t.fare != null && <div style={{ fontSize: 12, fontWeight: 700, color: "#059669", marginBottom: 4 }}>{fmtMoney(t.fare, currency)}</div>}
                           <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6, background: st.bg, color: st.color }}>{st.label}</span>
                         </div>
                         <span style={{ color: "#CBD5E1", fontSize: 14, flexShrink: 0 }}>›</span>
@@ -374,6 +378,7 @@ function RestoreModal({ passenger, onClose, onDone }) {
 // ── Wallet Adjust Modal ───────────────────────────────────────────────────────
 
 function WalletModal({ passenger, onClose, onDone }) {
+  const { currency } = useSettings();
   const [type,   setType]   = useState("credit");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
@@ -390,7 +395,7 @@ function WalletModal({ passenger, onClose, onDone }) {
     setBusy(true); setErr(null);
     try {
       await apiClient.post("/wallet/adjust", { user_id: passenger.user_id, type, amount: parsed, reason, notes: notes || undefined });
-      onDone(`$${parsed.toFixed(2)} ${type}ed successfully`);
+      onDone(`${fmtMoney(parsed, currency)} ${type}ed successfully`);
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
@@ -400,7 +405,7 @@ function WalletModal({ passenger, onClose, onDone }) {
   return (
     <Modal title={`Wallet — ${passenger.full_name}`} onClose={onClose} onSave={submit} saving={busy}>
       {err && <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>{err}</div>}
-      <p style={{ fontSize: 13, color: "#64748B", marginBottom: 16 }}>Balance: <strong style={{ color: "#0F172A" }}>${fmt(passenger.wallet_balance)}</strong></p>
+      <p style={{ fontSize: 13, color: "#64748B", marginBottom: 16 }}>Balance: <strong style={{ color: "#0F172A" }}>{fmtMoney(passenger.wallet_balance, currency)}</strong></p>
       <div style={{ display: "flex", gap: 4, background: "#F1F5F9", borderRadius: 10, padding: 4, marginBottom: 16 }}>
         {["credit", "debit"].map(t => (
           <button key={t} onClick={() => setType(t)} style={{ flex: 1, padding: "7px", borderRadius: 8, border: "none", background: type === t ? "#fff" : "transparent", color: type === t ? (t === "credit" ? "#059669" : "#DC2626") : "#64748B", fontWeight: type === t ? 700 : 500, fontSize: 13, cursor: "pointer" }}>
@@ -422,7 +427,7 @@ function WalletModal({ passenger, onClose, onDone }) {
       </div>
       {amount && !isNaN(parseFloat(amount)) && (
         <div style={{ padding: "10px 12px", background: isCredit ? "#ECFDF5" : "#FEF2F2", border: `1px solid ${isCredit ? "#A7F3D0" : "#FECACA"}`, borderRadius: 8, fontSize: 13, color: isCredit ? "#059669" : "#DC2626" }}>
-          New balance: <strong>${newBal}</strong>
+          New balance: <strong>{fmtMoney(newBal, currency)}</strong>
         </div>
       )}
     </Modal>
@@ -475,6 +480,7 @@ const today = new Date().toISOString().slice(0, 10);
 const fldSt = { width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" };
 
 export default function PassengersPage() {
+  const { currency } = useSettings();
   const [passengers,    setPassengers]    = useState([]);
   const [loading,       setLoading]       = useState(true);
   const [search,        setSearch]        = useState("");
@@ -582,7 +588,7 @@ export default function PassengersPage() {
             { key: "email",          label: "Email"          },
             { key: "phone",          label: "Phone",         value: r => r.phone ?? "—" },
             { key: "status",         label: "Status"         },
-            { key: "wallet_balance", label: "Wallet Balance", value: r => `$${parseFloat(r.wallet_balance || 0).toFixed(2)}` },
+            { key: "wallet_balance", label: "Wallet Balance", value: r => fmtMoney(r.wallet_balance, currency) },
             { key: "trips",          label: "Trips",         value: r => r.trips ?? 0 },
           ]}
           filename={`passengers-${new Date().toISOString().slice(0,10)}.csv`}
@@ -599,7 +605,7 @@ export default function PassengersPage() {
         <StatCard label="Active"           value={counts.active}                         delta="accounts"      accent="#10B981" icon={<UserCheck size={18} color="#10B981" />} />
         <StatCard label="Suspended"        value={counts.suspended}                      delta="temporarily"   accent="#F59E0B" icon={<UserMinus size={18} color="#F59E0B" />} />
         <StatCard label="Blocked"          value={counts.blocked}                        delta="permanently"   accent="#DC2626" icon={<UserX size={18} color="#DC2626" />} />
-        <StatCard label="Total balance"    value={`$${counts.balance.toFixed(2)}`}      delta="all wallets"   accent="#7C3AED" icon={<Wallet size={18} color="#7C3AED" />} />
+        <StatCard label="Total balance"    value={fmtMoney(counts.balance, currency)}    delta="all wallets"   accent="#7C3AED" icon={<Wallet size={18} color="#7C3AED" />} />
       </div>
 
       {/* Filter bar */}
@@ -643,7 +649,7 @@ export default function PassengersPage() {
             </div>
             <div style={{ fontSize: 13, color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.email}</div>
             <div><StatusBadge status={p.status} /></div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B" }}>${fmt(p.wallet_balance)}</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B" }}>{fmtMoney(p.wallet_balance, currency)}</div>
             <div style={{ fontSize: 13, color: "#475569" }}>{p.trip_count ?? 0}</div>
             <div style={{ fontSize: 12, color: "#94A3B8" }}>{relDate(p.created_at)}</div>
             <div style={{ display: "flex", gap: 6 }}>

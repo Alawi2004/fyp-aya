@@ -687,6 +687,186 @@ BEGIN
   CREATE INDEX IX_issues_driver ON issues(driver_id, created_at DESC);
   CREATE INDEX IX_issues_trip   ON issues(trip_id);
 END;
+
+-- staff_top_up_id link column on wallet_transactions (allows structured join
+-- to staff_top_ups for richer transaction history display)
+IF NOT EXISTS (
+  SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_NAME = 'wallet_transactions' AND COLUMN_NAME = 'staff_top_up_id'
+)
+BEGIN
+  ALTER TABLE wallet_transactions ADD staff_top_up_id INT NULL;
+END;
+
+-- Notification templates (reusable drafts for admin broadcast composer)
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='notification_templates')
+BEGIN
+  CREATE TABLE notification_templates (
+    template_id  INT            NOT NULL IDENTITY(1,1) PRIMARY KEY,
+    name         NVARCHAR(100)  NOT NULL,
+    title        NVARCHAR(200)  NOT NULL,
+    body         NVARCHAR(2000) NOT NULL,
+    type         NVARCHAR(20)   NOT NULL DEFAULT 'info',
+    target       NVARCHAR(50)   NOT NULL DEFAULT 'all_users',
+    created_at   DATETIME2      NOT NULL DEFAULT GETUTCDATE(),
+    updated_at   DATETIME2      NOT NULL DEFAULT GETUTCDATE()
+  );
+END;
+
+-- Scheduled notifications (pending broadcast queue)
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='scheduled_notifications')
+BEGIN
+  CREATE TABLE scheduled_notifications (
+    schedule_id   INT            NOT NULL IDENTITY(1,1) PRIMARY KEY,
+    title         NVARCHAR(200)  NOT NULL,
+    body          NVARCHAR(2000) NOT NULL,
+    type          NVARCHAR(20)   NOT NULL DEFAULT 'info',
+    target        NVARCHAR(50)   NOT NULL DEFAULT 'all_users',
+    target_label  NVARCHAR(200)  NULL,
+    scheduled_at  DATETIME2      NOT NULL,
+    status        NVARCHAR(20)   NOT NULL DEFAULT 'pending',
+    created_at    DATETIME2      NOT NULL DEFAULT GETUTCDATE()
+  );
+  CREATE INDEX IX_scheduled_notifications_status ON scheduled_notifications(status, scheduled_at);
+END;
+
+-- Pre-trip vehicle safety checklist submitted by drivers
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='trip_checklists')
+BEGIN
+  CREATE TABLE trip_checklists (
+    checklist_id  INT       NOT NULL IDENTITY(1,1) PRIMARY KEY,
+    trip_id       INT       NOT NULL REFERENCES trips(trip_id),
+    fuel_ok       BIT       NOT NULL DEFAULT 0,
+    lights_ok     BIT       NOT NULL DEFAULT 0,
+    tires_ok      BIT       NOT NULL DEFAULT 0,
+    submitted_at  DATETIME2 NOT NULL DEFAULT GETUTCDATE()
+  );
+  CREATE INDEX IX_trip_checklists_trip ON trip_checklists(trip_id, submitted_at DESC);
+END;
+
+-- Driver-reported trip delays (used for push notifications to passengers)
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='trip_delays')
+BEGIN
+  CREATE TABLE trip_delays (
+    delay_id      INT            NOT NULL IDENTITY(1,1) PRIMARY KEY,
+    trip_id       INT            NOT NULL REFERENCES trips(trip_id),
+    reason        NVARCHAR(100)  NOT NULL,
+    delay_minutes INT            NOT NULL,
+    notes         NVARCHAR(500)  NULL,
+    reported_at   DATETIME2      NOT NULL DEFAULT GETUTCDATE()
+  );
+  CREATE INDEX IX_trip_delays_trip ON trip_delays(trip_id, reported_at DESC);
+END;
+
+-- Vehicle maintenance / service records
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='vehicle_maintenance_records')
+BEGIN
+  CREATE TABLE vehicle_maintenance_records (
+    record_id         INT            NOT NULL IDENTITY(1,1) PRIMARY KEY,
+    vehicle_id        INT            NOT NULL REFERENCES vehicles(vehicle_id),
+    service_date      DATE           NOT NULL,
+    service_type      NVARCHAR(100)  NOT NULL,
+    mechanic          NVARCHAR(200)  NOT NULL DEFAULT 'Pending assignment',
+    workshop          NVARCHAR(200)  NULL,
+    cost              DECIMAL(10,2)  NULL,
+    odometer_km       INT            NULL,
+    notes             NVARCHAR(500)  NULL,
+    next_service_date DATE           NULL,
+    created_by        INT            NULL REFERENCES users(user_id),
+    created_at        DATETIME2      NOT NULL DEFAULT GETUTCDATE()
+  );
+  CREATE INDEX IX_vehicle_maintenance_vehicle ON vehicle_maintenance_records(vehicle_id, service_date DESC);
+END;
+
+-- Weekly schedule grid per driver (shift hours per day of week)
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='driver_schedules')
+BEGIN
+  CREATE TABLE driver_schedules (
+    schedule_id  INT            NOT NULL IDENTITY(1,1) PRIMARY KEY,
+    driver_id    INT            NOT NULL UNIQUE REFERENCES drivers(driver_id) ON DELETE CASCADE,
+    mon          NVARCHAR(50)   NULL,
+    tue          NVARCHAR(50)   NULL,
+    wed          NVARCHAR(50)   NULL,
+    thu          NVARCHAR(50)   NULL,
+    fri          NVARCHAR(50)   NULL,
+    sat          NVARCHAR(50)   NULL,
+    sun          NVARCHAR(50)   NULL,
+    updated_at   DATETIME2      NOT NULL DEFAULT GETUTCDATE()
+  );
+END;
+
+-- Passenger wallet recharges (in-person top-ups via wallet controller)
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='wallet_recharges')
+BEGIN
+  CREATE TABLE wallet_recharges (
+    recharge_id    INT            NOT NULL IDENTITY(1,1) PRIMARY KEY,
+    user_id        INT            NOT NULL REFERENCES users(user_id),
+    staff_id       INT            NULL     REFERENCES users(user_id),
+    amount         DECIMAL(10,2)  NOT NULL,
+    location_name  NVARCHAR(255)  NULL,
+    tx_ref         NVARCHAR(100)  NULL,
+    notes          NVARCHAR(500)  NULL,
+    created_at     DATETIME2      NOT NULL DEFAULT GETUTCDATE()
+  );
+  CREATE INDEX IX_wallet_recharges_user  ON wallet_recharges(user_id,  created_at DESC);
+  CREATE INDEX IX_wallet_recharges_staff ON wallet_recharges(staff_id, created_at DESC);
+  CREATE INDEX IX_wallet_recharges_date  ON wallet_recharges(created_at DESC);
+END;
+
+-- Link wallet_transactions to wallet_recharges for full audit chain
+IF NOT EXISTS (
+  SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_NAME = 'wallet_transactions' AND COLUMN_NAME = 'recharge_id'
+)
+BEGIN
+  ALTER TABLE wallet_transactions ADD recharge_id INT NULL;
+END;
+
+-- Staff in-person wallet top-up audit records
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='staff_top_ups')
+BEGIN
+  CREATE TABLE staff_top_ups (
+    top_up_id                INT            NOT NULL IDENTITY(1,1) PRIMARY KEY,
+    user_id                  INT            NOT NULL REFERENCES users(user_id),
+    wallet_id                INT            NULL,
+    amount                   DECIMAL(10,2)  NOT NULL,
+    transaction_type         NVARCHAR(50)   NOT NULL DEFAULT 'top_up',
+    balance_before           DECIMAL(10,2)  NOT NULL DEFAULT 0,
+    balance_after            DECIMAL(10,2)  NOT NULL DEFAULT 0,
+    processed_by_staff_id    INT            NOT NULL REFERENCES users(user_id),
+    recharge_location        NVARCHAR(255)  NULL,
+    payment_method           NVARCHAR(100)  NOT NULL DEFAULT 'cash',
+    transaction_reference    NVARCHAR(100)  NULL,
+    notes                    NVARCHAR(500)  NULL,
+    status                   NVARCHAR(20)   NOT NULL DEFAULT 'completed',
+    created_at               DATETIME2      NOT NULL DEFAULT GETUTCDATE()
+  );
+  CREATE UNIQUE INDEX UX_staff_top_ups_txref ON staff_top_ups(transaction_reference) WHERE transaction_reference IS NOT NULL;
+  CREATE INDEX IX_staff_top_ups_staff ON staff_top_ups(processed_by_staff_id, created_at DESC);
+  CREATE INDEX IX_staff_top_ups_user  ON staff_top_ups(user_id,               created_at DESC);
+  CREATE INDEX IX_staff_top_ups_date  ON staff_top_ups(created_at DESC);
+END;
+
+-- Staff daily cash reconciliation records
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='staff_reconciliation')
+BEGIN
+  CREATE TABLE staff_reconciliation (
+    reconciliation_id   INT            NOT NULL IDENTITY(1,1) PRIMARY KEY,
+    staff_id            INT            NOT NULL REFERENCES users(user_id),
+    reconciliation_date DATE           NOT NULL,
+    expected_amount     DECIMAL(10,2)  NOT NULL DEFAULT 0,
+    actual_amount       DECIMAL(10,2)  NULL,
+    discrepancy         DECIMAL(10,2)  NULL,
+    status              NVARCHAR(20)   NOT NULL DEFAULT 'pending',
+    notes               NVARCHAR(500)  NULL,
+    reviewed_by         INT            NULL REFERENCES users(user_id),
+    reviewed_at         DATETIME2      NULL,
+    created_at          DATETIME2      NOT NULL DEFAULT GETUTCDATE(),
+    CONSTRAINT UQ_staff_reconciliation_staff_date UNIQUE (staff_id, reconciliation_date)
+  );
+  CREATE INDEX IX_staff_reconciliation_staff ON staff_reconciliation(staff_id,            reconciliation_date DESC);
+  CREATE INDEX IX_staff_reconciliation_date  ON staff_reconciliation(reconciliation_date DESC);
+END;
 `;
 
 // ── Route-specific tables ─────────────────────────────────────────────────────

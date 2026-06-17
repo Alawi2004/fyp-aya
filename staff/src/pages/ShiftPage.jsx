@@ -5,6 +5,7 @@ import {
   BarChart2, ArrowRight,
 } from "lucide-react";
 import { useShift } from "../context/ShiftContext";
+import { useSettings } from "../context/SettingsContext";
 import { C, cardStyle, inputStyle, labelStyle, btnPrimary } from "../styles/themes";
 
 const LOCATIONS = [
@@ -17,7 +18,7 @@ const LOCATIONS = [
   "Other",
 ];
 
-const fmt  = (n) => `$${parseFloat(n ?? 0).toFixed(2)}`;
+const fmt  = (n, cur = "USD") => `${cur} ${parseFloat(n ?? 0).toFixed(2)}`;
 const fmtDuration = (iso) => {
   const ms = Date.now() - new Date(iso).getTime();
   const h  = Math.floor(ms / 3600000);
@@ -31,6 +32,7 @@ const fmtDateTime = (iso) => new Date(iso).toLocaleString("en-GB", {
 
 export default function ShiftPage() {
   const { shift, isShiftOpen, openShift, closeShift } = useShift();
+  const { currency } = useSettings();
 
   const [openForm,    setOpenForm]    = useState({ opening_cash: "", location: LOCATIONS[0] });
   const [openErr,     setOpenErr]     = useState({});
@@ -134,8 +136,8 @@ export default function ShiftPage() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 24 }}>
               {[
                 { label: "Transactions",   value: summary.tx_count,                  icon: Hash,        color: C.info },
-                { label: "Total Processed",value: fmt(summary.total_amount),         icon: TrendingUp,  color: C.primary },
-                { label: "Cash Collected", value: fmt(summary.cash_amount),          icon: DollarSign,  color: C.success },
+                { label: "Total Processed",value: fmt(summary.total_amount, currency),         icon: TrendingUp,  color: C.primary },
+                { label: "Cash Collected", value: fmt(summary.cash_amount, currency),          icon: DollarSign,  color: C.success },
               ].map(({ label, value, icon: Icon, color }) => (
                 <div key={label} style={{ background: "#F8FAFC", borderRadius: 12, padding: "16px", border: `1px solid ${C.border}` }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -153,13 +155,13 @@ export default function ShiftPage() {
                 Cash Reconciliation
               </div>
               {[
-                ["Opening Cash",  fmt(summary.opening_cash)],
-                ["Cash Received", fmt(summary.cash_amount)],
-                ["Closing Cash",  fmt(summary.closing_cash)],
+                ["Opening Cash",  fmt(summary.opening_cash, currency)],
+                ["Cash Received", fmt(summary.cash_amount, currency)],
+                ["Closing Cash",  fmt(summary.closing_cash, currency)],
                 ["Discrepancy",   (() => {
                   const d = summary.closing_cash - summary.cash_amount;
                   const sign = d > 0 ? "+" : "";
-                  return { label: `${sign}${fmt(Math.abs(d))}`, color: d === 0 ? C.success : d > 0 ? C.warning : C.danger };
+                  return { label: `${sign}${fmt(Math.abs(d), currency)}`, color: d === 0 ? C.success : d > 0 ? C.warning : C.danger };
                 })()],
               ].map(([k, v], i) => (
                 <div key={k} style={{
@@ -336,9 +338,9 @@ export default function ShiftPage() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
             {[
               { label: "Transactions",    value: shift.tx_count,           icon: Hash,       color: C.info,    bg: C.infoBg },
-              { label: "Total Processed", value: fmt(shift.total_amount),  icon: TrendingUp, color: C.primary, bg: C.primaryLight },
-              { label: "Cash Collected",  value: fmt(shift.cash_amount),   icon: DollarSign, color: C.success, bg: C.successBg },
-              { label: "Opening Cash",    value: fmt(shift.opening_cash),  icon: MapPin,     color: C.warning, bg: C.warningBg },
+              { label: "Total Processed", value: fmt(shift.total_amount, currency),  icon: TrendingUp, color: C.primary, bg: C.primaryLight },
+              { label: "Cash Collected",  value: fmt(shift.cash_amount, currency),   icon: DollarSign, color: C.success, bg: C.successBg },
+              { label: "Opening Cash",    value: fmt(shift.opening_cash, currency),  icon: MapPin,     color: C.warning, bg: C.warningBg },
             ].map(({ label, value, icon: Icon, color, bg }) => (
               <div key={label} style={{ ...cardStyle, padding: "18px 20px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
@@ -377,7 +379,7 @@ export default function ShiftPage() {
                       border: `1.5px solid ${C.primaryBorder}`, background: C.primaryLight,
                       fontSize: 18, fontWeight: 800, color: C.primary,
                     }}>
-                      {fmt(cashIn)}
+                      {fmt(cashIn, currency)}
                     </div>
                     <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>Sum of all Cash payment top-ups</div>
                   </div>
@@ -412,7 +414,7 @@ export default function ShiftPage() {
                     }
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: diff === 0 ? "#064E3B" : isShort ? "#B91C1C" : "#92400E" }}>
-                        {diff === 0 ? "Balanced — no discrepancy" : isShort ? `Short by ${fmt(Math.abs(diff))}` : `Over by ${fmt(diff)}`}
+                        {diff === 0 ? "Balanced — no discrepancy" : isShort ? `Short by ${fmt(Math.abs(diff), currency)}` : `Over by ${fmt(diff, currency)}`}
                       </div>
                       {diff !== 0 && (
                         <div style={{ fontSize: 12, marginTop: 2, color: isShort ? "#DC2626" : "#B45309" }}>
@@ -465,7 +467,7 @@ export default function ShiftPage() {
                 <InfoRow label="Station"       value={shift.location} />
                 <InfoRow label="Duration"      value={fmtDuration(shift.opened_at)} />
                 <InfoRow label="Opened At"     value={fmtDateTime(shift.opened_at)} />
-                <InfoRow label="Non-Cash Received" value={fmt((shift.total_amount || 0) - (shift.cash_amount || 0))} />
+                <InfoRow label="Non-Cash Received" value={fmt((shift.total_amount || 0) - (shift.cash_amount || 0), currency)} />
               </div>
             </div>
           </div>

@@ -116,7 +116,7 @@ router.post("/verify", verifyTicket);
  *       200:
  *         description: Booking cancelled
  */
-router.get("/:id", getBookingById);
+router.get("/:id", requireAuth, getBookingById);
 router.delete("/:id", requireAuth, cancelBooking);
 
 export default router;

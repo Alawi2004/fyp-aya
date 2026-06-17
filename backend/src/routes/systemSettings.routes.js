@@ -1,11 +1,11 @@
 import express from "express";
 import { getSettings, updateSettings, getSetting } from "../controllers/systemSettings.controller.js";
-import { requireAdminOnly } from "../middleware/auth.middleware.js";
+import { requireAuth, requireAdminOnly } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-router.get("/",     requireAdminOnly, getSettings);
+router.get("/",     requireAuth,      getSettings);
 router.put("/",     requireAdminOnly, updateSettings);
-router.get("/:key", requireAdminOnly, getSetting);
+router.get("/:key", requireAuth,      getSetting);
 
 export default router;

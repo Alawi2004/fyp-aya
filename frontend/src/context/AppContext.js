@@ -31,7 +31,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
-import { registerPushToken, registerFcmToken } from '../api/apiClient';
+import apiClient, { registerPushToken, registerFcmToken } from '../api/apiClient';
 
 // Expo Go removed Android push notifications in SDK 53 — skip registration there
 const IS_EXPO_GO = Constants.executionEnvironment === 'storeClient';
@@ -51,6 +51,8 @@ export const AppProvider = ({ children }) => {
   // from context and never trigger a fetch themselves, so without this
   // they'd show the stale $0.00 default until the Wallet tab was opened.
   const [walletBalance, setWalletBalance] = useState(0);
+  const [currency, setCurrency] = useState('USD');
+
   useEffect(() => {
     if (role !== 'passenger' || !user) return;
     let cancelled = false;
@@ -59,6 +61,16 @@ export const AppProvider = ({ children }) => {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [role, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    apiClient.get('/settings')
+      .then((res) => {
+        const cur = res.data?.flat?.['app.currency'];
+        if (cur) setCurrency(cur);
+      })
+      .catch(() => {});
+  }, [user]);
 
   // Register push tokens on mount — skipped in Expo Go (removed in SDK 53)
   useEffect(() => {
@@ -155,7 +167,7 @@ export const AppProvider = ({ children }) => {
           type: 'info',
           title: 'Reservation Cancelled',
           body: refundAmount > 0
-            ? `Your taxi reservation has been cancelled. $${refundAmount.toFixed(2)} refunded to wallet.`
+            ? `Your taxi reservation has been cancelled. ${currency} ${refundAmount.toFixed(2)} refunded to wallet.`
             : 'Your taxi reservation has been cancelled.',
           time: 'Just now',
           read: false,
@@ -176,7 +188,7 @@ export const AppProvider = ({ children }) => {
         _id: Date.now().toString(),
         type: 'info',
         title: 'Booking Cancelled',
-        body: `Your booking for ${booking.bus?.name} has been cancelled. $${refundAmount.toFixed(2)} refunded to wallet.`,
+        body: `Your booking for ${booking.bus?.name} has been cancelled. ${currency} ${refundAmount.toFixed(2)} refunded to wallet.`,
         time: 'Just now',
         read: false,
       });
@@ -212,6 +224,7 @@ export const AppProvider = ({ children }) => {
   return (
     <AppContext.Provider value={{
       walletBalance, updateBalance,
+      currency,
       activeBooking, setActiveBooking,
       bookings, addBooking, cancelBooking, refreshBookings,
       ratings, addRating, averageRating,

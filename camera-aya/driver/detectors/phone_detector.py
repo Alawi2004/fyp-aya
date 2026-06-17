@@ -212,9 +212,15 @@ class PhoneDetector:
                                       x2 + rx1, y2 + fy1))
                         confs.append(float(box.conf[0]))
 
-        deduped = _deduplicate(boxes)
-        # Keep confs aligned after dedup (best effort — take first-seen conf)
-        kept_confs = confs[:len(deduped)]
+        # Deduplicate while keeping confidences aligned with the surviving boxes.
+        # Greedy NMS: iterate in input order, keep a box only if it doesn't
+        # overlap (IoU > 0.45) with any already-kept box.
+        deduped: list = []
+        kept_confs: list = []
+        for box, conf in zip(boxes, confs):
+            if not any(_iou(box, k) > 0.45 for k in deduped):
+                deduped.append(box)
+                kept_confs.append(conf)
         return deduped, kept_confs
 
     def _log_row(self, strategy: str, confidence: float,

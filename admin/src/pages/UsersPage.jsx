@@ -7,6 +7,8 @@ import { Modal } from "../components/Modal";
 import { StatusPill } from "../components/StatusPill";
 import { StatCard } from "../components/StatCard";
 import { getUsers, createUser, updateUser, deleteUserApi, getPassengerHeatmap, getDriverSchedules, updateDriverSchedule, getDrivers, getDriverPerformance, adminAdjustWallet, getAuditLogs } from "../api/endpoints";
+import { useSettings } from "../context/SettingsContext";
+import { fmtMoney } from "../utils/fmt";
 
 const ROLES = ["Passenger", "Driver", "Admin", "Staff"];
 
@@ -114,6 +116,7 @@ function SectionLabel({ children }) {
 
 // ── Wallet Adjust Modal (inline, used in PassengerProfile) ───────────────────
 function WalletAdjustModal({ user, onClose }) {
+  const { currency } = useSettings();
   const [type,   setType]   = useState("credit");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
@@ -131,7 +134,7 @@ function WalletAdjustModal({ user, onClose }) {
     setBusy(true); setErr(null);
     try {
       await adminAdjustWallet({ user_id: user.id, type, amount: parsed, reason, notes: notes || undefined });
-      setOk(`$${parsed.toFixed(2)} ${type}ed successfully`);
+      setOk(`${fmtMoney(parsed, currency)} ${type}ed successfully`);
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
@@ -145,7 +148,7 @@ function WalletAdjustModal({ user, onClose }) {
         </div>
       ) : (<>
         {user.walletBalance != null && (
-          <p style={{ fontSize: 13, color: "#64748B", marginBottom: 16 }}>Current balance: <strong style={{ color: "#0F172A" }}>${parseFloat(user.walletBalance).toFixed(2)}</strong></p>
+          <p style={{ fontSize: 13, color: "#64748B", marginBottom: 16 }}>Current balance: <strong style={{ color: "#0F172A" }}>{fmtMoney(user.walletBalance, currency)}</strong></p>
         )}
         <div style={{ display: "flex", gap: 4, background: "#F1F5F9", borderRadius: 10, padding: 4, marginBottom: 16 }}>
           {["credit", "debit"].map(t => (
@@ -174,6 +177,7 @@ function WalletAdjustModal({ user, onClose }) {
 
 // ── Passenger Profile ────────────────────────────────────────────────────────
 function PassengerProfile({ user, onClose, onEdit }) {
+  const { currency } = useSettings();
   const [tickets,      setTickets]      = useState(null);
   const [walletOpen,   setWalletOpen]   = useState(false);
 
@@ -188,7 +192,7 @@ function PassengerProfile({ user, onClose, onEdit }) {
   const completed  = (tickets || []).filter(t => ["completed","confirmed"].includes(t.status?.toLowerCase())).length;
   const rs         = ROLE_STYLE.Passenger;
   const initials   = user.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-  const walletBal  = user.walletBalance != null ? `$${parseFloat(user.walletBalance).toFixed(2)}` : "—";
+  const walletBal  = user.walletBalance != null ? fmtMoney(user.walletBalance, currency) : "—";
   const phone      = user.phone || "—";
   const nationalId = user.nationalId || "IC-" + String(user.id).padStart(6, "0") + "X";
 
@@ -251,7 +255,7 @@ function PassengerProfile({ user, onClose, onEdit }) {
                   <div style={{ fontSize: 11, color: "#94A3B8" }}>{t.created_at ? new Date(t.created_at).toLocaleDateString("en-GB") : "—"}</div>
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  {t.fare != null && <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", marginBottom: 2 }}>${parseFloat(t.fare).toFixed(2)}</div>}
+                  {t.fare != null && <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", marginBottom: 2 }}>{fmtMoney(t.fare, currency)}</div>}
                   <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6, background: isOk ? "#F0FDF4" : "#FEF2F2", color: isOk ? "#059669" : "#DC2626" }}>
                     {t.status}
                   </span>
@@ -625,6 +629,7 @@ const FLAG_CONFIG = {
 };
 
 function StaffUserProfile({ user, onClose, onEdit }) {
+  const { currency } = useSettings();
   const rs       = ROLE_STYLE.Staff;
   const initials = user.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 
@@ -663,8 +668,8 @@ function StaffUserProfile({ user, onClose, onEdit }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <InfoTile label="Station"        value={staffRec.location ?? "—"} />
           <InfoTile label="Joined"         value={user.joined || "—"} />
-          <InfoTile label="Daily Limit"    value={staffRec.daily_limit ? `$${staffRec.daily_limit.toLocaleString()}` : "—"} />
-          <InfoTile label="Per-TX Limit"   value={staffRec.tx_limit   ? `$${staffRec.tx_limit}`                       : "—"} />
+          <InfoTile label="Daily Limit"    value={staffRec.daily_limit ? fmtMoney(staffRec.daily_limit, currency) : "—"} />
+          <InfoTile label="Per-TX Limit"   value={staffRec.tx_limit   ? fmtMoney(staffRec.tx_limit, currency)         : "—"} />
           <InfoTile label="Status"         value={user.status} />
           <InfoTile label="Flagged Txns"   value={suspicious.length} accent={suspicious.length > 0 ? "#DC2626" : "#059669"} />
         </div>
@@ -676,7 +681,7 @@ function StaffUserProfile({ user, onClose, onEdit }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
           {[
             { label: "Top-Ups",     value: staffRec.today_count ?? 0,   color: "#2563EB" },
-            { label: "Volume",      value: staffRec.today_total ? `$${staffRec.today_total.toLocaleString()}` : "$0", color: "#059669" },
+            { label: "Volume",      value: fmtMoney(staffRec.today_total || 0, currency), color: "#059669" },
             { label: "Suspicious",  value: suspicious.length,            color: suspicious.length > 0 ? "#DC2626" : "#10B981" },
           ].map(({ label, value, color }) => (
             <div key={label} style={{ background: "#F8FAFC", borderRadius: 10, padding: "12px 10px", textAlign: "center", border: "1px solid #F1F5F9" }}>
@@ -728,7 +733,7 @@ function StaffUserProfile({ user, onClose, onEdit }) {
                   <div style={{ fontSize: 11, color: "#94A3B8" }}>{t.location} · {new Date(t.time).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</div>
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#059669", marginBottom: 3 }}>${t.amount.toFixed(2)}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#059669", marginBottom: 3 }}>{fmtMoney(t.amount, currency)}</div>
                   {t.flags.length > 0
                     ? <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 6px", borderRadius: 5, background: "#FEF2F2", color: "#DC2626" }}>⚠ {t.flags.length} flag{t.flags.length > 1 ? "s" : ""}</span>
                     : <span style={{ fontSize: 9, color: "#10B981", fontWeight: 600 }}>✓ Normal</span>

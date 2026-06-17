@@ -4,6 +4,7 @@ import QRCode from 'react-native-qrcode-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, PURPLE } from '../../constants/colors';
 import { formatDateTime } from '../../utils/formatters';
+import { useApp } from '../../context/AppContext';
 
 // ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_CFG = {
@@ -51,6 +52,7 @@ const DetailCell = ({ label, value, accent, isDark }) => (
 // ── Main card ─────────────────────────────────────────────────────────────────
 const ShareTicketCard = React.forwardRef(
   ({ booking, ticket, passengerName, boardingQr, shareUrl, isDark = false }, ref) => {
+    const { currency } = useApp();
     const status  = booking?.status ?? 'upcoming';
     const cfg     = STATUS_CFG[status] ?? STATUS_CFG.default;
     const bus     = booking?.bus ?? {};
@@ -149,7 +151,7 @@ const ShareTicketCard = React.forwardRef(
                 : '—'}
               isDark={isDark}
             />
-            <DetailCell label="FARE"   value={`$${parseFloat(ticket?.amount ?? booking?.price ?? 0).toFixed(2)}`} isDark={isDark} />
+            <DetailCell label="FARE"   value={`${currency} ${parseFloat(ticket?.amount ?? booking?.price ?? 0).toFixed(2)}`} isDark={isDark} />
           </View>
 
           {/* Ticket / Booking ID */}

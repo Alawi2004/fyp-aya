@@ -7,6 +7,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
+import { useApp } from '../../context/AppContext';
 import { COLORS, PURPLE } from '../../constants/colors';
 import { getDriverTripsApi, startTripApi, completeTripApi, cancelTripApi } from '../../api/driverApi';
 import { useGpsTracking } from '../../hooks/useGpsTracking';
@@ -193,7 +194,7 @@ const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd,
               <View style={modalStyles.stat}>
                 <Ionicons name="cash-outline" size={14} color={COLORS.secondary} />
                 <Text style={modalStyles.statLbl}>Earnings</Text>
-                <Text style={[modalStyles.statVal, { color: COLORS.secondary }]}>${trip.earnings.toFixed(2)}</Text>
+                <Text style={[modalStyles.statVal, { color: COLORS.secondary }]}>{currency} {trip.earnings.toFixed(2)}</Text>
               </View>
               <View style={modalStyles.stat}>
                 <Ionicons name="map-outline" size={14} color={PURPLE.primary} />
@@ -389,6 +390,7 @@ const modalStyles = StyleSheet.create({
 const DriverDashboardScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { currency } = useApp();
   const fadeAnim   = useRef(new Animated.Value(0)).current;
   const slideAnim  = useRef(new Animated.Value(20)).current;
   const pulseAnim  = useRef(new Animated.Value(1)).current;
@@ -586,7 +588,7 @@ const DriverDashboardScreen = ({ navigation }) => {
           { icon: 'radio-button-on', label: 'Active',   value: activeTrip ? '1' : '0', color: COLORS.secondary },
           { icon: 'time-outline',    label: 'Upcoming', value: String(upcomingCount),   color: PURPLE.primary   },
           { icon: 'checkmark-circle',label: 'Done',     value: String(doneToday),       color: PURPLE.primary   },
-          { icon: 'cash-outline',    label: 'Earned',   value: `$${earnedToday.toFixed(0)}`, color: COLORS.secondary },
+          { icon: 'cash-outline',    label: 'Earned',   value: `${currency} ${earnedToday.toFixed(0)}`, color: COLORS.secondary },
         ].map((s, i) => (
           <View key={s.label} style={[styles.statItem, i < 3 && styles.statBorder]}>
             <Ionicons name={s.icon} size={16} color={s.color} />
@@ -728,7 +730,7 @@ const DriverDashboardScreen = ({ navigation }) => {
                   </View>
                   <View style={styles.earningsChip}>
                     <Ionicons name="cash-outline" size={12} color={COLORS.secondary} />
-                    <Text style={styles.earningsText}>${trip.earnings.toFixed(2)}</Text>
+                    <Text style={styles.earningsText}>{currency} {trip.earnings.toFixed(2)}</Text>
                   </View>
                 </View>
 

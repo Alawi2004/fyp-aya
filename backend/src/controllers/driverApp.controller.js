@@ -96,14 +96,31 @@ export const getDriverTrips = async (req, res) => {
   }
 };
 
+// Helper: resolve driver_id for the authenticated user. Returns null if the user is not a driver.
+async function resolveDriverId(pool, user) {
+  if (user?.driver_id) return user.driver_id;
+  if (!user?.user_id) return null;
+  const dr = await pool.request()
+    .input("uid", sql.Int, user.user_id)
+    .query("SELECT driver_id FROM drivers WHERE user_id = @uid AND ISNULL(is_deleted, 0) = 0");
+  return dr.recordset[0]?.driver_id ?? null;
+}
+
 // PUT /api/driver/trips/:id/start
 export const startTrip = async (req, res) => {
   try {
     const pool = await poolPromise;
-    await pool
+    const driverId = await resolveDriverId(pool, req.user);
+    if (!driverId) return res.status(403).json({ error: "Driver profile not found" });
+
+    const result = await pool
       .request()
-      .input("id", sql.Int, req.params.id)
-      .query("UPDATE trips SET status='ongoing', start_time = ISNULL(start_time, GETDATE()) WHERE trip_id=@id");
+      .input("id",  sql.Int, req.params.id)
+      .input("did", sql.Int, driverId)
+      .query("UPDATE trips SET status='ongoing', start_time = ISNULL(start_time, GETDATE()) WHERE trip_id=@id AND driver_id=@did");
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).json({ error: "Trip not found or not assigned to you" });
+    }
     res.json({ message: "Trip started" });
   } catch (err) {
     res.status(500).json({ error: "Failed to start trip" });
@@ -114,10 +131,17 @@ export const startTrip = async (req, res) => {
 export const completeTrip = async (req, res) => {
   try {
     const pool = await poolPromise;
-    await pool
+    const driverId = await resolveDriverId(pool, req.user);
+    if (!driverId) return res.status(403).json({ error: "Driver profile not found" });
+
+    const result = await pool
       .request()
-      .input("id", sql.Int, req.params.id)
-      .query("UPDATE trips SET status='completed', end_time = GETDATE() WHERE trip_id=@id");
+      .input("id",  sql.Int, req.params.id)
+      .input("did", sql.Int, driverId)
+      .query("UPDATE trips SET status='completed', end_time = GETDATE() WHERE trip_id=@id AND driver_id=@did");
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).json({ error: "Trip not found or not assigned to you" });
+    }
     res.json({ message: "Trip completed" });
   } catch (err) {
     res.status(500).json({ error: "Failed to complete trip" });
@@ -128,16 +152,20 @@ export const completeTrip = async (req, res) => {
 export const cancelTrip = async (req, res) => {
   try {
     const pool = await poolPromise;
+    const driverId = await resolveDriverId(pool, req.user);
+    if (!driverId) return res.status(403).json({ error: "Driver profile not found" });
+
     const result = await pool
       .request()
-      .input("id", sql.Int, req.params.id)
+      .input("id",  sql.Int, req.params.id)
+      .input("did", sql.Int, driverId)
       .query(`
         UPDATE trips
         SET status = 'cancelled', end_time = GETDATE()
-        WHERE trip_id = @id AND status NOT IN ('completed', 'cancelled')
+        WHERE trip_id = @id AND driver_id = @did AND status NOT IN ('completed', 'cancelled')
       `);
     if (result.rowsAffected[0] === 0) {
-      return res.status(400).json({ error: "Trip cannot be cancelled (already completed or cancelled)." });
+      return res.status(400).json({ error: "Trip cannot be cancelled (not yours, already completed, or already cancelled)." });
     }
     res.json({ message: "Trip cancelled" });
   } catch (err) {
@@ -149,6 +177,18 @@ export const cancelTrip = async (req, res) => {
 export const getTripPassengers = async (req, res) => {
   try {
     const pool = await poolPromise;
+    const driverId = await resolveDriverId(pool, req.user);
+    if (!driverId) return res.status(403).json({ error: "Driver profile not found" });
+
+    // Verify the trip belongs to this driver before exposing passenger details
+    const ownership = await pool.request()
+      .input("id",  sql.Int, req.params.id)
+      .input("did", sql.Int, driverId)
+      .query("SELECT 1 AS ok FROM trips WHERE trip_id = @id AND driver_id = @did");
+    if (!ownership.recordset[0]) {
+      return res.status(403).json({ error: "Trip not assigned to you" });
+    }
+
     const result = await pool
       .request()
       .input("id", sql.Int, req.params.id)
@@ -168,10 +208,10 @@ export const getTripPassengers = async (req, res) => {
 // GET /api/driver/earnings
 export const getDriverEarnings = async (req, res) => {
   try {
-    const driverId = req.query.driver_id || req.user?.driver_id;
-    if (!driverId) return res.status(400).json({ error: "driver_id required" });
-
     const pool = await poolPromise;
+    const driverId = await resolveDriverId(pool, req.user);
+    if (!driverId) return res.status(403).json({ error: "Driver profile not found" });
+
     const result = await pool
       .request()
       .input("id", sql.Int, driverId)
@@ -298,13 +338,18 @@ export const createServiceRequest = async (req, res) => {
 // POST /api/driver/issues
 export const reportIssue = async (req, res) => {
   try {
-    const { driver_id, trip_id, description } = req.body;
+    const { trip_id, description } = req.body;
+    if (!description) return res.status(400).json({ error: "description is required" });
+
     const pool = await poolPromise;
+    const driverId = await resolveDriverId(pool, req.user);
+    if (!driverId) return res.status(403).json({ error: "Driver profile not found" });
+
     await pool
       .request()
-      .input("driver_id", sql.Int, driver_id)
-      .input("trip_id", sql.Int, trip_id || null)
-      .input("description", sql.Text, description)
+      .input("driver_id",   sql.Int,  driverId)
+      .input("trip_id",     sql.Int,  trip_id || null)
+      .input("description", sql.NVarChar(1000), String(description).slice(0, 1000))
       .query(`
         INSERT INTO issues (driver_id, trip_id, description, created_at)
         VALUES (@driver_id, @trip_id, @description, GETDATE())
@@ -318,16 +363,19 @@ export const reportIssue = async (req, res) => {
 // POST /api/driver/emergency
 export const sendEmergency = async (req, res) => {
   try {
-    const { driver_id, trip_id, message } = req.body;
+    const { trip_id, message } = req.body;
     const pool = await poolPromise;
+    const driverId = await resolveDriverId(pool, req.user);
+    if (!driverId) return res.status(403).json({ error: "Driver profile not found" });
+
     await pool
       .request()
-      .input("driver_id", sql.Int, driver_id)
-      .input("trip_id", sql.Int, trip_id || null)
-      .input("message", sql.Text, message || "Emergency alert")
+      .input("driver_id", sql.Int,  driverId)
+      .input("trip_id",   sql.Int,  trip_id || null)
+      .input("message",   sql.NVarChar(1000), String(message || "Emergency alert").slice(0, 900))
       .query(`
         INSERT INTO issues (driver_id, trip_id, description, created_at)
-        VALUES (@driver_id, @trip_id, 'EMERGENCY: ' + @message, GETDATE())
+        VALUES (@driver_id, @trip_id, CONCAT('EMERGENCY: ', @message), GETDATE())
       `);
     res.status(201).json({ message: "Emergency alert sent" });
   } catch (err) {
@@ -486,7 +534,17 @@ export const scanPassengerQr = async (req, res) => {
           .query(`SELECT balance, is_frozen FROM wallets WHERE user_id=@uid`);
         const wallet = walletRes.recordset[0];
 
-        if (wallet && !wallet.is_frozen && parseFloat(wallet.balance) >= fare) {
+        if (wallet?.is_frozen) {
+          // Frozen wallet = active fraud block — deny boarding entirely
+          await tx.rollback().catch(() => {});
+          return res.status(403).json({
+            valid: false,
+            message: "Passenger wallet is frozen — boarding denied. Contact support.",
+            passenger: { name: ticket.full_name, seat_number: ticket.seat_number },
+          });
+        }
+
+        if (wallet && parseFloat(wallet.balance) >= fare) {
           await tx.request()
             .input("uid",  sql.Int,            userId)
             .input("fare", sql.Decimal(10, 2), fare)
@@ -511,6 +569,8 @@ export const scanPassengerQr = async (req, res) => {
         }
       }
 
+      // Allow boarding even on insufficient balance (service continuity), but flag it.
+      // Frozen wallets are blocked above before reaching this point.
       await tx.request()
         .input("ticketId", sql.Int, ticket.ticket_id)
         .query(`UPDATE tickets SET status='boarded' WHERE ticket_id=@ticketId`);
@@ -553,17 +613,17 @@ export const markStopArrival = async (req, res) => {
     const stopId = parseInt(req.params.stopId, 10);
     const pool = await poolPromise;
     await pool.request()
-      .input("trip_id",    sql.Int,      tripId)
-      .input("stop_id",    sql.Int,      stopId)
-      .input("arrived_at", sql.DateTime, new Date())
+      .input("trip_id",    sql.Int,       tripId)
+      .input("stop_id",    sql.Int,       stopId)
+      .input("arrived_at", sql.DateTime2, new Date())
       .query(`
         IF EXISTS (SELECT 1 FROM trip_stop_arrivals WHERE trip_id=@trip_id AND stop_id=@stop_id)
           UPDATE trip_stop_arrivals
-          SET actual_arrival=@arrived_at
+          SET actual_arrival_at=@arrived_at, updated_at=GETUTCDATE(), arrival_status='arrived'
           WHERE trip_id=@trip_id AND stop_id=@stop_id
         ELSE
-          INSERT INTO trip_stop_arrivals (trip_id, stop_id, actual_arrival)
-          VALUES (@trip_id, @stop_id, @arrived_at)
+          INSERT INTO trip_stop_arrivals (trip_id, stop_id, actual_arrival_at, arrival_status, created_at, updated_at)
+          VALUES (@trip_id, @stop_id, @arrived_at, 'arrived', GETUTCDATE(), GETUTCDATE())
       `);
     res.json({ message: "Stop arrival recorded" });
   } catch (err) {

@@ -497,11 +497,11 @@ export default function CameraPage() {
                         display: 'grid', gridTemplateColumns: '70px 60px 70px 80px 90px',
                         gap: 8, fontSize: 11, alignItems: 'center',
                       }}>
-                        <span style={{ color: evt.event === 'ENTER' ? '#3b82f6' : '#ef4444', fontWeight: 700 }}>
-                          {evt.event === 'ENTER' ? '↓ ENTER' : '↑ EXIT'}
+                        <span style={{ color: evt.event === 'ENTRY' ? '#3b82f6' : '#ef4444', fontWeight: 700 }}>
+                          {evt.event === 'ENTRY' ? '↓ ENTER' : '↑ EXIT'}
                         </span>
                         <span style={{ color: '#374151' }}>#{evt.tid}</span>
-                        <span style={{ color: '#6b7280' }}>F{evt.frame}</span>
+                        <span style={{ color: '#6b7280' }}>{evt.frame != null ? `F${evt.frame}` : '—'}</span>
                         <span style={{ color: '#059669', fontWeight: 600 }}>On: {evt.on_bus}</span>
                         <span style={{ color: '#9ca3af' }}>{new Date(evt.timestamp).toLocaleTimeString()}</span>
                       </div>

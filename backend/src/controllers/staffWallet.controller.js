@@ -112,11 +112,31 @@ export const staffTopUpWallet = async (req, res) => {
   if (isNaN(parsedAmount) || parsedAmount <= 0) {
     return res.status(400).json({ error: "amount must be a positive number" });
   }
-  if (parsedAmount > 10000) {
-    return res.status(400).json({ error: "Single top-up cannot exceed $10,000" });
+  if (parsedAmount > 500) {
+    return res.status(400).json({ error: "Single top-up cannot exceed $500 per transaction" });
   }
 
   const staffId = req.user.user_id;
+
+  // Enforce daily limit before opening the transaction
+  {
+    const pool = await poolPromise;
+    const dailyRes = await pool.request()
+      .input("staffId", sql.Int, staffId)
+      .query(`
+        SELECT ISNULL(SUM(amount), 0) AS today_total
+        FROM staff_top_ups
+        WHERE processed_by_staff_id = @staffId
+          AND CAST(created_at AS DATE) = CAST(GETUTCDATE() AS DATE)
+          AND status = 'completed'
+      `);
+    const todayTotal = parseFloat(dailyRes.recordset[0]?.today_total || 0);
+    if (todayTotal + parsedAmount > 5000) {
+      return res.status(400).json({
+        error: `Daily top-up limit of $5,000 reached (used: $${todayTotal.toFixed(2)}, requested: $${parsedAmount.toFixed(2)})`,
+      });
+    }
+  }
   const pool    = await poolPromise;
   const tx      = pool.transaction();
 

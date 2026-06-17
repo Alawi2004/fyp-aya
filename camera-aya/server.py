@@ -284,6 +284,7 @@ class PassengerCameraSession:
         self._events: deque        = deque(maxlen=200)
         self._recent_events: list  = []
         self._fps                  = 0.0
+        self._frame_count: int     = 0
 
         self._lock    = threading.Lock()
         self._running = False
@@ -377,6 +378,9 @@ class PassengerCameraSession:
                 h, w = frame.shape[:2]
                 now  = time.perf_counter()
 
+                self._frame_count += 1
+                frame_no = self._frame_count
+
                 with self._lock:
                     if self._line_counter is None:
                         self._line_counter = LineCounter(frame_w=w, frame_h=h)
@@ -401,6 +405,7 @@ class PassengerCameraSession:
                                 "event":     event.upper(),
                                 "tid":       tid,
                                 "on_bus":    on_bus,
+                                "frame":     frame_no,
                             })
                             self._recent_events.insert(0, {
                                 "time":     datetime.now().strftime("%H:%M:%S"),

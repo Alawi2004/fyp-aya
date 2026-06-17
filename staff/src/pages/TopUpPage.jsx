@@ -12,6 +12,7 @@ import { useOfflineCtx }  from "../context/OfflineContext";
 import { idempotency }    from "../utils/idempotency";
 import { C, cardStyle, inputStyle, labelStyle, btnPrimary } from "../styles/themes";
 import QRScanModal from "../components/QRScanModal";
+import { useSettings } from "../context/SettingsContext";
 
 // ─── constants ────────────────────────────────────────────────────────────────
 const PAYMENT_METHODS = ["Cash", "Card (Debit/Credit)", "Mobile Transfer", "Bank Transfer", "Voucher", "Other"];
@@ -19,7 +20,7 @@ const STEPS = { SEARCH: "search", CONFIRM_USER: "confirm_user", FORM: "form", CO
 const EMPTY_FORM = { amount: "", payment_method: "Cash", recharge_location: "", transaction_reference: "", notes: "" };
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
-const fmt         = (n) => `$${parseFloat(n ?? 0).toFixed(2)}`;
+const fmt         = (n, cur = "USD") => `${cur} ${parseFloat(n ?? 0).toFixed(2)}`;
 const fmtDateTime = (iso) => new Date(iso).toLocaleString("en-GB", {
   day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
 });
@@ -46,6 +47,7 @@ export default function TopUpPage() {
   const { isShiftOpen, shift, recordTransaction } = useShift();
   const { isOnline, enqueue }                     = useOfflineCtx();
   const navigate                                  = useNavigate();
+  const { currency }                              = useSettings();
 
   const [step,         setStep]         = useState(STEPS.SEARCH);
   const [query,        setQuery]        = useState("");
@@ -128,7 +130,7 @@ export default function TopUpPage() {
     const e = {};
     const amt = parseFloat(form.amount);
     if (!form.amount || isNaN(amt) || amt <= 0)  e.amount            = "Enter a positive amount";
-    if (amt > 10000)                              e.amount            = "Single top-up cannot exceed $10,000";
+    if (amt > 500)                                e.amount            = "Single top-up cannot exceed $500 per transaction";
     if (!form.recharge_location.trim())           e.recharge_location = "Location is required";
     if (!form.transaction_reference.trim())       e.transaction_reference = "Transaction reference is required";
     setFormErr(e);
@@ -320,7 +322,7 @@ export default function TopUpPage() {
                         <span style={{ fontSize: 12, color: C.textMuted }}>{u.email}{u.phone ? ` · ${u.phone}` : ""}</span>
                       </div>
                       <div style={{ textAlign: "right", flexShrink: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: C.primary }}>{fmt(u.balance)}</div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: C.primary }}>{fmt(u.balance, currency)}</div>
                         <div style={{ fontSize: 11, color: C.textMuted }}>balance</div>
                       </div>
                       <ChevronRight size={16} color={C.textMuted} />
@@ -438,7 +440,7 @@ export default function TopUpPage() {
               <div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#92400E" }}>Duplicate Transaction Detected</div>
                 <div style={{ fontSize: 12, color: "#B45309", marginTop: 2 }}>
-                  A top-up of {fmt(form.amount)} for this passenger was submitted {30 - dupWarning.secondsLeft}s ago.
+                  A top-up of {fmt(form.amount, currency)} for this passenger was submitted {30 - dupWarning.secondsLeft}s ago.
                   Wait <strong>{dupWarning.secondsLeft}s</strong> before retrying to prevent double-charging.
                 </div>
                 <button onClick={() => { setDupWarning(null); setStep(STEPS.CONFIRM); }} style={{ marginTop: 8, padding: "4px 12px", borderRadius: 7, border: "1.5px solid #FDE68A", background: "#fff", fontSize: 11, fontWeight: 700, color: "#92400E", cursor: "pointer" }}>
@@ -515,6 +517,7 @@ function BackBtn({ onClick, label }) {
 }
 
 function UserInfoCard({ user, compact }) {
+  const { currency } = useSettings();
   const sc = statusColor(user.status);
   return (
     <div style={{ display: "flex", alignItems: compact ? "center" : "flex-start", gap: 14 }}>
@@ -531,11 +534,11 @@ function UserInfoCard({ user, compact }) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 14 }}>
             <InfoChip label="User ID" value={`#${user.user_id}`} />
             <InfoChip label="Phone" value={user.phone ?? "—"} />
-            <InfoChip label="Balance" value={`$${parseFloat(user.balance).toFixed(2)}`} accent />
+            <InfoChip label="Balance" value={`${currency} ${parseFloat(user.balance).toFixed(2)}`} accent />
             <InfoChip label="Joined" value={user.joined ?? "—"} />
           </div>
         )}
-        {compact && <div style={{ display: "flex", gap: 10, marginTop: 8 }}><span style={{ fontSize: 11, color: C.textMuted }}>ID #{user.user_id}</span><span style={{ fontSize: 11, color: C.primary, fontWeight: 700 }}>${parseFloat(user.balance).toFixed(2)}</span></div>}
+        {compact && <div style={{ display: "flex", gap: 10, marginTop: 8 }}><span style={{ fontSize: 11, color: C.textMuted }}>ID #{user.user_id}</span><span style={{ fontSize: 11, color: C.primary, fontWeight: 700 }}>{currency} {parseFloat(user.balance).toFixed(2)}</span></div>}
       </div>
     </div>
   );
@@ -555,6 +558,7 @@ function ErrMsg({ msg }) {
 }
 
 function ConfirmDialog({ user, form, isOnline, submitting, submitErr, onBack, onConfirm }) {
+  const { currency } = useSettings();
   const newBalance = parseFloat(user.balance) + parseFloat(form.amount || 0);
   return (
     <div>
@@ -582,9 +586,9 @@ function ConfirmDialog({ user, form, isOnline, submitting, submitErr, onBack, on
             {[
               ["Passenger",       user.full_name],
               ["User ID",         `#${user.user_id}`],
-              ["Current Balance", `$${parseFloat(user.balance).toFixed(2)}`],
-              ["Amount",          `$${parseFloat(form.amount).toFixed(2)}`],
-              ["New Balance",     isOnline ? `$${newBalance.toFixed(2)}` : "Pending sync"],
+              ["Current Balance", `${currency} ${parseFloat(user.balance).toFixed(2)}`],
+              ["Amount",          `${currency} ${parseFloat(form.amount).toFixed(2)}`],
+              ["New Balance",     isOnline ? `${currency} ${newBalance.toFixed(2)}` : "Pending sync"],
               ["Payment",         form.payment_method],
               ["Location",        form.recharge_location],
               ["Reference",       form.transaction_reference],
@@ -616,6 +620,7 @@ function ConfirmDialog({ user, form, isOnline, submitting, submitErr, onBack, on
 
 // ─── Queued (offline) success card ───────────────────────────────────────────
 function QueuedCard({ receipt, onNewTopUp }) {
+  const { currency } = useSettings();
   return (
     <div style={{ maxWidth: 520, margin: "0 auto" }}>
       <div style={cardStyle}>
@@ -631,7 +636,7 @@ function QueuedCard({ receipt, onNewTopUp }) {
             {[
               ["Queue ID",   receipt.queue_id],
               ["Passenger",  receipt.user_name],
-              ["Amount",     fmt(receipt.amount)],
+              ["Amount",     fmt(receipt.amount, currency)],
               ["Method",     receipt.payment_method],
               ["Station",    receipt.station],
               ["Queued At",  new Date(receipt.created_at).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })],
@@ -660,6 +665,7 @@ function QueuedCard({ receipt, onNewTopUp }) {
 
 // ─── Digital receipt (online) ─────────────────────────────────────────────────
 function DigitalReceipt({ receipt, onNewTopUp }) {
+  const { currency } = useSettings();
   const shareText = [
     `🧾 YALLA TRANSIT — WALLET TOP-UP RECEIPT`,
     `Receipt No: ${receipt.receipt_no}`,
@@ -668,9 +674,9 @@ function DigitalReceipt({ receipt, onNewTopUp }) {
     `Passenger: ${receipt.user_name}`,
     `Email: ${receipt.user_email || ""}`,
     ``,
-    `Amount Added: +${fmt(receipt.amount_credited)}`,
-    `Previous Balance: ${fmt(receipt.balance_before)}`,
-    `NEW BALANCE: ${fmt(receipt.new_balance)}`,
+    `Amount Added: +${fmt(receipt.amount_credited, currency)}`,
+    `Previous Balance: ${fmt(receipt.balance_before, currency)}`,
+    `NEW BALANCE: ${fmt(receipt.new_balance, currency)}`,
     ``,
     `Payment Method: ${receipt.payment_method}`,
     `Station: ${receipt.station}`,
@@ -706,7 +712,7 @@ function DigitalReceipt({ receipt, onNewTopUp }) {
               </div>
             </div>
             <div style={{ textAlign: "center", padding: "10px 0" }}>
-              <div style={{ fontSize: 44, fontWeight: 900, color: "#fff", letterSpacing: "-1px" }}>+{fmt(receipt.amount_credited)}</div>
+              <div style={{ fontSize: 44, fontWeight: 900, color: "#fff", letterSpacing: "-1px" }}>+{fmt(receipt.amount_credited, currency)}</div>
               <div style={{ fontSize: 13, color: "rgba(255,255,255,.75)", marginTop: 2 }}>{receipt.payment_method}</div>
             </div>
           </div>
@@ -737,12 +743,12 @@ function DigitalReceipt({ receipt, onNewTopUp }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 8, marginBottom: 16 }}>
               <div style={{ background: "#F8FAFC", borderRadius: 10, border: `1px solid ${C.border}`, padding: "12px 14px", textAlign: "center" }}>
                 <div style={{ fontSize: 10, color: C.textMuted, fontWeight: 600, marginBottom: 4 }}>PREVIOUS</div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>{fmt(receipt.balance_before)}</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>{fmt(receipt.balance_before, currency)}</div>
               </div>
               <div style={{ fontSize: 20, color: C.primary, fontWeight: 800, textAlign: "center" }}>→</div>
               <div style={{ background: C.primaryLight, borderRadius: 10, border: `1px solid ${C.primaryBorder}`, padding: "12px 14px", textAlign: "center" }}>
                 <div style={{ fontSize: 10, color: C.primary, fontWeight: 600, marginBottom: 4 }}>NEW BALANCE</div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: C.primary }}>{fmt(receipt.new_balance)}</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: C.primary }}>{fmt(receipt.new_balance, currency)}</div>
               </div>
             </div>
 

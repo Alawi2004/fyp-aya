@@ -11,6 +11,7 @@ import FadeInView from '../../components/common/FadeInView';
 import PressableScale from '../../components/common/PressableScale';
 import { SkeletonCardList } from '../../components/common/Skeleton';
 import { getDriverTripsApi } from '../../api/driverApi';
+import { useApp } from '../../context/AppContext';
 
 const STATUS_CFG = {
   completed: { label: 'Completed', bg: COLORS.secondaryLight, text: COLORS.secondary, icon: 'checkmark-circle'  },
@@ -78,6 +79,7 @@ const FILTERS = [
 
 const DriverTripHistoryScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
+  const { currency } = useApp();
   const [trips,      setTrips]      = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -168,7 +170,7 @@ const DriverTripHistoryScreen = ({ navigation }) => {
             {item.status === 'completed' && item.earnings > 0 && (
               <View style={[styles.pill, { backgroundColor: COLORS.secondaryLight }]}>
                 <Ionicons name="cash-outline" size={11} color={COLORS.secondary} />
-                <Text style={[styles.pillText, { color: COLORS.secondary }]}>${item.earnings.toFixed(2)}</Text>
+                <Text style={[styles.pillText, { color: COLORS.secondary }]}>{currency} {item.earnings.toFixed(2)}</Text>
               </View>
             )}
             {item.totalSeats > 0 && item.status === 'completed' && (
@@ -205,7 +207,7 @@ const DriverTripHistoryScreen = ({ navigation }) => {
           </PressableScale>
           <View style={{ alignItems: 'center' }}>
             <Text style={styles.headerTitle}>Trip History</Text>
-            <Text style={styles.headerSub}>${totalEarned.toFixed(2)} total · {completedCnt} trips done</Text>
+            <Text style={styles.headerSub}>{currency} {totalEarned.toFixed(2)} total · {completedCnt} trips done</Text>
           </View>
           <View style={{ width: 40 }} />
         </View>
@@ -215,7 +217,7 @@ const DriverTripHistoryScreen = ({ navigation }) => {
             { icon: 'checkmark-circle', label: 'Completed', value: completedCnt,                 color: '#A7F3D0'               },
             { icon: 'calendar-outline', label: 'Upcoming',  value: upcomingCnt,                  color: 'rgba(255,255,255,0.95)' },
             { icon: 'close-circle',     label: 'Cancelled', value: cancelledCnt,                 color: '#FCA5A5'               },
-            { icon: 'cash-outline',     label: 'Earned',    value: `$${totalEarned.toFixed(0)}`, color: 'rgba(255,255,255,0.95)' },
+            { icon: 'cash-outline',     label: 'Earned',    value: `${currency} ${totalEarned.toFixed(0)}`, color: 'rgba(255,255,255,0.95)' },
           ].map((s, i) => (
             <View key={s.label} style={[styles.summaryCell, i < 3 && styles.summaryCellBorder]}>
               <Ionicons name={s.icon} size={14} color={s.color} />

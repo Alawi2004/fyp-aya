@@ -4,8 +4,9 @@ import { useShift } from "../context/ShiftContext";
 import { useAuth } from "../context/AuthContext";
 import { offlineQueue } from "../utils/offlineQueue";
 import { C, cardStyle } from "../styles/themes";
+import { useSettings } from "../context/SettingsContext";
 
-const fmt     = (n) => `$${parseFloat(n ?? 0).toFixed(2)}`;
+const fmt     = (n, cur = "USD") => `${cur} ${parseFloat(n ?? 0).toFixed(2)}`;
 const fmtTime = (iso) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 const fmtDate = (iso) => new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 const fmtFull = (iso) => `${fmtDate(iso)} ${fmtTime(iso)}`;
@@ -23,6 +24,7 @@ const methodStyle = (m) => METHOD_COLOR[m] || METHOD_COLOR["Other"];
 export default function CashReportPage() {
   const { shift, lastReport } = useShift();
   const { user }              = useAuth();
+  const { currency }          = useSettings();
   const [showQueued, setShowQueued] = useState(false);
 
   // Prefer active shift; fall back to last closed report
@@ -122,8 +124,8 @@ export default function CashReportPage() {
               { label: "Shift ID",    value: report.shift_id },
               { label: "Opened",      value: fmtFull(report.opened_at) },
               { label: "Transactions", value: String(report.tx_count || 0) },
-              { label: "Total Processed", value: fmt(report.total_amount) },
-              { label: "Cash Collected",  value: fmt(report.cash_amount) },
+              { label: "Total Processed", value: fmt(report.total_amount, currency) },
+              { label: "Cash Collected",  value: fmt(report.cash_amount, currency) },
               { label: isActive ? "Status" : "Closed", value: isActive ? "Active" : fmtFull(report.closed_at) },
             ].map(({ label, value }) => (
               <div key={label}>
@@ -138,9 +140,9 @@ export default function CashReportPage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 20 }}>
           {[
             { label: "Transactions",    value: report.tx_count || 0,         icon: Hash,       color: C.info,    bg: "#EFF6FF" },
-            { label: "Total Processed", value: fmt(report.total_amount),     icon: TrendingUp, color: C.primary, bg: C.primaryLight },
-            { label: "Cash Collected",  value: fmt(report.cash_amount),      icon: DollarSign, color: C.success, bg: C.successBg },
-            { label: "Non-Cash",        value: fmt((report.total_amount||0)-(report.cash_amount||0)), icon: Clock, color: C.warning, bg: C.warningBg },
+            { label: "Total Processed", value: fmt(report.total_amount, currency),     icon: TrendingUp, color: C.primary, bg: C.primaryLight },
+            { label: "Cash Collected",  value: fmt(report.cash_amount, currency),      icon: DollarSign, color: C.success, bg: C.successBg },
+            { label: "Non-Cash",        value: fmt((report.total_amount||0)-(report.cash_amount||0), currency), icon: Clock, color: C.warning, bg: C.warningBg },
           ].map(({ label, value, icon: Icon, color, bg }) => (
             <div key={label} style={{ ...cardStyle, padding: "16px 18px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -192,7 +194,7 @@ export default function CashReportPage() {
                           {tx.userId && <div style={{ fontSize: 10, color: C.textMuted }}>#{tx.userId}</div>}
                         </td>
                         <td style={{ padding: "9px 14px", fontWeight: 800, color: C.primary, whiteSpace: "nowrap" }}>
-                          +{fmt(tx.amount)}
+                          +{fmt(tx.amount, currency)}
                         </td>
                         <td style={{ padding: "9px 14px" }}>
                           <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 99, background: ms.bg, color: ms.color }}>
@@ -212,7 +214,7 @@ export default function CashReportPage() {
                 <tfoot>
                   <tr style={{ background: "#F8FAFC", borderTop: `2px solid ${C.border}` }}>
                     <td colSpan={3} style={{ padding: "10px 14px", fontWeight: 700, fontSize: 12, color: "#0F172A" }}>Total</td>
-                    <td style={{ padding: "10px 14px", fontWeight: 900, color: C.primary, fontSize: 14 }}>{fmt(report.total_amount)}</td>
+                    <td style={{ padding: "10px 14px", fontWeight: 900, color: C.primary, fontSize: 14 }}>{fmt(report.total_amount, currency)}</td>
                     <td colSpan={3} />
                   </tr>
                 </tfoot>
@@ -240,7 +242,7 @@ export default function CashReportPage() {
                   return (
                     <div key={method} style={{ background: ms.bg, borderRadius: 10, padding: "12px 14px", border: `1px solid ${ms.color}22` }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: ms.color, marginBottom: 6 }}>{method}</div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>{fmt(total)}</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>{fmt(total, currency)}</div>
                       <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>{count} transaction{count !== 1 ? "s" : ""}</div>
                     </div>
                   );
@@ -259,14 +261,14 @@ export default function CashReportPage() {
           <div style={{ padding: "0 20px 20px" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 0, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden", marginTop: 16 }}>
               {[
-                { label: "Opening Cash",            value: fmt(report.opening_cash),    note: "Cash on hand at shift start"              },
-                { label: "Cash Top-Ups Collected",  value: fmt(report.cash_amount),     note: `${cashTxs.length} Cash transactions`       },
-                { label: "Expected Closing Cash",   value: fmt(expectedClosing),        note: "Opening + Cash collected", bold: true, accent: C.primary },
+                { label: "Opening Cash",            value: fmt(report.opening_cash, currency),    note: "Cash on hand at shift start"              },
+                { label: "Cash Top-Ups Collected",  value: fmt(report.cash_amount, currency),     note: `${cashTxs.length} Cash transactions`       },
+                { label: "Expected Closing Cash",   value: fmt(expectedClosing, currency),        note: "Opening + Cash collected", bold: true, accent: C.primary },
                 ...(report.closing_cash != null ? [
-                  { label: "Reported Closing Cash", value: fmt(report.closing_cash),    note: "As counted by staff"                      },
+                  { label: "Reported Closing Cash", value: fmt(report.closing_cash, currency),    note: "As counted by staff"                      },
                   {
                     label:     "Discrepancy",
-                    value:     (() => { const d = discrepancy; return `${d > 0 ? "+" : ""}${fmt(Math.abs(d))}`; })(),
+                    value:     (() => { const d = discrepancy; return `${d > 0 ? "+" : ""}${fmt(Math.abs(d), currency)}`; })(),
                     note:      isBalanced ? "Balanced — no issues" : isShort ? "Shortage" : "Overage",
                     bold:      true,
                     accent:    isBalanced ? C.success : isShort ? C.danger : C.warning,
@@ -302,7 +304,7 @@ export default function CashReportPage() {
                 <AlertTriangle size={15} color={isShort ? C.danger : C.warning} style={{ flexShrink: 0, marginTop: 1 }} />
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: isShort ? "#B91C1C" : "#92400E" }}>
-                    {isShort ? `Cash shortage of ${fmt(Math.abs(discrepancy))} detected` : `Cash overage of ${fmt(discrepancy)} detected`}
+                    {isShort ? `Cash shortage of ${fmt(Math.abs(discrepancy), currency)} detected` : `Cash overage of ${fmt(discrepancy, currency)} detected`}
                   </div>
                   <div style={{ fontSize: 12, color: isShort ? "#DC2626" : "#B45309", marginTop: 2 }}>
                     {isShort
@@ -345,7 +347,7 @@ export default function CashReportPage() {
                       <td style={{ padding: "8px 14px", fontFamily: "monospace", color: C.danger, fontWeight: 700 }}>{item.id}</td>
                       <td style={{ padding: "8px 14px", color: C.textSecond }}>{fmtFull(item.created_at)}</td>
                       <td style={{ padding: "8px 14px", color: C.textMuted }}>#{item.payload?.user_id}</td>
-                      <td style={{ padding: "8px 14px", fontWeight: 800, color: C.primary }}>{fmt(item.payload?.amount)}</td>
+                      <td style={{ padding: "8px 14px", fontWeight: 800, color: C.primary }}>{fmt(item.payload?.amount, currency)}</td>
                       <td style={{ padding: "8px 14px", color: C.textSecond }}>{item.payload?.payment_method}</td>
                       <td style={{ padding: "8px 14px", fontFamily: "monospace", fontSize: 10, color: C.textMuted }}>{item.signature?.slice(0, 16)}…</td>
                     </tr>
