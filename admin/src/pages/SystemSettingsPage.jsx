@@ -314,11 +314,13 @@ function validateGeneral(s) {
   if (phone) e["app.support_phone"] = phone;
   const rate = errNum(s["app.exchange_rate"], 0.0001, undefined, "Exchange Rate");
   if (rate) e["app.exchange_rate"] = rate;
+  const perKm = errNum(s["fare.per_km_rate"], 0, undefined, "Per-km Rate");
+  if (perKm) e["fare.per_km_rate"] = perKm;
   return e;
 }
 
 function GeneralTab({ s, set }) {
-  const keys = ["app.name","app.timezone","app.currency","app.exchange_rate","app.language","app.support_email","app.support_phone"];
+  const keys = ["app.name","app.timezone","app.currency","app.exchange_rate","app.language","app.support_email","app.support_phone","fare.per_km_rate"];
   const { save, saving, saved, saveErr, valErrs, clearErr } = useSectionSave(s, keys, validateGeneral);
   const f = (k, v) => { set(k, v); clearErr(k); };
 
@@ -355,6 +357,9 @@ function GeneralTab({ s, set }) {
             <Field label="Support Phone" placeholder="+961 1 999 000"
               description="Contact phone number shown in the mobile app."
               value={s["app.support_phone"]} onChange={v => f("app.support_phone", v)} error={valErrs["app.support_phone"]} />
+            <Field label="Per-km Rate" unit={`${s["app.currency"] || "USD"}/km`} type="number" min="0" step="0.01"
+              description="Variable component added on top of the base fare per kilometre."
+              value={s["fare.per_km_rate"]} onChange={v => f("fare.per_km_rate", v)} error={valErrs["fare.per_km_rate"]} />
           </TwoCol>
         </div>
       </Panel>
@@ -395,7 +400,6 @@ function validateFare(s) {
   const e = {};
   const checks = [
     ["fare.base_amount",      errNum(s["fare.base_amount"],      0,   undefined, "Base Amount")],
-    ["fare.per_km_rate",      errNum(s["fare.per_km_rate"],      0,   undefined, "Per-km Rate")],
     ["fare.student_discount", errNum(s["fare.student_discount"], 0,   1,         "Student Discount")],
     ["fare.senior_discount",  errNum(s["fare.senior_discount"],  0,   1,         "Senior Discount")],
     ["fare.employee_discount",errNum(s["fare.employee_discount"],0,   1,         "Employee Discount")],
@@ -406,12 +410,12 @@ function validateFare(s) {
 }
 
 function FareTab({ s, set }) {
-  const keys = ["fare.base_amount","fare.per_km_rate","fare.student_discount","fare.senior_discount","fare.employee_discount","fare.school_discount"];
+  const keys = ["fare.base_amount","fare.student_discount","fare.senior_discount","fare.employee_discount","fare.school_discount"];
   const { save, saving, saved, saveErr, valErrs, clearErr } = useSectionSave(s, keys, validateFare);
   const f = (k, v) => { set(k, v); clearErr(k); };
 
   const base  = parseFloat(s["fare.base_amount"]  || 0);
-  const perKm = parseFloat(s["fare.per_km_rate"]  || 0);
+  const perKm = parseFloat(s["fare.per_km_rate"]  || 0); // read from General tab
   const curr  = s["app.currency"] || "USD";
   const rate  = parseFloat(s["app.exchange_rate"] || 1) || 1;
   const KM    = 10;
@@ -439,9 +443,6 @@ function FareTab({ s, set }) {
             <Field label="Base Amount" unit={curr} type="number" min="0" step="0.25"
               description="Flat fare charged for every journey regardless of distance."
               value={s["fare.base_amount"]} onChange={v => f("fare.base_amount", v)} error={valErrs["fare.base_amount"]} />
-            <Field label="Per-km Rate" unit={`${curr}/km`} type="number" min="0" step="0.01"
-              description="Variable component added on top of the base fare per kilometre."
-              value={s["fare.per_km_rate"]} onChange={v => f("fare.per_km_rate", v)} error={valErrs["fare.per_km_rate"]} />
           </TwoCol>
           <Divider label="Discount Ratios — 0 = no discount · 1 = free" />
           <TwoCol>
