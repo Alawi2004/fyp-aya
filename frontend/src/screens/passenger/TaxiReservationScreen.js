@@ -44,10 +44,10 @@ if (
 }
 
 const NOM = "https://nominatim.openstreetmap.org";
-const NOM_HEADERS = {
+const nomHeaders = () => ({
   "User-Agent": "FYP-AYA Transit App (student project)",
-  "Accept-Language": "en",
-};
+  "Accept-Language": apiClient.defaults.headers.common?.['Accept-Language'] || 'en',
+});
 
 const animateLayout = () =>
   LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -92,7 +92,7 @@ const searchNominatim = async (query) => {
     const url = `${NOM}/search?q=${encodeURIComponent(
       query.trim()
     )}&format=json&limit=6&addressdetails=1&countrycodes=lb`;
-    const res = await fetch(url, { headers: NOM_HEADERS });
+    const res = await fetch(url, { headers: nomHeaders() });
     if (!res.ok) return [];
     const data = await res.json();
     return data.map((p) => ({
@@ -109,7 +109,7 @@ const searchNominatim = async (query) => {
 const reverseGeocode = async (lat, lng) => {
   try {
     const url = `${NOM}/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`;
-    const res = await fetch(url, { headers: NOM_HEADERS });
+    const res = await fetch(url, { headers: nomHeaders() });
     if (!res.ok) return null;
     const data = await res.json();
     return data.display_name ?? null;

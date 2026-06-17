@@ -73,7 +73,7 @@ export const updateSettings = async (req, res) => {
 
 // ── GET /api/settings/public — no auth, returns safe app.* keys only ─────────
 export const getPublicSettings = async (req, res) => {
-  const PUBLIC_KEYS = ["app.name", "app.support_phone", "app.support_email"];
+  const PUBLIC_KEYS = ["app.name", "app.support_phone", "app.support_email", "app.language"];
   try {
     const pool = await poolPromise;
     const result = await pool.request().query(

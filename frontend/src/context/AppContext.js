@@ -29,6 +29,8 @@
 // export const useApp = () => useContext(AppContext);
 
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import { I18nManager } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import apiClient, { registerPushToken, registerFcmToken } from '../api/apiClient';
 
@@ -56,6 +58,7 @@ export const AppProvider = ({ children }) => {
   const [exchangeRate, setExchangeRate] = useState(1);
   const [supportPhone, setSupportPhone] = useState('+961 1 999 000');
   const [supportEmail, setSupportEmail] = useState('support@yallatransit.lb');
+  const [language, setLanguage] = useState('en');
 
   useEffect(() => {
     if (role !== 'passenger' || !user) return;
@@ -78,15 +81,35 @@ export const AppProvider = ({ children }) => {
       .catch(() => {});
   }, [user]);
 
-  // Fetch public settings (support phone/email) — no auth required
+  // Fetch public settings (support phone/email/language) — no auth required
   useEffect(() => {
+    // Restore persisted language immediately so the app doesn't flash the wrong layout
+    AsyncStorage.getItem('app.language').then((stored) => {
+      if (stored) applyLanguage(stored);
+    });
+
     apiClient.get('/settings/public')
       .then((res) => {
         if (res.data?.['app.support_phone']) setSupportPhone(res.data['app.support_phone']);
         if (res.data?.['app.support_email']) setSupportEmail(res.data['app.support_email']);
+        const lang = res.data?.['app.language'];
+        if (lang) applyLanguage(lang);
       })
       .catch(() => {});
   }, []);
+
+  const applyLanguage = (lang) => {
+    setLanguage(lang);
+    // Update Accept-Language for all subsequent API calls
+    apiClient.defaults.headers.common['Accept-Language'] = lang;
+    // Apply RTL layout for Arabic; requires an app restart to fully take effect
+    const isRTL = lang === 'ar';
+    if (I18nManager.isRTL !== isRTL) {
+      I18nManager.allowRTL(isRTL);
+      I18nManager.forceRTL(isRTL);
+    }
+    AsyncStorage.setItem('app.language', lang).catch(() => {});
+  };
 
   const fmtMoney = useCallback((n) => {
     const v = (parseFloat(n) || 0) * exchangeRate;
@@ -254,6 +277,7 @@ export const AppProvider = ({ children }) => {
       emergencyAlerts, sendEmergencyAlert,
       busLocations, updateBusLocation, getBusLocation,
       supportPhone, supportEmail,
+      language,
     }}>
       {children}
     </AppContext.Provider>

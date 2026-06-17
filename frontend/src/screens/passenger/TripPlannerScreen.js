@@ -48,10 +48,10 @@ if (
 const LBP_PER_USD = 89_500;
 
 const NOM = "https://nominatim.openstreetmap.org";
-const NOM_HEADERS = {
+const nomHeaders = () => ({
   "User-Agent": "FYP-AYA Transit App (student project)",
-  "Accept-Language": "en",
-};
+  "Accept-Language": apiClient.defaults.headers.common?.['Accept-Language'] || 'en',
+});
 
 const MODES = [
   { key: "fastest", label: "Fastest", icon: "flash-outline" },
@@ -459,7 +459,7 @@ const StopPickerModal = ({
         const url = `${NOM}/search?q=${encodeURIComponent(
           text.trim()
         )}&format=json&limit=5&addressdetails=1&countrycodes=lb`;
-        const res = await fetch(url, { headers: NOM_HEADERS });
+        const res = await fetch(url, { headers: nomHeaders() });
         if (!res.ok) throw new Error();
         const data = await res.json();
         setAddrResults(

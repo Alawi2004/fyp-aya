@@ -479,7 +479,8 @@ BEGIN
     ('maintenance.scheduled_end',   '',       'maintenance', 'Scheduled End',             'string',  'ISO datetime for planned maintenance window end'),
     ('app.support_phone',          '+961 1 999 000', 'app', 'Support Phone', 'string', 'Contact phone number shown in the mobile app'),
     ('app.support_email',          'support@yallatransit.lb', 'app', 'Support Email', 'string', 'Contact email shown to passengers and drivers'),
-    ('app.name',                   'Yalla Transit', 'app', 'App Name',    'string', 'Application name shown in the mobile app');
+    ('app.name',                   'Yalla Transit', 'app', 'App Name',    'string', 'Application name shown in the mobile app'),
+    ('app.language',               'en', 'app', 'Default Language', 'string', 'Default UI language for passengers and drivers');
 END;
 
 IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='scheduled_reports')
