@@ -18,7 +18,7 @@ import {
   getVehiclePhotos,
   deleteVehiclePhoto,
 } from "../controllers/vehicles.controller.js";
-import { requireAdminOnly }  from "../middleware/auth.middleware.js";
+import { requireAdminOnly, requireAuth }  from "../middleware/auth.middleware.js";
 import { requirePermission } from "../middleware/permissions.middleware.js";
 import { crudLimiter }       from "../middleware/rateLimiter.middleware.js";
 import { uploadPhoto }       from "../middleware/upload.middleware.js";
@@ -163,8 +163,8 @@ router.put("/:id",      crudLimiter, requirePermission("vehicles", "edit"),   up
 router.delete("/:id",   crudLimiter, requireAdminOnly,                        deleteVehicle);
 router.get("/:id/fuel", requireAdminOnly, getVehicleFuel);
 
-// Photo upload/retrieval — multer handles multipart parsing before the controller
-router.get("/:id/photos",                   requireAdminOnly, getVehiclePhotos);
+// Photo upload/retrieval — GET is open to any authenticated user (mobile app reads photos)
+router.get("/:id/photos",                   requireAuth,      getVehiclePhotos);
 router.post("/:id/photos",                  requireAdminOnly, uploadPhoto, uploadVehiclePhoto);
 router.delete("/:id/photos/:filename",      requireAdminOnly, deleteVehiclePhoto);
 
