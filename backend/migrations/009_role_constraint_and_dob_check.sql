@@ -27,11 +27,11 @@ IF NOT EXISTS (
 BEGIN
   UPDATE users
   SET role = 'passenger'
-  WHERE role NOT IN ('passenger', 'driver', 'admin', 'staff');
+  WHERE role NOT IN ('passenger', 'driver', 'admin', 'super_admin', 'staff');
 
   ALTER TABLE users
     ADD CONSTRAINT CK_users_role
-    CHECK (role IN ('passenger', 'driver', 'admin', 'staff'));
+    CHECK (role IN ('passenger', 'driver', 'admin', 'super_admin', 'staff'));
 
   PRINT 'Added CK_users_role constraint.';
 END
