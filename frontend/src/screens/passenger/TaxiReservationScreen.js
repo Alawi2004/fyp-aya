@@ -535,7 +535,7 @@ const VEHICLE_TYPES = [
     base: 5.0,
     perKm: 1.5,
     seats: 4,
-    color: "#3B82F6",
+    color: "#7C3AED",
   },
   {
     key: "suv",

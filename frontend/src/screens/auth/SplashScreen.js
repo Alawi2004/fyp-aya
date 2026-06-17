@@ -4,10 +4,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Defs, LinearGradient as SvgGradient, Stop, Rect, Circle } from 'react-native-svg';
 import { useAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
-import { COLORS } from '../../constants/colors';
+import { COLORS, PURPLE } from '../../constants/colors';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const BRAND = ['#1E3A8A', '#4338CA', '#7C3AED'];
+const BRAND = PURPLE.gradient;
 
 // ── SVG gradient fill that measures its own box (matches Login/Register) ──────
 const GradientFill = ({ id, colors, vertical = false }) => {
@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
   /* background blobs (same language as Login/Register) */
   blob: { position: 'absolute', borderRadius: 9999 },
   blobA: { width: 280, height: 280, top: -60, right: -80, backgroundColor: 'rgba(124,58,237,0.45)' },
-  blobB: { width: 240, height: 240, top: SCREEN_H * 0.22, left: -90, backgroundColor: 'rgba(37,99,235,0.40)' },
+  blobB: { width: 240, height: 240, top: SCREEN_H * 0.22, left: -90, backgroundColor: 'rgba(139,92,246,0.35)' },
   blobC: { width: 180, height: 180, borderRadius: 90, position: 'absolute', top: -30, left: SCREEN_W * 0.3, backgroundColor: 'rgba(255,255,255,0.06)' },
 
   /* stage holds the road + bus, centered vertically */

@@ -440,7 +440,7 @@ const DriverMapScreen = ({ navigation, route }) => {
       >
         {/* Planned route (dashed) */}
         {routeWaypoints.length >= 2 && (
-          <Polyline coordinates={routeWaypoints} strokeColor={PURPLE.midStrong ?? '#93C5FD'} strokeWidth={4} lineDashPattern={[8, 4]} />
+          <Polyline coordinates={routeWaypoints} strokeColor={PURPLE.midStrong ?? '#DDD6FE'} strokeWidth={4} lineDashPattern={[8, 4]} />
         )}
         {/* Completed portion */}
         {routeWaypoints.length >= 2 && doneCount > 0 && (
@@ -722,7 +722,7 @@ const styles = StyleSheet.create({
   handleArea: { alignSelf: 'stretch', alignItems: 'center', paddingTop: 10, paddingBottom: 8, marginHorizontal: -16 },
   handleBar:  { width: 44, height: 5, borderRadius: 3, backgroundColor: COLORS.border },
 
-  nextStopCard:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: PURPLE.light, borderRadius: 14, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: PURPLE.midStrong ?? '#93C5FD' },
+  nextStopCard:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: PURPLE.light, borderRadius: 14, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: PURPLE.midStrong ?? '#DDD6FE' },
   nextStopLeft:     { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   nextStopRight:    { flexDirection: 'row', alignItems: 'center', gap: 8 },
   nextStopIconWrap: { width: 34, height: 34, borderRadius: 10, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center' },

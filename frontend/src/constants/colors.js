@@ -1,9 +1,9 @@
 export const COLORS = {
-  // Primary Brand — Modern Blue
-  primary: '#2563EB',
-  primaryDark: '#1D4ED8',
-  primaryLight: '#EFF6FF',
-  primaryMid: '#DBEAFE',
+  // Primary Brand — Purple
+  primary: '#7C3AED',
+  primaryDark: '#6D28D9',
+  primaryLight: '#F5F3FF',
+  primaryMid: '#EDE9FE',
 
   // Secondary — Emerald Green
   secondary: '#10B981',
@@ -12,8 +12,8 @@ export const COLORS = {
   secondaryMid: '#D1FAE5',
 
   // Passenger Theme
-  passengerPrimary: '#2563EB',
-  passengerSecondary: '#1D4ED8',
+  passengerPrimary: '#7C3AED',
+  passengerSecondary: '#6D28D9',
 
   // Driver Theme
   driverPrimary: '#F59E0B',
@@ -49,36 +49,35 @@ export const COLORS = {
 
   // Status Aliases
   success: '#10B981',
-  info: '#3B82F6',
+  info: '#7C3AED',
   accent: '#10B981',
   accentDark: '#059669',
 
   // Seats
   seatAvailable: '#ECFDF5',
   seatBooked: '#FEF2F2',
-  seatSelected: '#2563EB',
+  seatSelected: '#7C3AED',
   seatUnavailable: '#F8FAFC',
 
   // Map
-  routeLine: '#2563EB',
+  routeLine: '#7C3AED',
   busMarker: '#F59E0B',
-  stopMarker: '#2563EB',
+  stopMarker: '#7C3AED',
 
   // Gradients (arrays for LinearGradient)
-  gradientPrimary: ['#2563EB', '#1D4ED8'],
-  gradientPassenger: ['#2563EB', '#7C3AED'],
+  gradientPrimary: ['#7C3AED', '#6D28D9'],
+  gradientPassenger: ['#6D28D9', '#7C3AED'],
   gradientDriver: ['#F59E0B', '#D97706'],
   gradientSuccess: ['#10B981', '#059669'],
   gradientCard: ['#FFFFFF', '#F8FAFC'],
 
   // Headers
-  headerBg: '#1E3A8A',
+  headerBg: '#4C1D95',
   driverHeaderBg: '#78350F',
 
-  // Glow / overlay helpers (60-30-10 accent at opacity)
-  // (purple helpers appended after this object — see PURPLE export below)
-  primaryGlow: 'rgba(37,99,235,0.12)',
-  primaryGlowStrong: 'rgba(37,99,235,0.22)',
+  // Glow / overlay helpers
+  primaryGlow: 'rgba(124,58,237,0.12)',
+  primaryGlowStrong: 'rgba(124,58,237,0.22)',
   secondaryGlow: 'rgba(16,185,129,0.12)',
   warningGlow: 'rgba(245,158,11,0.12)',
   dangerGlow: 'rgba(239,68,68,0.12)',
@@ -87,9 +86,6 @@ export const COLORS = {
 };
 
 // ── Purple profile theme ──────────────────────────────────────────────────────
-// Used by the passenger profile screens (Personal Info, Trip History, My Ratings)
-// to give the profile area a distinct, polished violet identity that matches the
-// ProfileScreen hero gradient.
 export const PURPLE = {
   primary: '#7C3AED',        // violet-600 (main accent)
   dark: '#6D28D9',           // violet-700

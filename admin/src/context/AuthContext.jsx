@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from "react";
+import { createContext, useContext, useState, useCallback, useEffect } from "react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
 
@@ -83,6 +83,15 @@ async function apiPostAuth(path, body) {
 }
 
 const AuthContext = createContext(null);
+
+function decodeTokenRole(token) {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload?.role ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export function AuthProvider({ children }) {
   const stored = loadStored();
@@ -172,6 +181,52 @@ export function AuthProvider({ children }) {
     localStorage.removeItem(USER_KEY);
     storeToken(null);
     apiPost("/auth/logout", {}).catch(() => {});
+  }, []);
+
+  // On mount: if the stored token carries a non-admin role (e.g. stale 'super_admin'),
+  // silently exchange it for a fresh one via the refresh-token cookie.
+  // This corrects stale JWTs without forcing a manual logout.
+  useEffect(() => {
+    const token = sessionStorage.getItem(TOKEN_KEY);
+    if (!token) return;
+    const role = decodeTokenRole(token);
+    if (role === "admin") return; // already correct
+
+    fetch(`${API_BASE}/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+      .then(async r => {
+        if (!r.ok) throw new Error("refresh failed");
+        const body = await r.json();
+        const newToken = body.access_token;
+        if (!newToken) throw new Error("no token in refresh response");
+        storeToken(newToken);
+
+        // Fetch current user from DB using the fresh token
+        const meRes = await fetch(`${API_BASE}/users/me`, {
+          headers: { Authorization: `Bearer ${newToken}` },
+        });
+        if (!meRes.ok) throw new Error("failed to fetch user");
+        const meUser = await meRes.json();
+        if (meUser?.role === "admin") {
+          persist(meUser);
+        } else {
+          // Role still isn't admin — clear session
+          setUser(null);
+          localStorage.removeItem(USER_KEY);
+          storeToken(null);
+        }
+      })
+      .catch(() => {
+        // Refresh token invalid/expired — clear session so user sees login page
+        setUser(null);
+        localStorage.removeItem(USER_KEY);
+        storeToken(null);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const getLoginAudit = useCallback(async (limit = 50) => {

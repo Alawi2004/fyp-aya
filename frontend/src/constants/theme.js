@@ -42,7 +42,7 @@ export const THEME = {
       elevation: 2,
     },
     md: {
-      shadowColor: '#2563EB',
+      shadowColor: '#7C3AED',
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.14,
       shadowRadius: 16,

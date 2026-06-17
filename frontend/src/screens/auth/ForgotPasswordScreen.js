@@ -374,7 +374,7 @@ const styles = StyleSheet.create({
 
   blob: { position: 'absolute', borderRadius: 9999 },
   blobA: { width: 280, height: 280, top: -60, right: -80, backgroundColor: 'rgba(124,58,237,0.45)' },
-  blobB: { width: 240, height: 240, top: SCREEN_H * 0.22, left: -90, backgroundColor: 'rgba(37,99,235,0.40)' },
+  blobB: { width: 240, height: 240, top: SCREEN_H * 0.22, left: -90, backgroundColor: 'rgba(139,92,246,0.35)' },
   blobC: { position: 'absolute', width: 180, height: 180, borderRadius: 90, top: -30, left: SCREEN_W * 0.3, backgroundColor: 'rgba(255,255,255,0.06)' },
 
   hero: { alignItems: 'center', paddingHorizontal: 24, paddingBottom: 34 },

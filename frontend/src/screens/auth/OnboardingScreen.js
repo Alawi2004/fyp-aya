@@ -15,8 +15,8 @@ const SLIDES = [
   {
     key: '1',
     icon: 'bus',
-    bgColor: '#EFF6FF',
-    ringColor: 'rgba(37,99,235,0.10)',
+    bgColor: '#F5F3FF',
+    ringColor: 'rgba(124,58,237,0.10)',
     iconColor: COLORS.primary,
     title: 'Welcome to Yalla Transit',
     subtitle:

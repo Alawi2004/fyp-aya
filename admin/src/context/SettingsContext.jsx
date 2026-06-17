@@ -19,10 +19,14 @@ export function SettingsProvider({ children }) {
 
   useEffect(() => { load(); }, [load]);
 
+  const currency     = settings["app.currency"]     || "USD";
+  const exchangeRate = parseFloat(settings["app.exchange_rate"] || 1) || 1;
+
   return (
     <SettingsContext.Provider value={{
-      currency:       settings["app.currency"] || "USD",
-      appName:        settings["app.name"]     || "Yalla Transit",
+      currency,
+      exchangeRate,
+      appName:        settings["app.name"] || "Yalla Transit",
       settings,
       reloadSettings: load,
     }}>

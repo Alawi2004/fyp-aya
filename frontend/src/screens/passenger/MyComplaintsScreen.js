@@ -23,7 +23,7 @@ const CATEGORIES = [
   { key: 'cleanliness', label: 'Cleanliness',      icon: 'sparkles-outline',            color: '#10B981' },
   { key: 'overcharge',  label: 'Overcharging',     icon: 'cash-outline',                color: '#F97316' },
   { key: 'safety',      label: 'Safety Concern',   icon: 'shield-outline',              color: '#DC2626' },
-  { key: 'lost',        label: 'Lost Item',        icon: 'bag-handle-outline',          color: '#6366F1' },
+  { key: 'lost',        label: 'Lost Item',        icon: 'bag-handle-outline',          color: '#8B5CF6' },
   { key: 'other',       label: 'Other',            icon: 'ellipsis-horizontal-outline', color: COLORS.textMuted },
 ];
 const CATEGORY_MAP = Object.fromEntries(CATEGORIES.map(c => [c.key, c]));

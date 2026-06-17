@@ -17,7 +17,7 @@ const SECTIONS = [
   {
     title: 'Information We Collect',
     icon: 'document-text-outline',
-    color: '#3B82F6',
+    color: '#7C3AED',
     body: 'We collect information you provide when creating an account: name, email, phone, and date of birth. We also collect trip and booking data, payment information, location data when using transit tracking, and any feedback or ratings you submit.',
   },
   {
@@ -65,7 +65,7 @@ const SECTIONS = [
   {
     title: 'Policy Changes',
     icon: 'refresh-outline',
-    color: '#6366F1',
+    color: '#8B5CF6',
     body: 'We may update this policy from time to time. Significant changes will be announced via in-app notification. Continued use of the app after changes means you accept the updated policy.',
   },
   {
