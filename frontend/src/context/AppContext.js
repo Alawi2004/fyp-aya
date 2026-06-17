@@ -33,6 +33,7 @@ import { I18nManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import apiClient, { registerPushToken, registerFcmToken } from '../api/apiClient';
+import { t as _t } from '../i18n/translations';
 
 // Expo Go removed Android push notifications in SDK 53 — skip registration there
 const IS_EXPO_GO = Constants.executionEnvironment === 'storeClient';
@@ -116,6 +117,9 @@ export const AppProvider = ({ children }) => {
     const dec = exchangeRate >= 100 ? 0 : 2;
     return `${currency} ${v.toLocaleString('en', { minimumFractionDigits: dec, maximumFractionDigits: dec })}`;
   }, [currency, exchangeRate]);
+
+  // Translate a string to the current app language
+  const t = useCallback((key) => _t(key, language), [language]);
 
   // Register push tokens on mount — skipped in Expo Go (removed in SDK 53)
   useEffect(() => {
@@ -277,7 +281,7 @@ export const AppProvider = ({ children }) => {
       emergencyAlerts, sendEmergencyAlert,
       busLocations, updateBusLocation, getBusLocation,
       supportPhone, supportEmail,
-      language,
+      language, t,
     }}>
       {children}
     </AppContext.Provider>

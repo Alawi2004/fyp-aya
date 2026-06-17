@@ -6,6 +6,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, PURPLE } from '../constants/colors';
 import PressableScale from '../components/common/PressableScale';
+import { useApp } from '../context/AppContext';
 
 import HomeScreen from '../screens/passenger/HomeScreen';
 import BusTrackingScreen from '../screens/passenger/BusTrackingScreen';
@@ -76,6 +77,7 @@ const TAB_CONFIG = {
 
 const CustomTabBar = ({ state, navigation }) => {
   const insets = useSafeAreaInsets();
+  const { t } = useApp();
   return (
     <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
       {state.routes.map((route, index) => {
@@ -100,7 +102,7 @@ const CustomTabBar = ({ state, navigation }) => {
               />
             </View>
             <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
-              {cfg.label}
+              {t(cfg.label)}
             </Text>
           </PressableScale>
         );

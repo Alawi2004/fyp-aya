@@ -535,7 +535,7 @@ const WalletScreen = () => {
   const navigation = useNavigation();
   const headerInsets = useHeaderInsets(12);
   const insets = useSafeAreaInsets();
-  const { walletBalance, updateBalance, currency, exchangeRate, fmtMoney } = useApp();
+  const { walletBalance, updateBalance, currency, exchangeRate, fmtMoney, t } = useApp();
   const { user } = useAuth();
   const [walletId, setWalletId] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -979,7 +979,7 @@ const WalletScreen = () => {
 
             {/* balance */}
             <View style={styles.balanceBlock}>
-              <Text style={styles.balanceLabel}>Available Balance</Text>
+              <Text style={styles.balanceLabel}>{t('Available Balance')}</Text>
               <AnimatedBalance
                 value={walletBalance * exchangeRate}
                 style={styles.balanceAmount}

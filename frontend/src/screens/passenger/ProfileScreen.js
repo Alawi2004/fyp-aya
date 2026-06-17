@@ -65,7 +65,7 @@ const MenuItem = ({ icon, label, value, onPress, danger = false, rightEl, last =
 const ProfileScreen = ({ navigation }) => {
   const headerInsets = useHeaderInsets();
   const { user, setUser, logout } = useAuth();
-  const { walletBalance, updateBalance, bookings, refreshBookings, currency, supportPhone } = useApp();
+  const { walletBalance, updateBalance, bookings, refreshBookings, currency, supportPhone, t } = useApp();
 
   const [refreshing, setRefreshing] = useState(false);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -220,23 +220,23 @@ const ProfileScreen = ({ navigation }) => {
         {/* Body */}
         <View style={styles.body}>
           {/* Account */}
-          <Text style={styles.sectionLabel}>Account</Text>
+          <Text style={styles.sectionLabel}>{t('Account')}</Text>
           <View style={styles.menuCard}>
             <MenuItem
               icon="person-circle-outline"
-              label="Personal Info"
+              label={t('Personal Info')}
               value={user?.phone || 'Tap to add phone'}
               onPress={() => navigation.push('PersonalInfo')}
             />
             <MenuItem
               icon="wallet-outline"
-              label="My Wallet"
+              label={t('Wallet')}
               value={`${currency} ${(walletBalance ?? 0).toFixed(2)} available`}
               onPress={() => navigation.push('Wallet')}
             />
             <MenuItem
               icon="receipt-outline"
-              label="Trip History"
+              label={t('Trips')}
               value={totalTrips ? `${totalTrips} booking${totalTrips === 1 ? '' : 's'}` : 'No trips yet'}
               onPress={() => navigation.push('TripHistory')}
             />
@@ -253,33 +253,33 @@ const ProfileScreen = ({ navigation }) => {
             />
             <MenuItem
               icon="notifications-outline"
-              label="Notifications"
+              label={t('Notifications')}
               onPress={() => navigation.push('Notifications')}
               last
             />
           </View>
 
           {/* Support */}
-          <Text style={styles.sectionLabel}>Support</Text>
+          <Text style={styles.sectionLabel}>{t('Support')}</Text>
           <View style={styles.menuCard}>
-            <MenuItem icon="shield-checkmark-outline" label="Privacy Policy" onPress={() => navigation.push('PrivacyPolicy')} />
-            <MenuItem icon="help-buoy-outline" label="Help & Support" onPress={() => navigation.push('MyComplaints')} />
+            <MenuItem icon="shield-checkmark-outline" label={t('Privacy Policy')} onPress={() => navigation.push('PrivacyPolicy')} />
+            <MenuItem icon="help-buoy-outline" label={t('Help & Support')} onPress={() => navigation.push('MyComplaints')} />
             <MenuItem
               icon="call-outline"
-              label="Call Support"
+              label={t('Call Support')}
               value={supportPhone}
               onPress={() => Linking.openURL(`tel:${supportPhone.replace(/\s/g, '')}`)}
             />
-            <MenuItem icon="star-outline" label="Rate the App" onPress={() => navigation.push('RateApp')} />
-            <MenuItem icon="log-out-outline" label="Sign Out" onPress={handleLogout} danger last />
+            <MenuItem icon="star-outline" label={t('Rate the App')} onPress={() => navigation.push('RateApp')} />
+            <MenuItem icon="log-out-outline" label={t('Sign Out')} onPress={handleLogout} danger last />
           </View>
 
           {/* Danger zone */}
-          <Text style={styles.sectionLabel}>Danger Zone</Text>
+          <Text style={styles.sectionLabel}>{t('Danger Zone')}</Text>
           <View style={styles.menuCard}>
             <MenuItem
               icon="trash-outline"
-              label="Delete Account"
+              label={t('Delete Account')}
               value="30-day cooling-off period"
               onPress={() => navigation.push('DeleteAccount')}
               danger
