@@ -100,7 +100,7 @@ const assertComplaintAccess = (req, complaint) => {
     return { allowed: false, status: 404, body: { error: "Complaint not found" } };
   }
 
-  if (["admin", "super_admin", "staff"].includes(req.user.role)) {
+  if (["admin", "staff"].includes(req.user.role)) {
     return { allowed: true };
   }
 
@@ -191,7 +191,7 @@ export const listComplaints = async (req, res) => {
     const request = pool.request();
     const conditions = [];
 
-    if (["admin", "super_admin", "staff"].includes(req.user.role)) {
+    if (["admin", "staff"].includes(req.user.role)) {
       if (req.query.status) {
         request.input("status", sql.NVarChar(20), normalizeValue(req.query.status));
         conditions.push("c.status = @status");

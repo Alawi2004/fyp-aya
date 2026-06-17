@@ -20,8 +20,8 @@ export const requirePermission = (module, action) => (req, res, next) => {
   requireAuth(req, res, async () => {
     const role = req.user?.role;
 
-    // admin and super_admin always bypass the matrix
-    if (role === "admin" || role === "super_admin") return next();
+    // admin always bypasses the matrix
+    if (role === "admin") return next();
 
     let matrix;
     try {

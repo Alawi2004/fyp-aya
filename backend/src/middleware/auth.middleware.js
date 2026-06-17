@@ -22,12 +22,12 @@ export const requireAuth = (req, res, next) => {
 };
 
 /**
- * Requires the authenticated user to have the role 'admin', 'super_admin', or 'staff'.
- * Used for shared privileged operations accessible to both admin and staff roles.
+ * Requires the authenticated user to have the role 'admin' or 'staff'.
+ * Used for shared privileged operations accessible to both roles.
  */
 export const requireAdmin = (req, res, next) => {
   requireAuth(req, res, () => {
-    if (!["admin", "super_admin", "staff"].includes(req.user?.role)) {
+    if (!["admin", "staff"].includes(req.user?.role)) {
       return res.status(403).json({
         error: "Forbidden — admin or staff access required",
       });
@@ -53,12 +53,12 @@ export const requireStaffOnly = (req, res, next) => {
 };
 
 /**
- * Requires the authenticated user to have the role 'admin' or 'super_admin'.
+ * Requires the authenticated user to have the role 'admin'.
  * Staff members and passengers are blocked from admin-exclusive endpoints.
  */
 export const requireAdminOnly = (req, res, next) => {
   requireAuth(req, res, () => {
-    if (!["admin", "super_admin"].includes(req.user?.role)) {
+    if (req.user?.role !== "admin") {
       return res.status(403).json({
         error: "Forbidden — admin access only",
       });

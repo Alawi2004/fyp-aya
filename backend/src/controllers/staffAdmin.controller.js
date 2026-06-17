@@ -87,7 +87,7 @@ export const updateStaffAccount = async (req, res) => {
     return res.status(400).json({ error: "Provide at least one field to update" });
   }
 
-  const VALID_ROLES    = ["admin", "staff", "ops_staff", "finance_officer", "transport_manager", "it_admin", "auditor", "super_admin"];
+  const VALID_ROLES    = ["admin", "staff", "ops_staff", "finance_officer", "transport_manager", "it_admin", "auditor"];
   const VALID_STATUSES = ["active", "inactive", "suspended"];
 
   // Accept frontend's "Active"/"Disabled" casing too

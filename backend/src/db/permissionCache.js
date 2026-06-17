@@ -5,7 +5,6 @@ import { poolPromise } from "./db.js";
 // Used when the DB is unavailable or returns no rows.
 // ─────────────────────────────────────────────────────────────────────────────
 export const HARDCODED_MATRIX = {
-  super_admin:       { "*": { view: true, create: true, edit: true, delete: true } },
   admin:             { "*": { view: true, create: true, edit: true, delete: true } },
 
   transport_manager: {
@@ -152,9 +151,7 @@ async function _loadFromDb() {
     }
 
     const matrix = {
-      // Wildcard roles always bypass the matrix — keep them explicit
-      super_admin: { "*": { view: true, create: true, edit: true, delete: true } },
-      admin:       { "*": { view: true, create: true, edit: true, delete: true } },
+      admin: { "*": { view: true, create: true, edit: true, delete: true } },
     };
 
     for (const { role_key, module_name, action_name } of result.recordset) {

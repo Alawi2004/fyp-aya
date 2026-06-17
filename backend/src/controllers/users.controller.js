@@ -187,7 +187,7 @@ export const updateUserProfile = async (req, res) => {
     // 'me' or own user_id → self-edit (passengers allowed, role/status locked)
     const isSelf = req.params.id === 'me' || String(req.params.id) === String(req.user.user_id);
     const targetId = req.params.id === 'me' ? req.user.user_id : Number(req.params.id);
-    const isAdmin  = ["admin", "super_admin"].includes(req.user.role);
+    const isAdmin  = req.user.role === "admin";
 
     if (!full_name || !String(full_name).trim()) {
       return res.status(400).json({ error: "Full name is required" });

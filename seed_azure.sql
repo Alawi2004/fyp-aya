@@ -147,7 +147,7 @@ PRINT '4. users';
 MERGE users AS t
 USING (VALUES
   -- Admin / management (Admin@123)
-  ('Super Admin',      'superadmin@yallatransit.lb', '$2b$10$eG/v0ScZnqUGry5mcjsvqO7lP2OyZNaA.jL6yPW6M2ltE7a.N/pbe', '+961 1 100001', 'super_admin'),
+  ('Super Admin',      'superadmin@yallatransit.lb', '$2b$10$eG/v0ScZnqUGry5mcjsvqO7lP2OyZNaA.jL6yPW6M2ltE7a.N/pbe', '+961 1 100001', 'admin'),
   ('Admin User',       'admin@yallatransit.lb',      '$2b$10$eG/v0ScZnqUGry5mcjsvqO7lP2OyZNaA.jL6yPW6M2ltE7a.N/pbe', '+961 1 100002', 'admin'),
   ('Karim Saad',       'karim.saad@yallatransit.lb', '$2b$10$eG/v0ScZnqUGry5mcjsvqO7lP2OyZNaA.jL6yPW6M2ltE7a.N/pbe', '+961 1 100003', 'transport_manager'),
   ('Lara Haddad',      'lara.haddad@yallatransit.lb','$2b$10$eG/v0ScZnqUGry5mcjsvqO7lP2OyZNaA.jL6yPW6M2ltE7a.N/pbe', '+961 1 100004', 'finance_officer'),
