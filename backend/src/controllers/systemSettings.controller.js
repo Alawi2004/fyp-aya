@@ -73,13 +73,20 @@ export const updateSettings = async (req, res) => {
 
 // ── GET /api/settings/public — no auth, returns safe app.* keys only ─────────
 export const getPublicSettings = async (req, res) => {
-  const PUBLIC_KEYS = ["app.name", "app.support_phone", "app.support_email", "app.language"];
+  const DEFAULTS = {
+    "app.name":          "Yalla Transit",
+    "app.support_phone": "+961 1 999 000",
+    "app.support_email": "support@yallatransit.lb",
+    "app.language":      "en",
+  };
   try {
     const pool = await poolPromise;
+    const keys = Object.keys(DEFAULTS);
     const result = await pool.request().query(
-      `SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('${PUBLIC_KEYS.join("','")}')`
+      `SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('${keys.join("','")}')`
     );
-    const flat = {};
+    // Start from defaults so missing DB rows always return a value
+    const flat = { ...DEFAULTS };
     for (const row of result.recordset) flat[row.setting_key] = row.setting_value;
     res.json(flat);
   } catch (err) {

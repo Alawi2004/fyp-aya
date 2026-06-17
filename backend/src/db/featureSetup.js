@@ -476,12 +476,23 @@ BEGIN
     ('maintenance.message',         'System is undergoing scheduled maintenance. Please check back shortly.', 'maintenance', 'Maintenance Message', 'string', 'Message shown to users during maintenance'),
     ('maintenance.allowed_ips',     '127.0.0.1', 'maintenance', 'Allowed IPs (comma-separated)', 'string', 'These IPs bypass maintenance mode'),
     ('maintenance.scheduled_start', '',       'maintenance', 'Scheduled Start',           'string',  'ISO datetime for planned maintenance window start'),
-    ('maintenance.scheduled_end',   '',       'maintenance', 'Scheduled End',             'string',  'ISO datetime for planned maintenance window end'),
-    ('app.support_phone',          '+961 1 999 000', 'app', 'Support Phone', 'string', 'Contact phone number shown in the mobile app'),
-    ('app.support_email',          'support@yallatransit.lb', 'app', 'Support Email', 'string', 'Contact email shown to passengers and drivers'),
-    ('app.name',                   'Yalla Transit', 'app', 'App Name',    'string', 'Application name shown in the mobile app'),
-    ('app.language',               'en', 'app', 'Default Language', 'string', 'Default UI language for passengers and drivers');
+    ('maintenance.scheduled_end',   '',       'maintenance', 'Scheduled End',             'string',  'ISO datetime for planned maintenance window end');
 END;
+
+-- Back-fill app.* settings for databases where system_settings already existed
+-- These run every startup but are no-ops after first insert
+IF NOT EXISTS (SELECT 1 FROM system_settings WHERE setting_key='app.support_phone')
+  INSERT INTO system_settings(setting_key,setting_value,category,label,value_type,description)
+  VALUES('app.support_phone','+961 1 999 000','app','Support Phone','string','Contact phone number shown in the mobile app');
+IF NOT EXISTS (SELECT 1 FROM system_settings WHERE setting_key='app.support_email')
+  INSERT INTO system_settings(setting_key,setting_value,category,label,value_type,description)
+  VALUES('app.support_email','support@yallatransit.lb','app','Support Email','string','Contact email shown to passengers and drivers');
+IF NOT EXISTS (SELECT 1 FROM system_settings WHERE setting_key='app.name')
+  INSERT INTO system_settings(setting_key,setting_value,category,label,value_type,description)
+  VALUES('app.name','Yalla Transit','app','App Name','string','Application name shown in the mobile app');
+IF NOT EXISTS (SELECT 1 FROM system_settings WHERE setting_key='app.language')
+  INSERT INTO system_settings(setting_key,setting_value,category,label,value_type,description)
+  VALUES('app.language','en','app','Default Language','string','Default UI language for passengers and drivers');
 
 IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='scheduled_reports')
 BEGIN
