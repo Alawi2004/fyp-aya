@@ -75,7 +75,7 @@ export default function ShiftHistoryPage() {
 
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 20 }}>
-        <SummaryCard icon={Hash}       label="Total Shifts"       value={closed.length}    color={C.info}    bg="#EFF6FF" />
+        <SummaryCard icon={Hash}       label="Total Shifts"       value={closed.length}    color={C.info}    bg="#F5F3FF" />
         <SummaryCard icon={TrendingUp} label="Total Collected"    value={fmt(totalAmount, currency, exchangeRate)} color={C.primary} bg={C.primaryLight} accent />
         <SummaryCard icon={DollarSign} label="Total Transactions" value={totalTx}          color={C.success} bg={C.successBg} />
       </div>
@@ -238,7 +238,7 @@ function SummaryCard({ icon: Icon, label, value, color, bg, accent }) {
       background: accent ? `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})` : "#fff",
       border: `1px solid ${accent ? "transparent" : C.border}`,
       borderRadius: 14, padding: "16px 18px",
-      boxShadow: accent ? `0 4px 20px rgba(37,99,235,.2)` : "0 1px 3px rgba(0,0,0,.04)",
+      boxShadow: accent ? `0 4px 20px rgba(109,40,217,.2)` : "0 1px 3px rgba(0,0,0,.04)",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
         <div style={{ width: 28, height: 28, borderRadius: 8, background: accent ? "rgba(255,255,255,.18)" : bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -323,3 +323,4 @@ function DetailModal({ shift: s, onClose }) {
     </div>
   );
 }
+

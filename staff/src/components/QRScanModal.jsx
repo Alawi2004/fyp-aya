@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+﻿import { useEffect, useRef, useState, useCallback } from "react";
 import { X, Camera, AlertTriangle, Loader, QrCode, CheckCircle } from "lucide-react";
 import jsQR from "jsqr";
 import { C } from "../styles/themes";
@@ -153,7 +153,7 @@ export default function QRScanModal({ onResult, onClose }) {
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{
               width: 34, height: 34, borderRadius: 9,
-              background: "rgba(37,99,235,.3)", border: "1px solid rgba(37,99,235,.5)",
+              background: "rgba(109,40,217,.3)", border: "1px solid rgba(109,40,217,.5)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
               <QrCode size={16} color={C.primary} />
@@ -292,3 +292,4 @@ function Txt({ children, style }) {
     </div>
   );
 }
+

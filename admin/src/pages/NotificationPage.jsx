@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { Panel } from "../components/Panel";
 import { StatCard } from "../components/StatCard";
 import { Modal } from "../components/Modal";
@@ -14,7 +14,7 @@ import {
 const ALERT_STYLE = {
   emergency: { dot: "#EF4444", bg: "#FEF2F2", color: "#B91C1C", label: "Emergency" },
   delay:     { dot: "#F59E0B", bg: "#FFFBEB", color: "#D97706", label: "Delay"     },
-  info:      { dot: "#3B82F6", bg: "#EFF6FF", color: "#1E40AF", label: "Info"      },
+  info:      { dot: "#3B82F6", bg: "#F5F3FF", color: "#4C1D95", label: "Info"      },
   success:   { dot: "#10B981", bg: "#ECFDF5", color: "#059669", label: "Success"   },
 };
 
@@ -101,7 +101,7 @@ function TabNav({ tabs, active, onChange }) {
           padding: "7px 18px", borderRadius: 7, border: "none",
           fontSize: 13, fontWeight: active === id ? 700 : 500, cursor: "pointer",
           background: active === id ? "#fff" : "transparent",
-          color: active === id ? "#2563EB" : "#64748B",
+          color: active === id ? "#6D28D9" : "#64748B",
           boxShadow: active === id ? "0 1px 4px rgba(0,0,0,.09)" : "none",
           display: "flex", alignItems: "center", gap: 6, transition: "all .15s",
         }}>
@@ -129,7 +129,7 @@ function DeliveryBars({ delivery }) {
         {failed > 0 && <span style={{ color: "#DC2626" }}>{failed} failed</span>}
       </div>
       {[
-        { label: "Delivered", pct: delivPct, color: "#2563EB", value: delivered },
+        { label: "Delivered", pct: delivPct, color: "#6D28D9", value: delivered },
         { label: "Read",      pct: readPct,  color: "#10B981", value: read      },
       ].map(({ label, pct, color, value }) => (
         <div key={label} style={{ marginBottom: 5 }}>
@@ -218,7 +218,7 @@ function LogTab({ log, onDelete, onEdit }) {
             <button key={f} onClick={() => setFilter(f)} style={{
               padding: "5px 12px", borderRadius: 20, fontSize: 11, cursor: "pointer",
               border: filter === f ? "none" : "1px solid #E2E8F0",
-              background: filter === f ? "#2563EB" : "#fff",
+              background: filter === f ? "#6D28D9" : "#fff",
               color: filter === f ? "#fff" : "#555",
               fontWeight: filter === f ? 600 : 400,
             }}>{f}</button>
@@ -262,7 +262,7 @@ function LogTab({ log, onDelete, onEdit }) {
               <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
                 <DeliveryBars delivery={delivery} />
                 <div style={{ display: "flex", gap: 5 }}>
-                  <button onClick={() => openEdit(n)} style={{ fontSize: 10, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>Edit</button>
+                  <button onClick={() => openEdit(n)} style={{ fontSize: 10, color: "#6D28D9", background: "#F5F3FF", border: "none", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>Edit</button>
                   <button onClick={() => { setDeleteTarget(n); setDeleteError(null); }} style={{ fontSize: 10, color: "#B91C1C", background: "#FEF2F2", border: "none", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>Delete</button>
                 </div>
               </div>
@@ -400,9 +400,9 @@ function ComposeTab({ templates, routes, drivers, onSent, onScheduled }) {
               </select>
             </div>
             {/* Schedule toggle */}
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: form.scheduled ? "#EFF6FF" : "#F8FAFC", borderRadius: 10, border: "1px solid #E2E8F0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: form.scheduled ? "#F5F3FF" : "#F8FAFC", borderRadius: 10, border: "1px solid #E2E8F0" }}>
               <input type="checkbox" id="schedCheck" checked={form.scheduled} onChange={e => set("scheduled")(e.target.checked)}
-                style={{ width: 16, height: 16, accentColor: "#2563EB", cursor: "pointer" }} />
+                style={{ width: 16, height: 16, accentColor: "#6D28D9", cursor: "pointer" }} />
               <label htmlFor="schedCheck" style={{ fontSize: 13, fontWeight: 600, color: "#0F172A", cursor: "pointer" }}>Schedule for later</label>
             </div>
             {form.scheduled && (
@@ -424,7 +424,7 @@ function ComposeTab({ templates, routes, drivers, onSent, onScheduled }) {
             )}
             {/* Send button */}
             <button onClick={handleSend} style={{
-              background: sent || sched ? "#10B981" : "#2563EB", color: "#fff", border: "none",
+              background: sent || sched ? "#10B981" : "#6D28D9", color: "#fff", border: "none",
               borderRadius: 9, padding: "11px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "background .2s",
             }}>
               {sent ? "Sent!" : sched ? "Scheduled!" : form.scheduled ? "Schedule Notification" : "Send Notification"}
@@ -442,15 +442,15 @@ function ComposeTab({ templates, routes, drivers, onSent, onScheduled }) {
               <div key={g.id} onClick={() => set("target")(g.id)} style={{
                 display: "flex", alignItems: "center", gap: 12, padding: "11px 14px",
                 borderRadius: 10, cursor: "pointer",
-                border: `2px solid ${form.target === g.id ? "#2563EB" : "#E2E8F0"}`,
-                background: form.target === g.id ? "#EFF6FF" : "#fff",
+                border: `2px solid ${form.target === g.id ? "#6D28D9" : "#E2E8F0"}`,
+                background: form.target === g.id ? "#F5F3FF" : "#fff",
                 transition: "all .15s",
               }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: form.target === g.id ? 700 : 500, color: form.target === g.id ? "#1E40AF" : "#0F172A" }}>{g.label}</div>
+                  <div style={{ fontSize: 13, fontWeight: form.target === g.id ? 700 : 500, color: form.target === g.id ? "#4C1D95" : "#0F172A" }}>{g.label}</div>
                   <div style={{ fontSize: 11, color: "#94A3B8" }}>{g.desc}</div>
                 </div>
-                {form.target === g.id && <span style={{ color: "#2563EB", fontWeight: 700, fontSize: 13 }}>✓</span>}
+                {form.target === g.id && <span style={{ color: "#6D28D9", fontWeight: 700, fontSize: 13 }}>✓</span>}
               </div>
             ))}
 
@@ -504,7 +504,7 @@ function ComposeTab({ templates, routes, drivers, onSent, onScheduled }) {
                     </div>
                     <div style={{ fontSize: 11, color: "#94A3B8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div>
                   </div>
-                  <button onClick={() => applyTemplate(t)} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontWeight: 600, flexShrink: 0 }}>
+                  <button onClick={() => applyTemplate(t)} style={{ fontSize: 11, color: "#6D28D9", background: "#F5F3FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontWeight: 600, flexShrink: 0 }}>
                     Use
                   </button>
                 </div>
@@ -586,7 +586,7 @@ function ScheduledTab({ scheduled, onCancel, onEdit }) {
         </div>
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           {isPending && <>
-            <button onClick={() => openEdit(n)} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontWeight: 600 }}>Edit</button>
+            <button onClick={() => openEdit(n)} style={{ fontSize: 11, color: "#6D28D9", background: "#F5F3FF", border: "none", borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontWeight: 600 }}>Edit</button>
             <button onClick={() => onCancel(n.id)} style={{ fontSize: 11, color: "#DC2626", background: "#FEF2F2", border: "none", borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontWeight: 600 }}>Cancel</button>
           </>}
           {!isPending && <span style={{ fontSize: 11, color: "#10B981", fontWeight: 600 }}>Sent</span>}
@@ -681,7 +681,7 @@ function TemplatesTab({ templates, onReload, onEdit, onDelete, onUse }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button onClick={openAdd} style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+        <button onClick={openAdd} style={{ background: "#6D28D9", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
           + New Template
         </button>
       </div>
@@ -706,8 +706,8 @@ function TemplatesTab({ templates, onReload, onEdit, onDelete, onUse }) {
                 {t.body}
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => onUse(t)} style={{ flex: 1, fontSize: 11, fontWeight: 700, color: "#fff", background: "#2563EB", border: "none", borderRadius: 7, padding: "7px 0", cursor: "pointer" }}>Use</button>
-                <button onClick={() => openEdit(t)} style={{ flex: 1, fontSize: 11, fontWeight: 600, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 7, padding: "7px 0", cursor: "pointer" }}>Edit</button>
+                <button onClick={() => onUse(t)} style={{ flex: 1, fontSize: 11, fontWeight: 700, color: "#fff", background: "#6D28D9", border: "none", borderRadius: 7, padding: "7px 0", cursor: "pointer" }}>Use</button>
+                <button onClick={() => openEdit(t)} style={{ flex: 1, fontSize: 11, fontWeight: 600, color: "#6D28D9", background: "#F5F3FF", border: "none", borderRadius: 7, padding: "7px 0", cursor: "pointer" }}>Edit</button>
                 <button onClick={async () => {
                   if (!window.confirm(`Delete template "${t.name}"?`)) return;
                   try { await deleteTemplate(t.id); onDelete(t.id); } catch (err) { alert(err?.message ?? "Delete failed"); }
@@ -858,7 +858,7 @@ export default function NotificationsPage() {
 
       {/* KPI cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-        <StatCard label="Total Sent"    value={log.length}             delta="all time"           accent="#2563EB" />
+        <StatCard label="Total Sent"    value={log.length}             delta="all time"           accent="#6D28D9" />
         <StatCard label="Delivery Rate" value={`${overallDelivPct}%`}  delta="delivered / sent"   up={overallDelivPct >= 90} accent="#10B981" />
         <StatCard label="Read Rate"     value={`${overallReadPct}%`}   delta="read by passengers" up={overallReadPct >= 60}  accent="#7C3AED" />
         <StatCard label="Scheduled"     value={pending}                delta="queued to send"     accent="#0EA5E9" />
@@ -888,3 +888,4 @@ export default function NotificationsPage() {
     </div>
   );
 }
+

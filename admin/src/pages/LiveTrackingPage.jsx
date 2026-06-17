@@ -1,4 +1,4 @@
-// pages/LiveTrackingPage.jsx
+﻿// pages/LiveTrackingPage.jsx
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { getTripGpsLogs, getGpsHeatmap, getLiveGps, getTrips, getWaypoints, getRouteStops } from '../api/endpoints';
 
@@ -368,7 +368,7 @@ function JourneyPlayback({ buses, onClose }) {
             <div style={{ width: 1, height: 28, background: '#E2E8F0' }} />
             <div style={{ textAlign: 'right', fontSize: 11, color: '#64748B' }}>
               <div>Point {idx + 1} of {track.length}</div>
-              <div style={{ fontWeight: 600, color: '#2563EB' }}>{pct.toFixed(0)}% complete</div>
+              <div style={{ fontWeight: 600, color: '#6D28D9' }}>{pct.toFixed(0)}% complete</div>
             </div>
           </div>
         )}
@@ -396,7 +396,7 @@ function JourneyPlayback({ buses, onClose }) {
             style={ctrlInput} />
         </div>
 
-        <button onClick={load} style={{ padding: '8px 20px', borderRadius: 8, background: '#2563EB', color: '#fff', border: 'none', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+        <button onClick={load} style={{ padding: '8px 20px', borderRadius: 8, background: '#6D28D9', color: '#fff', border: 'none', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
           className="btn-primary">
           Load Journey
         </button>
@@ -412,9 +412,9 @@ function JourneyPlayback({ buses, onClose }) {
               <button onClick={() => setIdx(0)} title="Reset" style={{ padding: '7px 11px', borderRadius: 8, border: '1.5px solid #E2E8F0', background: '#F8FAFC', color: '#374151', fontSize: 15, cursor: 'pointer' }}>⏮</button>
               <button onClick={() => setPlaying((p) => !p)} style={{
                 padding: '7px 18px', borderRadius: 8, border: 'none',
-                background: playing ? '#F59E0B' : '#2563EB',
+                background: playing ? '#F59E0B' : '#6D28D9',
                 color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer',
-                boxShadow: playing ? '0 2px 8px rgba(245,158,11,.3)' : '0 2px 8px rgba(37,99,235,.25)',
+                boxShadow: playing ? '0 2px 8px rgba(245,158,11,.3)' : '0 2px 8px rgba(109,40,217,.25)',
               }}>
                 {playing ? '⏸ Pause' : '▶ Play'}
               </button>
@@ -429,9 +429,9 @@ function JourneyPlayback({ buses, onClose }) {
               {[1, 2, 4, 8].map((s) => (
                 <button key={s} onClick={() => setSpeed(s)} style={{
                   padding: '7px 12px', borderRadius: 8,
-                  border: `1.5px solid ${speed === s ? '#2563EB' : '#E2E8F0'}`,
-                  background: speed === s ? '#EFF6FF' : '#F8FAFC',
-                  color: speed === s ? '#2563EB' : '#64748B',
+                  border: `1.5px solid ${speed === s ? '#6D28D9' : '#E2E8F0'}`,
+                  background: speed === s ? '#F5F3FF' : '#F8FAFC',
+                  color: speed === s ? '#6D28D9' : '#64748B',
                   fontSize: 12, fontWeight: 700, cursor: 'pointer',
                 }}>{s}×</button>
               ))}
@@ -448,7 +448,7 @@ function JourneyPlayback({ buses, onClose }) {
             <input
               type="range" min={0} max={track.length - 1} value={idx}
               onChange={(e) => { setPlaying(false); setIdx(Number(e.target.value)); }}
-              style={{ width: '100%', accentColor: '#2563EB', height: 6 }}
+              style={{ width: '100%', accentColor: '#6D28D9', height: 6 }}
             />
           </div>
         </>}
@@ -481,7 +481,7 @@ function JourneyPlayback({ buses, onClose }) {
           />
         ) : (
           <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, background: '#F8FAFC' }}>
-            <div style={{ width: 80, height: 80, borderRadius: 20, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40 }}>🗺️</div>
+            <div style={{ width: 80, height: 80, borderRadius: 20, background: '#F5F3FF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40 }}>🗺️</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: '#0F172A' }}>Select a vehicle and date</div>
             <div style={{ fontSize: 13, color: '#64748B', maxWidth: 360, textAlign: 'center', lineHeight: 1.6 }}>
               The GPS track will be drawn on the map coloured by speed, with the planned route shown as a dashed overlay.
@@ -848,7 +848,7 @@ export default function LiveTrackingPage() {
                 padding: '5px 12px', borderRadius: 20, border: 'none',
                 fontSize: 12, fontWeight: 600, cursor: 'pointer',
                 backgroundColor: filter === f
-                  ? (STATUS_COLOR[f] || '#2563EB')
+                  ? (STATUS_COLOR[f] || '#6D28D9')
                   : '#F1F5F9',
                 color: filter === f ? '#fff' : '#64748B',
                 transition: 'all .15s',
@@ -950,7 +950,7 @@ export default function LiveTrackingPage() {
                 </div>
                 <button
                   onClick={() => setSelected(alert.busId)}
-                  style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid #BFDBFE', background: '#EFF6FF', color: '#2563EB', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                  style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid #DDD6FE', background: '#F5F3FF', color: '#6D28D9', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
                 >
                   View on map
                 </button>
@@ -972,7 +972,7 @@ export default function LiveTrackingPage() {
           { label: 'Active',      value: counts.Ongoing,   color: '#10B981', bg: '#ECFDF5' },
           { label: 'Delayed',     value: counts.Delayed,   color: '#F59E0B', bg: '#FFFBEB' },
           { label: 'Scheduled',   value: counts.Scheduled, color: '#64748B', bg: '#F1F5F9' },
-          { label: 'Passengers',  value: buses.reduce((s, b) => s + b.passengerCount, 0), color: '#2563EB', bg: '#EFF6FF' },
+          { label: 'Passengers',  value: buses.reduce((s, b) => s + b.passengerCount, 0), color: '#6D28D9', bg: '#F5F3FF' },
           { label: 'Seats free',  value: buses.reduce((s, b) => s + b.seatInfo.available, 0), color: '#059669', bg: '#ECFDF5' },
         ].map(({ label, value, color, bg }) => (
           <div key={label} style={{ padding: '6px 14px', borderRadius: 9,
@@ -996,7 +996,7 @@ export default function LiveTrackingPage() {
             {/* Title */}
             <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', flexShrink: 0 }}>
               GPS map
-              {loadingRoute && <span style={{ fontSize: 11, fontWeight: 500, color: '#2563EB', marginLeft: 8 }}>· Loading route…</span>}
+              {loadingRoute && <span style={{ fontSize: 11, fontWeight: 500, color: '#6D28D9', marginLeft: 8 }}>· Loading route…</span>}
             </span>
 
             {/* Bus selector */}
@@ -1069,8 +1069,8 @@ export default function LiveTrackingPage() {
                   padding: '8px 12px',
                   borderBottom: '1px solid #F7F7F7',
                   cursor: 'pointer',
-                  background: selected === bus.id ? '#EFF6FF' : 'transparent',
-                  borderLeft: selected === bus.id ? '3px solid #2563EB' : '3px solid transparent',
+                  background: selected === bus.id ? '#F5F3FF' : 'transparent',
+                  borderLeft: selected === bus.id ? '3px solid #6D28D9' : '3px solid transparent',
                   transition: 'background .15s',
                 }}
               >
@@ -1093,7 +1093,7 @@ export default function LiveTrackingPage() {
                 </div>
                 {/* Row 4: ETA + seat pill */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 11, color: '#2563EB', fontWeight: 700 }}>ETA {bus.trafficInfo.adjustedEta}</span>
+                  <span style={{ fontSize: 11, color: '#6D28D9', fontWeight: 700 }}>ETA {bus.trafficInfo.adjustedEta}</span>
                   <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 999,
                                   background: bus.seatInfo.bg, color: bus.seatInfo.color, fontWeight: 700, flexShrink: 0 }}>
                     {bus.seatInfo.label}
@@ -1202,3 +1202,4 @@ export default function LiveTrackingPage() {
     </div>
   );
 }
+

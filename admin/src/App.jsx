@@ -163,8 +163,8 @@ function AppShell() {
           transition: background .14s ease, box-shadow .14s ease, transform .1s ease;
         }
         .btn-primary:hover {
-          background: #1D4ED8 !important;
-          box-shadow: 0 4px 18px rgba(37,99,235,.3) !important;
+          background: #4C1D95 !important;
+          box-shadow: 0 4px 18px rgba(109,40,217,.3) !important;
           transform: translateY(-1px);
         }
         .btn-primary:active { transform: translateY(0); }
@@ -180,7 +180,7 @@ function AppShell() {
         .status-idle      { color: #64748B; background: #F1F5F9; border: 1px solid #E2E8F0; }
         .status-alert     { color: #DC2626; background: #FEF2F2; border: 1px solid #FECACA; }
         .status-offline   { color: #DC2626; background: #FEF2F2; border: 1px solid #FECACA; }
-        .status-scheduled { color: #2563EB; background: #EFF6FF; border: 1px solid #BFDBFE; }
+        .status-scheduled { color: #6D28D9; background: #F5F3FF; border: 1px solid #DDD6FE; }
 
         /* ── Live pulsing dot ── */
         .live-dot {

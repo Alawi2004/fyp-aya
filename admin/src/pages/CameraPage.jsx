@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import { useWebSocketCamera } from '../hooks/useWebSocketCamera';
 import { useCounterData }     from '../hooks/useCounterData';
 import { CAMERA_REST_URL }    from '../config/camera';
@@ -99,7 +99,7 @@ function PassengerCameraPanel({ busId, counter }) {
   const badge = connected && frameUrl
     ? { text: '● LIVE',         bg: '#dcfce7', color: '#166534', border: '#86efac' }
     : status === 'connecting'
-    ? { text: '◉ CONNECTING',   bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' }
+    ? { text: '◉ CONNECTING',   bg: '#dbeafe', color: '#4C1D95', border: '#C4B5FD' }
     : frameUrl
     ? { text: '✕ DISCONNECTED', bg: '#fee2e2', color: '#991b1b', border: '#fca5a5' }
     : { text: '○ OFFLINE',      bg: '#f3f4f6', color: '#6b7280', border: '#d1d5db' };
@@ -165,7 +165,7 @@ function PassengerCameraPanel({ busId, counter }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
           {[
             { label: 'On Bus',  value: counter.on_bus,  color: '#059669', bg: '#f0fdf4', border: '#86efac' },
-            { label: 'Entered', value: counter.entered, color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe' },
+            { label: 'Entered', value: counter.entered, color: '#3b82f6', bg: '#F5F3FF', border: '#DDD6FE' },
             { label: 'Exited',  value: counter.exited,  color: '#ef4444', bg: '#fef2f2', border: '#fecaca' },
           ].map(({ label, value, color, bg, border }) => (
             <div key={label} style={{ padding: '8px 6px', borderRadius: 8, textAlign: 'center',
@@ -197,12 +197,12 @@ function BusSelectorPanel({ buses, selectedBusId, onSelect, onRefresh, loading }
         padding: '9px 11px', borderRadius: 9, textAlign: 'left',
         cursor: isActive ? 'pointer' : 'not-allowed', opacity: isActive ? 1 : 0.55,
         border: selected ? '2px solid #3b82f6' : isActive ? '2px solid #e5e7eb' : '2px solid #d1d5db',
-        backgroundColor: selected ? '#eff6ff' : isActive ? '#fff' : '#f3f4f6',
+        backgroundColor: selected ? '#F5F3FF' : isActive ? '#fff' : '#f3f4f6',
         boxShadow: selected ? '0 0 0 3px rgba(59,130,246,.12)' : 'none',
         transition: 'all .15s',
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4 }}>
-          <span style={{ fontWeight: 700, fontSize: 13, color: selected ? '#1d4ed8' : isActive ? '#111827' : '#9ca3af' }}>
+          <span style={{ fontWeight: 700, fontSize: 13, color: selected ? '#4C1D95' : isActive ? '#111827' : '#9ca3af' }}>
             {bus.bus_id}
           </span>
           <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 8,
@@ -386,7 +386,7 @@ export default function CameraPage() {
       {/* Fleet stat cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
         {[
-          { label: 'Total Fleet',     value: totalVehicles,  color: '#2563EB', bg: '#eff6ff', border: '#bfdbfe' },
+          { label: 'Total Fleet',     value: totalVehicles,  color: '#6D28D9', bg: '#F5F3FF', border: '#DDD6FE' },
           { label: 'Active Vehicles', value: activeVehicles, color: '#059669', bg: '#f0fdf4', border: '#86efac' },
           { label: 'On Bus Now',      value: totalOnBus,     color: '#7c3aed', bg: '#f5f3ff', border: '#c4b5fd' },
           { label: 'Active Buses',    value: buses.filter(b => b.active).length, color: '#d97706', bg: '#fffbeb', border: '#fde68a' },
@@ -466,7 +466,7 @@ export default function CameraPage() {
 
                 {counter.last_event ? (
                   <div style={{ padding: 10, borderRadius: 8, backgroundColor: '#f9fafb',
-                                border: counter.last_event.event === 'ENTER' ? '2px solid #93c5fd' : '2px solid #fca5a5',
+                                border: counter.last_event.event === 'ENTER' ? '2px solid #C4B5FD' : '2px solid #fca5a5',
                                 display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
                     {[
                       { label: 'Event',    value: counter.last_event.event === 'ENTER' ? '↓ ENTRY' : '↑ EXIT',
@@ -516,3 +516,4 @@ export default function CameraPage() {
     </div>
   );
 }
+

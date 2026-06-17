@@ -155,8 +155,8 @@ function SessionsModal({ onClose }) {
 }
 
 const SEARCH_CATEGORIES = {
-  trips:    { label: "Trip",    icon: Zap,        color: "#2563EB", bg: "#EFF6FF" },
-  drivers:  { label: "Driver",  icon: UserCircle,  color: "#7C3AED", bg: "#F5F3FF" },
+  trips:    { label: "Trip",    icon: Zap,        color: "#6D28D9", bg: "#F5F3FF" },
+  drivers:  { label: "Driver",  icon: UserCircle,  color: "#0891B2", bg: "#ECFEFF" },
   vehicles: { label: "Vehicle", icon: Bus,         color: "#059669", bg: "#ECFDF5" },
   routes:   { label: "Route",   icon: Route,       color: "#D97706", bg: "#FFFBEB" },
 };
@@ -298,7 +298,7 @@ export default function Topbar({ onToggleSidebar, collapsed, activePage, onNavig
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{
               width: 28, height: 28, borderRadius: 8,
-              background: "linear-gradient(135deg,#2563EB,#1D4ED8)",
+              background: "linear-gradient(135deg,#6D28D9,#4C1D95)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
@@ -334,9 +334,9 @@ export default function Topbar({ onToggleSidebar, collapsed, activePage, onNavig
           onChange={e => { setQuery(e.target.value); setSearchOpen(true); }}
           onFocus={e => {
             setSearchOpen(true);
-            e.target.style.borderColor = "#93C5FD";
+            e.target.style.borderColor = "#C4B5FD";
             e.target.style.background  = "#fff";
-            e.target.style.boxShadow   = "0 0 0 3px rgba(37,99,235,.08)";
+            e.target.style.boxShadow   = "0 0 0 3px rgba(109,40,217,.08)";
           }}
           onBlur={e => {
             e.target.style.borderColor = "#E2E8F0";
@@ -509,7 +509,7 @@ export default function Topbar({ onToggleSidebar, collapsed, activePage, onNavig
                 display: "flex", justifyContent: "space-between", alignItems: "center",
               }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>Notifications</span>
-                <span style={{ fontSize: 11, color: "#2563EB", cursor: "pointer", fontWeight: 500 }}>Mark all read</span>
+                <span style={{ fontSize: 11, color: "#6D28D9", cursor: "pointer", fontWeight: 500 }}>Mark all read</span>
               </div>
               {[
                 { Icon: AlertTriangle, text: "Emergency alert — Driver K. Moussa", sub: "Trip #TRP-041 · 2m ago",  dot: "#EF4444" },
@@ -562,7 +562,7 @@ export default function Topbar({ onToggleSidebar, collapsed, activePage, onNavig
           >
             <div style={{
               width: 28, height: 28, borderRadius: "50%",
-              background: "linear-gradient(135deg,#2563EB,#7C3AED)",
+              background: "linear-gradient(135deg,#6D28D9,#8B5CF6)",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 10, fontWeight: 700, color: "#fff",
             }}>

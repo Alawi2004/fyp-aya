@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback } from "react";
 import { Download, Search as SearchIcon } from "lucide-react";
 import apiClient from "../api/apiClient";
 
@@ -26,7 +26,7 @@ function exportCSV(rows) {
 
 const ACTION_COLORS = {
   created:   { bg: "#ECFDF5", color: "#059669" },
-  updated:   { bg: "#EFF6FF", color: "#2563EB" },
+  updated:   { bg: "#F5F3FF", color: "#6D28D9" },
   deleted:   { bg: "#FEF2F2", color: "#DC2626" },
   suspended: { bg: "#FFFBEB", color: "#D97706" },
   restored:  { bg: "#ECFDF5", color: "#059669" },
@@ -34,8 +34,8 @@ const ACTION_COLORS = {
   logout:    { bg: "#F1F5F9", color: "#64748B" },
   credited:  { bg: "#ECFDF5", color: "#059669" },
   debited:   { bg: "#FEF2F2", color: "#DC2626" },
-  exported:  { bg: "#EFF6FF", color: "#2563EB" },
-  sent:      { bg: "#EFF6FF", color: "#0891B2" },
+  exported:  { bg: "#F5F3FF", color: "#6D28D9" },
+  sent:      { bg: "#F5F3FF", color: "#0891B2" },
 };
 
 function actionStyle(action = "") {
@@ -236,7 +236,7 @@ export default function AuditLogPage() {
                 const p = page <= 4 ? i + 1 : page + i - 3;
                 if (p < 1 || p > totalPages) return null;
                 return (
-                  <button key={p} onClick={() => setPage(p)} style={{ padding: "5px 10px", borderRadius: 7, border: `1px solid ${p === page ? "#2563EB" : "#E2E8F0"}`, background: p === page ? "#EFF6FF" : "#fff", fontSize: 12, fontWeight: p === page ? 700 : 400, color: p === page ? "#2563EB" : "#374151", cursor: "pointer" }}>
+                  <button key={p} onClick={() => setPage(p)} style={{ padding: "5px 10px", borderRadius: 7, border: `1px solid ${p === page ? "#6D28D9" : "#E2E8F0"}`, background: p === page ? "#F5F3FF" : "#fff", fontSize: 12, fontWeight: p === page ? 700 : 400, color: p === page ? "#6D28D9" : "#374151", cursor: "pointer" }}>
                     {p}
                   </button>
                 );
@@ -249,3 +249,4 @@ export default function AuditLogPage() {
     </div>
   );
 }
+

@@ -118,10 +118,11 @@ export default function Topbar({ onMenuToggle, pageTitle }) {
         background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`,
         display: "flex", alignItems: "center", justifyContent: "center",
         fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0,
-        boxShadow: `0 2px 8px rgba(37,99,235,.3)`,
+        boxShadow: `0 2px 8px rgba(109,40,217,.3)`,
       }} title={user?.full_name ?? "Staff"}>
         {initials}
       </div>
     </header>
   );
 }
+

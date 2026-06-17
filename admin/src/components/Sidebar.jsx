@@ -55,7 +55,6 @@ export default function Sidebar({ activePage, onNavigate, collapsed }) {
       boxShadow: "2px 0 12px rgba(0,0,0,.03)",
     }}>
 
-
       {/* ── Nav ── */}
       <nav style={{ flex: 1, padding: "10px 0", overflowY: "auto", overflowX: "hidden" }}>
         {NAV.map((item, i) => {
@@ -95,7 +94,7 @@ export default function Sidebar({ activePage, onNavigate, collapsed }) {
                 cursor:         "pointer",
                 position:       "relative",
                 background:     active
-                  ? "#EFF6FF"
+                  ? "#F5F3FF"
                   : isHov
                   ? "#F8FAFC"
                   : "transparent",
@@ -110,14 +109,14 @@ export default function Sidebar({ activePage, onNavigate, collapsed }) {
                   bottom:    "18%",
                   width:     3,
                   borderRadius: "0 4px 4px 0",
-                  background: "#2563EB",
+                  background: "#6D28D9",
                 }} />
               )}
 
               <Icon
                 size={18}
                 strokeWidth={active ? 2.2 : 1.8}
-                color={active ? "#2563EB" : isHov ? "#475569" : "#94A3B8"}
+                color={active ? "#6D28D9" : isHov ? "#475569" : "#94A3B8"}
                 style={{ flexShrink: 0, transition: "color .14s" }}
               />
 
@@ -126,7 +125,7 @@ export default function Sidebar({ activePage, onNavigate, collapsed }) {
                   flex:       1,
                   fontSize:   13,
                   fontWeight: active ? 600 : 400,
-                  color:      active ? "#1E40AF" : isHov ? "#334155" : "#64748B",
+                  color:      active ? "#4C1D95" : isHov ? "#334155" : "#64748B",
                   whiteSpace: "nowrap",
                   overflow:   "hidden",
                   transition: "color .14s",
@@ -138,7 +137,7 @@ export default function Sidebar({ activePage, onNavigate, collapsed }) {
               {/* Badge (expanded) */}
               {item.badge != null && !collapsed && (
                 <span style={{
-                  background:   active ? "#2563EB" : "#EF4444",
+                  background:   active ? "#6D28D9" : "#EF4444",
                   color:        "#fff",
                   fontSize:     9,
                   fontWeight:   700,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+﻿import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMapEvents } from "react-leaflet";
 import L from "leaflet";
@@ -9,7 +9,7 @@ import { getRouteStops, updateRouteStopOrder, removeStopFromRoute } from "../api
 // ── Custom div-icons ───────────────────────────────────────────────────────────
 
 const makeStopIcon = (order, isFirst, isLast) => {
-  const color = isFirst ? '#10B981' : isLast ? '#EF4444' : '#2563EB';
+  const color = isFirst ? '#10B981' : isLast ? '#EF4444' : '#6D28D9';
   const size  = (isFirst || isLast) ? 22 : 18;
   return L.divIcon({
     html: `<div style="
@@ -295,9 +295,9 @@ export default function RouteMapEditor({ route, onClose, onSaved }) {
         {/* Add Waypoint mode */}
         <button onClick={() => toggleMode("waypoint")} style={{
           padding: "7px 14px", borderRadius: 8,
-          border: `1.5px solid ${mode === "waypoint" ? "#2563EB" : "#E2E8F0"}`,
-          background: mode === "waypoint" ? "#EFF6FF" : "#fff",
-          color: mode === "waypoint" ? "#2563EB" : "#374151",
+          border: `1.5px solid ${mode === "waypoint" ? "#6D28D9" : "#E2E8F0"}`,
+          background: mode === "waypoint" ? "#F5F3FF" : "#fff",
+          color: mode === "waypoint" ? "#6D28D9" : "#374151",
           fontWeight: 600, fontSize: 13, cursor: "pointer",
         }}>
           {mode === "waypoint" ? "✓ Click to add waypoint" : "+ Add Waypoint"}
@@ -311,7 +311,7 @@ export default function RouteMapEditor({ route, onClose, onSaved }) {
 
         <button onClick={handleSave} disabled={saving} style={{
           padding: "8px 20px", borderRadius: 8, border: "none",
-          background: saving ? "#93C5FD" : "#2563EB",
+          background: saving ? "#C4B5FD" : "#6D28D9",
           color: "#fff", fontWeight: 700, fontSize: 13, cursor: saving ? "not-allowed" : "pointer",
         }}>
           {saving ? "Saving…" : "Save"}
@@ -328,7 +328,7 @@ export default function RouteMapEditor({ route, onClose, onSaved }) {
           {mode && !pendingPos && (
             <div style={{
               position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)",
-              background: mode === "stop" ? "#059669" : "#2563EB", color: "#fff", borderRadius: 20,
+              background: mode === "stop" ? "#059669" : "#6D28D9", color: "#fff", borderRadius: 20,
               padding: "5px 16px", fontSize: 12, fontWeight: 600, zIndex: 1000,
               pointerEvents: "none",
             }}>
@@ -376,7 +376,7 @@ export default function RouteMapEditor({ route, onClose, onSaved }) {
                   disabled={!pendingName.trim() || addingStop}
                   style={{
                     flex: 1, padding: "8px", borderRadius: 7, border: "none",
-                    background: !pendingName.trim() || addingStop ? "#93C5FD" : "#059669",
+                    background: !pendingName.trim() || addingStop ? "#C4B5FD" : "#059669",
                     color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer",
                   }}
                 >
@@ -406,8 +406,8 @@ export default function RouteMapEditor({ route, onClose, onSaved }) {
             {/* Route polyline */}
             {stopLine.length > 1 && (
               <>
-                <Polyline positions={stopLine} color="#93C5FD" weight={7} opacity={0.35} />
-                <Polyline positions={stopLine} color="#2563EB" weight={4} opacity={0.9} dashArray="12 6" />
+                <Polyline positions={stopLine} color="#C4B5FD" weight={7} opacity={0.35} />
+                <Polyline positions={stopLine} color="#6D28D9" weight={4} opacity={0.9} dashArray="12 6" />
               </>
             )}
 
@@ -468,7 +468,7 @@ export default function RouteMapEditor({ route, onClose, onSaved }) {
                   {/* Colour dot */}
                   <div style={{
                     width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
-                    background: i === 0 ? "#10B981" : i === stops.length - 1 ? "#EF4444" : "#2563EB",
+                    background: i === 0 ? "#10B981" : i === stops.length - 1 ? "#EF4444" : "#6D28D9",
                     color: "#fff", fontSize: 9, fontWeight: 800,
                     display: "flex", alignItems: "center", justifyContent: "center",
                   }}>{i + 1}</div>
@@ -532,7 +532,7 @@ export default function RouteMapEditor({ route, onClose, onSaved }) {
             <strong style={{ color: "#475569" }}>Tips:</strong><br />
             • <strong style={{ color: "#059669" }}>+ Add Stop</strong> → click map → name it<br />
             • ▲ ▼ to reorder · × to remove a stop<br />
-            • <strong style={{ color: "#2563EB" }}>+ Add Waypoint</strong> → shapes the road path<br />
+            • <strong style={{ color: "#6D28D9" }}>+ Add Waypoint</strong> → shapes the road path<br />
             • Drag any marker to reposition it<br />
             • Right-click a waypoint to delete it<br />
             • <strong style={{ color: "#0F172A" }}>Save</strong> to persist positions + waypoints
@@ -543,3 +543,4 @@ export default function RouteMapEditor({ route, onClose, onSaved }) {
     document.body
   );
 }
+

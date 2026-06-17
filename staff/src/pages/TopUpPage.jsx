@@ -648,9 +648,9 @@ function QueuedCard({ receipt, onNewTopUp }) {
               </div>
             ))}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, background: "#EFF6FF", border: "1px solid #BFDBFE", marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, background: "#F5F3FF", border: "1px solid #DDD6FE", marginBottom: 20 }}>
             <Clock size={14} color={C.info} />
-            <span style={{ fontSize: 12, color: "#1D4ED8", fontWeight: 600 }}>
+            <span style={{ fontSize: 12, color: "#4C1D95", fontWeight: 600 }}>
               This transaction will be automatically synced when your device reconnects to the internet.
             </span>
           </div>
@@ -820,3 +820,4 @@ function ShareBtn({ onClick, icon, label, hoverColor }) {
     </button>
   );
 }
+

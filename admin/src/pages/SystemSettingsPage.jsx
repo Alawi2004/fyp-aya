@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+﻿import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Globe, Receipt, Wallet, BookOpen, MapPin,
   Shield, Wrench, AlertTriangle, Check, RefreshCw,
@@ -50,11 +50,11 @@ function Field({ label, description, type = "text", value, onChange, unit, min, 
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
         style={{
           width: "100%", padding: "9px 12px", boxSizing: "border-box",
-          border: `1.5px solid ${hasErr ? "#EF4444" : focused ? "#2563EB" : "#E2E8F0"}`,
+          border: `1.5px solid ${hasErr ? "#EF4444" : focused ? "#6D28D9" : "#E2E8F0"}`,
           borderRadius: 9, fontSize: 14, color: "#1E293B",
           background: hasErr ? "#FEF2F2" : focused ? "#fff" : "#F8FAFC",
           outline: "none",
-          boxShadow: focused ? `0 0 0 3px ${hasErr ? "rgba(239,68,68,.12)" : "rgba(37,99,235,.10)"}` : "none",
+          boxShadow: focused ? `0 0 0 3px ${hasErr ? "rgba(239,68,68,.12)" : "rgba(109,40,217,.10)"}` : "none",
           transition: "border-color .15s, box-shadow .15s",
         }}
       />
@@ -77,10 +77,10 @@ function Select({ label, description, value, onChange, options, error }) {
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
         style={{
           width: "100%", padding: "9px 12px", boxSizing: "border-box",
-          border: `1.5px solid ${hasErr ? "#EF4444" : focused ? "#2563EB" : "#E2E8F0"}`,
+          border: `1.5px solid ${hasErr ? "#EF4444" : focused ? "#6D28D9" : "#E2E8F0"}`,
           borderRadius: 9, fontSize: 14, color: "#1E293B",
           background: "#F8FAFC", outline: "none", cursor: "pointer",
-          boxShadow: focused ? "0 0 0 3px rgba(37,99,235,.10)" : "none",
+          boxShadow: focused ? "0 0 0 3px rgba(109,40,217,.10)" : "none",
           transition: "border-color .15s",
         }}
       >
@@ -100,7 +100,7 @@ function Toggle({ label, description, checked, onChange }) {
         onClick={() => onChange(!checked)}
         style={{
           cursor: "pointer", width: 44, height: 24, borderRadius: 12,
-          background: checked ? "#2563EB" : "#CBD5E1",
+          background: checked ? "#6D28D9" : "#CBD5E1",
           position: "relative", flexShrink: 0, marginTop: 2,
           transition: "background .2s",
         }}
@@ -216,7 +216,7 @@ function SaveRow({ onSave, saving, saved, saveErr }) {
         style={{
           display: "flex", alignItems: "center", gap: 6,
           padding: "7px 18px", border: "none", borderRadius: 8,
-          background: saved ? "#059669" : saving ? "#93C5FD" : "#2563EB",
+          background: saved ? "#059669" : saving ? "#C4B5FD" : "#6D28D9",
           color: "#fff", fontSize: 13, fontWeight: 600,
           cursor: saving ? "not-allowed" : "pointer",
           transition: "background .2s", whiteSpace: "nowrap",
@@ -322,35 +322,70 @@ function GeneralTab({ s, set }) {
   const { save, saving, saved, saveErr, valErrs, clearErr } = useSectionSave(s, keys, validateGeneral);
   const f = (k, v) => { set(k, v); clearErr(k); };
 
+  const curr = s["app.currency"] || "USD";
+  const rate = parseFloat(s["app.exchange_rate"] || 1) || 1;
+  const dec  = rate >= 100 ? 0 : 2;
+  const fmtEx = (n) =>
+    `${curr} ${(n * rate).toLocaleString("en", { minimumFractionDigits: dec, maximumFractionDigits: dec })}`;
+
   return (
-    <Panel title="General Application Settings" icon={<Globe size={14} color="#2563EB" />} accent="#2563EB"
-      extra={<SaveRow onSave={save} saving={saving} saved={saved} saveErr={saveErr} />}>
-      <div style={{ paddingTop: 10 }}>
-        <TwoCol>
-          <Field label="Application Name" placeholder="Yalla Transit"
-            description="Public name shown in the mobile app and portals."
-            value={s["app.name"]} onChange={v => f("app.name", v)} error={valErrs["app.name"]} />
-          <Select label="Timezone" options={TIMEZONE_OPTS}
-            description="System-wide timezone for schedules and logs."
-            value={s["app.timezone"]} onChange={v => f("app.timezone", v)} />
-          <Select label="Currency" options={CURRENCY_OPTS}
-            description="ISO 4217 currency code used for fares and wallets."
-            value={s["app.currency"]} onChange={v => f("app.currency", v)} />
-          <Field label="Exchange Rate" unit="per 1 USD" type="number" min="0.0001" step="1"
-            description="Units of the selected currency equal to 1 USD. Set to 1 for USD-based systems."
-            value={s["app.exchange_rate"]} onChange={v => f("app.exchange_rate", v)} error={valErrs["app.exchange_rate"]} />
-          <Select label="Default Language" options={LANG_OPTS}
-            description="Default UI language for passengers and drivers."
-            value={s["app.language"]} onChange={v => f("app.language", v)} />
-          <Field label="Support Email" type="email" placeholder="support@yallatransit.lb"
-            description="Contact email shown to passengers and drivers."
-            value={s["app.support_email"]} onChange={v => f("app.support_email", v)} error={valErrs["app.support_email"]} />
-          <Field label="Support Phone" placeholder="+961 1 999 000"
-            description="Contact phone number shown in the mobile app."
-            value={s["app.support_phone"]} onChange={v => f("app.support_phone", v)} error={valErrs["app.support_phone"]} />
-        </TwoCol>
-      </div>
-    </Panel>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <Panel title="General Application Settings" icon={<Globe size={14} color="#6D28D9" />} accent="#6D28D9"
+        extra={<SaveRow onSave={save} saving={saving} saved={saved} saveErr={saveErr} />}>
+        <div style={{ paddingTop: 10 }}>
+          <TwoCol>
+            <Field label="Application Name" placeholder="Yalla Transit"
+              description="Public name shown in the mobile app and portals."
+              value={s["app.name"]} onChange={v => f("app.name", v)} error={valErrs["app.name"]} />
+            <Select label="Timezone" options={TIMEZONE_OPTS}
+              description="System-wide timezone for schedules and logs."
+              value={s["app.timezone"]} onChange={v => f("app.timezone", v)} />
+            <Select label="Currency" options={CURRENCY_OPTS}
+              description="ISO 4217 currency code used for fares and wallets."
+              value={s["app.currency"]} onChange={v => f("app.currency", v)} />
+            <Field label="Exchange Rate" unit="per 1 USD" type="number" min="0.0001" step="1"
+              description="Units of the selected currency equal to 1 USD. Set to 1 for USD-based systems."
+              value={s["app.exchange_rate"]} onChange={v => f("app.exchange_rate", v)} error={valErrs["app.exchange_rate"]} />
+            <Select label="Default Language" options={LANG_OPTS}
+              description="Default UI language for passengers and drivers."
+              value={s["app.language"]} onChange={v => f("app.language", v)} />
+            <Field label="Support Email" type="email" placeholder="support@yallatransit.lb"
+              description="Contact email shown to passengers and drivers."
+              value={s["app.support_email"]} onChange={v => f("app.support_email", v)} error={valErrs["app.support_email"]} />
+            <Field label="Support Phone" placeholder="+961 1 999 000"
+              description="Contact phone number shown in the mobile app."
+              value={s["app.support_phone"]} onChange={v => f("app.support_phone", v)} error={valErrs["app.support_phone"]} />
+          </TwoCol>
+        </div>
+      </Panel>
+
+      {/* Currency converter preview */}
+      <Panel title="Currency Converter Preview" accent="#6D28D9">
+        <div style={{ paddingTop: 4 }}>
+          <p style={{ fontSize: 12, color: "#64748B", marginBottom: 12, lineHeight: 1.5 }}>
+            All monetary values stored in USD are multiplied by the exchange rate for display in the mobile app and staff portal.
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 }}>
+            {[1, 5, 10, 50, 100].map(usd => (
+              <div key={usd} style={{ background: "#F8FAFC", borderRadius: 10, padding: "12px 14px", border: "1px solid #E2E8F0", textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 6 }}>USD {usd}</div>
+                <div style={{ fontSize: rate >= 100 ? 13 : 16, fontWeight: 800, color: "#0F172A" }}>{fmtEx(usd)}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{
+            marginTop: 12, padding: "10px 14px", borderRadius: 9,
+            background: rate === 1 ? "#F0FDF4" : "#F5F3FF",
+            border: `1px solid ${rate === 1 ? "#A7F3D0" : "#DDD6FE"}`,
+            fontSize: 12, color: rate === 1 ? "#065F46" : "#4C1D95", fontWeight: 600,
+          }}>
+            {rate === 1
+              ? `✓ No conversion — ${curr} is the base currency (1:1 with USD)`
+              : `1 USD = ${rate.toLocaleString("en")} ${curr}  ·  1 ${curr} = ${(1 / rate).toFixed(6)} USD`}
+          </div>
+        </div>
+      </Panel>
+    </div>
   );
 }
 
@@ -378,7 +413,14 @@ function FareTab({ s, set }) {
   const base  = parseFloat(s["fare.base_amount"]  || 0);
   const perKm = parseFloat(s["fare.per_km_rate"]  || 0);
   const curr  = s["app.currency"] || "USD";
+  const rate  = parseFloat(s["app.exchange_rate"] || 1) || 1;
   const KM    = 10;
+
+  const fmtFare = (n) => {
+    const v   = n * rate;
+    const dec = rate >= 100 ? 0 : 2;
+    return `${curr} ${v.toLocaleString("en", { minimumFractionDigits: dec, maximumFractionDigits: dec })}`;
+  };
 
   const preview = [
     { label: "Standard",  disc: 0 },
@@ -420,6 +462,16 @@ function FareTab({ s, set }) {
       </Panel>
 
       <Panel title={`Live Preview — ${KM} km journey`} accent="#10B981">
+        {rate !== 1 && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8,
+            background: "#F0FDF4", border: "1px solid #A7F3D0",
+            borderRadius: 8, padding: "7px 12px", marginBottom: 12, fontSize: 12, color: "#065F46",
+          }}>
+            <span style={{ fontWeight: 700 }}>Rate applied:</span>
+            <span>1 USD = {rate.toLocaleString("en")} {curr} — amounts shown in {curr}</span>
+          </div>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, paddingTop: 4 }}>
           {preview.map(({ label, disc }) => {
             const raw   = base + KM * perKm;
@@ -427,8 +479,9 @@ function FareTab({ s, set }) {
             return (
               <div key={label} style={{ background: "#F8FAFC", borderRadius: 10, padding: "12px 14px", border: "1px solid #E2E8F0", textAlign: "center" }}>
                 <div style={{ fontSize: 11, color: "#64748B", marginBottom: 6 }}>{label}</div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>{curr} {final.toFixed(2)}</div>
+                <div style={{ fontSize: rate >= 100 ? 14 : 18, fontWeight: 800, color: "#0F172A" }}>{fmtFare(final)}</div>
                 {disc > 0 && <div style={{ fontSize: 10, color: "#10B981", fontWeight: 600, marginTop: 4 }}>{Math.round(disc * 100)}% off</div>}
+                {rate !== 1 && <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 3 }}>≈ USD {final.toFixed(2)}</div>}
               </div>
             );
           })}
@@ -467,27 +520,53 @@ function WalletTab({ s, set }) {
   const { save, saving, saved, saveErr, valErrs, clearErr } = useSectionSave(s, keys, validateWallet);
   const f = (k, v) => { set(k, v); clearErr(k); };
   const curr = s["app.currency"] || "USD";
+  const rate = parseFloat(s["app.exchange_rate"] || 1) || 1;
+  const dec  = rate >= 100 ? 0 : 2;
+  const fmtW = (n) =>
+    `${curr} ${((parseFloat(n) || 0) * rate).toLocaleString("en", { minimumFractionDigits: dec, maximumFractionDigits: dec })}`;
+
+  const limits = [
+    { label: "Max Balance",      key: "wallet.max_balance",       color: "#7C3AED" },
+    { label: "Max Top-Up",       key: "wallet.max_topup",         color: "#6D28D9" },
+    { label: "Min Top-Up",       key: "wallet.min_topup",         color: "#10B981" },
+    { label: "Low-Bal Alert",    key: "wallet.low_balance_alert", color: "#F59E0B" },
+  ];
 
   return (
-    <Panel title="Wallet Limits" icon={<Wallet size={14} color="#7C3AED" />} accent="#7C3AED"
-      extra={<SaveRow onSave={save} saving={saving} saved={saved} saveErr={saveErr} />}>
-      <div style={{ paddingTop: 10 }}>
-        <TwoCol>
-          <Field label="Max Wallet Balance" unit={curr} type="number" min="0.01" step="10"
-            description="A passenger's wallet cannot exceed this balance."
-            value={s["wallet.max_balance"]} onChange={v => f("wallet.max_balance", v)} error={valErrs["wallet.max_balance"]} />
-          <Field label="Low-Balance Alert" unit={curr} type="number" min="0" step="0.5"
-            description="Push notification triggered when balance falls below this threshold."
-            value={s["wallet.low_balance_alert"]} onChange={v => f("wallet.low_balance_alert", v)} error={valErrs["wallet.low_balance_alert"]} />
-          <Field label="Min Top-Up Amount" unit={curr} type="number" min="0.01" step="1"
-            description="Smallest top-up a staff agent may process per transaction."
-            value={s["wallet.min_topup"]} onChange={v => f("wallet.min_topup", v)} error={valErrs["wallet.min_topup"]} />
-          <Field label="Max Top-Up Amount" unit={curr} type="number" min="0.01" step="10"
-            description="Maximum top-up allowed per single transaction."
-            value={s["wallet.max_topup"]} onChange={v => f("wallet.max_topup", v)} error={valErrs["wallet.max_topup"]} />
-        </TwoCol>
-      </div>
-    </Panel>
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <Panel title="Wallet Limits" icon={<Wallet size={14} color="#7C3AED" />} accent="#7C3AED"
+        extra={<SaveRow onSave={save} saving={saving} saved={saved} saveErr={saveErr} />}>
+        <div style={{ paddingTop: 10 }}>
+          <TwoCol>
+            <Field label="Max Wallet Balance" unit="USD base" type="number" min="0.01" step="10"
+              description="A passenger's wallet cannot exceed this balance (stored in USD)."
+              value={s["wallet.max_balance"]} onChange={v => f("wallet.max_balance", v)} error={valErrs["wallet.max_balance"]} />
+            <Field label="Low-Balance Alert" unit="USD base" type="number" min="0" step="0.5"
+              description="Push notification triggered when balance falls below this threshold."
+              value={s["wallet.low_balance_alert"]} onChange={v => f("wallet.low_balance_alert", v)} error={valErrs["wallet.low_balance_alert"]} />
+            <Field label="Min Top-Up Amount" unit="USD base" type="number" min="0.01" step="1"
+              description="Smallest top-up a staff agent may process per transaction."
+              value={s["wallet.min_topup"]} onChange={v => f("wallet.min_topup", v)} error={valErrs["wallet.min_topup"]} />
+            <Field label="Max Top-Up Amount" unit="USD base" type="number" min="0.01" step="10"
+              description="Maximum top-up allowed per single transaction."
+              value={s["wallet.max_topup"]} onChange={v => f("wallet.max_topup", v)} error={valErrs["wallet.max_topup"]} />
+          </TwoCol>
+        </div>
+      </Panel>
+
+      {/* Converted limits summary */}
+      <Panel title={`Limits in ${curr} (at current exchange rate)`} accent="#7C3AED">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, paddingTop: 4 }}>
+          {limits.map(({ label, key, color }) => (
+            <div key={key} style={{ background: "#F8FAFC", borderRadius: 10, padding: "12px 14px", border: `1px solid ${color}22`, textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: "#64748B", marginBottom: 6 }}>{label}</div>
+              <div style={{ fontSize: rate >= 100 ? 12 : 16, fontWeight: 800, color }}>{fmtW(s[key])}</div>
+              {rate !== 1 && <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 3 }}>≈ USD {parseFloat(s[key] || 0).toFixed(2)}</div>}
+            </div>
+          ))}
+        </div>
+      </Panel>
+    </div>
   );
 }
 
@@ -549,7 +628,7 @@ function GpsTab({ s, set }) {
   const f = (k, v) => { set(k, v); clearErr(k); };
 
   return (
-    <Panel title="GPS & Tracking" icon={<MapPin size={14} color="#2563EB" />} accent="#2563EB"
+    <Panel title="GPS & Tracking" icon={<MapPin size={14} color="#6D28D9" />} accent="#6D28D9"
       extra={<SaveRow onSave={save} saving={saving} saved={saved} saveErr={saveErr} />}>
       <div style={{ paddingTop: 10 }}>
         <TwoCol>
@@ -617,7 +696,7 @@ function SecurityTab({ s, set }) {
         {/* TTL summary */}
         <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
           {[
-            { label: "Access Token", val: accessTTL,  color: "#2563EB" },
+            { label: "Access Token", val: accessTTL,  color: "#6D28D9" },
             { label: "Refresh Token", val: refreshTTL, color: "#7C3AED" },
           ].map(({ label, val, color }) => {
             const d = Math.floor(val / 86400);
@@ -839,3 +918,4 @@ export default function SystemSettingsPage() {
     </div>
   );
 }
+

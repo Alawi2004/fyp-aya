@@ -1,12 +1,12 @@
 // Staff Portal Theme
-// Primary: Blue (#2563EB) | Secondary/Success: Green (#22C55E)
+// Primary: Purple (#6D28D9) matching mobile app
 
 export const C = {
-  // Brand — Blue primary
-  primary:       "#2563EB",   // blue-600
-  primaryDark:   "#1D4ED8",   // blue-700
-  primaryLight:  "#EFF6FF",   // blue-50
-  primaryBorder: "#BFDBFE",   // blue-200
+  // Brand — Purple primary (matches mobile app)
+  primary:       "#6D28D9",   // purple-700
+  primaryDark:   "#4C1D95",   // purple-900
+  primaryLight:  "#F5F3FF",   // purple-50
+  primaryBorder: "#DDD6FE",   // purple-200
 
   // Surfaces
   bg:      "#F8FAFC",
@@ -25,8 +25,8 @@ export const C = {
   warningBg:  "#FFFBEB",
   danger:     "#EF4444",
   dangerBg:   "#FEF2F2",
-  info:       "#3B82F6",
-  infoBg:     "#EFF6FF",
+  info:       "#8B5CF6",
+  infoBg:     "#F5F3FF",
 };
 
 export const cardStyle = {
@@ -71,5 +71,5 @@ export const btnPrimary = {
   fontSize:       14,
   fontWeight:     700,
   cursor:         "pointer",
-  boxShadow:      `0 4px 14px rgba(37,99,235,.28)`,
+  boxShadow:      `0 4px 14px rgba(109,40,217,.28)`,
 };

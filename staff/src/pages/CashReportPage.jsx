@@ -13,7 +13,7 @@ const fmtFull = (iso) => `${fmtDate(iso)} ${fmtTime(iso)}`;
 
 const METHOD_COLOR = {
   "Cash":               { bg: "#F0FDF4", color: "#065F46" },
-  "Card (Debit/Credit)": { bg: "#EFF6FF", color: "#1E40AF" },
+  "Card (Debit/Credit)": { bg: "#F5F3FF", color: "#4C1D95" },
   "Mobile Transfer":     { bg: "#FDF4FF", color: "#6B21A8" },
   "Bank Transfer":       { bg: "#FFF7ED", color: "#92400E" },
   "Voucher":             { bg: "#FEFCE8", color: "#713F12" },
@@ -139,7 +139,7 @@ export default function CashReportPage() {
         {/* KPI row */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 20 }}>
           {[
-            { label: "Transactions",    value: report.tx_count || 0,         icon: Hash,       color: C.info,    bg: "#EFF6FF" },
+            { label: "Transactions",    value: report.tx_count || 0,         icon: Hash,       color: C.info,    bg: "#F5F3FF" },
             { label: "Total Processed", value: fmt(report.total_amount, currency, exchangeRate),     icon: TrendingUp, color: C.primary, bg: C.primaryLight },
             { label: "Cash Collected",  value: fmt(report.cash_amount, currency, exchangeRate),      icon: DollarSign, color: C.success, bg: C.successBg },
             { label: "Non-Cash",        value: fmt((report.total_amount||0)-(report.cash_amount||0), currency, exchangeRate), icon: Clock, color: C.warning, bg: C.warningBg },
@@ -400,3 +400,4 @@ export default function CashReportPage() {
     </div>
   );
 }
+

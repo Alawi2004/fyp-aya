@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, PURPLE } from '../../constants/colors';
 import { THEME } from '../../constants/theme';
 import apiClient from '../../api/apiClient';
-
 const STATUS_CONFIG = {
   active:    { label: 'On Time',   bg: COLORS.secondaryLight, text: COLORS.secondary, dot: COLORS.secondary },
   boarding:  { label: 'Boarding',  bg: PURPLE.mid,     text: PURPLE.primary,   dot: PURPLE.primary   },
@@ -26,7 +25,7 @@ const TYPE_LABEL = {
   tuktuk: 'Tuktuk',
 };
 
-const BusCard = ({ bus, onPress }) => {
+const BusCard = ({ bus, onPress, fmtMoney }) => {
   const [photoUrl, setPhotoUrl] = useState(null);
 
   useEffect(() => {
@@ -62,28 +61,25 @@ const BusCard = ({ bus, onPress }) => {
         </View>
         <View style={styles.busInfo}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={styles.busName}>{bus.name}</Text>
-            <View style={styles.typeTag}>
-              <Text style={styles.typeTagText}>{vehicleLabel}</Text>
+            <Text style={[styles.busName, { flex: 1 }]} numberOfLines={1}>{bus.name}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+              <View style={[styles.statusDot, { backgroundColor: status.dot }]} />
+              <Text style={[styles.statusText, { color: status.text }]}>{status.label}</Text>
             </View>
           </View>
-          <Text style={styles.busRoute}>{bus.route}</Text>
-        </View>
-        <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-          <View style={[styles.statusDot, { backgroundColor: status.dot }]} />
-          <Text style={[styles.statusText, { color: status.text }]}>{status.label}</Text>
+          <View style={styles.typeTag}>
+            <Text style={styles.typeTagText}>{vehicleLabel}</Text>
+          </View>
+          <Text style={styles.busRoute} numberOfLines={1}>{bus.route}</Text>
         </View>
       </View>
 
       {/* Route row */}
       <View style={styles.routeRow}>
         <View style={styles.routeStop}>
-          <View style={styles.dotOrigin} />
-          <View>
-            <Text style={styles.stopLabel}>FROM</Text>
-            <Text style={styles.stopName}>{bus.origin}</Text>
-            <Text style={styles.stopTime}>{bus.departureTime}</Text>
-          </View>
+          <Text style={styles.stopLabel}>FROM</Text>
+          <Text style={styles.stopName}>{bus.origin}</Text>
+          <Text style={styles.stopTime}>{bus.departureTime}</Text>
         </View>
         <View style={styles.routeMid}>
           <View style={styles.routeLineDash} />
@@ -93,12 +89,9 @@ const BusCard = ({ bus, onPress }) => {
           <View style={styles.routeLineDash} />
         </View>
         <View style={[styles.routeStop, { alignItems: 'flex-end' }]}>
-          <View style={[styles.dotOrigin, { backgroundColor: COLORS.danger }]} />
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={styles.stopLabel}>TO</Text>
-            <Text style={styles.stopName}>{bus.destination}</Text>
-            <Text style={styles.stopTime}>{bus.arrivalTime}</Text>
-          </View>
+          <Text style={styles.stopLabel}>TO</Text>
+          <Text style={styles.stopName}>{bus.destination}</Text>
+          <Text style={styles.stopTime}>{bus.arrivalTime}</Text>
         </View>
       </View>
 
@@ -120,8 +113,7 @@ const BusCard = ({ bus, onPress }) => {
           </View>
         </View>
         <View style={styles.priceRow}>
-          <Text style={styles.priceCurrency}>$</Text>
-          <Text style={styles.priceAmount}>{bus.price}</Text>
+          <Text style={styles.priceAmount}>{fmtMoney(bus.price)}</Text>
           <View style={styles.bookNowBtn}>
             <View style={styles.bookNowHighlight} pointerEvents="none" />
             <Ionicons name="arrow-forward" size={13} color={COLORS.white} />
@@ -160,6 +152,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
+    alignSelf: 'flex-start',
+    marginTop: 3,
   },
   typeTagText: {
     fontSize: 9,
@@ -181,7 +175,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
   },
-  busInfo: { flex: 1 },
+  busInfo: { flex: 1, minWidth: 0 },
   busName: {
     fontSize: THEME.fontSize.md,
     fontWeight: THEME.fontWeight.extrabold,
@@ -212,9 +206,6 @@ const styles = StyleSheet.create({
   },
   routeStop: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
   },
   dotOrigin: {
     width: 10,
@@ -288,8 +279,8 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   priceAmount: {
-    fontSize: 22,
-    fontWeight: '900',
+    fontSize: 14,
+    fontWeight: '800',
     color: PURPLE.primary,
     letterSpacing: -0.5,
   },

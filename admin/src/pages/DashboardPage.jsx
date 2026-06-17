@@ -1,4 +1,4 @@
-// pages/DashboardPage.jsx
+﻿// pages/DashboardPage.jsx
 import { useState, useEffect } from "react";
 import {
   MapPin, Clock,
@@ -28,7 +28,7 @@ function fmtAgo(dt) {
 const TRIP_STATUS = {
   Ongoing:   { bg: "#ECFDF5", color: "#059669", border: "#A7F3D0", dot: "#10B981" },
   Delayed:   { bg: "#FFFBEB", color: "#D97706", border: "#FDE68A", dot: "#F59E0B" },
-  Scheduled: { bg: "#EFF6FF", color: "#2563EB", border: "#BFDBFE", dot: "#3B82F6" },
+  Scheduled: { bg: "#F5F3FF", color: "#6D28D9", border: "#DDD6FE", dot: "#3B82F6" },
   Completed: { bg: "#F8FAFC", color: "#94A3B8", border: "#E2E8F0", dot: "#CBD5E1" },
   Active:    { bg: "#ECFDF5", color: "#059669", border: "#A7F3D0", dot: "#10B981" },
 };
@@ -48,7 +48,7 @@ function TripBadge({ status }) {
   );
 }
 
-function QuickTile({ label, value, sub, icon, iconBg, accent = "#2563EB", onClick }) {
+function QuickTile({ label, value, sub, icon, iconBg, accent = "#6D28D9", onClick }) {
   return (
     <div
       onClick={onClick}
@@ -111,7 +111,7 @@ function QuickTile({ label, value, sub, icon, iconBg, accent = "#2563EB", onClic
 }
 
 export default function DashboardPage({ onNavigate }) {
-  const { currency } = useSettings();
+  const { currency, exchangeRate } = useSettings();
   const today = new Date().toLocaleDateString("en-GB", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
@@ -216,11 +216,11 @@ export default function DashboardPage({ onNavigate }) {
             className="btn-primary"
             onClick={() => setTripModal(false)}
             style={{
-              background: "#2563EB", color: "#fff", border: "none",
+              background: "#6D28D9", color: "#fff", border: "none",
               borderRadius: 9, padding: "9px 16px",
               fontSize: 13, fontWeight: 700, cursor: "pointer",
               display: "flex", alignItems: "center", gap: 6,
-              boxShadow: "0 4px 14px rgba(37,99,235,.3)",
+              boxShadow: "0 4px 14px rgba(109,40,217,.3)",
             }}
           >
             <Zap size={13} />
@@ -233,7 +233,7 @@ export default function DashboardPage({ onNavigate }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
         <QuickTile
           label="Today's Revenue"
-          value={fmtMoneyRound(stats.todayRevenue || 0, currency)}
+          value={fmtMoneyRound(stats.todayRevenue || 0, currency, exchangeRate)}
           sub="View Analytics →"
           accent="#10B981"
           iconBg="#F0FDF4"
@@ -253,9 +253,9 @@ export default function DashboardPage({ onNavigate }) {
           label="Total Drivers"
           value={stats.totalDrivers ?? 0}
           sub="View Drivers →"
-          accent="#2563EB"
-          iconBg="#EFF6FF"
-          icon={<UserCheck size={16} color="#2563EB" />}
+          accent="#6D28D9"
+          iconBg="#F5F3FF"
+          icon={<UserCheck size={16} color="#6D28D9" />}
           onClick={() => onNavigate?.("drivers")}
         />
         <QuickTile
@@ -331,7 +331,7 @@ export default function DashboardPage({ onNavigate }) {
                       </td>
                       <td style={{ padding: "7px 12px", fontWeight: 700, color: "#0F172A" }}>{e.driver_name ?? "—"}</td>
                       <td style={{ padding: "7px 12px" }}>
-                        <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#2563EB" }}>{e.vehicle ?? "—"}</span>
+                        <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#6D28D9" }}>{e.vehicle ?? "—"}</span>
                       </td>
                       <td style={{ padding: "7px 12px" }}>
                         <span style={{ fontFamily: "monospace", fontSize: 11, color: "#64748B" }}>{e.trip_ref ?? "—"}</span>
@@ -375,8 +375,8 @@ export default function DashboardPage({ onNavigate }) {
           title="Live GPS Map"
           action="Full Screen ↗"
           onAction={() => onNavigate?.("live")}
-          icon={<MapPin size={14} color="#2563EB" />}
-          accent="#2563EB"
+          icon={<MapPin size={14} color="#6D28D9" />}
+          accent="#6D28D9"
           noPad
         >
           <div style={{ padding: "8px 12px" }}>
@@ -390,8 +390,8 @@ export default function DashboardPage({ onNavigate }) {
           title="Active Trips"
           action="View all"
           onAction={() => onNavigate?.("trips")}
-          icon={<Clock size={14} color="#2563EB" />}
-          accent="#2563EB"
+          icon={<Clock size={14} color="#6D28D9" />}
+          accent="#6D28D9"
           extra={selectedTrip && (
             <button
               onClick={() => setSelectedTrip(null)}
@@ -425,8 +425,8 @@ export default function DashboardPage({ onNavigate }) {
                       borderRadius: 8,
                       marginBottom: i < visibleTrips.length - 1 ? 3 : 0,
                       cursor: "pointer",
-                      background: isSelected ? "#EFF6FF" : "#F8FAFC",
-                      border: isSelected ? `1px solid #BFDBFE` : "1px solid #F1F5F9",
+                      background: isSelected ? "#F5F3FF" : "#F8FAFC",
+                      border: isSelected ? `1px solid #DDD6FE` : "1px solid #F1F5F9",
                       transition: "background .15s, border-color .15s",
                     }}
                     onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = "#F1F5F9"; }}
@@ -435,7 +435,7 @@ export default function DashboardPage({ onNavigate }) {
                     {/* Status-colored left bar */}
                     <div style={{
                       width: 3, height: 36, borderRadius: 2,
-                      background: isSelected ? "#2563EB" : sc.dot,
+                      background: isSelected ? "#6D28D9" : sc.dot,
                       flexShrink: 0,
                     }} />
 
@@ -445,8 +445,8 @@ export default function DashboardPage({ onNavigate }) {
                       fontSize: 10, flexShrink: 0,
                       padding: "2px 7px", borderRadius: 6,
                       background: isSelected ? "#DBEAFE" : `${sc.dot}18`,
-                      color: isSelected ? "#1D4ED8" : sc.color,
-                      border: `1px solid ${isSelected ? "#BFDBFE" : sc.dot + "33"}`,
+                      color: isSelected ? "#4C1D95" : sc.color,
+                      border: `1px solid ${isSelected ? "#DDD6FE" : sc.dot + "33"}`,
                     }}>
                       {t.id}
                     </span>
@@ -505,3 +505,5 @@ export default function DashboardPage({ onNavigate }) {
     </div>
   );
 }
+
+

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback } from "react";
 import { Users, UserRound, UserCheck, Shield, BadgeCheck } from "lucide-react";
 import { PageLoading, PageError, PageEmpty } from "../components/DataStates";
 import { Panel } from "../components/Panel";
@@ -14,7 +14,7 @@ const ROLES = ["Passenger", "Driver", "Admin", "Staff"];
 
 const ROLE_STYLE = {
   Admin:     { bg: "#FEF2F2", color: "#B91C1C" },
-  Driver:    { bg: "#EFF6FF", color: "#1E40AF" },
+  Driver:    { bg: "#F5F3FF", color: "#4C1D95" },
   Passenger: { bg: "#F5F3FF", color: "#6D28D9" },
   Staff:     { bg: "#F0FDF4", color: "#059669" },
 };
@@ -23,7 +23,7 @@ const ROLE_STYLE = {
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const SHIFT_CONFIG = {
-  morning:   { label: "Morning",   time: "6:00–14:00",  color: "#2563EB", bg: "#EFF6FF" },
+  morning:   { label: "Morning",   time: "6:00–14:00",  color: "#6D28D9", bg: "#F5F3FF" },
   afternoon: { label: "Afternoon", time: "14:00–22:00", color: "#D97706", bg: "#FFFBEB" },
   night:     { label: "Night",     time: "22:00–6:00",  color: "#7C3AED", bg: "#F5F3FF" },
   off:       { label: "Day Off",   time: "",             color: "#94A3B8", bg: "#F8FAFC" },
@@ -85,7 +85,7 @@ function DrawerHeader({ title, accent, onClose, onEdit, extra, children }) {
         <div style={{ display: "flex", gap: 8 }}>
           {extra}
           {onEdit && (
-            <button onClick={onEdit} style={{ background: accent?.bg ?? "#EFF6FF", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", color: accent?.color ?? "#2563EB", fontSize: 12, fontWeight: 600 }}>
+            <button onClick={onEdit} style={{ background: accent?.bg ?? "#F5F3FF", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", color: accent?.color ?? "#6D28D9", fontSize: 12, fontWeight: 600 }}>
               Edit
             </button>
           )}
@@ -375,7 +375,7 @@ function DriverUserProfile({ user, onClose, onEdit }) {
         <SectionLabel>This Week&apos;s Performance</SectionLabel>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 14 }}>
           {[
-            { label: "Trips",      value: perfData.trips_week,        color: "#2563EB" },
+            { label: "Trips",      value: perfData.trips_week,        color: "#6D28D9" },
             { label: "On-Time",    value: `${perfData.on_time_pct ?? 0}%`, color: (perfData.on_time_pct ?? 0) >= 90 ? "#10B981" : (perfData.on_time_pct ?? 0) >= 75 ? "#F59E0B" : "#EF4444" },
             { label: "Complaints", value: perfData.complaints,         color: perfData.complaints === 0 ? "#10B981" : "#EF4444" },
             { label: "Idle",       value: `${perfData.idle_hours}h`,  color: perfData.idle_hours > 4 ? "#EF4444" : "#64748B" },
@@ -469,8 +469,8 @@ function DriverUserProfile({ user, onClose, onEdit }) {
                 </div>
                 <span style={{
                   fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6,
-                  background: t.status === "Completed" ? "#F0FDF4" : t.status === "Ongoing" ? "#EFF6FF" : t.status === "Delayed" ? "#FFFBEB" : "#F3F4F6",
-                  color:      t.status === "Completed" ? "#059669" : t.status === "Ongoing" ? "#2563EB" : t.status === "Delayed" ? "#D97706" : "#94A3B8",
+                  background: t.status === "Completed" ? "#F0FDF4" : t.status === "Ongoing" ? "#F5F3FF" : t.status === "Delayed" ? "#FFFBEB" : "#F3F4F6",
+                  color:      t.status === "Completed" ? "#059669" : t.status === "Ongoing" ? "#6D28D9" : t.status === "Delayed" ? "#D97706" : "#94A3B8",
                 }}>
                   {t.status}
                 </span>
@@ -556,7 +556,7 @@ function AdminProfile({ user, onClose, onEdit }) {
     <ProfileDrawer onClose={onClose}>
       <DrawerHeader title="Admin Profile" accent={rs} onClose={onClose} onEdit={onEdit}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ width: 64, height: 64, borderRadius: "50%", flexShrink: 0, background: "linear-gradient(135deg,#2563EB,#7C3AED)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: "#fff", boxShadow: "0 4px 14px rgba(37,99,235,.30)" }}>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", flexShrink: 0, background: "linear-gradient(135deg,#6D28D9,#7C3AED)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: "#fff", boxShadow: "0 4px 14px rgba(109,40,217,.30)" }}>
             {initials}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -607,7 +607,7 @@ function AdminProfile({ user, onClose, onEdit }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {activity.map((a, i) => (
             <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, background: "#F8FAFC", border: "1px solid #F1F5F9", borderRadius: 10, padding: "10px 14px" }}>
-              <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#2563EB", marginTop: 5, flexShrink: 0 }} />
+              <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#6D28D9", marginTop: 5, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: "#0F172A", marginBottom: 2 }}>{a.action}</div>
                 <div style={{ fontSize: 11, color: "#94A3B8" }}>{a.date} at {a.time}</div>
@@ -680,7 +680,7 @@ function StaffUserProfile({ user, onClose, onEdit }) {
         <SectionLabel>Today&apos;s Activity</SectionLabel>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10 }}>
           {[
-            { label: "Top-Ups",     value: staffRec.today_count ?? 0,   color: "#2563EB" },
+            { label: "Top-Ups",     value: staffRec.today_count ?? 0,   color: "#6D28D9" },
             { label: "Volume",      value: fmtMoney(staffRec.today_total || 0, currency), color: "#059669" },
             { label: "Suspicious",  value: suspicious.length,            color: suspicious.length > 0 ? "#DC2626" : "#10B981" },
           ].map(({ label, value, color }) => (
@@ -783,7 +783,7 @@ function exportPDF(rows, label) {
     body{font-family:Arial,sans-serif;font-size:11px;margin:24px;color:#111}
     h2{font-size:16px;margin:0 0 4px}p{color:#64748b;font-size:11px;margin:0 0 14px}
     table{width:100%;border-collapse:collapse}
-    th{background:#2563EB;color:#fff;padding:7px 10px;text-align:left;font-size:11px;font-weight:700}
+    th{background:#6D28D9;color:#fff;padding:7px 10px;text-align:left;font-size:11px;font-weight:700}
     td{padding:6px 10px;border-bottom:1px solid #e2e8f0;font-size:11px}
     tr:nth-child(even) td{background:#f8fafc}
     @media print{@page{margin:15mm}button{display:none}}
@@ -928,7 +928,7 @@ function ActivityTab({ users }) {
         {heatmapLoading ? (
           /* Loading state */
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, padding: "40px 0", color: "#94A3B8" }}>
-            <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid #E2E8F0", borderTopColor: "#2563EB", animation: "spin 0.7s linear infinite" }} />
+            <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid #E2E8F0", borderTopColor: "#6D28D9", animation: "spin 0.7s linear infinite" }} />
             <span style={{ fontSize: 13 }}>Loading booking data…</span>
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
           </div>
@@ -1015,13 +1015,13 @@ function ActivityTab({ users }) {
                   <div style={{ flex: 1, height: 18, background: "#F1F5F9", borderRadius: 4, overflow: "hidden" }}>
                     <div style={{
                       width: `${pct}%`, height: "100%", borderRadius: 4,
-                      background: isTop ? "#2563EB" : "#BFDBFE",
+                      background: isTop ? "#6D28D9" : "#DDD6FE",
                       transition: "width .4s ease",
                     }} />
                   </div>
                   <span style={{ fontSize: 11, fontWeight: isTop ? 700 : 400, color: isTop ? "#0F172A" : "#94A3B8", width: 38, flexShrink: 0 }}>
                     {h.count}
-                    {isTop && <span style={{ fontSize: 9, color: "#2563EB", marginLeft: 2 }}>▲</span>}
+                    {isTop && <span style={{ fontSize: 9, color: "#6D28D9", marginLeft: 2 }}>▲</span>}
                   </span>
                 </div>
               );
@@ -1043,7 +1043,7 @@ function ActivityTab({ users }) {
                     <span style={{ fontSize: 11, color: "#64748B" }}>{total} trips</span>
                   </div>
                   <div style={{ height: 12, background: "#F1F5F9", borderRadius: 6, overflow: "hidden" }}>
-                    <div style={{ width: "100%", height: "100%", borderRadius: 6, background: "#2563EB" }} />
+                    <div style={{ width: "100%", height: "100%", borderRadius: 6, background: "#6D28D9" }} />
                   </div>
                 </div>
               );
@@ -1064,7 +1064,7 @@ function TabNav({ tabs, active, onChange }) {
           padding: "7px 20px", borderRadius: 7, border: "none",
           fontSize: 13, fontWeight: active === id ? 700 : 500, cursor: "pointer",
           background: active === id ? "#fff" : "transparent",
-          color:      active === id ? "#2563EB" : "#64748B",
+          color:      active === id ? "#6D28D9" : "#64748B",
           boxShadow:  active === id ? "0 1px 4px rgba(0,0,0,.09)" : "none",
           transition: "all .15s",
         }}>{label}</button>
@@ -1201,7 +1201,7 @@ export default function UsersPage() {
       key: "name", label: "User",
       render: (v, row) => (
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 32, height: 32, borderRadius: "50%", background: ROLE_STYLE[row.role]?.bg ?? "#EFF6FF", color: ROLE_STYLE[row.role]?.color ?? "#2563EB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+          <div style={{ width: 32, height: 32, borderRadius: "50%", background: ROLE_STYLE[row.role]?.bg ?? "#F5F3FF", color: ROLE_STYLE[row.role]?.color ?? "#6D28D9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
             {v.split(" ").map(w => w[0]).join("").slice(0, 2)}
           </div>
           <div>
@@ -1238,7 +1238,7 @@ export default function UsersPage() {
       render: (_, row) => (
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={e => { e.stopPropagation(); setProfile(row); }} style={{ fontSize: 11, color: "#7C3AED", background: "#F5F3FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Profile</button>
-          <button onClick={e => { e.stopPropagation(); openEdit(row); }} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Edit</button>
+          <button onClick={e => { e.stopPropagation(); openEdit(row); }} style={{ fontSize: 11, color: "#6D28D9", background: "#F5F3FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Edit</button>
           <button onClick={e => { e.stopPropagation(); setDeleteTarget(row); setDeleteError(null); }} style={{ fontSize: 11, color: "#B91C1C", background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Delete</button>
         </div>
       ),
@@ -1259,7 +1259,7 @@ export default function UsersPage() {
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 10, alignItems: "center", visibility: tab === "users" ? "visible" : "hidden", pointerEvents: tab === "users" ? "auto" : "none" }}>
           <ExportMenu users={users} roleFilter={roleFilter} />
-          <button onClick={openAdd} style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          <button onClick={openAdd} style={{ background: "#6D28D9", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             + Add user
           </button>
         </div>
@@ -1272,7 +1272,7 @@ export default function UsersPage() {
 
       {/* KPI cards — always visible */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0,1fr))", gap: 12 }}>
-        <StatCard label="Total users"  value={counts.all}        delta="registered"    accent="#2563EB" icon={<Users size={18} color="#2563EB" />} />
+        <StatCard label="Total users"  value={counts.all}        delta="registered"    accent="#6D28D9" icon={<Users size={18} color="#6D28D9" />} />
         <StatCard label="Passengers"   value={counts.passengers} delta="active"         accent="#7C3AED" icon={<UserRound size={18} color="#7C3AED" />} />
         <StatCard label="Drivers"      value={counts.drivers}    delta="on platform"    accent="#0EA5E9" icon={<UserCheck size={18} color="#0EA5E9" />} />
         <StatCard label="Admins"       value={counts.admins}     delta="system users"   accent="#EF4444" icon={<Shield size={18} color="#EF4444" />} />
@@ -1297,7 +1297,7 @@ export default function UsersPage() {
           <button key={r} onClick={() => setRoleFilter(r)} style={{
             padding: "6px 14px", borderRadius: 20, fontSize: 12, cursor: "pointer",
             border: roleFilter === r ? "none" : "1px solid #E2E8F0",
-            background: roleFilter === r ? "#2563EB" : "#fff",
+            background: roleFilter === r ? "#6D28D9" : "#fff",
             color: roleFilter === r ? "#fff" : "#555",
             fontWeight: roleFilter === r ? 600 : 400,
           }}>{r}</button>
@@ -1409,3 +1409,4 @@ export default function UsersPage() {
     </div>
   );
 }
+

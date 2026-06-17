@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ShiftProvider } from "./context/ShiftContext";
@@ -61,11 +61,11 @@ function InnerApp() {
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 99px; }
         select { cursor: pointer; }
-        button:focus-visible { outline: 2px solid #2563EB; outline-offset: 2px; }
+        button:focus-visible { outline: 2px solid #6D28D9; outline-offset: 2px; }
         input:focus, select:focus, textarea:focus {
           outline: none;
-          border-color: #2563EB !important;
-          box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+          border-color: #6D28D9 !important;
+          box-shadow: 0 0 0 3px rgba(109,40,217,.12);
         }
       `}</style>
 
@@ -146,3 +146,4 @@ export default function App() {
     </AuthProvider>
   );
 }
+

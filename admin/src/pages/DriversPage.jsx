@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback } from "react";
 import { ExportBtn } from "../components/ExportBtn";
 import { PageLoading, PageError, PageEmpty } from "../components/DataStates";
 import { Panel } from "../components/Panel";
@@ -21,7 +21,7 @@ const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const TODAY = new Date("2026-05-10");
 
 const SHIFT_CONFIG = {
-  morning:   { label: "Morning",   time: "6:00–14:00",  color: "#2563EB", bg: "#EFF6FF" },
+  morning:   { label: "Morning",   time: "6:00–14:00",  color: "#6D28D9", bg: "#F5F3FF" },
   afternoon: { label: "Afternoon", time: "14:00–22:00", color: "#D97706", bg: "#FFFBEB" },
   night:     { label: "Night",     time: "22:00–6:00",  color: "#7C3AED", bg: "#F5F3FF" },
   off:       { label: "Day Off",   time: "",             color: "#94A3B8", bg: "#F8FAFC" },
@@ -82,7 +82,7 @@ function TabNav({ tabs, active, onChange }) {
           fontSize: 13, fontWeight: active === tab ? 700 : 500,
           cursor: "pointer",
           background: active === tab ? "#fff" : "transparent",
-          color: active === tab ? "#2563EB" : "#64748B",
+          color: active === tab ? "#6D28D9" : "#64748B",
           boxShadow: active === tab ? "0 1px 4px rgba(0,0,0,.09)" : "none",
           transition: "all .15s",
         }}>
@@ -413,9 +413,9 @@ function BusSelector({ selectedBusId, onSelect }) {
       {list.map(id => (
         <button key={id} onClick={() => onSelect(id)} style={{
           fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 6,
-          border: `2px solid ${id === selectedBusId ? "#2563EB" : "#e5e7eb"}`,
-          background: id === selectedBusId ? "#eff6ff" : "#fff",
-          color: id === selectedBusId ? "#2563EB" : "#374151",
+          border: `2px solid ${id === selectedBusId ? "#6D28D9" : "#e5e7eb"}`,
+          background: id === selectedBusId ? "#F5F3FF" : "#fff",
+          color: id === selectedBusId ? "#6D28D9" : "#374151",
           cursor: "pointer",
         }}>{id}</button>
       ))}
@@ -497,7 +497,7 @@ function DriverProfile({ driver, onClose, onEdit }) {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
             <span style={{ fontSize: 15, fontWeight: 800, color: "#0F172A" }}>Driver Profile</span>
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => { onClose(); onEdit(driver); }} style={{ background: "#EFF6FF", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", color: "#2563EB", fontSize: 12, fontWeight: 600 }}>
+              <button onClick={() => { onClose(); onEdit(driver); }} style={{ background: "#F5F3FF", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", color: "#6D28D9", fontSize: 12, fontWeight: 600 }}>
                 Edit
               </button>
               <button onClick={onClose} style={{ background: "#F1F5F9", border: "none", borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: "#64748B", fontSize: 15, lineHeight: 1 }}>✕</button>
@@ -505,14 +505,14 @@ function DriverProfile({ driver, onClose, onEdit }) {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <div style={{ width: 64, height: 64, borderRadius: "50%", flexShrink: 0, background: "#EFF6FF", border: "3px solid #2563EB30", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: "#2563EB" }}>
+            <div style={{ width: 64, height: 64, borderRadius: "50%", flexShrink: 0, background: "#F5F3FF", border: "3px solid #6D28D930", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: "#6D28D9" }}>
               {initials}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 17, fontWeight: 800, color: "#0F172A", marginBottom: 4 }}>{driver.name}</div>
               <div style={{ fontSize: 12, color: "#64748B", marginBottom: 6 }}>{driver.phone}</div>
               <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: "#EFF6FF", color: "#1E40AF" }}>Driver</span>
+                <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: "#F5F3FF", color: "#4C1D95" }}>Driver</span>
                 <StatusPill status={driver.status} />
                 {driver.rating && <span style={{ color: "#f9a825", fontWeight: 700, fontSize: 12 }}>★ {driver.rating}</span>}
               </div>
@@ -545,7 +545,7 @@ function DriverProfile({ driver, onClose, onEdit }) {
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#94A3B8", marginBottom: 14 }}>This Week&apos;s Performance</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 14 }}>
             {[
-              { label: "Trips",      value: perf.trips_week,            color: "#2563EB" },
+              { label: "Trips",      value: perf.trips_week,            color: "#6D28D9" },
               { label: "On-Time",    value: `${perf.on_time_pct}%`,     color: perf.on_time_pct >= 90 ? "#10B981" : perf.on_time_pct >= 75 ? "#F59E0B" : "#EF4444" },
               { label: "Complaints", value: perf.complaints,             color: perf.complaints === 0 ? "#10B981" : "#EF4444" },
               { label: "Idle",       value: `${perf.idle_hours}h`,      color: perf.idle_hours > 4 ? "#EF4444" : "#64748B" },
@@ -677,8 +677,8 @@ function DriverProfile({ driver, onClose, onEdit }) {
                 </div>
                 <span style={{
                   fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6,
-                  background: t.status === "Completed" ? "#F0FDF4" : t.status === "Ongoing" ? "#EFF6FF" : t.status === "Delayed" ? "#FFFBEB" : "#F3F4F6",
-                  color:      t.status === "Completed" ? "#059669" : t.status === "Ongoing" ? "#2563EB" : t.status === "Delayed" ? "#D97706" : "#94A3B8",
+                  background: t.status === "Completed" ? "#F0FDF4" : t.status === "Ongoing" ? "#F5F3FF" : t.status === "Delayed" ? "#FFFBEB" : "#F3F4F6",
+                  color:      t.status === "Completed" ? "#059669" : t.status === "Ongoing" ? "#6D28D9" : t.status === "Delayed" ? "#D97706" : "#94A3B8",
                 }}>
                   {t.status}
                 </span>
@@ -703,7 +703,7 @@ function OverviewTab({ drivers, selectedBusId, onEdit, onDelete, onViewProfile, 
       key: "name", label: "Driver",
       render: (v, row) => (
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#EFF6FF", color: "#2563EB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+          <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#F5F3FF", color: "#6D28D9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
             {v.split(" ").map(w => w[0]).join("").slice(0, 2)}
           </div>
           <div>
@@ -727,7 +727,7 @@ function OverviewTab({ drivers, selectedBusId, onEdit, onDelete, onViewProfile, 
       render: (_, row) => (
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={e => { e.stopPropagation(); onViewProfile(row); }} style={{ fontSize: 11, color: "#7C3AED", background: "#F5F3FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Profile</button>
-          <button onClick={e => { e.stopPropagation(); onEdit(row); }} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Edit</button>
+          <button onClick={e => { e.stopPropagation(); onEdit(row); }} style={{ fontSize: 11, color: "#6D28D9", background: "#F5F3FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Edit</button>
           <button onClick={e => { e.stopPropagation(); onDelete(row.id); }} style={{ fontSize: 11, color: "#B91C1C", background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Delete</button>
         </div>
       ),
@@ -796,7 +796,7 @@ function PerformanceTab() {
       key: "name", label: "Driver",
       render: v => (
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#EFF6FF", color: "#2563EB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+          <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#F5F3FF", color: "#6D28D9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
             {v.split(" ").map(w => w[0]).join("").slice(0, 2)}
           </div>
           <span style={{ fontWeight: 600, color: "#0F172A" }}>{v}</span>
@@ -870,8 +870,8 @@ function PerformanceTab() {
           label="Total Trips This Week"
           value={totalTrips}
           delta="All active drivers"
-          accent="#2563EB"
-          icon={<svg style={iconStyle} viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 17V7m6 10V7"/></svg>}
+          accent="#6D28D9"
+          icon={<svg style={iconStyle} viewBox="0 0 24 24" fill="none" stroke="#6D28D9" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 17V7m6 10V7"/></svg>}
         />
         <StatCard
           label="Avg Idle Time"
@@ -1009,7 +1009,7 @@ function ScheduleTab() {
           <button
             onClick={() => setWeekOffset(0)}
             disabled={weekOffset === 0}
-            style={{ padding: "6px 12px", borderRadius: 7, border: "1px solid #E2E8F0", background: weekOffset === 0 ? "#F8FAFC" : "#fff", cursor: weekOffset === 0 ? "default" : "pointer", fontSize: 12, color: weekOffset === 0 ? "#94A3B8" : "#2563EB" }}
+            style={{ padding: "6px 12px", borderRadius: 7, border: "1px solid #E2E8F0", background: weekOffset === 0 ? "#F8FAFC" : "#fff", cursor: weekOffset === 0 ? "default" : "pointer", fontSize: 12, color: weekOffset === 0 ? "#94A3B8" : "#6D28D9" }}
           >Today</button>
         </div>
       </div>
@@ -1036,7 +1036,7 @@ function ScheduleTab() {
                 <tr key={schedule.driver_id} style={{ borderBottom: "1px solid #F8FAFC", background: ri % 2 === 0 ? "#fff" : "#FAFAFA" }}>
                   <td style={{ padding: "10px 18px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#EFF6FF", color: "#2563EB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
+                      <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#F5F3FF", color: "#6D28D9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
                         {schedule.driver_name.split(" ").map(w => w[0]).join("").slice(0, 2)}
                       </div>
                       <span style={{ fontSize: 13, fontWeight: 600, color: "#0F172A", whiteSpace: "nowrap" }}>{schedule.driver_name}</span>
@@ -1139,7 +1139,7 @@ function LicenseAlertsTab({ drivers, onEdit }) {
       key: "actions",
       label: "",
       render: (_, row) => (
-        <button onClick={() => onEdit(row)} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>
+        <button onClick={() => onEdit(row)} style={{ fontSize: 11, color: "#6D28D9", background: "#F5F3FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>
           Edit
         </button>
       ),
@@ -1238,7 +1238,7 @@ function ChecklistsTab() {
       {/* KPI row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
         {[
-          { label: "Total Submissions", value: rows.length,                  color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE" },
+          { label: "Total Submissions", value: rows.length,                  color: "#6D28D9", bg: "#F5F3FF", border: "#DDD6FE" },
           { label: "All-Clear Passes",  value: totalPass,                    color: "#059669", bg: "#ECFDF5", border: "#A7F3D0" },
           { label: "Failed Checks",     value: rows.length - totalPass,      color: "#DC2626", bg: "#FEF2F2", border: "#FECACA" },
           { label: "Overall Pass Rate", value: `${passRate}%`,               color: passRate >= 80 ? "#059669" : "#D97706", bg: passRate >= 80 ? "#ECFDF5" : "#FFFBEB", border: passRate >= 80 ? "#A7F3D0" : "#FDE68A" },
@@ -1281,7 +1281,7 @@ function ChecklistsTab() {
             <button key={f} onClick={() => setFilter(f)} style={{
               padding: "5px 14px", borderRadius: 20, fontSize: 11, cursor: "pointer",
               border:     filter === f ? "none" : "1px solid #E2E8F0",
-              background: filter === f ? (f === "Pass" ? "#059669" : f === "Fail" ? "#DC2626" : "#2563EB") : "#fff",
+              background: filter === f ? (f === "Pass" ? "#059669" : f === "Fail" ? "#DC2626" : "#6D28D9") : "#fff",
               color:      filter === f ? "#fff" : "#64748B",
               fontWeight: filter === f ? 600 : 400,
             }}>{f}</button>
@@ -1305,10 +1305,10 @@ function ChecklistsTab() {
               return (
                 <tr key={r.checklist_id} style={{ borderBottom: "1px solid #F8FAFC", background: i % 2 === 0 ? "#fff" : "#FAFAFA" }}>
                   <td style={{ padding: "11px 14px" }}>
-                    <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#2563EB", fontSize: 12 }}>{r.trip_ref}</span>
+                    <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#6D28D9", fontSize: 12 }}>{r.trip_ref}</span>
                   </td>
                   <td style={{ padding: "11px 14px", fontSize: 12, fontWeight: 600, color: "#0F172A" }}>{r.driver}</td>
-                  <td style={{ padding: "11px 14px", fontSize: 12, fontFamily: "monospace", color: "#2563EB", fontWeight: 600 }}>{r.vehicle}</td>
+                  <td style={{ padding: "11px 14px", fontSize: 12, fontFamily: "monospace", color: "#6D28D9", fontWeight: 600 }}>{r.vehicle}</td>
                   <td style={{ padding: "11px 14px", fontSize: 12 }}>{r.route}</td>
                   <td style={{ padding: "11px 14px", textAlign: "center" }}><CheckMark ok={r.fuel_ok} /></td>
                   <td style={{ padding: "11px 14px", textAlign: "center" }}><CheckMark ok={r.lights_ok} /></td>
@@ -1472,7 +1472,7 @@ export default function DriversPage() {
             filename={`drivers-${new Date().toISOString().slice(0,10)}.csv`}
             title="Drivers Report"
           />
-          <button onClick={openAdd} style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", letterSpacing: "-.1px" }}>
+          <button onClick={openAdd} style={{ background: "#6D28D9", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", letterSpacing: "-.1px" }}>
             + Add driver
           </button>
         </div>
@@ -1667,3 +1667,4 @@ export default function DriversPage() {
     </div>
   );
 }
+

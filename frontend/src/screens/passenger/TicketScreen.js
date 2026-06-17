@@ -54,7 +54,7 @@ const TicketScreen = ({ route, navigation }) => {
   const headerInsets        = useHeaderInsets();
   const { booking }         = route.params;
   const { user }            = useAuth();
-  const { currency }        = useApp();
+  const { currency, fmtMoney } = useApp();
 
   // A booking can hold several seats — each gets its own ticket record,
   // its own rotating QR, and its own share/PDF. Fall back to a single
@@ -205,7 +205,7 @@ const TicketScreen = ({ route, navigation }) => {
               booking.type === 'taxi'
                 ? { label: 'VEHICLE', value: booking.vehicleLabel ?? 'Taxi', highlight: false }
                 : { label: 'SEAT',    value: activeTicket.seat_number,        highlight: false },
-              { label: 'FARE',   value: `${currency} ${parseFloat(activeTicket.amount ?? booking.price).toFixed(2)}`, highlight: true },
+              { label: 'FARE',   value: fmtMoney(parseFloat(activeTicket.amount ?? booking.price ?? 0)), highlight: true },
               { label: 'DATE',   value: formatDateTime(booking.date), highlight: false },
               { label: 'STATUS', value: 'Confirmed', highlight: true, green: true },
             ].map((d) => (

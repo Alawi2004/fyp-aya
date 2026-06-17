@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+﻿import { useState, useEffect, useMemo, useCallback } from "react";
 import { CalendarDays, Play, Clock, CheckCircle2, AlertTriangle } from "lucide-react";
 import { ExportBtn } from "../components/ExportBtn";
 import { PageLoading, PageError } from "../components/DataStates";
@@ -39,7 +39,7 @@ const ROUTE_DURATIONS = {
 
 const STATUS_COLORS = {
   Completed: { bg: "#ECFDF5", color: "#059669", border: "#A7F3D0" },
-  Ongoing:   { bg: "#EFF6FF", color: "#2563EB", border: "#BFDBFE" },
+  Ongoing:   { bg: "#F5F3FF", color: "#6D28D9", border: "#DDD6FE" },
   Delayed:   { bg: "#FFFBEB", color: "#D97706", border: "#FDE68A" },
   Scheduled: { bg: "#F8FAFC", color: "#64748B", border: "#E2E8F0" },
   Cancelled: { bg: "#FEF2F2", color: "#DC2626", border: "#FECACA" },
@@ -131,7 +131,7 @@ function TabNav({ tabs, active, onChange }) {
           padding: "7px 18px", borderRadius: 7, border: "none",
           fontSize: 13, fontWeight: active === id ? 700 : 500, cursor: "pointer",
           background: active === id ? "#fff" : "transparent",
-          color:      active === id ? "#2563EB" : "#64748B",
+          color:      active === id ? "#6D28D9" : "#64748B",
           boxShadow:  active === id ? "0 1px 4px rgba(0,0,0,.09)" : "none",
           display: "flex", alignItems: "center", gap: 6, transition: "all .15s",
         }}>
@@ -162,7 +162,7 @@ function TripsListTab({ trips, allTrips, onAdd, onEdit, onDetail }) {
   const columns = [
     {
       key: "id", label: "Trip ID",
-      render: v => <span style={{ fontFamily: "monospace", fontWeight: 600, color: "#2563EB", fontSize: 12 }}>{v}</span>,
+      render: v => <span style={{ fontFamily: "monospace", fontWeight: 600, color: "#6D28D9", fontSize: 12 }}>{v}</span>,
     },
     { key: "route",  label: "Route"   },
     { key: "driver", label: "Driver"  },
@@ -187,7 +187,7 @@ function TripsListTab({ trips, allTrips, onAdd, onEdit, onDetail }) {
             border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer",
           }}>Details</button>
           <button onClick={e => { e.stopPropagation(); onEdit(row); }} style={{
-            fontSize: 11, color: "#2563EB", background: "#EFF6FF",
+            fontSize: 11, color: "#6D28D9", background: "#F5F3FF",
             border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer",
           }}>Edit</button>
         </div>
@@ -205,7 +205,7 @@ function TripsListTab({ trips, allTrips, onAdd, onEdit, onDetail }) {
             <button key={s} onClick={() => setFilter(s)} style={{
               padding: "5px 12px", borderRadius: 20, fontSize: 11, cursor: "pointer",
               border: filter === s ? "none" : "1px solid #E2E8F0",
-              background: filter === s ? "#2563EB" : "#fff",
+              background: filter === s ? "#6D28D9" : "#fff",
               color:      filter === s ? "#fff"    : "#64748B",
               fontWeight: filter === s ? 600 : 400,
             }}>{s}</button>
@@ -278,7 +278,7 @@ function TimetableTab({ routeOpts = [] }) {
             <button key={r} onClick={() => setRouteFilter(r)} style={{
               padding: "5px 12px", borderRadius: 20, fontSize: 11, cursor: "pointer",
               border: routeFilter === r ? "none" : "1px solid #E2E8F0",
-              background: routeFilter === r ? "#2563EB" : "#fff",
+              background: routeFilter === r ? "#6D28D9" : "#fff",
               color:      routeFilter === r ? "#fff"    : "#64748B",
               fontWeight: routeFilter === r ? 600 : 400,
             }}>{r}</button>
@@ -487,7 +487,7 @@ function recurrenceLabel(r) {
 }
 
 const RECURRENCE_BADGE = {
-  daily:    { label: "Daily",    bg: "#EFF6FF", color: "#2563EB" },
+  daily:    { label: "Daily",    bg: "#F5F3FF", color: "#6D28D9" },
   weekdays: { label: "Weekdays", bg: "#F0FDF4", color: "#059669" },
   weekends: { label: "Weekends", bg: "#F5F3FF", color: "#7C3AED" },
   custom:   { label: "Custom",   bg: "#FFFBEB", color: "#D97706" },
@@ -537,7 +537,7 @@ function RecurringTab({ recurring, onAdd, onEdit, onDelete, onToggle, routeOpts 
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ fontSize: 13, color: "#64748B" }}>{recurring.length} schedule{recurring.length !== 1 ? "s" : ""} · each runs automatically on its defined days</span>
-        <button onClick={openAdd} style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+        <button onClick={openAdd} style={{ background: "#6D28D9", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
           + New Recurring Schedule
         </button>
       </div>
@@ -574,7 +574,7 @@ function RecurringTab({ recurring, onAdd, onEdit, onDelete, onToggle, routeOpts 
                       {r.recurrence === "custom" && r.days?.length > 0 && (
                         <div style={{ display: "flex", gap: 3 }}>
                           {r.days.map(d => (
-                            <span key={d} style={{ fontSize: 9, fontWeight: 700, padding: "2px 5px", borderRadius: 5, background: "#EFF6FF", color: "#2563EB" }}>{d}</span>
+                            <span key={d} style={{ fontSize: 9, fontWeight: 700, padding: "2px 5px", borderRadius: 5, background: "#F5F3FF", color: "#6D28D9" }}>{d}</span>
                           ))}
                         </div>
                       )}
@@ -588,7 +588,7 @@ function RecurringTab({ recurring, onAdd, onEdit, onDelete, onToggle, routeOpts 
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
                     <StatusPill status={active ? "Active" : "Inactive"} />
                     <div style={{ display: "flex", gap: 6 }}>
-                      <button onClick={() => openEdit(r)} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 9px", cursor: "pointer" }}>Edit</button>
+                      <button onClick={() => openEdit(r)} style={{ fontSize: 11, color: "#6D28D9", background: "#F5F3FF", border: "none", borderRadius: 6, padding: "4px 9px", cursor: "pointer" }}>Edit</button>
                       <button
                         onClick={async () => {
                           onToggle(r.id);
@@ -648,7 +648,7 @@ function RecurringTab({ recurring, onAdd, onEdit, onDelete, onToggle, routeOpts 
               {["daily", "weekdays", "weekends", "custom"].map(r => (
                 <button key={r} onClick={() => setForm(p => ({ ...p, recurrence: r }))} style={{
                   padding: "5px 12px", borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: "pointer", border: "none",
-                  background: form.recurrence === r ? "#2563EB" : "#F1F5F9",
+                  background: form.recurrence === r ? "#6D28D9" : "#F1F5F9",
                   color:      form.recurrence === r ? "#fff"    : "#64748B",
                 }}>
                   {RECURRENCE_LABEL[r]}
@@ -663,7 +663,7 @@ function RecurringTab({ recurring, onAdd, onEdit, onDelete, onToggle, routeOpts 
                 {WEEK_DAYS.map(d => (
                   <button key={d} onClick={() => toggleDay(d)} style={{
                     width: 38, height: 34, borderRadius: 8, border: "none", fontSize: 11, fontWeight: 700, cursor: "pointer",
-                    background: form.days.includes(d) ? "#2563EB" : "#F1F5F9",
+                    background: form.days.includes(d) ? "#6D28D9" : "#F1F5F9",
                     color:      form.days.includes(d) ? "#fff"    : "#64748B",
                   }}>{d}</button>
                 ))}
@@ -746,7 +746,7 @@ function ConflictsTab({ conflicts, onResolve }) {
                   <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 10, alignItems: "center" }}>
                     {[c.a, c.b].map((t, ti) => ti === 0 ? (
                       <div key={0} style={{ background: "#fff", borderRadius: 9, padding: "10px 12px", border: "1px solid #F1F5F9" }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#2563EB", marginBottom: 3, fontFamily: "monospace" }}>{t.id}</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#6D28D9", marginBottom: 3, fontFamily: "monospace" }}>{t.id}</div>
                         <div style={{ fontSize: 12, fontWeight: 600, color: "#0F172A", marginBottom: 2 }}>{t.route}</div>
                         <div style={{ fontSize: 11, color: "#64748B" }}>{t.time} · {ROUTE_DURATIONS[t.route] ?? "?"} min</div>
                         <div style={{ fontSize: 11, color: "#64748B" }}>{t.driver} · {t.vehicle}</div>
@@ -758,7 +758,7 @@ function ConflictsTab({ conflicts, onResolve }) {
                         <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>overlap</div>
                       </div>,
                       <div key={1} style={{ background: "#fff", borderRadius: 9, padding: "10px 12px", border: "1px solid #F1F5F9" }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#2563EB", marginBottom: 3, fontFamily: "monospace" }}>{t.id}</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#6D28D9", marginBottom: 3, fontFamily: "monospace" }}>{t.id}</div>
                         <div style={{ fontSize: 12, fontWeight: 600, color: "#0F172A", marginBottom: 2 }}>{t.route}</div>
                         <div style={{ fontSize: 11, color: "#64748B" }}>{t.time} · {ROUTE_DURATIONS[t.route] ?? "?"} min</div>
                         <div style={{ fontSize: 11, color: "#64748B" }}>{t.driver} · {t.vehicle}</div>
@@ -768,10 +768,10 @@ function ConflictsTab({ conflicts, onResolve }) {
                   </div>
 
                   <div style={{ marginTop: 10, display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                    <button onClick={() => onResolve(c.a)} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 7, padding: "5px 12px", cursor: "pointer", fontWeight: 600 }}>
+                    <button onClick={() => onResolve(c.a)} style={{ fontSize: 11, color: "#6D28D9", background: "#F5F3FF", border: "none", borderRadius: 7, padding: "5px 12px", cursor: "pointer", fontWeight: 600 }}>
                       Edit {c.a.id}
                     </button>
-                    <button onClick={() => onResolve(c.b)} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 7, padding: "5px 12px", cursor: "pointer", fontWeight: 600 }}>
+                    <button onClick={() => onResolve(c.b)} style={{ fontSize: 11, color: "#6D28D9", background: "#F5F3FF", border: "none", borderRadius: 7, padding: "5px 12px", cursor: "pointer", fontWeight: 600 }}>
                       Edit {c.b.id}
                     </button>
                   </div>
@@ -840,9 +840,9 @@ function DelaysTab({ delays, loading, error, onRetry }) {
           <div style={{ fontSize: 12, color: "#B45309", marginTop: 6, fontWeight: 600 }}>Avg Delay (min)</div>
           <div style={{ fontSize: 11, color: "#F59E0B", marginTop: 2 }}>across visible records</div>
         </div>
-        <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 12, padding: "16px 20px", textAlign: "center" }}>
-          <div style={{ fontSize: 32, fontWeight: 800, color: "#2563EB", lineHeight: 1 }}>{totalAffected}</div>
-          <div style={{ fontSize: 12, color: "#1D4ED8", marginTop: 6, fontWeight: 600 }}>Passengers Affected</div>
+        <div style={{ background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: 12, padding: "16px 20px", textAlign: "center" }}>
+          <div style={{ fontSize: 32, fontWeight: 800, color: "#6D28D9", lineHeight: 1 }}>{totalAffected}</div>
+          <div style={{ fontSize: 12, color: "#4C1D95", marginTop: 6, fontWeight: 600 }}>Passengers Affected</div>
           <div style={{ fontSize: 11, color: "#3B82F6", marginTop: 2 }}>confirmed + boarded tickets</div>
         </div>
       </div>
@@ -860,7 +860,7 @@ function DelaysTab({ delays, loading, error, onRetry }) {
             <button key={r} onClick={() => setReasonFilter(r)} style={{
               padding: "5px 12px", borderRadius: 20, fontSize: 11, cursor: "pointer",
               border:      reasonFilter === r ? "none" : "1px solid #E2E8F0",
-              background:  reasonFilter === r ? "#2563EB" : "#fff",
+              background:  reasonFilter === r ? "#6D28D9" : "#fff",
               color:       reasonFilter === r ? "#fff" : "#64748B",
               fontWeight:  reasonFilter === r ? 600 : 400,
             }}>{r}</button>
@@ -883,15 +883,15 @@ function DelaysTab({ delays, loading, error, onRetry }) {
               const rc = DELAY_REASON_COLORS[d.reason] ?? DELAY_REASON_COLORS["Other"];
               return (
                 <tr key={d.delay_id} style={{ borderBottom: "1px solid #E8EDF5", background: i % 2 === 0 ? "#FFFFFF" : "#F8FAFC" }}
-                onMouseEnter={e => { e.currentTarget.style.background = "#EFF6FF"; }}
+                onMouseEnter={e => { e.currentTarget.style.background = "#F5F3FF"; }}
                 onMouseLeave={e => { e.currentTarget.style.background = i % 2 === 0 ? "#FFFFFF" : "#F8FAFC"; }}
               >
                   <td style={{ padding: "12px 14px" }}>
-                    <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#2563EB", fontSize: 12 }}>{d.trip_ref}</span>
+                    <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#6D28D9", fontSize: 12 }}>{d.trip_ref}</span>
                   </td>
                   <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 600, color: "#0F172A" }}>{d.route}</td>
                   <td style={{ padding: "12px 14px", fontSize: 12 }}>{d.driver}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 12, fontFamily: "monospace", color: "#2563EB", fontWeight: 600 }}>{d.vehicle}</td>
+                  <td style={{ padding: "12px 14px", fontSize: 12, fontFamily: "monospace", color: "#6D28D9", fontWeight: 600 }}>{d.vehicle}</td>
                   <td style={{ padding: "12px 14px" }}>
                     <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 20, background: rc.bg, color: rc.color, border: `1px solid ${rc.border}` }}>
                       {d.reason}
@@ -933,7 +933,7 @@ function DelaysTab({ delays, loading, error, onRetry }) {
 const ARRIVAL_STATUS_CFG = {
   on_time:  { label: "On Time",  bg: "#ECFDF5", color: "#059669", border: "#A7F3D0", icon: "✓" },
   late:     { label: "Late",     bg: "#FEF2F2", color: "#DC2626", border: "#FECACA", icon: "!" },
-  early:    { label: "Early",    bg: "#EFF6FF", color: "#2563EB", border: "#BFDBFE", icon: "↑" },
+  early:    { label: "Early",    bg: "#F5F3FF", color: "#6D28D9", border: "#DDD6FE", icon: "↑" },
   pending:  { label: "Pending",  bg: "#F8FAFC", color: "#64748B", border: "#E2E8F0", icon: "…" },
   skipped:  { label: "Skipped",  bg: "#FFFBEB", color: "#D97706", border: "#FDE68A", icon: "—" },
 };
@@ -983,7 +983,7 @@ function TripDetailDrawer({ trip, onClose, onEdit }) {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
             <span style={{ fontSize: 15, fontWeight: 800, color: "#0F172A" }}>Trip Details</span>
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => { onClose(); onEdit(trip); }} style={{ background: "#EFF6FF", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", color: "#2563EB", fontSize: 12, fontWeight: 600 }}>
+              <button onClick={() => { onClose(); onEdit(trip); }} style={{ background: "#F5F3FF", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer", color: "#6D28D9", fontSize: 12, fontWeight: 600 }}>
                 Edit Trip
               </button>
               <button onClick={onClose} style={{ background: "#F1F5F9", border: "none", borderRadius: 8, padding: "6px 10px", cursor: "pointer", color: "#64748B", fontSize: 15, lineHeight: 1 }}>✕</button>
@@ -992,8 +992,8 @@ function TripDetailDrawer({ trip, onClose, onEdit }) {
 
           {/* Trip ID + status */}
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 48, height: 48, borderRadius: 12, background: "#EFF6FF", border: "2px solid #BFDBFE", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="11" x2="22" y2="11"/><line x1="8" y1="5" x2="8" y2="11"/><line x1="16" y1="5" x2="16" y2="11"/><circle cx="6.5" cy="20" r="1.5"/><circle cx="17.5" cy="20" r="1.5"/></svg>
+            <div style={{ width: 48, height: 48, borderRadius: 12, background: "#F5F3FF", border: "2px solid #DDD6FE", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6D28D9" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="11" x2="22" y2="11"/><line x1="8" y1="5" x2="8" y2="11"/><line x1="16" y1="5" x2="16" y2="11"/><circle cx="6.5" cy="20" r="1.5"/><circle cx="17.5" cy="20" r="1.5"/></svg>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 16, fontWeight: 800, color: "#0F172A", fontFamily: "monospace", marginBottom: 4 }}>{trip.id}</div>
@@ -1088,7 +1088,7 @@ function TripDetailDrawer({ trip, onClose, onEdit }) {
                             </strong></span>
                           </div>
                           {delayStr && (
-                            <div style={{ fontSize: 11, color: a.delay_seconds > 0 ? "#DC2626" : a.delay_seconds < 0 ? "#2563EB" : "#059669", marginTop: 3, fontWeight: 600 }}>
+                            <div style={{ fontSize: 11, color: a.delay_seconds > 0 ? "#DC2626" : a.delay_seconds < 0 ? "#6D28D9" : "#059669", marginTop: 3, fontWeight: 600 }}>
                               {delayStr}
                             </div>
                           )}
@@ -1286,7 +1286,7 @@ export default function TripsPage() {
           title="Trips Report"
         />
         <button onClick={() => setTripModal(false)} style={{
-          background: "#2563EB", color: "#fff", border: "none",
+          background: "#6D28D9", color: "#fff", border: "none",
           borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer",
         }}>
           + Create trip
@@ -1296,7 +1296,7 @@ export default function TripsPage() {
 
       {/* KPI cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0,1fr))", gap: 12 }}>
-        <StatCard label="Total Trips"      value={stats.all}        delta="all trips loaded"          accent="#2563EB" icon={<CalendarDays size={18} color="#2563EB" />} />
+        <StatCard label="Total Trips"      value={stats.all}        delta="all trips loaded"          accent="#6D28D9" icon={<CalendarDays size={18} color="#6D28D9" />} />
         <StatCard label="Ongoing"          value={stats.ongoing}    delta="currently running"          accent="#10B981" icon={<Play size={18} color="#10B981" />} />
         <StatCard label="Delayed Status"   value={stats.delayed}    delta="trips marked as delayed"    up={stats.delayed === 0} accent="#F59E0B" icon={<Clock size={18} color="#F59E0B" />} />
         <StatCard label="Completed"        value={stats.completed}  delta="finished trips"             up accent="#059669" icon={<CheckCircle2 size={18} color="#059669" />} />
@@ -1365,3 +1365,4 @@ export default function TripsPage() {
     </div>
   );
 }
+

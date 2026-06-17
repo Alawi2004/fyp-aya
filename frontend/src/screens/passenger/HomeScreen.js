@@ -248,7 +248,7 @@ const BellWiggle = ({ children }) => {
 const HomeScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { walletBalance, bookings, currency, exchangeRate } = useApp();
+  const { walletBalance, bookings, currency, exchangeRate, fmtMoney } = useApp();
 
   const [buses, setBuses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -768,6 +768,7 @@ const HomeScreen = ({ navigation }) => {
               <BusCard
                 bus={item}
                 onPress={() => navigation.navigate("Booking", { bus: item })}
+                fmtMoney={fmtMoney}
               />
             </FadeInView>
           )}

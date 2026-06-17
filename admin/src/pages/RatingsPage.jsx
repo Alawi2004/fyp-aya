@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+﻿import { useState, useEffect, useMemo } from "react";
 import { Star, MessageSquare, ThumbsUp, ThumbsDown } from "lucide-react";
 import { ExportBtn } from "../components/ExportBtn";
 import { Panel } from "../components/Panel";
@@ -67,7 +67,7 @@ function TabNav({ tabs, active, onChange }) {
           padding: "7px 18px", borderRadius: 7, border: "none", cursor: "pointer",
           fontSize: 13, fontWeight: active === id ? 700 : 500,
           background: active === id ? "#fff" : "transparent",
-          color:      active === id ? "#2563EB" : "#64748B",
+          color:      active === id ? "#6D28D9" : "#64748B",
           boxShadow:  active === id ? "0 1px 4px rgba(0,0,0,.09)" : "none",
           transition: "all .15s",
         }}>{label}</button>
@@ -227,7 +227,7 @@ export default function RatingsPage() {
       {/* KPI cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
         <StatCard label="Avg rating"    value={overallAvg.toFixed(1)} delta="out of 5"       up={overallAvg >= 4} accent="#F59E0B" icon={<Star size={18} color="#F59E0B" />} />
-        <StatCard label="Total reviews" value={ratings.length}         delta="all time"        accent="#2563EB" icon={<MessageSquare size={18} color="#2563EB" />} />
+        <StatCard label="Total reviews" value={ratings.length}         delta="all time"        accent="#6D28D9" icon={<MessageSquare size={18} color="#6D28D9" />} />
         <StatCard label="5-star"        value={fiveStars}              delta={`${ratings.length ? Math.round(fiveStars/ratings.length*100) : 0}% of total`} up={true} accent="#10B981" icon={<ThumbsUp size={18} color="#10B981" />} />
         <StatCard label="1–2 star"      value={lowStars}               delta="need attention"  up={lowStars === 0} accent="#EF4444" icon={<ThumbsDown size={18} color="#EF4444" />} />
       </div>
@@ -389,3 +389,4 @@ export default function RatingsPage() {
     </div>
   );
 }
+

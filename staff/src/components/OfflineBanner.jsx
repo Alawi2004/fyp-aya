@@ -1,4 +1,4 @@
-import { WifiOff, RefreshCw, CheckCircle, CloudOff } from "lucide-react";
+﻿import { WifiOff, RefreshCw, CheckCircle, CloudOff } from "lucide-react";
 import { useOfflineCtx } from "../context/OfflineContext";
 import { C } from "../styles/themes";
 
@@ -49,11 +49,11 @@ export default function OfflineBanner() {
   if (isOnline && pendingCount > 0) {
     return (
       <div style={{
-        background: "#EFF6FF", borderBottom: "1.5px solid #BFDBFE",
+        background: "#F5F3FF", borderBottom: "1.5px solid #DDD6FE",
         padding: "8px 20px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
       }}>
         <CloudOff size={14} color={C.info} style={{ flexShrink: 0 }} />
-        <span style={{ fontSize: 12, fontWeight: 600, color: "#1D4ED8", flex: 1 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "#4C1D95", flex: 1 }}>
           Connection restored — {pendingCount} transaction{pendingCount !== 1 ? "s" : ""} pending sync.
         </span>
         <button
@@ -87,3 +87,4 @@ export default function OfflineBanner() {
 
   return null;
 }
+

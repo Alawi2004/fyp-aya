@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+﻿import { useState, useEffect, useRef, useCallback } from "react";
 import { ExportBtn } from "../components/ExportBtn";
 import { Panel } from "../components/Panel";
 import { useSettings } from "../context/SettingsContext";
@@ -99,7 +99,7 @@ function VehicleIcon({ type, size = 20, color = "currentColor" }) {
   return icons[type] ?? icons.Bus;
 }
 const TYPE_STYLE = {
-  Bus:     { bg: "#EFF6FF", color: "#1E40AF" },
+  Bus:     { bg: "#F5F3FF", color: "#4C1D95" },
   Minibus: { bg: "#F5F3FF", color: "#7C3AED" },
   Van:     { bg: "#ECFDF5", color: "#059669" },
   Taxi:    { bg: "#FFFBEB", color: "#D97706" },
@@ -169,7 +169,7 @@ function TabNav({ tabs, active, onChange }) {
           padding: "7px 16px", borderRadius: 7, border: "none", cursor: "pointer",
           fontSize: 13, fontWeight: active === id ? 700 : 500,
           background: active === id ? "#fff" : "transparent",
-          color:      active === id ? "#2563EB" : "#64748B",
+          color:      active === id ? "#6D28D9" : "#64748B",
           boxShadow:  active === id ? "0 1px 4px rgba(0,0,0,.09)" : "none",
           display: "flex", alignItems: "center", gap: 6, transition: "all .15s",
         }}>
@@ -361,7 +361,7 @@ function VehicleProfile({ vehicle, docs, mlog, fuelLog, photos, onClose, onEdit,
               Maintenance Log
               {history.length > 0 && <span style={{ fontWeight: 400, color: "#94A3B8", marginLeft: 6 }}>({history.length} records · total ${totalCost.toLocaleString()})</span>}
             </SectionLabel>
-            <button onClick={() => setAddingRecord(a => !a)} style={{ fontSize: 11, fontWeight: 700, padding: "5px 12px", borderRadius: 8, border: addingRecord ? "none" : "1px solid #E2E8F0", background: addingRecord ? "#FEF2F2" : "#EFF6FF", color: addingRecord ? "#DC2626" : "#2563EB", cursor: "pointer" }}>
+            <button onClick={() => setAddingRecord(a => !a)} style={{ fontSize: 11, fontWeight: 700, padding: "5px 12px", borderRadius: 8, border: addingRecord ? "none" : "1px solid #E2E8F0", background: addingRecord ? "#FEF2F2" : "#F5F3FF", color: addingRecord ? "#DC2626" : "#6D28D9", cursor: "pointer" }}>
               {addingRecord ? "✕ Cancel" : "+ Add Record"}
             </button>
           </div>
@@ -405,7 +405,7 @@ function VehicleProfile({ vehicle, docs, mlog, fuelLog, photos, onClose, onEdit,
                   <input value={recForm.notes} onChange={e => setRecForm(p => ({ ...p, notes: e.target.value }))} placeholder="Work done..." style={inp} />
                 </div>
               </div>
-              <button onClick={handleAddRecord} style={{ width: "100%", padding: "9px 0", background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+              <button onClick={handleAddRecord} style={{ width: "100%", padding: "9px 0", background: "#6D28D9", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
                 Save Record
               </button>
             </div>
@@ -419,8 +419,8 @@ function VehicleProfile({ vehicle, docs, mlog, fuelLog, photos, onClose, onEdit,
                 const nb = r.next_service ? expiryBadge(r.next_service) : null;
                 return (
                   <div key={r.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "11px 14px", background: "#F8FAFC", border: "1px solid #F1F5F9", borderRadius: 10, flexShrink: 0 }}>
-                    <div style={{ width: 34, height: 34, borderRadius: 9, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                    <div style={{ width: 34, height: 34, borderRadius: 9, background: "#F5F3FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6D28D9" strokeWidth="2" strokeLinecap="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
@@ -485,7 +485,7 @@ function VehicleProfile({ vehicle, docs, mlog, fuelLog, photos, onClose, onEdit,
                     {slot.label}
                   </div>
                   {/* Photo box */}
-                  <div style={{ width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", border: `2px dashed ${photoUrl ? "#2563EB" : "#E2E8F0"}`, background: photoUrl ? "#000" : "#F8FAFC", position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", border: `2px dashed ${photoUrl ? "#6D28D9" : "#E2E8F0"}`, background: photoUrl ? "#000" : "#F8FAFC", position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     {photoUrl ? (
                       <img src={photoUrl} alt={slot.label} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                     ) : (
@@ -503,7 +503,7 @@ function VehicleProfile({ vehicle, docs, mlog, fuelLog, photos, onClose, onEdit,
                       </div>
                     )}
                   </div>
-                  <button onClick={() => fileRefs.current[key]?.click()} style={{ marginTop: 6, width: "100%", padding: "7px 0", border: `1px dashed ${photoUrl ? "#2563EB" : "#E2E8F0"}`, borderRadius: 8, background: photoUrl ? "#EFF6FF" : "#F8FAFC", color: photoUrl ? "#2563EB" : "#94A3B8", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                  <button onClick={() => fileRefs.current[key]?.click()} style={{ marginTop: 6, width: "100%", padding: "7px 0", border: `1px dashed ${photoUrl ? "#6D28D9" : "#E2E8F0"}`, borderRadius: 8, background: photoUrl ? "#F5F3FF" : "#F8FAFC", color: photoUrl ? "#6D28D9" : "#94A3B8", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
                     {photoUrl ? "✓ Change" : "Upload"}
                   </button>
                   <input type="file" accept="image/*" style={{ display: "none" }} ref={el => fileRefs.current[key] = el}
@@ -591,7 +591,7 @@ function FleetTab({ vehicles, docs, onEdit, onDelete, onViewProfile }) {
       render: (_, row) => (
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={e => { e.stopPropagation(); onViewProfile(row); }} style={{ fontSize: 11, color: "#7C3AED", background: "#F5F3FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Profile</button>
-          <button onClick={e => { e.stopPropagation(); onEdit(row); }}        style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Edit</button>
+          <button onClick={e => { e.stopPropagation(); onEdit(row); }}        style={{ fontSize: 11, color: "#6D28D9", background: "#F5F3FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Edit</button>
           <button onClick={e => { e.stopPropagation(); onDelete(row); }}   style={{ fontSize: 11, color: "#B91C1C", background: "#FEF2F2", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Delete</button>
         </div>
       ),
@@ -610,7 +610,7 @@ function FleetTab({ vehicles, docs, onEdit, onDelete, onViewProfile }) {
           <button key={s} onClick={() => setStatusFilter(s)} style={{
             padding: "5px 13px", borderRadius: 20, fontSize: 11, cursor: "pointer",
             border: statusFilter === s ? "none" : "1px solid #E2E8F0",
-            background: statusFilter === s ? "#2563EB" : "#fff",
+            background: statusFilter === s ? "#6D28D9" : "#fff",
             color:      statusFilter === s ? "#fff"    : "#64748B",
             fontWeight: statusFilter === s ? 600 : 400,
           }}>{s}</button>
@@ -622,8 +622,8 @@ function FleetTab({ vehicles, docs, onEdit, onDelete, onViewProfile }) {
             <button key={t} onClick={() => setTypeFilter(t)} style={{
               padding: "5px 13px", borderRadius: 20, fontSize: 11, cursor: "pointer",
               border: typeFilter === t ? "none" : "1px solid #E2E8F0",
-              background: typeFilter === t ? (ts?.bg ?? "#EFF6FF") : "#fff",
-              color:      typeFilter === t ? (ts?.color ?? "#2563EB") : "#64748B",
+              background: typeFilter === t ? (ts?.bg ?? "#F5F3FF") : "#fff",
+              color:      typeFilter === t ? (ts?.color ?? "#6D28D9") : "#64748B",
               fontWeight: typeFilter === t ? 700 : 400,
             }}>
               {t === "All" ? "All Types" : t}
@@ -722,8 +722,8 @@ function ExpiryAlertsTab({ docs, onUpdateDocs }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {needsAttention.map(d => (
               <div key={d.plate} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", background: "#F8FAFC", border: "1px solid #F1F5F9", borderRadius: 12 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: "#EFF6FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: "#F5F3FF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6D28D9" strokeWidth="2" strokeLinecap="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 800, color: "#0F172A", marginBottom: 8 }}>{d.plate}</div>
@@ -737,7 +737,7 @@ function ExpiryAlertsTab({ docs, onUpdateDocs }) {
                     ))}
                   </div>
                 </div>
-                <button onClick={() => openEdit(d)} style={{ fontSize: 12, fontWeight: 600, padding: "7px 14px", borderRadius: 8, border: "1px solid #E2E8F0", background: "#fff", cursor: "pointer", color: "#2563EB", flexShrink: 0 }}>
+                <button onClick={() => openEdit(d)} style={{ fontSize: 12, fontWeight: 600, padding: "7px 14px", borderRadius: 8, border: "1px solid #E2E8F0", background: "#fff", cursor: "pointer", color: "#6D28D9", flexShrink: 0 }}>
                   Update Dates
                 </button>
               </div>
@@ -760,7 +760,7 @@ function ExpiryAlertsTab({ docs, onUpdateDocs }) {
             {enriched.map((d, i) => (
               <tr key={d.plate} style={{ borderBottom: "1px solid #F8FAFC", background: i % 2 === 0 ? "#fff" : "#FAFAFA" }}>
                 <td style={{ padding: "12px 16px" }}>
-                  <span style={{ fontWeight: 700, color: "#2563EB", fontSize: 13 }}>{d.plate}</span>
+                  <span style={{ fontWeight: 700, color: "#6D28D9", fontSize: 13 }}>{d.plate}</span>
                 </td>
                 <td style={{ padding: "12px 16px" }}>
                   <div><DocCell badge={d.reg} /></div>
@@ -775,7 +775,7 @@ function ExpiryAlertsTab({ docs, onUpdateDocs }) {
                   <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 3 }}>{fmtDate(d.road_expiry)}</div>
                 </td>
                 <td style={{ padding: "12px 16px" }}>
-                  <button onClick={() => openEdit(d)} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>
+                  <button onClick={() => openEdit(d)} style={{ fontSize: 11, color: "#6D28D9", background: "#F5F3FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>
                     Edit
                   </button>
                 </td>
@@ -843,7 +843,7 @@ function MaintenanceTab({ log, vehicles, onAdd }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
-        <StatCard label="Total Records"    value={log.length}            delta="all time"         accent="#2563EB" />
+        <StatCard label="Total Records"    value={log.length}            delta="all time"         accent="#6D28D9" />
         <StatCard label="Cost This Year"   value={fmtMoney(totalCost2026, currency)}   delta="maintenance spend" accent="#7C3AED" />
         <StatCard label="Vehicles Covered" value={plates.length}         delta="in log"            accent="#10B981" />
         <StatCard label="Due for Service"  value={log.filter(r => r.next_service && daysUntil(r.next_service) <= 30 && daysUntil(r.next_service) >= 0).length} delta="within 30 days" up={false} accent="#F59E0B" />
@@ -856,14 +856,14 @@ function MaintenanceTab({ log, vehicles, onAdd }) {
             <button key={p} onClick={() => setPlateFilter(p)} style={{
               padding: "5px 12px", borderRadius: 20, fontSize: 11, cursor: "pointer",
               border: plateFilter === p ? "none" : "1px solid #E2E8F0",
-              background: plateFilter === p ? "#2563EB" : "#fff",
+              background: plateFilter === p ? "#6D28D9" : "#fff",
               color:      plateFilter === p ? "#fff"    : "#64748B",
               fontWeight: plateFilter === p ? 700 : 400,
             }}>{p}</button>
           ))}
         </div>
         <div style={{ flex: 1 }} />
-        <button onClick={() => setModalOpen(true)} style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+        <button onClick={() => setModalOpen(true)} style={{ background: "#6D28D9", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
           + Add Service Record
         </button>
       </div>
@@ -888,11 +888,11 @@ function MaintenanceTab({ log, vehicles, onAdd }) {
                 return (
                   <tr key={r.id} style={{ borderBottom: "1px solid #F8FAFC", background: i % 2 === 0 ? "#fff" : "#FAFAFA" }}>
                     <td style={{ padding: "12px 14px" }}>
-                      <span style={{ fontWeight: 700, color: "#2563EB", fontSize: 13 }}>{r.plate}</span>
+                      <span style={{ fontWeight: 700, color: "#6D28D9", fontSize: 13 }}>{r.plate}</span>
                     </td>
                     <td style={{ padding: "12px 14px", fontSize: 12, color: "#475569", whiteSpace: "nowrap" }}>{fmtDate(r.date)}</td>
                     <td style={{ padding: "12px 14px" }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 20, background: "#EFF6FF", color: "#2563EB" }}>{r.type}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 20, background: "#F5F3FF", color: "#6D28D9" }}>{r.type}</span>
                     </td>
                     <td style={{ padding: "12px 14px", fontSize: 12 }}>{r.mechanic}</td>
                     <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 700, color: "#0F172A" }}>
@@ -1037,7 +1037,7 @@ function FuelTab({ vehicles, fuelLog, onAdd }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
-        <StatCard label="Fill-Ups" value={fuelLog.length} delta="logged refuels" accent="#2563EB" />
+        <StatCard label="Fill-Ups" value={fuelLog.length} delta="logged refuels" accent="#6D28D9" />
         <StatCard label="Fuel Volume" value={`${totalLiters.toFixed(0)} L`} delta="tracked liters" accent="#0EA5E9" />
         <StatCard label="Fuel Cost" value={fmtMoney(totalCost, currency)} delta="recorded spend" accent="#7C3AED" />
         <StatCard label="Avg Efficiency" value={avgEfficiency ? `${avgEfficiency.toFixed(1)} km/L` : "—"} delta={lowEfficiency ? `${lowEfficiency} vehicles below 10 km/L` : "healthy efficiency"} up={lowEfficiency === 0} accent="#10B981" />
@@ -1049,14 +1049,14 @@ function FuelTab({ vehicles, fuelLog, onAdd }) {
             <button key={p} onClick={() => setPlateFilter(p)} style={{
               padding: "5px 12px", borderRadius: 20, fontSize: 11, cursor: "pointer",
               border: plateFilter === p ? "none" : "1px solid #E2E8F0",
-              background: plateFilter === p ? "#2563EB" : "#fff",
+              background: plateFilter === p ? "#6D28D9" : "#fff",
               color: plateFilter === p ? "#fff" : "#64748B",
               fontWeight: plateFilter === p ? 700 : 400,
             }}>{p}</button>
           ))}
         </div>
         <div style={{ flex: 1 }} />
-        <button onClick={() => setModalOpen(true)} style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+        <button onClick={() => setModalOpen(true)} style={{ background: "#6D28D9", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
           + Add Fuel Fill-Up
         </button>
       </div>
@@ -1073,7 +1073,7 @@ function FuelTab({ vehicles, fuelLog, onAdd }) {
               const good = row.kmPerLiter >= 10;
               return (
                 <tr key={row.plate} style={{ borderBottom: "1px solid #F8FAFC", background: i % 2 === 0 ? "#fff" : "#FAFAFA" }}>
-                  <td style={{ padding: "12px 14px", fontWeight: 700, color: "#2563EB" }}>{row.plate}</td>
+                  <td style={{ padding: "12px 14px", fontWeight: 700, color: "#6D28D9" }}>{row.plate}</td>
                   <td style={{ padding: "12px 14px", fontSize: 12 }}>{row.entries}</td>
                   <td style={{ padding: "12px 14px", fontSize: 12 }}>{row.kmTravelled.toLocaleString()} km</td>
                   <td style={{ padding: "12px 14px", fontSize: 12 }}>{row.litersUsed.toFixed(1)} L</td>
@@ -1096,7 +1096,7 @@ function FuelTab({ vehicles, fuelLog, onAdd }) {
           <tbody>
             {sorted.map((row, i) => (
               <tr key={row.id} style={{ borderBottom: "1px solid #F8FAFC", background: i % 2 === 0 ? "#fff" : "#FAFAFA" }}>
-                <td style={{ padding: "12px 14px", fontWeight: 700, color: "#2563EB" }}>{row.plate}</td>
+                <td style={{ padding: "12px 14px", fontWeight: 700, color: "#6D28D9" }}>{row.plate}</td>
                 <td style={{ padding: "12px 14px", fontSize: 12 }}>{fmtDate(row.date)}</td>
                 <td style={{ padding: "12px 14px", fontSize: 12 }}>{row.station || "—"}</td>
                 <td style={{ padding: "12px 14px", fontSize: 12 }}>{row.liters} L</td>
@@ -1153,7 +1153,7 @@ function PhotosTab({ vehicles, photos, onPhotoUpload, onPhotoRemove }) {
           <button key={v.plate} onClick={() => setSelectedPlate(v.plate)} style={{
             padding: "6px 14px", borderRadius: 20, fontSize: 12, cursor: "pointer",
             border: selectedPlate === v.plate ? "none" : "1px solid #E2E8F0",
-            background: selectedPlate === v.plate ? "#2563EB" : "#fff",
+            background: selectedPlate === v.plate ? "#6D28D9" : "#fff",
             color:      selectedPlate === v.plate ? "#fff" : "#64748B",
             fontWeight: selectedPlate === v.plate ? 700 : 400,
           }}>{v.plate}</button>
@@ -1166,12 +1166,12 @@ function PhotosTab({ vehicles, photos, onPhotoUpload, onPhotoRemove }) {
           {(() => {
             const v = vehicles.find(x => x.plate === selectedPlate);
             return v ? (
-              <div style={{ padding: "12px 18px", background: "#EFF6FF", borderRadius: 10, border: "1px solid #BFDBFE", display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ padding: "12px 18px", background: "#F5F3FF", borderRadius: 10, border: "1px solid #DDD6FE", display: "flex", alignItems: "center", gap: 12 }}>
                 <div style={{ width: 36, height: 36, borderRadius: 9, background: (TYPE_STYLE[v?.type] || TYPE_STYLE.Bus).bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <VehicleIcon type={v?.type} size={18} color={(TYPE_STYLE[v?.type] || TYPE_STYLE.Bus).color} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#1E40AF" }}>{v.plate} — {v.model} ({v.year})</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#4C1D95" }}>{v.plate} — {v.model} ({v.year})</div>
                   <div style={{ fontSize: 12, color: "#3B82F6" }}>Capacity: {v.capacity} seats · Driver: {v.driver}</div>
                 </div>
               </div>
@@ -1193,7 +1193,7 @@ function PhotosTab({ vehicles, photos, onPhotoUpload, onPhotoRemove }) {
                   {/* Photo area */}
                   <div style={{
                     width: "100%", aspectRatio: "4/3", borderRadius: 12, overflow: "hidden",
-                    border: `2px dashed ${photoUrl ? "#2563EB" : "#E2E8F0"}`,
+                    border: `2px dashed ${photoUrl ? "#6D28D9" : "#E2E8F0"}`,
                     background: photoUrl ? "#000" : "#F8FAFC",
                     position: "relative", display: "flex", alignItems: "center", justifyContent: "center",
                   }}>
@@ -1234,9 +1234,9 @@ function PhotosTab({ vehicles, photos, onPhotoUpload, onPhotoRemove }) {
                   <button
                     onClick={() => fileInputRefs.current[key]?.click()}
                     style={{
-                      padding: "9px 0", borderRadius: 9, border: `1px dashed ${photoUrl ? "#2563EB" : "#E2E8F0"}`,
-                      background: photoUrl ? "#EFF6FF" : "#F8FAFC",
-                      color: photoUrl ? "#2563EB" : "#94A3B8",
+                      padding: "9px 0", borderRadius: 9, border: `1px dashed ${photoUrl ? "#6D28D9" : "#E2E8F0"}`,
+                      background: photoUrl ? "#F5F3FF" : "#F8FAFC",
+                      color: photoUrl ? "#6D28D9" : "#94A3B8",
                       fontSize: 13, fontWeight: 600, cursor: "pointer",
                     }}
                   >
@@ -1487,7 +1487,7 @@ export default function VehiclesPage() {
           title="Fleet Report"
         />
         {tab === "fleet" && (
-          <button onClick={openAdd} style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          <button onClick={openAdd} style={{ background: "#6D28D9", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             + Add vehicle
           </button>
         )}
@@ -1496,7 +1496,7 @@ export default function VehiclesPage() {
 
       {/* KPI cards — status row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 12 }}>
-        <StatCard label="Total Fleet"  value={counts.total}       delta="all vehicle types"  accent="#2563EB" />
+        <StatCard label="Total Fleet"  value={counts.total}       delta="all vehicle types"  accent="#6D28D9" />
         <StatCard label="Active"       value={counts.active}      delta="in service"         up accent="#10B981" />
         <StatCard label="Maintenance"  value={counts.maintenance} delta="need attention"      up={counts.maintenance === 0} accent="#F59E0B" />
         <StatCard label="Inactive"     value={counts.inactive}    delta="offline"            accent="#94A3B8" />
@@ -1624,3 +1624,4 @@ export default function VehiclesPage() {
     </div>
   );
 }
+

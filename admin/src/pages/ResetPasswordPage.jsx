@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 
 const GLOBAL_CSS = `
@@ -7,8 +7,8 @@ const GLOBAL_CSS = `
   body { font-family: 'Inter', system-ui, sans-serif; }
   @keyframes fadeSlideUp { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .rp-input:focus { border-color: #2563EB !important; background: #fff !important; box-shadow: 0 0 0 3px rgba(37,99,235,.12) !important; }
-  .rp-btn:hover:not(:disabled) { background: #1D4ED8 !important; box-shadow: 0 6px 20px rgba(37,99,235,.35) !important; transform: translateY(-1px); }
+  .rp-input:focus { border-color: #6D28D9 !important; background: #fff !important; box-shadow: 0 0 0 3px rgba(109,40,217,.12) !important; }
+  .rp-btn:hover:not(:disabled) { background: #4C1D95 !important; box-shadow: 0 6px 20px rgba(109,40,217,.35) !important; transform: translateY(-1px); }
   .rp-btn:active:not(:disabled) { transform: translateY(0) !important; }
   .rp-btn { transition: background .15s, box-shadow .15s, transform .1s; }
   .rp-card { animation: fadeSlideUp .35s ease both; }
@@ -99,7 +99,7 @@ export default function ResetPasswordPage({ token, onDone }) {
       <style>{GLOBAL_CSS}</style>
       <div style={{
         minHeight: "100vh",
-        background: "linear-gradient(135deg, #EFF6FF 0%, #F8FAFC 60%, #F1F5F9 100%)",
+        background: "linear-gradient(135deg, #F5F3FF 0%, #F8FAFC 60%, #F1F5F9 100%)",
         display: "flex", alignItems: "center", justifyContent: "center",
         padding: 24, fontFamily: "'Inter', system-ui, sans-serif",
       }}>
@@ -110,7 +110,7 @@ export default function ResetPasswordPage({ token, onDone }) {
         }}>
           {/* Logo */}
           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:32 }}>
-            <div style={{ width:38, height:38, borderRadius:10, background:"#2563EB", display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <div style={{ width:38, height:38, borderRadius:10, background:"#6D28D9", display:"flex", alignItems:"center", justifyContent:"center" }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round">
                 <path d="M8 6v6"/><path d="M16 6v6"/><path d="M2 12h20"/>
                 <rect x="2" y="4" width="20" height="16" rx="3"/>
@@ -145,7 +145,7 @@ export default function ResetPasswordPage({ token, onDone }) {
                 className="rp-btn"
                 style={{
                   width:"100%", padding:12,
-                  background:"#2563EB", color:"#fff",
+                  background:"#6D28D9", color:"#fff",
                   border:"none", borderRadius:10,
                   fontSize:14, fontWeight:600, cursor:"pointer",
                 }}
@@ -158,11 +158,11 @@ export default function ResetPasswordPage({ token, onDone }) {
             <>
               <div style={{
                 width:48, height:48, borderRadius:12,
-                background:"#EFF6FF", display:"flex",
+                background:"#F5F3FF", display:"flex",
                 alignItems:"center", justifyContent:"center",
                 marginBottom:20,
               }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2" strokeLinecap="round">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6D28D9" strokeWidth="2" strokeLinecap="round">
                   <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/>
                 </svg>
               </div>
@@ -221,7 +221,7 @@ export default function ResetPasswordPage({ token, onDone }) {
                   className="rp-btn"
                   style={{
                     width:"100%", padding:12, marginTop:4,
-                    background: canSubmit ? "#2563EB" : "#93C5FD",
+                    background: canSubmit ? "#6D28D9" : "#C4B5FD",
                     color:"#fff", border:"none", borderRadius:10,
                     fontSize:14, fontWeight:600,
                     cursor: canSubmit ? "pointer" : "not-allowed",
@@ -238,3 +238,4 @@ export default function ResetPasswordPage({ token, onDone }) {
     </>
   );
 }
+

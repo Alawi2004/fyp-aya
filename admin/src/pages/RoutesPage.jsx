@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback } from "react";
 import { GitBranch, CheckCircle, MapPin } from "lucide-react";
 import { PageLoading, PageError, PageEmpty } from "../components/DataStates";
 import { Panel } from "../components/Panel";
@@ -30,7 +30,7 @@ const EMPTY_ROUTE = { code: "", name: "", distance: "", duration: "", active: tr
 const EMPTY_STOP  = { name: "", lat: "", lng: "" };
 
 const ZONE_COLORS = [
-  "#2563EB", "#059669", "#D97706", "#DC2626",
+  "#6D28D9", "#059669", "#D97706", "#DC2626",
   "#7C3AED", "#DB2777", "#0891B2", "#65A30D",
 ];
 
@@ -51,7 +51,7 @@ function StopsList({ route, onDelete }) {
         return (
           <div key={sid}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "#F8FAFC", borderRadius: 8 }}>
-              <span style={{ width: 22, height: 22, borderRadius: "50%", background: "#2563EB", color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <span style={{ width: 22, height: 22, borderRadius: "50%", background: "#6D28D9", color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 {stop.order ?? stop.stop_order ?? "·"}
               </span>
               <span style={{ flex: 1, fontSize: 13, color: "#333" }}>{stop.name ?? stop.stop_name}</span>
@@ -65,8 +65,8 @@ function StopsList({ route, onDelete }) {
                 onClick={() => setOpenStop(isOpen ? null : sid)}
                 title="Amenities & QR"
                 style={{
-                  fontSize: 12, padding: "3px 8px", borderRadius: 6, border: `1px solid ${isOpen ? "#2563EB" : "#E2E8F0"}`,
-                  background: isOpen ? "#EFF6FF" : "#fff", color: isOpen ? "#2563EB" : "#64748B", cursor: "pointer",
+                  fontSize: 12, padding: "3px 8px", borderRadius: 6, border: `1px solid ${isOpen ? "#6D28D9" : "#E2E8F0"}`,
+                  background: isOpen ? "#F5F3FF" : "#fff", color: isOpen ? "#6D28D9" : "#64748B", cursor: "pointer",
                 }}
               >
                 Info
@@ -89,7 +89,7 @@ function FareZonesPanel({ route }) {
   const [zones,    setZones]    = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editZone, setEditZone] = useState(null);
-  const [form,     setForm]     = useState({ zone_name: "", zone_color: "#2563EB", base_fare: "" });
+  const [form,     setForm]     = useState({ zone_name: "", zone_color: "#6D28D9", base_fare: "" });
   const [expanded, setExpanded] = useState(null);
   const [busy,     setBusy]     = useState(false);
   const [toast,    setToast]    = useState(null);
@@ -104,7 +104,7 @@ function FareZonesPanel({ route }) {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2000); };
 
-  const openAdd = () => { setEditZone(null); setForm({ zone_name: "", zone_color: "#2563EB", base_fare: "" }); setShowForm(true); };
+  const openAdd = () => { setEditZone(null); setForm({ zone_name: "", zone_color: "#6D28D9", base_fare: "" }); setShowForm(true); };
   const openEdit = (z) => { setEditZone(z); setForm({ zone_name: z.zone_name, zone_color: z.zone_color, base_fare: String(z.base_fare) }); setShowForm(true); };
 
   const saveZone = async () => {
@@ -174,7 +174,7 @@ function FareZonesPanel({ route }) {
           </span>
         </div>
         <div style={{ flex: 1 }} />
-        <button onClick={openAdd} style={{ fontSize: 12, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontWeight: 600 }}>
+        <button onClick={openAdd} style={{ fontSize: 12, color: "#6D28D9", background: "#F5F3FF", border: "none", borderRadius: 6, padding: "5px 12px", cursor: "pointer", fontWeight: 600 }}>
           + Add Zone
         </button>
       </div>
@@ -213,7 +213,7 @@ function FareZonesPanel({ route }) {
             <button onClick={() => setShowForm(false)} style={{ padding: "6px 14px", borderRadius: 7, border: "1px solid #E2E8F0", background: "#fff", fontSize: 12, cursor: "pointer" }}>Cancel</button>
             <button onClick={saveZone} disabled={busy || !form.zone_name || !form.base_fare} style={{
               padding: "6px 14px", borderRadius: 7, border: "none",
-              background: busy || !form.zone_name || !form.base_fare ? "#93C5FD" : "#2563EB",
+              background: busy || !form.zone_name || !form.base_fare ? "#C4B5FD" : "#6D28D9",
               color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer"
             }}>
               {busy ? "Saving…" : editZone ? "Update" : "Create Zone"}
@@ -239,7 +239,7 @@ function FareZonesPanel({ route }) {
             <span style={{ fontWeight: 700, fontSize: 13, color: "#0F172A", flex: 1 }}>{z.zone_name}</span>
             <span style={{ fontWeight: 800, fontSize: 14, color: "#059669" }}>{fmtMoney(z.base_fare, currency)}</span>
             <span style={{ fontSize: 11, color: "#94A3B8" }}>{(z.stops || []).length} stops</span>
-            <button onClick={e => { e.stopPropagation(); openEdit(z); }} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>Edit</button>
+            <button onClick={e => { e.stopPropagation(); openEdit(z); }} style={{ fontSize: 11, color: "#6D28D9", background: "#F5F3FF", border: "none", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>Edit</button>
             <button onClick={e => { e.stopPropagation(); deleteZone(z.zone_id); }} style={{ fontSize: 11, color: "#DC2626", background: "#FEF2F2", border: "none", borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>Delete</button>
             <span style={{ color: "#CBD5E1", fontSize: 12 }}>{expanded === z.zone_id ? "▲" : "▼"}</span>
           </div>
@@ -278,13 +278,13 @@ function FareZonesPanel({ route }) {
 
       {/* Fare calculator preview */}
       {zones && zones.length > 0 && (
-        <div style={{ marginTop: 12, background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 9, padding: "10px 14px" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#1D4ED8", marginBottom: 6 }}>Zone Fares</div>
+        <div style={{ marginTop: 12, background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: 9, padding: "10px 14px" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#4C1D95", marginBottom: 6 }}>Zone Fares</div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             {zones.map(z => (
               <div key={z.zone_id} style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: z.zone_color }} />
-                <span style={{ fontSize: 12, color: "#1E40AF", fontWeight: 500 }}>
+                <span style={{ fontSize: 12, color: "#4C1D95", fontWeight: 500 }}>
                   {z.zone_name}: <strong>{fmtMoney(z.base_fare, currency)}</strong>
                 </span>
               </div>
@@ -411,9 +411,9 @@ function StopAmenitiesPanel({ stop }) {
                   return (
                     <button key={key} onClick={() => toggle(key)} style={{
                       padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600,
-                      border: `1.5px solid ${active ? "#2563EB" : "#E2E8F0"}`,
-                      background: active ? "#EFF6FF" : "#fff",
-                      color: active ? "#2563EB" : "#64748B",
+                      border: `1.5px solid ${active ? "#6D28D9" : "#E2E8F0"}`,
+                      background: active ? "#F5F3FF" : "#fff",
+                      color: active ? "#6D28D9" : "#64748B",
                       cursor: "pointer",
                     }}>
                       {label}{active ? " ✓" : ""}
@@ -437,7 +437,7 @@ function StopAmenitiesPanel({ stop }) {
 
               <button onClick={save} disabled={saving} style={{
                 padding: "6px 16px", borderRadius: 7, border: "none",
-                background: saved ? "#059669" : saving ? "#93C5FD" : "#2563EB",
+                background: saved ? "#059669" : saving ? "#C4B5FD" : "#6D28D9",
                 color: "#fff", fontSize: 12, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer",
               }}>
                 {saved ? "✓ Saved" : saving ? "Saving…" : "Save Amenities"}
@@ -462,7 +462,7 @@ function StopAmenitiesPanel({ stop }) {
           <a
             href={qrSrc}
             download={`stop-${stop.id ?? stop.stop_id}-qr.png`}
-            style={{ display: "inline-block", marginTop: 6, fontSize: 11, color: "#2563EB", fontWeight: 600, textDecoration: "none" }}
+            style={{ display: "inline-block", marginTop: 6, fontSize: 11, color: "#6D28D9", fontWeight: 600, textDecoration: "none" }}
           >
             Download QR
           </a>
@@ -657,14 +657,14 @@ export default function RoutesPage() {
           <p style={{ fontSize: 12, color: "#64748B", margin: "2px 0 0" }}>Manage routes, stops, map paths, and zone-based pricing</p>
         </div>
         <div style={{ flex: 1 }} />
-        <button onClick={openAddRoute} className="btn-primary" style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+        <button onClick={openAddRoute} className="btn-primary" style={{ background: "#6D28D9", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
           + Add Route
         </button>
       </div>
 
       {/* ── Stats ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 12 }}>
-        <StatCard label="Total routes"  value={counts.total}  delta="defined"           accent="#2563EB" icon={<GitBranch size={18} color="#2563EB" />} />
+        <StatCard label="Total routes"  value={counts.total}  delta="defined"           accent="#6D28D9" icon={<GitBranch size={18} color="#6D28D9" />} />
         <StatCard label="Active routes" value={counts.active} delta="in service"  up={true} accent="#10B981" icon={<CheckCircle size={18} color="#10B981" />} />
         <StatCard label="Total stops"   value={counts.stops}  delta="across all routes"  accent="#F59E0B" icon={<MapPin size={18} color="#F59E0B" />} />
       </div>
@@ -682,8 +682,8 @@ export default function RoutesPage() {
             {/* Route header row */}
             <div style={{ display: "flex", alignItems: "center", padding: "14px 18px", gap: 12, cursor: "pointer" }}
               onClick={() => toggleRoute(route.id)}>
-              <div style={{ width: 38, height: 38, borderRadius: 10, background: route.active ? "#EFF6FF" : "#F1F5F9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke={route.active ? "#2563EB" : "#aaa"} strokeWidth="1.5" strokeLinecap="round">
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: route.active ? "#F5F3FF" : "#F1F5F9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke={route.active ? "#6D28D9" : "#aaa"} strokeWidth="1.5" strokeLinecap="round">
                   <circle cx="4" cy="14" r="2"/><circle cx="14" cy="14" r="2"/>
                   <path d="M2 7h14l-2-5H4L2 7z"/><path d="M2 7v5a2 2 0 002 2"/><path d="M16 7v5a2 2 0 01-2 2"/>
                 </svg>
@@ -711,7 +711,7 @@ export default function RoutesPage() {
                 >
                   Map
                 </button>
-                <button onClick={() => openEditRoute(route)} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Edit</button>
+                <button onClick={() => openEditRoute(route)} style={{ fontSize: 11, color: "#6D28D9", background: "#F5F3FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Edit</button>
                 <button onClick={() => toggleActive(route)} style={{ fontSize: 11, color: route.active ? "#B91C1C" : "#059669", background: route.active ? "#FEF2F2" : "#ECFDF5", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>
                   {route.active ? "Deactivate" : "Activate"}
                 </button>
@@ -736,8 +736,8 @@ export default function RoutesPage() {
                       <button key={tab.id} onClick={() => setTab(route.id, tab.id)} style={{
                         padding: "10px 20px", border: "none", background: "none",
                         fontSize: 13, fontWeight: getTab(route.id) === tab.id ? 700 : 500,
-                        color: getTab(route.id) === tab.id ? "#2563EB" : "#64748B",
-                        borderBottom: getTab(route.id) === tab.id ? "2px solid #2563EB" : "2px solid transparent",
+                        color: getTab(route.id) === tab.id ? "#6D28D9" : "#64748B",
+                        borderBottom: getTab(route.id) === tab.id ? "2px solid #6D28D9" : "2px solid transparent",
                         cursor: "pointer",
                       }}>{tab.label}</button>
                     ))}
@@ -752,7 +752,7 @@ export default function RoutesPage() {
                           Stops ({stops.length}){loadingStops ? " — loading…" : ""}
                         </span>
                         <div style={{ flex: 1 }} />
-                        <button onClick={() => { setStopModal(route.id); setStopForm(EMPTY_STOP); }} style={{ fontSize: 11, color: "#2563EB", background: "#EFF6FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>
+                        <button onClick={() => { setStopModal(route.id); setStopForm(EMPTY_STOP); }} style={{ fontSize: 11, color: "#6D28D9", background: "#F5F3FF", border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>
                           + Add Stop
                         </button>
                       </div>
@@ -858,3 +858,4 @@ export default function RoutesPage() {
     </div>
   );
 }
+

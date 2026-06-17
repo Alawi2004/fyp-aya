@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Coins, Mail, Lock, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
@@ -38,8 +38,8 @@ export default function LoginPage() {
       fontFamily: "Inter, system-ui, sans-serif",
     }}>
       {/* Decorative blobs */}
-      <div style={{ position: "fixed", top: -100, right: -100, width: 400, height: 400, borderRadius: "50%", background: `radial-gradient(circle, rgba(37,99,235,.18) 0%, transparent 70%)`, pointerEvents: "none" }} />
-      <div style={{ position: "fixed", bottom: -120, left: -80,  width: 350, height: 350, borderRadius: "50%", background: `radial-gradient(circle, rgba(37,99,235,.12) 0%, transparent 70%)`, pointerEvents: "none" }} />
+      <div style={{ position: "fixed", top: -100, right: -100, width: 400, height: 400, borderRadius: "50%", background: `radial-gradient(circle, rgba(109,40,217,.18) 0%, transparent 70%)`, pointerEvents: "none" }} />
+      <div style={{ position: "fixed", bottom: -120, left: -80,  width: 350, height: 350, borderRadius: "50%", background: `radial-gradient(circle, rgba(109,40,217,.12) 0%, transparent 70%)`, pointerEvents: "none" }} />
 
       <div style={{
         width: "100%", maxWidth: 420,
@@ -156,3 +156,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

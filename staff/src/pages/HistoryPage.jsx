@@ -254,7 +254,7 @@ function SummaryCard({ label, value, sub, accent }) {
       background: accent ? `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})` : "#fff",
       border: `1px solid ${accent ? "transparent" : C.border}`,
       borderRadius: 14, padding: "18px 20px",
-      boxShadow: accent ? `0 4px 20px rgba(37,99,235,.2)` : "0 1px 3px rgba(0,0,0,.04)",
+      boxShadow: accent ? `0 4px 20px rgba(109,40,217,.2)` : "0 1px 3px rgba(0,0,0,.04)",
     }}>
       <div style={{ fontSize: 11, fontWeight: 600, color: accent ? "rgba(255,255,255,.75)" : C.textMuted, marginBottom: 6, textTransform: "uppercase", letterSpacing: ".4px" }}>
         {label}
@@ -324,3 +324,4 @@ function DetailModal({ record, onClose }) {
     </div>
   );
 }
+

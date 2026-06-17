@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+﻿import { useState, useEffect, useCallback, useMemo } from "react";
 import { Wallet, Plus, Filter, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
 import { ExportBtn } from "../components/ExportBtn";
 import { Modal } from "../components/Modal";
@@ -33,14 +33,14 @@ const FREEZE_REASONS = [
 const EMPTY_FORM = { user_id: "", amount: "", location_name: "", tx_ref: "", notes: "" };
 const LOW_BALANCE_THRESHOLD = 25;
 
-function deltaMeta(current, previous, currency = "USD") {
+function deltaMeta(current, previous, currency = "USD", rate = 1) {
   const diff = current - previous;
   const pct = previous > 0 ? (diff / previous) * 100 : 0;
   return {
     diff,
     pct,
     up: diff <= 0,
-    label: `${diff >= 0 ? "+" : ""}${fmtMoney(diff, currency)} vs last month`,
+    label: `${diff >= 0 ? "+" : ""}${fmtMoney(diff, currency, rate)} vs last month`,
   };
 }
 
@@ -59,7 +59,7 @@ function TabNav({ active, onChange, alertCount }) {
           padding: "7px 16px", borderRadius: 7, border: "none", cursor: "pointer",
           fontSize: 13, fontWeight: active === t.id ? 700 : 500,
           background: active === t.id ? "#fff" : "transparent",
-          color:      active === t.id ? "#2563EB" : "#64748B",
+          color:      active === t.id ? "#6D28D9" : "#64748B",
           boxShadow:  active === t.id ? "0 1px 4px rgba(0,0,0,.09)" : "none",
           display: "flex", alignItems: "center", gap: 6, transition: "all .15s",
         }}>
@@ -73,8 +73,8 @@ function TabNav({ active, onChange, alertCount }) {
 
 // ── Freeze Wallet Modal ───────────────────────────────────────────────────────
 function FreezeModal({ wallet, onClose, onConfirm }) {
-  const { currency } = useSettings();
-  const fmt = n => fmtMoney(n, currency);
+  const { currency, exchangeRate } = useSettings();
+  const fmt = n => fmtMoney(n, currency, exchangeRate);
   const [reason, setReason] = useState("Fraud Investigation");
   const [notes,  setNotes]  = useState("");
 
@@ -127,8 +127,8 @@ function FreezeModal({ wallet, onClose, onConfirm }) {
 
 // ── Unfreeze Wallet Modal ─────────────────────────────────────────────────────
 function UnfreezeModal({ wallet, onClose, onConfirm }) {
-  const { currency } = useSettings();
-  const fmt = n => fmtMoney(n, currency);
+  const { currency, exchangeRate } = useSettings();
+  const fmt = n => fmtMoney(n, currency, exchangeRate);
   const [notes, setNotes] = useState("");
 
   return (
@@ -175,8 +175,8 @@ function UnfreezeModal({ wallet, onClose, onConfirm }) {
 
 // ── Freeze Management Tab ─────────────────────────────────────────────────────
 function FreezeManagementTab({ wallets, freezeLog, onFreeze, onUnfreeze }) {
-  const { currency } = useSettings();
-  const fmt = n => fmtMoney(n, currency);
+  const { currency, exchangeRate } = useSettings();
+  const fmt = n => fmtMoney(n, currency, exchangeRate);
   const [search,      setSearch]      = useState("");
   const [frozenOnly,  setFrozenOnly]  = useState(false);
   const [freezeTarget,  setFreezeTarget]  = useState(null);
@@ -197,7 +197,7 @@ function FreezeManagementTab({ wallets, freezeLog, onFreeze, onUnfreeze }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* KPI cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
-        <StatCard label="Total Wallets"    value={wallets.length}    delta="passenger accounts" accent="#2563EB" />
+        <StatCard label="Total Wallets"    value={wallets.length}    delta="passenger accounts" accent="#6D28D9" />
         <StatCard label="Active"           value={active.length}     delta="deductions enabled" up accent="#10B981" />
         <StatCard label="Frozen"           value={frozen.length}     delta={frozen.length > 0 ? "deductions blocked" : "none frozen"} up={frozen.length === 0} accent="#DC2626" />
         <StatCard label="Balance Frozen"   value={fmt(frozenBalance)} delta="protected from use" accent="#F59E0B" />
@@ -254,8 +254,8 @@ function FreezeManagementTab({ wallets, freezeLog, onFreeze, onUnfreeze }) {
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <div style={{
                         width: 34, height: 34, borderRadius: "50%", flexShrink: 0,
-                        background: frozen ? "#FEF2F2" : "#EFF6FF",
-                        color:      frozen ? "#DC2626" : "#2563EB",
+                        background: frozen ? "#FEF2F2" : "#F5F3FF",
+                        color:      frozen ? "#DC2626" : "#6D28D9",
                         display: "flex", alignItems: "center", justifyContent: "center",
                         fontSize: 11, fontWeight: 700, border: frozen ? "2px solid #FECACA" : "none",
                       }}>
@@ -401,8 +401,8 @@ function FreezeManagementTab({ wallets, freezeLog, onFreeze, onUnfreeze }) {
 }
 
 function WalletInsights({ wallets, alerts, spendSummary }) {
-  const { currency } = useSettings();
-  const fmt = n => fmtMoney(n, currency);
+  const { currency, exchangeRate } = useSettings();
+  const fmt = n => fmtMoney(n, currency, exchangeRate);
   const enrichedAlerts = alerts
     .map((alert) => {
       const wallet = wallets.find((w) => w.user_id === alert.user_id);
@@ -418,14 +418,14 @@ function WalletInsights({ wallets, alerts, spendSummary }) {
 
   const totalCurrentSpend  = spendSummary?.current?.total  ?? spendRows.reduce((s, r) => s + (r.current  ?? r.spent  ?? 0), 0);
   const totalPreviousSpend = spendSummary?.previous?.total ?? spendRows.reduce((s, r) => s + (r.previous ?? r.last_month_spent ?? 0), 0);
-  const spendDelta = deltaMeta(totalCurrentSpend, totalPreviousSpend, currency);
+  const spendDelta = deltaMeta(totalCurrentSpend, totalPreviousSpend, currency, exchangeRate);
   const increasedSpenders = spendRows.filter((r) => (r.current ?? r.spent ?? 0) > (r.previous ?? r.last_month_spent ?? 0)).length;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 24 }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
         <StatCard label="Low Balance Alerts" value={enrichedAlerts.length} delta={`below $${LOW_BALANCE_THRESHOLD} threshold`} accent="#DC2626" />
-        <StatCard label="Push Sent" value={enrichedAlerts.filter((a) => a.push_sent_at).length} delta="passengers notified" accent="#2563EB" />
+        <StatCard label="Push Sent" value={enrichedAlerts.filter((a) => a.push_sent_at).length} delta="passengers notified" accent="#6D28D9" />
         <StatCard label="In-App Seen" value={enrichedAlerts.filter((a) => a.in_app_seen).length} delta="warnings opened" accent="#0EA5E9" />
         <StatCard label="Monthly Spend" value={fmt(totalCurrentSpend)} delta={spendDelta.label} up={spendDelta.up} accent="#7C3AED" />
       </div>
@@ -453,7 +453,7 @@ function WalletInsights({ wallets, alerts, spendSummary }) {
                   </div>
                   <div style={{ fontSize: 11, color: "#64748B" }}>{alert.wallet.email}</div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: "#EFF6FF", color: "#2563EB" }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: "#F5F3FF", color: "#6D28D9" }}>
                       Push {alert.push_sent_at ? `sent ${fmtShort(alert.push_sent_at)}` : "pending"}
                     </span>
                     <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: alert.in_app_seen ? "#ECFDF5" : "#F8FAFC", color: alert.in_app_seen ? "#059669" : "#64748B" }}>
@@ -525,8 +525,8 @@ function WalletInsights({ wallets, alerts, spendSummary }) {
 
 // ── Balance Alerts Tab ────────────────────────────────────────────────────────
 function AlertsTab({ alerts, threshold, onNotify }) {
-  const { currency } = useSettings();
-  const fmt = n => fmtMoney(n, currency);
+  const { currency, exchangeRate } = useSettings();
+  const fmt = n => fmtMoney(n, currency, exchangeRate);
   const critical = alerts.filter(a => a.balance < threshold * 0.4);
   const warning  = alerts.filter(a => a.balance >= threshold * 0.4 && a.balance < threshold);
 
@@ -554,7 +554,7 @@ function AlertsTab({ alerts, threshold, onNotify }) {
         </div>
         <div style={{ flexShrink: 0, display: "flex", gap: 8, alignItems: "center" }}>
           {a.notified && <span style={{ fontSize: 10, color: "#059669", fontWeight: 600 }}>✓ Notified</span>}
-          <button onClick={() => onNotify(a.user_id)} style={{ fontSize: 11, fontWeight: 700, padding: "6px 14px", borderRadius: 8, border: "none", background: "#2563EB", color: "#fff", cursor: "pointer" }}>
+          <button onClick={() => onNotify(a.user_id)} style={{ fontSize: 11, fontWeight: 700, padding: "6px 14px", borderRadius: 8, border: "none", background: "#6D28D9", color: "#fff", cursor: "pointer" }}>
             {a.notified ? "Re-notify" : "Send Alert"}
           </button>
         </div>
@@ -587,7 +587,7 @@ function AlertsTab({ alerts, threshold, onNotify }) {
       )}
 
       {/* Threshold info */}
-      <div style={{ padding: "12px 16px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 10, fontSize: 12, color: "#1E40AF" }}>
+      <div style={{ padding: "12px 16px", background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: 10, fontSize: 12, color: "#4C1D95" }}>
         <strong>Alert threshold: {fmt(threshold)}</strong> — passengers below this balance receive an in-app warning and push notification.
       </div>
 
@@ -624,8 +624,8 @@ function AlertsTab({ alerts, threshold, onNotify }) {
 
 // ── Spend Summary Tab ─────────────────────────────────────────────────────────
 function SummaryTab({ summary }) {
-  const { currency } = useSettings();
-  const fmt = n => fmtMoney(n, currency);
+  const { currency, exchangeRate } = useSettings();
+  const fmt = n => fmtMoney(n, currency, exchangeRate);
   // Guard: summary may be empty array before data loads
   if (!summary || Array.isArray(summary) || !summary.current || !summary.previous) {
     return (
@@ -637,9 +637,9 @@ function SummaryTab({ summary }) {
   }
 
   const { current, previous, per_passenger } = summary;
-  const totalDelta = deltaMeta(current.total, previous.total, currency);
-  const tripDelta  = deltaMeta(current.transactions, previous.transactions, currency);
-  const avgDelta   = deltaMeta(current.avg_per_trip, previous.avg_per_trip, currency);
+  const totalDelta = deltaMeta(current.total, previous.total, currency, exchangeRate);
+  const tripDelta  = deltaMeta(current.transactions, previous.transactions, currency, exchangeRate);
+  const avgDelta   = deltaMeta(current.avg_per_trip, previous.avg_per_trip, currency, exchangeRate);
 
   const maxVal = Math.max(...(per_passenger ?? []).map(p => Math.max(p.current ?? 0, p.previous ?? 0)), 1);
 
@@ -648,7 +648,7 @@ function SummaryTab({ summary }) {
       {/* Overall comparison cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
         {[
-          { label: "Total Spent",       curr: fmt(current.total),        prev: fmt(previous.total),        meta: totalDelta, accent: "#2563EB" },
+          { label: "Total Spent",       curr: fmt(current.total),        prev: fmt(previous.total),        meta: totalDelta, accent: "#6D28D9" },
           { label: "Trips",             curr: current.transactions,       prev: previous.transactions,      meta: tripDelta,  accent: "#7C3AED" },
           { label: "Avg Fare / Trip",   curr: fmt(current.avg_per_trip),  prev: fmt(previous.avg_per_trip), meta: avgDelta,   accent: "#10B981" },
         ].map(({ label, curr, prev, meta, accent }) => (
@@ -679,11 +679,11 @@ function SummaryTab({ summary }) {
       {/* Month labels */}
       <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 12, height: 12, borderRadius: 3, background: "#2563EB" }} />
+          <div style={{ width: 12, height: 12, borderRadius: 3, background: "#6D28D9" }} />
           <span style={{ fontSize: 12, fontWeight: 700, color: "#0F172A" }}>{current.label} (current)</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 12, height: 12, borderRadius: 3, background: "#BFDBFE" }} />
+          <div style={{ width: 12, height: 12, borderRadius: 3, background: "#DDD6FE" }} />
           <span style={{ fontSize: 12, color: "#64748B" }}>{previous.label} (previous)</span>
         </div>
       </div>
@@ -700,15 +700,15 @@ function SummaryTab({ summary }) {
             return (
               <div key={p.user_id} style={{ padding: "14px 18px", borderBottom: i < per_passenger.length - 1 ? "1px solid #F8FAFC" : "none", display: "flex", alignItems: "center", gap: 16 }}>
                 {/* Avatar */}
-                <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#EFF6FF", color: "#2563EB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, flexShrink: 0 }}>
+                <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#F5F3FF", color: "#6D28D9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, flexShrink: 0 }}>
                   {p.name.split(" ").map(w => w[0]).join("").slice(0, 2)}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "#0F172A", marginBottom: 6 }}>{p.name}</div>
                   {/* Grouped bars */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                    {[{ label: current.label,  val: p.current,  color: "#2563EB" },
-                      { label: previous.label, val: p.previous, color: "#BFDBFE" }].map(({ label, val, color }) => (
+                    {[{ label: current.label,  val: p.current,  color: "#6D28D9" },
+                      { label: previous.label, val: p.previous, color: "#DDD6FE" }].map(({ label, val, color }) => (
                       <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <span style={{ fontSize: 9, color: "#94A3B8", width: 52, textAlign: "right", flexShrink: 0 }}>{label}</span>
                         <div style={{ flex: 1, height: 8, background: "#F1F5F9", borderRadius: 4, overflow: "hidden" }}>
@@ -740,8 +740,8 @@ const inp = { width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", b
 
 // ── Main WalletPage ───────────────────────────────────────────────────────────
 export default function WalletPage() {
-  const { currency } = useSettings();
-  const fmt = n => fmtMoney(n, currency);
+  const { currency, exchangeRate } = useSettings();
+  const fmt = n => fmtMoney(n, currency, exchangeRate);
   const [tab,       setTab]       = useState("recharge");
   const [users,     setUsers]     = useState([]);
   const [recharges, setRecharges] = useState([]);
@@ -931,7 +931,7 @@ export default function WalletPage() {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, gap: 12, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg,#2563EB,#1D4ED8)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 14px rgba(37,99,235,.28)" }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg,#6D28D9,#4C1D95)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 14px rgba(109,40,217,.28)" }}>
             <Wallet size={20} color="#fff" strokeWidth={2} />
           </div>
           <div>
@@ -947,7 +947,7 @@ export default function WalletPage() {
             rows={recharges}
             columns={[
               { key: "user_name",     label: "Passenger",  value: r => r.user_name ?? "—"                                     },
-              { key: "amount",        label: "Amount",     value: r => fmtMoney(r.amount || 0, currency)                   },
+              { key: "amount",        label: "Amount",     value: r => fmtMoney(r.amount || 0, currency, exchangeRate)                   },
               { key: "location_name", label: "Location",   value: r => r.location_name ?? "—"                                 },
               { key: "tx_ref",        label: "Tx Ref",     value: r => r.tx_ref ?? "—"                                        },
               { key: "created_at",    label: "Date",       value: r => r.created_at ? new Date(r.created_at).toLocaleString() : "—" },
@@ -958,10 +958,10 @@ export default function WalletPage() {
           {tab === "recharge" && (
             <button onClick={() => { setForm(EMPTY_FORM); setFormErr({}); setModalOpen(true); }} style={{
               display: "flex", alignItems: "center", gap: 8,
-              background: "linear-gradient(135deg,#2563EB,#1D4ED8)", color: "#fff",
+              background: "linear-gradient(135deg,#6D28D9,#4C1D95)", color: "#fff",
               border: "none", borderRadius: 10, padding: "10px 18px",
               fontSize: 14, fontWeight: 700, cursor: "pointer",
-              boxShadow: "0 4px 14px rgba(37,99,235,.28)",
+              boxShadow: "0 4px 14px rgba(109,40,217,.28)",
             }}>
               <Plus size={16} strokeWidth={2.5} />
               Recharge Wallet
@@ -977,7 +977,7 @@ export default function WalletPage() {
           <WalletInsights wallets={walletStatuses} alerts={lowBalanceAlerts} spendSummary={spendSummary} />
 
           {/* Summary banner */}
-          <div style={{ background: "linear-gradient(135deg,#2563EB,#1D4ED8)", borderRadius: 16, padding: "20px 24px", marginBottom: 28, display: "flex", alignItems: "center", gap: 20, boxShadow: "0 8px 24px rgba(37,99,235,.20)" }}>
+          <div style={{ background: "linear-gradient(135deg,#6D28D9,#4C1D95)", borderRadius: 16, padding: "20px 24px", marginBottom: 28, display: "flex", alignItems: "center", gap: 20, boxShadow: "0 8px 24px rgba(109,40,217,.20)" }}>
             <div>
               <div style={{ fontSize: 12, color: "rgba(255,255,255,.7)", fontWeight: 500, marginBottom: 4 }}>Total Recharged (filtered)</div>
               <div style={{ fontSize: 34, fontWeight: 900, color: "#fff", letterSpacing: "-1px" }}>{fmt(totalRecharged)}</div>
@@ -992,7 +992,7 @@ export default function WalletPage() {
           <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #E2E8F0", boxShadow: "0 1px 4px rgba(0,0,0,.04)", overflow: "hidden" }}>
             <div style={{ padding: "16px 20px", borderBottom: "1px solid #F1F5F9", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
               <span style={{ fontSize: 15, fontWeight: 700, color: "#0F172A", flex: 1 }}>Recharge Audit Log</span>
-              <button onClick={() => setFiltersOpen(o => !o)} style={{ display: "flex", alignItems: "center", gap: 6, background: filtersOpen ? "#EFF6FF" : "#F8FAFC", border: `1px solid ${filtersOpen ? "#BFDBFE" : "#E2E8F0"}`, borderRadius: 8, padding: "7px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: filtersOpen ? "#2563EB" : "#64748B" }}>
+              <button onClick={() => setFiltersOpen(o => !o)} style={{ display: "flex", alignItems: "center", gap: 6, background: filtersOpen ? "#F5F3FF" : "#F8FAFC", border: `1px solid ${filtersOpen ? "#DDD6FE" : "#E2E8F0"}`, borderRadius: 8, padding: "7px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: filtersOpen ? "#6D28D9" : "#64748B" }}>
                 <Filter size={14} /> Filters {filtersOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
               </button>
               <button onClick={loadRecharges} style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 8, padding: "7px 10px", cursor: "pointer", display: "flex", alignItems: "center" }} title="Refresh">
@@ -1087,7 +1087,7 @@ export default function WalletPage() {
                 {users.map(u => <option key={u.user_id ?? u.id} value={u.user_id ?? u.id}>{u.full_name ?? u.name} ({u.email})</option>)}
               </select>
               {formErr.user_id && <div style={errStyle}>{formErr.user_id}</div>}
-              {selectedBalance !== null && <div style={{ fontSize: 12, color: "#2563EB", marginTop: 4, fontWeight: 600 }}>Current balance: {fmt(selectedBalance)}</div>}
+              {selectedBalance !== null && <div style={{ fontSize: 12, color: "#6D28D9", marginTop: 4, fontWeight: 600 }}>Current balance: {fmt(selectedBalance)}</div>}
             </div>
             <div>
               <label style={labelStyle}>Amount (USD) *</label>
@@ -1112,7 +1112,7 @@ export default function WalletPage() {
               <textarea value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Any additional notes…" rows={3} style={{ ...inputStyle, resize: "vertical", lineHeight: 1.5 }} />
             </div>
             {formErr.submit && <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", color: "#DC2626", fontSize: 13 }}>{formErr.submit}</div>}
-            <button onClick={handleRecharge} disabled={saving} style={{ background: saving ? "#93C5FD" : "linear-gradient(135deg,#2563EB,#1D4ED8)", color: "#fff", border: "none", borderRadius: 10, padding: "12px", fontSize: 14, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", boxShadow: saving ? "none" : "0 4px 14px rgba(37,99,235,.28)" }}>
+            <button onClick={handleRecharge} disabled={saving} style={{ background: saving ? "#C4B5FD" : "linear-gradient(135deg,#6D28D9,#4C1D95)", color: "#fff", border: "none", borderRadius: 10, padding: "12px", fontSize: 14, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", boxShadow: saving ? "none" : "0 4px 14px rgba(109,40,217,.28)" }}>
               {saving ? "Processing…" : "Confirm Recharge"}
             </button>
           </div>
@@ -1128,3 +1128,6 @@ const inputStyle  = { width: "100%", padding: "9px 12px", fontSize: 13, borderRa
 const errStyle    = { fontSize: 11, color: "#DC2626", marginTop: 4, fontWeight: 500 };
 const thStyle     = { padding: "10px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".5px", whiteSpace: "nowrap" };
 const tdStyle     = { padding: "12px 16px", verticalAlign: "middle", whiteSpace: "nowrap" };
+
+
+

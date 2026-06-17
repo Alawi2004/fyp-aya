@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback } from "react";
 import { Download, Printer, Calendar, BarChart3, Bus, Trophy } from "lucide-react";
 import { Panel } from "../components/Panel";
 import { StatCard } from "../components/StatCard";
@@ -112,10 +112,10 @@ function BarChart({ data, color = "#3B82F6", height = 110 }) {
             width: "100%",
             height: Math.max(4, Math.round((d.value / max) * (height - 24))),
             borderRadius: "4px 4px 0 0",
-            background: d.highlight ? "#1D4ED8" : color,
+            background: d.highlight ? "#4C1D95" : color,
             transition: "height .3s",
           }} />
-          <span style={{ fontSize: 9, color: d.highlight ? "#1D4ED8" : "#94A3B8", fontWeight: d.highlight ? 700 : 400, whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: 9, color: d.highlight ? "#4C1D95" : "#94A3B8", fontWeight: d.highlight ? 700 : 400, whiteSpace: "nowrap" }}>
             {d.label}
           </span>
         </div>
@@ -124,7 +124,7 @@ function BarChart({ data, color = "#3B82F6", height = 110 }) {
   );
 }
 
-function LineChart({ data, color = "#2563EB", height = 110 }) {
+function LineChart({ data, color = "#6D28D9", height = 110 }) {
   if (!data.length) return <EmptyChart height={height} />;
   const values = data.map(d => d.value);
   const max = Math.max(...values, 1);
@@ -299,7 +299,7 @@ function OverviewTab({ range, revenueRows, revenueTrendRows, topRoutes, hourlyLo
           [0,1,2,3].map(i => <div key={i} style={{ background: "#F8FAFC", borderRadius: 14, padding: 18 }}><Skeleton height={20} style={{ marginBottom: 10 }} /><Skeleton height={32} width="60%" /></div>)
         ) : (
           <>
-            <StatCard label="Total Revenue"    value={fmtMoneyRound(kpi.revenue, currency)} delta="this period" up accent="#2563EB" />
+            <StatCard label="Total Revenue"    value={fmtMoneyRound(kpi.revenue, currency, exchangeRate)} delta="this period" up accent="#6D28D9" />
             <StatCard label="Tickets Sold"     value={kpi.passengers.toLocaleString()} delta="passengers" up accent="#10B981" />
             <StatCard label="Trips Completed"  value={kpi.trips.toLocaleString()}       delta="this period" up accent="#7C3AED" />
             <StatCard label="Peak Load Hour"   value={peakHour?.label ?? "—"}           delta={peakHour ? `${peakHour.value}% capacity` : "no data"} accent="#F59E0B" />
@@ -313,7 +313,7 @@ function OverviewTab({ range, revenueRows, revenueTrendRows, topRoutes, hourlyLo
           {!loading && barData.length > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, paddingTop: 10, borderTop: "1px solid #F1F5F9", fontSize: 12 }}>
               <span style={{ color: "#64748B" }}>Total</span>
-              <span style={{ fontWeight: 700, color: "#0F172A" }}>{fmtMoneyRound(barData.reduce((s, d) => s + d.value, 0), currency)}</span>
+              <span style={{ fontWeight: 700, color: "#0F172A" }}>{fmtMoneyRound(barData.reduce((s, d) => s + d.value, 0), currency, exchangeRate)}</span>
             </div>
           )}
         </Panel>
@@ -328,7 +328,7 @@ function OverviewTab({ range, revenueRows, revenueTrendRows, topRoutes, hourlyLo
       </div>
 
       <Panel title="Revenue Trend">
-        {loading ? <Skeleton height={110} /> : <LineChart data={monthlyData} color="#2563EB" height={110} />}
+        {loading ? <Skeleton height={110} /> : <LineChart data={monthlyData} color="#6D28D9" height={110} />}
       </Panel>
 
       <Panel title="Top Routes by Revenue" extra={topRoutes.length ? <ExportMenu onCSV={doCSV} onPDF={doPDF} /> : null}>
@@ -348,10 +348,10 @@ function OverviewTab({ range, revenueRows, revenueTrendRows, topRoutes, hourlyLo
                 const load = r.load ?? r.load_pct ?? 0;
                 return (
                   <tr key={r.route ?? i} style={{ borderBottom: "1px solid #F8FAFC" }}>
-                    <td style={{ ...TD, fontWeight: 700, color: "#2563EB" }}>{r.route}</td>
+                    <td style={{ ...TD, fontWeight: 700, color: "#6D28D9" }}>{r.route}</td>
                     <td style={{ ...TD, color: "#475569" }}>{r.name}</td>
                     <td style={TD}>{r.trips}</td>
-                    <td style={{ ...TD, fontWeight: 600 }}>{fmtMoneyRound(r.revenue, currency)}</td>
+                    <td style={{ ...TD, fontWeight: 600 }}>{fmtMoneyRound(r.revenue, currency, exchangeRate)}</td>
                     <td style={TD}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <div style={{ flex: 1, height: 6, background: "#F1F5F9", borderRadius: 3 }}>
@@ -421,7 +421,7 @@ function DriverPerformanceTab({ range, driverPerf, loading }) {
           [0,1,2,3].map(i => <div key={i} style={{ background: "#F8FAFC", borderRadius: 14, padding: 18 }}><Skeleton height={20} style={{ marginBottom: 10 }} /><Skeleton height={32} width="60%" /></div>)
         ) : (
           <>
-            <StatCard label="Avg Completion Rate"     value={data.length ? avgOnTime + "%" : "—"}   delta="trip completion" up={avgOnTime >= 80} accent="#2563EB" />
+            <StatCard label="Avg Completion Rate"     value={data.length ? avgOnTime + "%" : "—"}   delta="trip completion" up={avgOnTime >= 80} accent="#6D28D9" />
             <StatCard label="Zero-Complaint Drivers"  value={zeroComp}                               delta={`of ${data.length} total`} up accent="#10B981" />
             <StatCard label="Avg Rating"              value={data.length ? avgRating + " ★" : "—"}  delta="passenger score" accent="#F59E0B" />
             <StatCard label="Top Performer"           value={data[0]?.name?.split(" ")[0] ?? "—"}   delta={data[0] ? `Score: ${data[0].score}` : "no data"} up accent="#7C3AED" />
@@ -433,7 +433,7 @@ function DriverPerformanceTab({ range, driverPerf, loading }) {
         <Panel title="Driver Score Distribution">
           <BarChart
             data={data.map((d, i) => ({ label: d.name.split(" ")[0], value: d.score, highlight: i === 0 }))}
-            color="#2563EB" height={130}
+            color="#6D28D9" height={130}
           />
           <div style={{ marginTop: 8, fontSize: 11, color: "#64748B" }}>
             Score = Completion (40%) + No Complaints (30%) + Rating (30%)
@@ -526,7 +526,7 @@ function VehicleUtilizationTab({ range, vehicleUtil, loading }) {
           [0,1,2,3].map(i => <div key={i} style={{ background: "#F8FAFC", borderRadius: 14, padding: 18 }}><Skeleton height={20} style={{ marginBottom: 10 }} /><Skeleton height={32} width="60%" /></div>)
         ) : (
           <>
-            <StatCard label="Avg Utilization"   value={data.length ? avgUtil + "%" : "—"} delta="fleet average"   up={avgUtil >= 65} accent="#2563EB" />
+            <StatCard label="Avg Utilization"   value={data.length ? avgUtil + "%" : "—"} delta="fleet average"   up={avgUtil >= 65} accent="#6D28D9" />
             <StatCard label="Total Active Hrs"  value={totalActive + "h"}                  delta="combined"        accent="#10B981" />
             <StatCard label="Vehicles in Fleet" value={data.length}                        delta="tracked"         accent="#7C3AED" />
             <StatCard label="Well Utilised"     value={highUtil + " buses"}                delta="≥ 70% utilized"  up accent="#F59E0B" />
@@ -698,7 +698,7 @@ function ScheduledReportsTab() {
           <p style={{ fontSize: 12, color: "#64748B", margin: "3px 0 0" }}>Reports emailed automatically on your configured schedule</p>
         </div>
         <div style={{ flex: 1 }} />
-        <button onClick={openAdd} style={{ padding: "8px 18px", background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+        <button onClick={openAdd} style={{ padding: "8px 18px", background: "#6D28D9", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
           + New Schedule
         </button>
       </div>
@@ -749,7 +749,7 @@ function ScheduledReportsTab() {
             </label>
             <div style={{ flex: 1 }} />
             <button onClick={() => setShowForm(false)} style={{ padding: "7px 16px", borderRadius: 7, border: "1px solid #E2E8F0", background: "#fff", fontSize: 13, cursor: "pointer" }}>Cancel</button>
-            <button onClick={save} disabled={busy || !form.report_name || !form.recipients} style={{ padding: "7px 18px", borderRadius: 7, border: "none", background: "#2563EB", color: "#fff", fontSize: 13, fontWeight: 600, cursor: busy ? "wait" : "pointer" }}>
+            <button onClick={save} disabled={busy || !form.report_name || !form.recipients} style={{ padding: "7px 18px", borderRadius: 7, border: "none", background: "#6D28D9", color: "#fff", fontSize: 13, fontWeight: 600, cursor: busy ? "wait" : "pointer" }}>
               {busy ? "Saving…" : editing ? "Update" : "Create"}
             </button>
           </div>
@@ -771,7 +771,7 @@ function ScheduledReportsTab() {
             const recipStr = Array.isArray(s.recipients) ? s.recipients.join(", ") : s.recipients;
             return (
               <div key={s.schedule_id} style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, padding: "16px 20px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-                <div onClick={() => toggleEnabled(s)} style={{ cursor: "pointer", width: 40, height: 22, borderRadius: 11, background: s.enabled ? "#2563EB" : "#E2E8F0", position: "relative", flexShrink: 0, transition: "background .2s" }}>
+                <div onClick={() => toggleEnabled(s)} style={{ cursor: "pointer", width: 40, height: 22, borderRadius: 11, background: s.enabled ? "#6D28D9" : "#E2E8F0", position: "relative", flexShrink: 0, transition: "background .2s" }}>
                   <div style={{ position: "absolute", top: 3, left: s.enabled ? 21 : 3, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
                 </div>
                 <div style={{ flex: 1, minWidth: 200 }}>
@@ -785,7 +785,7 @@ function ScheduledReportsTab() {
                   <div>Next: {fmtDate(s.next_send_at)}</div>
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
-                  <button onClick={() => sendNow(s)} disabled={busy} style={{ padding: "5px 12px", borderRadius: 7, border: "1px solid #BFDBFE", background: "#EFF6FF", color: "#2563EB", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>▶ Send Now</button>
+                  <button onClick={() => sendNow(s)} disabled={busy} style={{ padding: "5px 12px", borderRadius: 7, border: "1px solid #DDD6FE", background: "#F5F3FF", color: "#6D28D9", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>▶ Send Now</button>
                   <button onClick={() => openEdit(s)} style={{ padding: "5px 10px", borderRadius: 7, border: "1px solid #E2E8F0", background: "#fff", color: "#374151", fontSize: 12, cursor: "pointer" }}>Edit</button>
                   <button onClick={() => remove(s.schedule_id)} style={{ padding: "5px 10px", borderRadius: 7, border: "1px solid #FECACA", background: "#FEF2F2", color: "#DC2626", fontSize: 12, cursor: "pointer" }}>✕</button>
                 </div>
@@ -821,7 +821,7 @@ const RANGE_OPTIONS = ["This week", "Last 30 days", "Last 3 months"];
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function AnalyticsPage() {
-  const { currency } = useSettings();
+  const { currency, exchangeRate } = useSettings();
   const [tab,   setTab]   = useState("overview");
   const [range, setRange] = useState("This week");
   const [loading, setLoading] = useState(true);
@@ -911,7 +911,7 @@ export default function AnalyticsPage() {
               <button key={r} onClick={() => setRange(r)} style={{
                 padding: "6px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer",
                 border: range === r ? "none" : "1px solid #E2E8F0",
-                background: range === r ? "#2563EB" : "#fff",
+                background: range === r ? "#6D28D9" : "#fff",
                 color:  range === r ? "#fff" : "#64748B",
                 fontWeight: range === r ? 600 : 400,
               }}>{r}</button>
@@ -943,3 +943,5 @@ export default function AnalyticsPage() {
     </div>
   );
 }
+
+

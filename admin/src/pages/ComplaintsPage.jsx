@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { ExportBtn } from "../components/ExportBtn";
 import { Panel } from "../components/Panel";
 import { Modal } from "../components/Modal";
@@ -30,19 +30,19 @@ const CATEGORIES = ["Driver Behavior", "Route Issue", "Payment", "App Issue", "S
 const PRIORITY_STYLE = {
   Critical: { bg: "#FEF2F2", color: "#DC2626", border: "#FECACA" },
   High:     { bg: "#FFFBEB", color: "#D97706", border: "#FDE68A" },
-  Medium:   { bg: "#EFF6FF", color: "#2563EB", border: "#BFDBFE" },
+  Medium:   { bg: "#F5F3FF", color: "#6D28D9", border: "#DDD6FE" },
   Low:      { bg: "#F8FAFC", color: "#64748B", border: "#E2E8F0" },
 };
 
 const STATUS_STYLE = {
   "Open":        { bg: "#FEF2F2", color: "#DC2626" },
-  "In Progress": { bg: "#EFF6FF", color: "#2563EB" },
+  "In Progress": { bg: "#F5F3FF", color: "#6D28D9" },
   "Resolved":    { bg: "#ECFDF5", color: "#059669" },
   "Closed":      { bg: "#F8FAFC", color: "#94A3B8" },
 };
 
 const CAT_COLOR = {
-  "Driver Behavior": "#2563EB", "Route Issue": "#7C3AED", "Payment": "#059669",
+  "Driver Behavior": "#6D28D9", "Route Issue": "#7C3AED", "Payment": "#059669",
   "App Issue": "#D97706",      "Safety": "#DC2626",       "Vehicle": "#0891B2", "Other": "#64748B",
 };
 
@@ -122,7 +122,7 @@ function ComplaintDetail({ complaint, onClose, onUpdate, onAddComment }) {
         <div style={{ padding: "22px 24px 18px", borderBottom: "1px solid #F1F5F9", flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <span style={{ fontSize: 11, fontFamily: "monospace", fontWeight: 700, color: "#2563EB" }}>{complaint.id}</span>
+              <span style={{ fontSize: 11, fontFamily: "monospace", fontWeight: 700, color: "#6D28D9" }}>{complaint.id}</span>
               <PriorityBadge priority={complaint.priority} />
               <StatusBadge status={complaint.status} />
             </div>
@@ -195,7 +195,7 @@ function ComplaintDetail({ complaint, onClose, onUpdate, onAddComment }) {
             </div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={handleStatusUpdate} style={{ flex: 1, padding: "9px 0", background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            <button onClick={handleStatusUpdate} style={{ flex: 1, padding: "9px 0", background: "#6D28D9", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               Save Changes
             </button>
             {complaint.status !== "Resolved" && (
@@ -231,7 +231,7 @@ function ComplaintDetail({ complaint, onClose, onUpdate, onAddComment }) {
             {/* Comments */}
             {(complaint.comments ?? []).map((c, i) => (
               <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#EFF6FF", color: "#2563EB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
+                <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#F5F3FF", color: "#6D28D9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
                   {c.author.split(" ").map(w => w[0]).join("").slice(0, 2)}
                 </div>
                 <div style={{ flex: 1, background: "#F8FAFC", borderRadius: 10, padding: "10px 14px", border: "1px solid #F1F5F9" }}>
@@ -256,7 +256,7 @@ function ComplaintDetail({ complaint, onClose, onUpdate, onAddComment }) {
               style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box", marginBottom: 8 }}
             />
             <button onClick={handleComment} disabled={!newComment.trim()}
-              style={{ padding: "8px 18px", background: newComment.trim() ? "#2563EB" : "#F1F5F9", color: newComment.trim() ? "#fff" : "#94A3B8", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: newComment.trim() ? "pointer" : "default" }}>
+              style={{ padding: "8px 18px", background: newComment.trim() ? "#6D28D9" : "#F1F5F9", color: newComment.trim() ? "#fff" : "#94A3B8", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: newComment.trim() ? "pointer" : "default" }}>
               Post Comment
             </button>
           </div>
@@ -449,7 +449,7 @@ export default function ComplaintsPage() {
           title="Complaints Report"
         />
         <button onClick={() => setCreateOpen(true)} style={{
-          background: "#2563EB", color: "#fff", border: "none",
+          background: "#6D28D9", color: "#fff", border: "none",
           borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer",
         }}>
           + New Complaint
@@ -459,7 +459,7 @@ export default function ComplaintsPage() {
       {/* KPI cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
         <StatCard label="Open"        value={counts.open}       delta="awaiting action"  up={counts.open === 0}  accent="#DC2626" />
-        <StatCard label="In Progress" value={counts.inProgress} delta="being handled"    accent="#2563EB" />
+        <StatCard label="In Progress" value={counts.inProgress} delta="being handled"    accent="#6D28D9" />
         <StatCard label="Resolved"    value={counts.resolved}   delta="completed"        up accent="#10B981" />
         <StatCard label="Closed"      value={counts.closed}     delta="archived"         accent="#94A3B8" />
       </div>
@@ -475,7 +475,7 @@ export default function ComplaintsPage() {
             <button key={s} onClick={() => setStatusFilter(s)} style={{
               padding: "5px 12px", borderRadius: 20, fontSize: 11, cursor: "pointer",
               border: statusFilter === s ? "none" : "1px solid #E2E8F0",
-              background: statusFilter === s ? (STATUS_STYLE[s]?.bg ?? "#2563EB") : "#fff",
+              background: statusFilter === s ? (STATUS_STYLE[s]?.bg ?? "#6D28D9") : "#fff",
               color:      statusFilter === s ? (STATUS_STYLE[s]?.color ?? "#fff") : "#64748B",
               fontWeight: statusFilter === s ? 700 : 400,
             }}>{s}</button>
@@ -527,7 +527,7 @@ export default function ComplaintsPage() {
                 {/* Content */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 5, flexWrap: "wrap" }}>
-                    <span style={{ fontSize: 11, fontFamily: "monospace", fontWeight: 700, color: "#2563EB" }}>{c.id}</span>
+                    <span style={{ fontSize: 11, fontFamily: "monospace", fontWeight: 700, color: "#6D28D9" }}>{c.id}</span>
                     <PriorityBadge priority={c.priority} />
                     <StatusBadge status={c.status} />
                     <span style={{ fontSize: 10, background: "#F1F5F9", color: "#64748B", padding: "2px 7px", borderRadius: 6 }}>{c.category}</span>
@@ -573,3 +573,4 @@ export default function ComplaintsPage() {
     </div>
   );
 }
+

@@ -788,7 +788,7 @@ const StopPickerModal = ({
 };
 
 // ── Alternative Route Chip ─────────────────────────────────────────────────────
-const AlternativeChip = ({ alt, label, selected, onPress }) => (
+const AlternativeChip = ({ alt, label, selected, onPress, fmt }) => (
   <PopIn active={selected}>
     <PressableScale
       style={[chipStyles.wrap, selected && chipStyles.wrapActive]}
@@ -811,7 +811,7 @@ const AlternativeChip = ({ alt, label, selected, onPress }) => (
           color={selected ? PURPLE.primary : COLORS.textMuted}
         />
         <Text style={[chipStyles.meta, selected && chipStyles.metaActive]}>
-          {alt.total_duration_min} min · {money(alt.total_price, currency)}
+          {alt.total_duration_min} min · {fmt(alt.total_price / LBP_PER_USD)}
         </Text>
       </View>
     </PressableScale>
@@ -821,7 +821,7 @@ const AlternativeChip = ({ alt, label, selected, onPress }) => (
 // ── Main Screen ────────────────────────────────────────────────────────────────
 const TripPlannerScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
-  const { walletBalance, currency, exchangeRate } = useApp();
+  const { walletBalance, currency, exchangeRate, fmtMoney } = useApp();
 
   const [stops, setStops] = useState([]);
   const [loadingStops, setLoadingStops] = useState(false);
@@ -1092,7 +1092,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
         origin: segment.from,
         destination: segment.to,
         duration: `${segment.estimated_time_min} min`,
-        price: ((segment.price || 0) / (exchangeRate > 0 ? exchangeRate : LBP_PER_USD)).toFixed(2),
+        price: ((segment.price || 0) / LBP_PER_USD).toFixed(2),
         bookedSeatsCsv: details.bookedSeatsCsv ?? "",
         totalSeats: details.totalSeats ?? 30,
         departureTime: formatDepTime(departureTime),
@@ -1138,7 +1138,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
       return [
         `${num} 🚌 Bus ${s.line} — ${s.route_name || "Route"}  (${
           s.estimated_time_min
-        } min · ${money(s.price, currency)})`,
+        } min · ${fmtMoney(s.price / LBP_PER_USD)})`,
         `   Board at:  ${s.from}`,
         `   Exit at:   ${s.to}${
           s.stops ? ` (${s.stops} stop${s.stops === 1 ? "" : "s"})` : ""
@@ -1153,7 +1153,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
       divider,
       `📍 From:  ${fromStop.stop_name}`,
       `🏁 To:    ${toStop.stop_name}`,
-      `🕐 Time:  ${displayTrip.total_duration_min} min  |  💰 ${money(displayTrip.total_price, currency)}`,
+      `🕐 Time:  ${displayTrip.total_duration_min} min  |  💰 ${fmtMoney(displayTrip.total_price / LBP_PER_USD)}`,
       displayTrip.total_transfers
         ? `🔄 Transfers: ${displayTrip.total_transfers}`
         : `✅ Direct route`,
@@ -1586,8 +1586,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
             {/* ── Fare Estimate Card ── */}
             <FadeInView index={1}>
               {(() => {
-                const rateToUsd = exchangeRate > 0 ? exchangeRate : LBP_PER_USD;
-                const fareUsd = displayTrip.total_price / rateToUsd;
+                const fareUsd = displayTrip.total_price / LBP_PER_USD;
                 const sufficient = walletBalance >= fareUsd;
                 const shortfall = fareUsd - walletBalance;
                 const busSeg = (displayTrip.segments || []).filter(
@@ -1646,7 +1645,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
                         <Text style={styles.fareStatLabel}>TOTAL FARE</Text>
                         <Bump trigger={displayTrip.total_price}>
                           <Text style={styles.fareStatValue}>
-                            {money(displayTrip.total_price, currency)}
+                            {fmtMoney(displayTrip.total_price / LBP_PER_USD)}
                           </Text>
                         </Bump>
                         <Text style={styles.fareStatSub}>
@@ -1679,7 +1678,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
                             },
                           ]}
                         >
-                          {money(walletBalance * rateToUsd, currency)}
+                          {fmtMoney(walletBalance)}
                         </Text>
                         <Text style={styles.fareStatSub}>{currency}</Text>
                       </View>
@@ -1700,7 +1699,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
                               {s.from} → {s.to}
                             </Text>
                             <Text style={styles.fareSegPrice}>
-                              {money(s.price, currency)}
+                              {fmtMoney(s.price / LBP_PER_USD)}
                             </Text>
                           </View>
                         ))}
@@ -1716,7 +1715,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
                         />
                         <View style={{ flex: 1 }}>
                           <Text style={styles.fareWarningText}>
-                            Your wallet is {currency} {shortfall.toFixed(2)} short for
+                            Your wallet is {fmtMoney(shortfall)} short for
                             this trip. Top up before booking.
                           </Text>
                         </View>
@@ -1764,6 +1763,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
                       label="Best"
                       selected={selectedAlt === null}
                       onPress={() => selectAlt(null)}
+                      fmt={fmtMoney}
                     />
                     {alternatives.map((alt, i) => (
                       <AlternativeChip
@@ -1772,6 +1772,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
                         label={`Alt ${i + 1}`}
                         selected={selectedAlt === i}
                         onPress={() => selectAlt(i)}
+                        fmt={fmtMoney}
                       />
                     ))}
                   </ScrollView>
@@ -1856,7 +1857,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
                               {seg.from} → {seg.to}
                             </Text>
                             <Text style={styles.legMeta}>
-                              {seg.estimated_time_min} min · {money(seg.price, currency)}
+                              {seg.estimated_time_min} min · {fmtMoney(seg.price / LBP_PER_USD)}
                             </Text>
                           </View>
                           <PressableScale

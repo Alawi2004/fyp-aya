@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { PageLoading } from "../components/DataStates";
 import { Panel } from "../components/Panel";
 import { StatusPill } from "../components/StatusPill";
@@ -23,7 +23,7 @@ const PRIORITY_CFG = {
 
 const STATUS_CFG = {
   open:        { label: "Open",        bg: "#FEF2F2", color: "#DC2626", border: "#FECACA" },
-  in_progress: { label: "In Progress", bg: "#EFF6FF", color: "#2563EB", border: "#BFDBFE" },
+  in_progress: { label: "In Progress", bg: "#F5F3FF", color: "#6D28D9", border: "#DDD6FE" },
   resolved:    { label: "Resolved",    bg: "#ECFDF5", color: "#059669", border: "#A7F3D0" },
 };
 
@@ -99,7 +99,7 @@ function IssueDrawer({ issue, onClose, onStatusChange }) {
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#94A3B8", marginBottom: 12 }}>Update Status</div>
           <div style={{ display: "flex", gap: 8 }}>
             {issue.status !== "in_progress" && issue.status !== "resolved" && (
-              <button onClick={() => onStatusChange(issue.issue_id, "in_progress")} style={{ fontSize: 12, fontWeight: 600, padding: "8px 16px", borderRadius: 8, border: "none", background: "#EFF6FF", color: "#2563EB", cursor: "pointer" }}>
+              <button onClick={() => onStatusChange(issue.issue_id, "in_progress")} style={{ fontSize: 12, fontWeight: 600, padding: "8px 16px", borderRadius: 8, border: "none", background: "#F5F3FF", color: "#6D28D9", cursor: "pointer" }}>
                 Set In Progress
               </button>
             )}
@@ -204,7 +204,7 @@ export default function IssuesPage() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
         {[
           { label: "Open",        value: openCount,        color: "#DC2626", bg: "#FEF2F2", border: "#FECACA" },
-          { label: "In Progress", value: inProgressCount,  color: "#2563EB", bg: "#EFF6FF", border: "#BFDBFE" },
+          { label: "In Progress", value: inProgressCount,  color: "#6D28D9", bg: "#F5F3FF", border: "#DDD6FE" },
           { label: "Resolved",    value: resolvedCount,    color: "#059669", bg: "#ECFDF5", border: "#A7F3D0" },
           { label: "High Priority (unresolved)", value: highCount, color: highCount > 0 ? "#DC2626" : "#059669", bg: highCount > 0 ? "#FEF2F2" : "#ECFDF5", border: highCount > 0 ? "#FECACA" : "#A7F3D0" },
         ].map(k => (
@@ -222,13 +222,13 @@ export default function IssuesPage() {
             padding: "7px 16px", borderRadius: 7, border: "none",
             fontSize: 13, fontWeight: tab === t.id ? 700 : 500, cursor: "pointer",
             background: tab === t.id ? "#fff" : "transparent",
-            color:      tab === t.id ? "#2563EB" : "#64748B",
+            color:      tab === t.id ? "#6D28D9" : "#64748B",
             boxShadow:  tab === t.id ? "0 1px 4px rgba(0,0,0,.09)" : "none",
             display: "flex", alignItems: "center", gap: 6, transition: "all .15s",
           }}>
             {t.label}
             {t.count > 0 && (
-              <span style={{ background: tab === t.id ? "#2563EB" : "#E2E8F0", color: tab === t.id ? "#fff" : "#64748B", fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 10 }}>
+              <span style={{ background: tab === t.id ? "#6D28D9" : "#E2E8F0", color: tab === t.id ? "#fff" : "#64748B", fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 10 }}>
                 {t.count}
               </span>
             )}
@@ -249,7 +249,7 @@ export default function IssuesPage() {
             <button key={c} onClick={() => setCatFilter(c)} style={{
               padding: "5px 11px", borderRadius: 20, fontSize: 11, cursor: "pointer",
               border:     catFilter === c ? "none" : "1px solid #E2E8F0",
-              background: catFilter === c ? "#2563EB" : "#fff",
+              background: catFilter === c ? "#6D28D9" : "#fff",
               color:      catFilter === c ? "#fff" : "#64748B",
               fontWeight: catFilter === c ? 600 : 400,
             }}>{c}</button>
@@ -260,7 +260,7 @@ export default function IssuesPage() {
             <button key={p} onClick={() => setPrioFilter(p)} style={{
               padding: "5px 11px", borderRadius: 20, fontSize: 11, cursor: "pointer",
               border:     prioFilter === p ? "none" : "1px solid #E2E8F0",
-              background: prioFilter === p ? (p === "high" ? "#DC2626" : p === "medium" ? "#D97706" : p === "low" ? "#059669" : "#2563EB") : "#fff",
+              background: prioFilter === p ? (p === "high" ? "#DC2626" : p === "medium" ? "#D97706" : p === "low" ? "#059669" : "#6D28D9") : "#fff",
               color:      prioFilter === p ? "#fff" : "#64748B",
               fontWeight: prioFilter === p ? 600 : 400,
             }}>{p === "All" ? "All Priority" : p.charAt(0).toUpperCase() + p.slice(1)}</button>
@@ -291,7 +291,7 @@ export default function IssuesPage() {
                       <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#64748B", fontSize: 11 }}>#{issue.issue_id}</span>
                     </td>
                     <td style={{ padding: "11px 14px", fontSize: 12, fontWeight: 600 }}>{issue.driver_name ?? "—"}</td>
-                    <td style={{ padding: "11px 14px", fontSize: 12, fontFamily: "monospace", color: "#2563EB", fontWeight: 600 }}>{issue.vehicle ?? "—"}</td>
+                    <td style={{ padding: "11px 14px", fontSize: 12, fontFamily: "monospace", color: "#6D28D9", fontWeight: 600 }}>{issue.vehicle ?? "—"}</td>
                     <td style={{ padding: "11px 14px", fontSize: 11, color: "#64748B", fontFamily: "monospace" }}>{issue.trip_ref ?? "—"}</td>
                     <td style={{ padding: "11px 14px" }}><Badge {...cat} label={issue.category} /></td>
                     <td style={{ padding: "11px 14px" }}><Badge {...prio} label={prio.label} /></td>
@@ -305,7 +305,7 @@ export default function IssuesPage() {
                     <td style={{ padding: "11px 14px" }}>
                       <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
                         {issue.status === "open" && (
-                          <button onClick={() => updateStatus(issue.issue_id, "in_progress")} style={{ fontSize: 10, fontWeight: 600, padding: "3px 8px", borderRadius: 6, border: "none", background: "#EFF6FF", color: "#2563EB", cursor: "pointer" }}>
+                          <button onClick={() => updateStatus(issue.issue_id, "in_progress")} style={{ fontSize: 10, fontWeight: 600, padding: "3px 8px", borderRadius: 6, border: "none", background: "#F5F3FF", color: "#6D28D9", cursor: "pointer" }}>
                             Start
                           </button>
                         )}
@@ -348,3 +348,4 @@ export default function IssuesPage() {
     </div>
   );
 }
+

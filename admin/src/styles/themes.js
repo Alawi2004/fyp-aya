@@ -4,23 +4,24 @@
 // ─────────────────────────────────────────────────────────────
 
 export const COLORS = {
-  primary:     "#2563EB",
-  primaryDark: "#1E40AF",
-  primaryLight:"#EFF6FF",
-  bg:          "#F1F5F9",
-  surface:     "#ffffff",
-  border:      "#E2E8F0",
-  textPrimary: "#0F172A",
-  textSecond:  "#475569",
-  textMuted:   "#94A3B8",
-  success:     "#10B981",
-  successBg:   "#ECFDF5",
-  warning:     "#F59E0B",
-  warningBg:   "#FFFBEB",
-  danger:      "#EF4444",
-  dangerBg:    "#FEF2F2",
-  info:        "#3B82F6",
-  infoBg:      "#EFF6FF",
+  primary:      "#6D28D9",
+  primaryDark:  "#4C1D95",
+  primaryLight: "#F5F3FF",
+  primaryBorder:"#DDD6FE",
+  bg:           "#F8FAFC",
+  surface:      "#ffffff",
+  border:       "#E2E8F0",
+  textPrimary:  "#0F172A",
+  textSecond:   "#475569",
+  textMuted:    "#94A3B8",
+  success:      "#10B981",
+  successBg:    "#ECFDF5",
+  warning:      "#F59E0B",
+  warningBg:    "#FFFBEB",
+  danger:       "#EF4444",
+  dangerBg:     "#FEF2F2",
+  info:         "#8B5CF6",
+  infoBg:       "#F5F3FF",
 };
 
 // Trip / ticket / user status → visual style
@@ -28,7 +29,7 @@ export const STATUS = {
   Active:    { bg: "#ECFDF5", color: "#059669", dot: "#10B981" },
   Ongoing:   { bg: "#ECFDF5", color: "#059669", dot: "#10B981" },
   Delayed:   { bg: "#FFFBEB", color: "#B45309", dot: "#F59E0B" },
-  Scheduled: { bg: "#EFF6FF", color: "#2563EB", dot: "#3B82F6" },
+  Scheduled: { bg: "#F5F3FF", color: "#6D28D9", dot: "#8B5CF6" },
   Completed: { bg: "#F5F3FF", color: "#6D28D9", dot: "#7C3AED" },
   Cancelled: { bg: "#FEF2F2", color: "#B91C1C", dot: "#EF4444" },
   Inactive:  { bg: "#F1F5F9", color: "#64748B", dot: "#94A3B8" },
@@ -41,7 +42,7 @@ export const STATUS = {
 export const ALERT = {
   emergency: { dot: "#EF4444", bg: "#FEF2F2", text: "#B91C1C" },
   delay:     { dot: "#F59E0B", bg: "#FFFBEB", text: "#D97706" },
-  info:      { dot: "#3B82F6", bg: "#EFF6FF", text: "#1E40AF" },
+  info:      { dot: "#8B5CF6", bg: "#F5F3FF", text: "#6D28D9" },
 };
 
 // Vehicle status → visual style
@@ -75,8 +76,8 @@ export const thStyle = {
 
 // Shared table body cell style
 export const tdStyle = {
-  padding:    "11px 12px",
-  fontSize:   13,
-  color:      "#1E293B",
+  padding:      "11px 12px",
+  fontSize:     13,
+  color:        "#1E293B",
   borderBottom: "1px solid #F8FAFC",
 };

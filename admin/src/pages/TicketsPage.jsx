@@ -1,4 +1,4 @@
-// pages/TicketsPage.jsx
+﻿// pages/TicketsPage.jsx
 import { useState, useEffect } from "react";
 import { ExportBtn } from "../components/ExportBtn";
 import { Panel } from "../components/Panel";
@@ -32,13 +32,13 @@ function normalizeTicket(t) {
 const TICKET_STATUS_STYLE = {
   Confirmed: { bg: "#ECFDF5", color: "#059669", dot: "#10B981" },
   Cancelled: { bg: "#FEF2F2", color: "#B91C1C", dot: "#EF4444" },
-  Used: { bg: "#EFF6FF", color: "#2563EB", dot: "#3B82F6" },
+  Used: { bg: "#F5F3FF", color: "#6D28D9", dot: "#3B82F6" },
   Pending: { bg: "#FFFBEB", color: "#B45309", dot: "#F59E0B" },
 };
 
 
 export default function TicketsPage() {
-  const { currency } = useSettings();
+  const { currency, exchangeRate } = useSettings();
   const [tickets,      setTickets]      = useState([]);
   const [search,       setSearch]       = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -96,7 +96,7 @@ export default function TicketsPage() {
           style={{
             fontFamily: "monospace",
             fontWeight: 600,
-            color: "#2563EB",
+            color: "#6D28D9",
             fontSize: 12,
           }}
         >
@@ -120,7 +120,7 @@ export default function TicketsPage() {
     {
       key: "amount",
       label: "Fare",
-      render: (v) => <span style={{ fontWeight: 600 }}>{fmtMoney(v, currency)}</span>,
+      render: (v) => <span style={{ fontWeight: 600 }}>{fmtMoney(v, currency, exchangeRate)}</span>,
     },
     {
       key: "status",
@@ -248,7 +248,7 @@ export default function TicketsPage() {
         />
         <StatCard
           label="Fare collected"
-          value={fmtMoney(counts.revenue, currency)}
+          value={fmtMoney(counts.revenue, currency, exchangeRate)}
           delta="total revenue"
           up={true}
         />
@@ -323,3 +323,5 @@ export default function TicketsPage() {
     </div>
   );
 }
+
+

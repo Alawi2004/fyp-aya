@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+﻿import { useState, useEffect, useMemo, useCallback } from "react";
 import { Users, UserCheck, UserMinus, UserX, Wallet } from "lucide-react";
 import { ExportBtn } from "../components/ExportBtn";
 import apiClient from "../api/apiClient";
@@ -58,16 +58,16 @@ const actionBtn = (color, bg) => ({
 
 const TRIP_STATUS_STYLE = {
   completed:  { bg: "#F0FDF4", color: "#059669", label: "Completed"  },
-  upcoming:   { bg: "#EFF6FF", color: "#2563EB", label: "Upcoming"   },
+  upcoming:   { bg: "#F5F3FF", color: "#6D28D9", label: "Upcoming"   },
   cancelled:  { bg: "#FEF2F2", color: "#DC2626", label: "Cancelled"  },
-  confirmed:  { bg: "#EFF6FF", color: "#2563EB", label: "Confirmed"  },
+  confirmed:  { bg: "#F5F3FF", color: "#6D28D9", label: "Confirmed"  },
   ongoing:    { bg: "#FFF7ED", color: "#EA580C", label: "Ongoing"    },
-  scheduled:  { bg: "#EFF6FF", color: "#2563EB", label: "Scheduled"  },
+  scheduled:  { bg: "#F5F3FF", color: "#6D28D9", label: "Scheduled"  },
   boarded:    { bg: "#F0FDF4", color: "#059669", label: "Boarded"    },
 };
 
 function TripDetailPanel({ trip, passenger, onBack }) {
-  const { currency } = useSettings();
+  const { currency, exchangeRate } = useSettings();
   const tripSt     = TRIP_STATUS_STYLE[trip.trip_status?.toLowerCase()]      || TRIP_STATUS_STYLE.upcoming;
   const bookingSt  = TRIP_STATUS_STYLE[trip.ui_status ?? trip.trip_status?.toLowerCase()] || TRIP_STATUS_STYLE.upcoming;
 
@@ -81,7 +81,7 @@ function TripDetailPanel({ trip, passenger, onBack }) {
   ].filter(Boolean).join(" · ") || "—";
 
   const fareLabel = trip.fare != null
-    ? fmtMoney(trip.fare, currency) + (trip.seat_count > 1 ? ` × ${trip.seat_count} seats` : "")
+    ? fmtMoney(trip.fare, currency, exchangeRate) + (trip.seat_count > 1 ? ` × ${trip.seat_count} seats` : "")
     : "—";
 
   const bookedAt = trip.booking_time
@@ -130,7 +130,7 @@ function TripDetailPanel({ trip, passenger, onBack }) {
         <Row label="To"         value={trip.destination} />
         <Row label="Date & Time" value={formatTripDate(trip.start_time)} />
         <Row label="Duration"   value={trip.duration} />
-        <Row label="Driver"     value={trip.driver_name} accent={trip.driver_name ? "#1D4ED8" : undefined} />
+        <Row label="Driver"     value={trip.driver_name} accent={trip.driver_name ? "#4C1D95" : undefined} />
         <Row label="Vehicle"    value={vehicleLabel} />
         <Row label="Capacity"   value={trip.vehicle_capacity ? `${trip.vehicle_capacity} seats` : null} last />
 
@@ -147,7 +147,7 @@ function TripDetailPanel({ trip, passenger, onBack }) {
 }
 
 function PassengerProfileDrawer({ passenger, onClose, onEdit, onWallet }) {
-  const { currency } = useSettings();
+  const { currency, exchangeRate } = useSettings();
   const [tickets,      setTickets]      = useState(null);
   const [ticketsError, setTicketsError] = useState(null);
   const [selectedTrip, setSelectedTrip] = useState(null);
@@ -176,7 +176,7 @@ function PassengerProfileDrawer({ passenger, onClose, onEdit, onWallet }) {
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "stretch", justifyContent: "flex-end" }}>
       <style>{`
         @keyframes slideInRight { from { transform:translateX(40px);opacity:0 } to { transform:none;opacity:1 } }
-        .trip-row:hover { background: #EFF6FF !important; border-color: #BFDBFE !important; }
+        .trip-row:hover { background: #F5F3FF !important; border-color: #DDD6FE !important; }
       `}</style>
       <div onClick={onClose} style={{ flex: 1, background: "rgba(15,23,42,.40)", backdropFilter: "blur(3px)" }} />
       <div style={{ width: "min(92vw, 560px)", background: "#fff", display: "flex", flexDirection: "column", boxShadow: "-8px 0 40px rgba(0,0,0,.14)", animation: "slideInRight .25s ease", overflow: "hidden" }}>
@@ -217,7 +217,7 @@ function PassengerProfileDrawer({ passenger, onClose, onEdit, onWallet }) {
                 {[
                   { label: "National ID",    value: nationalId },
                   { label: "Date of Birth",  value: passenger.birth_date ? relDate(passenger.birth_date) : "—" },
-                  { label: "Wallet Balance", value: fmtMoney(passenger.wallet_balance, currency), accent: "#059669" },
+                  { label: "Wallet Balance", value: fmtMoney(passenger.wallet_balance, currency, exchangeRate), accent: "#059669" },
                   { label: "Phone",          value: passenger.phone || "—" },
                   { label: "Joined",         value: relDate(passenger.created_at) },
                   { label: "Total Trips",    value: passenger.trip_count ?? 0 },
@@ -271,7 +271,7 @@ function PassengerProfileDrawer({ passenger, onClose, onEdit, onWallet }) {
                           </div>
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0 }}>
-                          {t.fare != null && <div style={{ fontSize: 12, fontWeight: 700, color: "#059669", marginBottom: 4 }}>{fmtMoney(t.fare, currency)}</div>}
+                          {t.fare != null && <div style={{ fontSize: 12, fontWeight: 700, color: "#059669", marginBottom: 4 }}>{fmtMoney(t.fare, currency, exchangeRate)}</div>}
                           <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 6, background: st.bg, color: st.color }}>{st.label}</span>
                         </div>
                         <span style={{ color: "#CBD5E1", fontSize: 14, flexShrink: 0 }}>›</span>
@@ -325,7 +325,7 @@ function SuspendModal({ passenger, onClose, onDone }) {
           <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 6 }}>Duration</label>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {DURATIONS.map(d => (
-              <button key={d.value} onClick={() => setDuration(d.value)} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, border: `1.5px solid ${duration === d.value ? "#2563EB" : "#E2E8F0"}`, background: duration === d.value ? "#EFF6FF" : "#fff", color: duration === d.value ? "#2563EB" : "#374151", cursor: "pointer" }}>
+              <button key={d.value} onClick={() => setDuration(d.value)} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, border: `1.5px solid ${duration === d.value ? "#6D28D9" : "#E2E8F0"}`, background: duration === d.value ? "#F5F3FF" : "#fff", color: duration === d.value ? "#6D28D9" : "#374151", cursor: "pointer" }}>
                 {d.label}
               </button>
             ))}
@@ -378,7 +378,7 @@ function RestoreModal({ passenger, onClose, onDone }) {
 // ── Wallet Adjust Modal ───────────────────────────────────────────────────────
 
 function WalletModal({ passenger, onClose, onDone }) {
-  const { currency } = useSettings();
+  const { currency, exchangeRate } = useSettings();
   const [type,   setType]   = useState("credit");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
@@ -395,7 +395,7 @@ function WalletModal({ passenger, onClose, onDone }) {
     setBusy(true); setErr(null);
     try {
       await apiClient.post("/wallet/adjust", { user_id: passenger.user_id, type, amount: parsed, reason, notes: notes || undefined });
-      onDone(`${fmtMoney(parsed, currency)} ${type}ed successfully`);
+      onDone(`${fmtMoney(parsed, currency, exchangeRate)} ${type}ed successfully`);
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
@@ -405,7 +405,7 @@ function WalletModal({ passenger, onClose, onDone }) {
   return (
     <Modal title={`Wallet — ${passenger.full_name}`} onClose={onClose} onSave={submit} saving={busy}>
       {err && <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>{err}</div>}
-      <p style={{ fontSize: 13, color: "#64748B", marginBottom: 16 }}>Balance: <strong style={{ color: "#0F172A" }}>{fmtMoney(passenger.wallet_balance, currency)}</strong></p>
+      <p style={{ fontSize: 13, color: "#64748B", marginBottom: 16 }}>Balance: <strong style={{ color: "#0F172A" }}>{fmtMoney(passenger.wallet_balance, currency, exchangeRate)}</strong></p>
       <div style={{ display: "flex", gap: 4, background: "#F1F5F9", borderRadius: 10, padding: 4, marginBottom: 16 }}>
         {["credit", "debit"].map(t => (
           <button key={t} onClick={() => setType(t)} style={{ flex: 1, padding: "7px", borderRadius: 8, border: "none", background: type === t ? "#fff" : "transparent", color: type === t ? (t === "credit" ? "#059669" : "#DC2626") : "#64748B", fontWeight: type === t ? 700 : 500, fontSize: 13, cursor: "pointer" }}>
@@ -427,7 +427,7 @@ function WalletModal({ passenger, onClose, onDone }) {
       </div>
       {amount && !isNaN(parseFloat(amount)) && (
         <div style={{ padding: "10px 12px", background: isCredit ? "#ECFDF5" : "#FEF2F2", border: `1px solid ${isCredit ? "#A7F3D0" : "#FECACA"}`, borderRadius: 8, fontSize: 13, color: isCredit ? "#059669" : "#DC2626" }}>
-          New balance: <strong>{fmtMoney(newBal, currency)}</strong>
+          New balance: <strong>{fmtMoney(newBal, currency, exchangeRate)}</strong>
         </div>
       )}
     </Modal>
@@ -480,7 +480,7 @@ const today = new Date().toISOString().slice(0, 10);
 const fldSt = { width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" };
 
 export default function PassengersPage() {
-  const { currency } = useSettings();
+  const { currency, exchangeRate } = useSettings();
   const [passengers,    setPassengers]    = useState([]);
   const [loading,       setLoading]       = useState(true);
   const [search,        setSearch]        = useState("");
@@ -588,24 +588,24 @@ export default function PassengersPage() {
             { key: "email",          label: "Email"          },
             { key: "phone",          label: "Phone",         value: r => r.phone ?? "—" },
             { key: "status",         label: "Status"         },
-            { key: "wallet_balance", label: "Wallet Balance", value: r => fmtMoney(r.wallet_balance, currency) },
+            { key: "wallet_balance", label: "Wallet Balance", value: r => fmtMoney(r.wallet_balance, currency, exchangeRate) },
             { key: "trips",          label: "Trips",         value: r => r.trips ?? 0 },
           ]}
           filename={`passengers-${new Date().toISOString().slice(0,10)}.csv`}
           title="Passengers Report"
         />
-        <button onClick={openAdd} style={{ background: "#2563EB", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+        <button onClick={openAdd} style={{ background: "#6D28D9", color: "#fff", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
           + Add passenger
         </button>
       </div>
 
       {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0,1fr))", gap: 12 }}>
-        <StatCard label="Total passengers" value={counts.total}                          delta="registered"    accent="#2563EB" icon={<Users size={18} color="#2563EB" />} />
+        <StatCard label="Total passengers" value={counts.total}                          delta="registered"    accent="#6D28D9" icon={<Users size={18} color="#6D28D9" />} />
         <StatCard label="Active"           value={counts.active}                         delta="accounts"      accent="#10B981" icon={<UserCheck size={18} color="#10B981" />} />
         <StatCard label="Suspended"        value={counts.suspended}                      delta="temporarily"   accent="#F59E0B" icon={<UserMinus size={18} color="#F59E0B" />} />
         <StatCard label="Blocked"          value={counts.blocked}                        delta="permanently"   accent="#DC2626" icon={<UserX size={18} color="#DC2626" />} />
-        <StatCard label="Total balance"    value={fmtMoney(counts.balance, currency)}    delta="all wallets"   accent="#7C3AED" icon={<Wallet size={18} color="#7C3AED" />} />
+        <StatCard label="Total balance"    value={fmtMoney(counts.balance, currency, exchangeRate)}    delta="all wallets"   accent="#7C3AED" icon={<Wallet size={18} color="#7C3AED" />} />
       </div>
 
       {/* Filter bar */}
@@ -619,7 +619,7 @@ export default function PassengersPage() {
           <button key={f} onClick={() => setFilter(f)} style={{
             padding: "6px 14px", borderRadius: 20, fontSize: 12, cursor: "pointer",
             border: filter === f ? "none" : "1px solid #E2E8F0",
-            background: filter === f ? "#2563EB" : "#fff",
+            background: filter === f ? "#6D28D9" : "#fff",
             color: filter === f ? "#fff" : "#555",
             fontWeight: filter === f ? 600 : 400,
           }}>
@@ -649,12 +649,12 @@ export default function PassengersPage() {
             </div>
             <div style={{ fontSize: 13, color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.email}</div>
             <div><StatusBadge status={p.status} /></div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B" }}>{fmtMoney(p.wallet_balance, currency)}</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#1E293B" }}>{fmtMoney(p.wallet_balance, currency, exchangeRate)}</div>
             <div style={{ fontSize: 13, color: "#475569" }}>{p.trip_count ?? 0}</div>
             <div style={{ fontSize: 12, color: "#94A3B8" }}>{relDate(p.created_at)}</div>
             <div style={{ display: "flex", gap: 6 }}>
               <button onClick={() => setProfileTarget(p)}                                   style={actionBtn("#7C3AED", "#F5F3FF")}>Profile</button>
-              <button onClick={() => openEdit(p)}                                            style={actionBtn("#2563EB", "#EFF6FF")}>Edit</button>
+              <button onClick={() => openEdit(p)}                                            style={actionBtn("#6D28D9", "#F5F3FF")}>Edit</button>
               <button onClick={() => setWalletTarget(p)}                                    style={actionBtn("#059669", "#ECFDF5")}>Wallet</button>
               <button onClick={() => { setDeleteTarget(p); setDeleteError(null); }}         style={actionBtn("#B91C1C", "#FEF2F2")}>Delete</button>
               {p.status === "active"
@@ -728,3 +728,5 @@ export default function PassengersPage() {
     </div>
   );
 }
+
+

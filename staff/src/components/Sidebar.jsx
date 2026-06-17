@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Wallet, History, LogOut, Coins, Clock, FileText, CalendarDays } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useShift } from "../context/ShiftContext";
@@ -48,7 +48,7 @@ export default function Sidebar({ activePage, onNavigate, collapsed, onToggle })
               width: 34, height: 34, borderRadius: 9,
               background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`,
               display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: `0 4px 12px rgba(37,99,235,.35)`,
+              boxShadow: `0 4px 12px rgba(109,40,217,.35)`,
             }}>
               <Coins size={16} color="#fff" strokeWidth={2.2} />
             </div>
@@ -81,7 +81,7 @@ export default function Sidebar({ activePage, onNavigate, collapsed, onToggle })
         }}>
           <div style={{
             width: 7, height: 7, borderRadius: "50%",
-            background: isShiftOpen ? C.primary : C.danger,
+            background: isShiftOpen ? "#22C55E" : C.danger,
             boxShadow: isShiftOpen ? `0 0 0 3px rgba(34,197,94,.2)` : `0 0 0 3px rgba(239,68,68,.2)`,
             flexShrink: 0,
           }} />
@@ -118,7 +118,7 @@ export default function Sidebar({ activePage, onNavigate, collapsed, onToggle })
                 cursor: "pointer",
                 position: "relative",
                 background: active
-                  ? "rgba(37,99,235,.20)"
+                  ? "rgba(109,40,217,.20)"
                   : isHov ? "rgba(255,255,255,.05)"
                   : "transparent",
                 transition: "background .13s",
@@ -222,3 +222,4 @@ export default function Sidebar({ activePage, onNavigate, collapsed, onToggle })
     </aside>
   );
 }
+
