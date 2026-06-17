@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  Globe, Receipt, Wallet, BookOpen, MapPin,
+  Globe, Wallet, BookOpen, MapPin,
   Shield, Wrench, AlertTriangle, Check, RefreshCw,
 } from "lucide-react";
 import { Panel } from "../components/Panel";
@@ -394,104 +394,6 @@ function GeneralTab({ s, set }) {
   );
 }
 
-// ── Tab: Fare Rules ────────────────────────────────────────────────────────────
-
-function validateFare(s) {
-  const e = {};
-  const checks = [
-    ["fare.base_amount",      errNum(s["fare.base_amount"],      0,   undefined, "Base Amount")],
-    ["fare.student_discount", errNum(s["fare.student_discount"], 0,   1,         "Student Discount")],
-    ["fare.senior_discount",  errNum(s["fare.senior_discount"],  0,   1,         "Senior Discount")],
-    ["fare.employee_discount",errNum(s["fare.employee_discount"],0,   1,         "Employee Discount")],
-    ["fare.school_discount",  errNum(s["fare.school_discount"],  0,   1,         "School Discount")],
-  ];
-  for (const [k, err] of checks) if (err) e[k] = err;
-  return e;
-}
-
-function FareTab({ s, set }) {
-  const keys = ["fare.base_amount","fare.student_discount","fare.senior_discount","fare.employee_discount","fare.school_discount"];
-  const { save, saving, saved, saveErr, valErrs, clearErr } = useSectionSave(s, keys, validateFare);
-  const f = (k, v) => { set(k, v); clearErr(k); };
-
-  const base  = parseFloat(s["fare.base_amount"]  || 0);
-  const perKm = parseFloat(s["fare.per_km_rate"]  || 0); // read from General tab
-  const curr  = s["app.currency"] || "USD";
-  const rate  = parseFloat(s["app.exchange_rate"] || 1) || 1;
-  const KM    = 10;
-
-  const fmtFare = (n) => {
-    const v   = n * rate;
-    const dec = rate >= 100 ? 0 : 2;
-    return `${curr} ${v.toLocaleString("en", { minimumFractionDigits: dec, maximumFractionDigits: dec })}`;
-  };
-
-  const preview = [
-    { label: "Standard",  disc: 0 },
-    { label: "Student",   disc: parseFloat(s["fare.student_discount"]  || 0) },
-    { label: "Senior",    disc: parseFloat(s["fare.senior_discount"]   || 0) },
-    { label: "School",    disc: parseFloat(s["fare.school_discount"]   || 0) },
-    { label: "Employee",  disc: parseFloat(s["fare.employee_discount"] || 0) },
-  ];
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <Panel title="Fare Rules" icon={<Receipt size={14} color="#10B981" />} accent="#10B981"
-        extra={<SaveRow onSave={save} saving={saving} saved={saved} saveErr={saveErr} />}>
-        <div style={{ paddingTop: 10 }}>
-          <TwoCol>
-            <Field label="Base Amount" unit={curr} type="number" min="0" step="0.25"
-              description="Flat fare charged for every journey regardless of distance."
-              value={s["fare.base_amount"]} onChange={v => f("fare.base_amount", v)} error={valErrs["fare.base_amount"]} />
-          </TwoCol>
-          <Divider label="Discount Ratios — 0 = no discount · 1 = free" />
-          <TwoCol>
-            <Field label="Student Discount" unit="0 – 1" type="number" min="0" max="1" step="0.05"
-              description="Fraction off for verified student accounts (e.g. 0.25 = 25% off)."
-              value={s["fare.student_discount"]} onChange={v => f("fare.student_discount", v)} error={valErrs["fare.student_discount"]} />
-            <Field label="Senior Discount" unit="0 – 1" type="number" min="0" max="1" step="0.05"
-              description="Fraction off for senior citizens."
-              value={s["fare.senior_discount"]} onChange={v => f("fare.senior_discount", v)} error={valErrs["fare.senior_discount"]} />
-            <Field label="Employee Discount" unit="0 – 1" type="number" min="0" max="1" step="0.05"
-              description="Fraction off for company employees."
-              value={s["fare.employee_discount"]} onChange={v => f("fare.employee_discount", v)} error={valErrs["fare.employee_discount"]} />
-            <Field label="School Child Discount" unit="0 – 1" type="number" min="0" max="1" step="0.05"
-              description="Fraction off for school children."
-              value={s["fare.school_discount"]} onChange={v => f("fare.school_discount", v)} error={valErrs["fare.school_discount"]} />
-          </TwoCol>
-        </div>
-      </Panel>
-
-      <Panel title={`Live Preview — ${KM} km journey`} accent="#10B981">
-        {rate !== 1 && (
-          <div style={{
-            display: "flex", alignItems: "center", gap: 8,
-            background: "#F0FDF4", border: "1px solid #A7F3D0",
-            borderRadius: 8, padding: "7px 12px", marginBottom: 12, fontSize: 12, color: "#065F46",
-          }}>
-            <span style={{ fontWeight: 700 }}>Rate applied:</span>
-            <span>1 USD = {rate.toLocaleString("en")} {curr} — amounts shown in {curr}</span>
-          </div>
-        )}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, paddingTop: 4 }}>
-          {preview.map(({ label, disc }) => {
-            const raw   = base + KM * perKm;
-            const final = Math.max(0, raw * (1 - disc));
-            return (
-              <div key={label} style={{ background: "#F8FAFC", borderRadius: 10, padding: "12px 14px", border: "1px solid #E2E8F0", textAlign: "center" }}>
-                <div style={{ fontSize: 11, color: "#64748B", marginBottom: 6 }}>{label}</div>
-                <div style={{ fontSize: rate >= 100 ? 14 : 18, fontWeight: 800, color: "#0F172A" }}>{fmtFare(final)}</div>
-                {disc > 0 && <div style={{ fontSize: 10, color: "#10B981", fontWeight: 600, marginTop: 4 }}>{Math.round(disc * 100)}% off</div>}
-                {rate !== 1 && <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 3 }}>≈ USD {final.toFixed(2)}</div>}
-              </div>
-            );
-          })}
-        </div>
-      </Panel>
-    </div>
-  );
-}
-
 // ── Tab: Wallet ────────────────────────────────────────────────────────────────
 
 function validateWallet(s) {
@@ -804,7 +706,6 @@ function MaintenanceTab({ s, set }) {
 
 const TABS = [
   { id: "general",     label: "General",     Icon: Globe    },
-  { id: "fare",        label: "Fare Rules",  Icon: Receipt  },
   { id: "wallet",      label: "Wallet",      Icon: Wallet   },
   { id: "booking",     label: "Booking",     Icon: BookOpen },
   { id: "gps",         label: "GPS",         Icon: MapPin   },
@@ -908,7 +809,6 @@ export default function SystemSettingsPage() {
       ) : (
         <>
           {tab === "general"     && <GeneralTab     s={s} set={set} />}
-          {tab === "fare"        && <FareTab        s={s} set={set} />}
           {tab === "wallet"      && <WalletTab      s={s} set={set} />}
           {tab === "booking"     && <BookingTab     s={s} set={set} />}
           {tab === "gps"         && <GpsTab         s={s} set={set} />}
