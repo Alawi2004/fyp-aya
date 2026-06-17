@@ -54,18 +54,18 @@ const animateLayout = () =>
 
 // ── Extract lat/lng from any text (URL or HTML body) ─────────────────────────
 const parseCoords = (text) => {
-  // @lat,lng — standard share/place URL format
-  const at = text.match(/@(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
-  if (at) return { lat: parseFloat(at[1]), lng: parseFloat(at[2]) };
-  // !3dlat!4dlng — directions / embed format
-  const d = text.match(/!3d(-?\d{1,3}\.\d+)!4d(-?\d{1,3}\.\d+)/);
-  if (d) return { lat: parseFloat(d[1]), lng: parseFloat(d[2]) };
-  // "lat":X,"lng":Y — JSON embedded in HTML
-  const j = text.match(/"lat":(-?\d{1,3}\.\d+),"lng":(-?\d{1,3}\.\d+)/);
-  if (j) return { lat: parseFloat(j[1]), lng: parseFloat(j[2]) };
-  // ?q=lat,lng / ?center= / ?ll=
-  const q = text.match(/[?&](?:q|center|ll)=(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
-  if (q) return { lat: parseFloat(q[1]), lng: parseFloat(q[2]) };
+  // @lat,lng — standard share/place URL format (most common)
+  let m = text.match(/@(-?(?:1[0-7]\d|\d{1,2})\.\d+),(-?(?:1[0-7]\d|\d{1,2})\.\d+)/);
+  if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
+  // !3dlat!4dlng — directions / embed / data= field
+  m = text.match(/!3d(-?(?:1[0-7]\d|\d{1,2})\.\d+)!4d(-?(?:1[0-7]\d|\d{1,2})\.\d+)/);
+  if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
+  // "lat":X,"lng":Y or "latitude":X,"longitude":Y — JSON embedded in HTML
+  m = text.match(/"lat(?:itude)?":(-?\d{1,3}\.\d+),"lng|lon(?:gitude)?":(-?\d{1,3}\.\d+)/);
+  if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
+  // ?q=, ?center=, ?ll=, ?query= with numeric coords
+  m = text.match(/[?&](?:q|center|ll|query)=(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
+  if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
   return null;
 };
 
@@ -570,7 +570,7 @@ const VEHICLE_TYPES = [
 
 const TaxiReservationScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
-  const { refreshBookings, updateBalance, walletBalance, currency } = useApp();
+  const { refreshBookings, updateBalance, walletBalance, currency, fmtMoney } = useApp();
   const { fromStop, toStop, tripSummary } = route?.params ?? {};
 
   const [pickup, setPickup] = useState(fromStop?.stop_name ?? "");
@@ -1304,10 +1304,10 @@ const TaxiReservationScreen = ({ navigation, route }) => {
                           active && { color: v.color },
                         ]}
                       >
-                        from {currency} {v.base.toFixed(2)}
+                        from {fmtMoney(v.base)}
                       </Text>
                       <Text style={styles.vehiclePerKm}>
-                        {currency} {v.perKm.toFixed(2)}/km
+                        {fmtMoney(v.perKm)}/km
                       </Text>
                     </View>
                     {active && (
@@ -1334,10 +1334,8 @@ const TaxiReservationScreen = ({ navigation, route }) => {
             const insufficient = walletBalance < fare;
             const fareText =
               estimatedFare != null
-                ? `${currency} ${estimatedFare.toFixed(2)}`
-                : `${currency} ${selVehicle.base.toFixed(2)} + ${currency} ${selVehicle.perKm.toFixed(
-                    2
-                  )}/km`;
+                ? fmtMoney(estimatedFare)
+                : `${fmtMoney(selVehicle.base)} + ${fmtMoney(selVehicle.perKm)}/km`;
             return (
               <View
                 style={[

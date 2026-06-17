@@ -123,29 +123,53 @@ export const createTaxiReservation = async (req, res) => {
   }
 };
 
-const DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+const DESKTOP_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+// SOCS=CAI bypasses the Google consent/cookie-gate that intercepts server-side requests
+const GOOGLE_COOKIES = 'SOCS=CAI; NID=; SID=';
+
+const COORD = '(-?(?:1[0-7]\\d|\\d{1,2})\\.\\d+)';
 
 const parseMapCoords = (text) => {
-  const at = text.match(/@(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
-  if (at) return { lat: parseFloat(at[1]), lng: parseFloat(at[2]) };
-  const d = text.match(/!3d(-?\d{1,3}\.\d+)!4d(-?\d{1,3}\.\d+)/);
-  if (d) return { lat: parseFloat(d[1]), lng: parseFloat(d[2]) };
-  const j = text.match(/"lat":(-?\d{1,3}\.\d+),"lng":(-?\d{1,3}\.\d+)/);
-  if (j) return { lat: parseFloat(j[1]), lng: parseFloat(j[2]) };
-  const q = text.match(/[?&](?:q|center|ll)=(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
-  if (q) return { lat: parseFloat(q[1]), lng: parseFloat(q[2]) };
+  // @lat,lng — standard share/place URL (most common)
+  let m = text.match(new RegExp(`@${COORD},${COORD}`));
+  if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
+  // !3dlat!4dlng — directions / embed / data= field
+  m = text.match(new RegExp(`!3d${COORD}!4d${COORD}`));
+  if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
+  // "lat":X,"lng":Y or "latitude":X,"longitude":Y — JSON in HTML
+  m = text.match(/"lat(?:itude)?":(-?\d{1,3}\.\d+),"lng|lon(?:gitude)?":(-?\d{1,3}\.\d+)/);
+  if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
+  // ?q=, ?center=, ?ll=, ?query= carrying numeric coords
+  m = text.match(/[?&](?:q|center|ll|query)=(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
+  if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
   return null;
 };
 
+const nominatimGeocode = async (query) => {
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=0`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'FYP-AYA Transit App (student project)', 'Accept-Language': 'en' },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.length) return null;
+    return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+  } catch {
+    return null;
+  }
+};
+
 // GET /api/taxi-reservations/expand-map?url=...
-// Server-side URL expansion so client avoids Google bot-detection blocks.
+// Server-side URL expansion — bypasses Google bot-detection and consent pages.
 export const expandMapUrl = async (req, res) => {
   const { url } = req.query;
   if (!url || typeof url !== 'string') {
     return res.status(400).json({ error: 'url query parameter is required' });
   }
 
-  // Step 1: parse the raw URL string directly (full google.com/maps links work here)
+  // Step 1: parse the raw URL directly (full google.com/maps links with @lat,lng work here)
   const direct = parseMapCoords(url);
   if (direct) return res.json(direct);
 
@@ -160,12 +184,13 @@ export const expandMapUrl = async (req, res) => {
         'Accept':                    'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language':           'en-US,en;q=0.9',
         'Upgrade-Insecure-Requests': '1',
+        'Cookie':                    GOOGLE_COOKIES,
       },
       redirect: 'follow',
     });
     clearTimeout(timer);
 
-    // Step 2: check the final URL after all redirects
+    // Step 2: check the fully-resolved URL after all HTTP redirects
     const fromFinal = parseMapCoords(response.url ?? '');
     if (fromFinal) return res.json(fromFinal);
 
@@ -173,6 +198,16 @@ export const expandMapUrl = async (req, res) => {
     const html = await response.text();
     const fromHtml = parseMapCoords(html);
     if (fromHtml) return res.json(fromHtml);
+
+    // Step 4: extract place name from HTML <title> and geocode via Nominatim
+    const titleMatch = html.match(/<title[^>]*>([^<]+?)\s*[-–|]\s*Google Maps/i);
+    if (titleMatch) {
+      const placeName = titleMatch[1].trim();
+      if (placeName) {
+        const geocoded = await nominatimGeocode(placeName);
+        if (geocoded) return res.json(geocoded);
+      }
+    }
 
     return res.status(422).json({ error: 'Could not extract coordinates from this URL' });
   } catch (err) {

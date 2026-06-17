@@ -234,6 +234,7 @@ const DEFAULTS = {
   "app.name":                    "Yalla Transit",
   "app.timezone":                "Asia/Beirut",
   "app.currency":                "USD",
+  "app.exchange_rate":           "1",
   "app.language":                "en",
   "app.support_email":           "support@yallatransit.lb",
   "app.support_phone":           "+961 1 999 000",
@@ -311,11 +312,13 @@ function validateGeneral(s) {
   if (email) e["app.support_email"] = email;
   const phone = errRequired(s["app.support_phone"], "Support Phone");
   if (phone) e["app.support_phone"] = phone;
+  const rate = errNum(s["app.exchange_rate"], 0.0001, undefined, "Exchange Rate");
+  if (rate) e["app.exchange_rate"] = rate;
   return e;
 }
 
 function GeneralTab({ s, set }) {
-  const keys = ["app.name","app.timezone","app.currency","app.language","app.support_email","app.support_phone"];
+  const keys = ["app.name","app.timezone","app.currency","app.exchange_rate","app.language","app.support_email","app.support_phone"];
   const { save, saving, saved, saveErr, valErrs, clearErr } = useSectionSave(s, keys, validateGeneral);
   const f = (k, v) => { set(k, v); clearErr(k); };
 
@@ -333,6 +336,9 @@ function GeneralTab({ s, set }) {
           <Select label="Currency" options={CURRENCY_OPTS}
             description="ISO 4217 currency code used for fares and wallets."
             value={s["app.currency"]} onChange={v => f("app.currency", v)} />
+          <Field label="Exchange Rate" unit="per 1 USD" type="number" min="0.0001" step="1"
+            description="Units of the selected currency equal to 1 USD. Set to 1 for USD-based systems."
+            value={s["app.exchange_rate"]} onChange={v => f("app.exchange_rate", v)} error={valErrs["app.exchange_rate"]} />
           <Select label="Default Language" options={LANG_OPTS}
             description="Default UI language for passengers and drivers."
             value={s["app.language"]} onChange={v => f("app.language", v)} />

@@ -248,7 +248,7 @@ const BellWiggle = ({ children }) => {
 const HomeScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { walletBalance, bookings } = useApp();
+  const { walletBalance, bookings, currency, exchangeRate } = useApp();
 
   const [buses, setBuses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -673,10 +673,10 @@ const HomeScreen = ({ navigation }) => {
               <View style={{ flex: 1 }}>
                 <Text style={styles.walletLabel}>Available balance</Text>
                 <View style={styles.walletAmountRow}>
-                  <Text style={styles.walletCurrency}>$</Text>
+                  <Text style={styles.walletCurrency}>{currency}</Text>
                   <CountUp
-                    value={walletBalance ?? 0}
-                    decimals={2}
+                    value={(walletBalance ?? 0) * exchangeRate}
+                    decimals={exchangeRate >= 100 ? 0 : 2}
                     style={styles.walletAmount}
                   />
                 </View>

@@ -12,7 +12,7 @@ import { useApp } from '../../context/AppContext';
 
 const PassengerVerifyScreen = ({ navigation, route }) => {
   const headerInsets = useHeaderInsets();
-  const { currency } = useApp();
+  const { fmtMoney } = useApp();
   const tripId = route?.params?.tripId ?? null;
 
   const [permission, requestPermission] = useCameraPermissions();
@@ -210,7 +210,7 @@ const PassengerVerifyScreen = ({ navigation, route }) => {
                 label="Fare"
                 value={
                   scanData.fare_deducted
-                    ? `${currency} ${scanData.amount_deducted?.toFixed(2)} deducted`
+                    ? `${fmtMoney(scanData.amount_deducted)} deducted`
                     : scanData.fare_insufficient
                     ? 'Insufficient balance'
                     : '—'

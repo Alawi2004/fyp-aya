@@ -201,7 +201,7 @@ const Shuttle = ({ style, children }) => {
 const BookingScreen = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
   const { bus } = route.params;
-  const { walletBalance, updateBalance, addBooking, refreshBookings, currency } =
+  const { walletBalance, updateBalance, addBooking, refreshBookings, currency, exchangeRate, fmtMoney } =
     useApp();
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -257,7 +257,7 @@ const BookingScreen = ({ route, navigation }) => {
   const totalPrice = selectedSeats.length * unitPrice;
   const insufficientBalance =
     selectedSeats.length > 0 && walletBalance < totalPrice;
-  const shortfall = Math.max(0, totalPrice - walletBalance).toFixed(2);
+  const shortfall = Math.max(0, totalPrice - walletBalance);
   const availableSeats = totalSeats - bookedSeats.length;
   const canBook = selectedSeats.length > 0 && !insufficientBalance;
 
@@ -277,9 +277,9 @@ const BookingScreen = ({ route, navigation }) => {
     if (insufficientBalance) {
       Alert.alert(
         "Insufficient Balance",
-        `You need ${currency} ${totalPrice.toFixed(2)} for ${
+        `You need ${fmtMoney(totalPrice)} for ${
           selectedSeats.length
-        } seat(s) but only have ${currency} ${walletBalance.toFixed(2)} in your wallet.`,
+        } seat(s) but only have ${fmtMoney(walletBalance)} in your wallet.`,
         [
           {
             text: "Top Up Wallet",
@@ -296,7 +296,7 @@ const BookingScreen = ({ route, navigation }) => {
         : `${selectedSeats.length} seats (${selectedSeats.join(", ")})`;
     Alert.alert(
       "Confirm Booking",
-      `Book ${seatLabel} on ${bus.name} for ${currency} ${totalPrice.toFixed(2)}?`,
+      `Book ${seatLabel} on ${bus.name} for ${fmtMoney(totalPrice)}?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -427,7 +427,7 @@ const BookingScreen = ({ route, navigation }) => {
           <View style={styles.heroFareChip}>
             <Ionicons name="pricetag" size={12} color={COLORS.white} />
             <Text style={styles.heroFareText}>
-              {currency} {unitPrice.toFixed(2)} / seat
+              {fmtMoney(unitPrice)} / seat
             </Text>
           </View>
         </Animated.View>
@@ -503,7 +503,7 @@ const BookingScreen = ({ route, navigation }) => {
             <View style={styles.priceRow}>
               <View style={styles.priceItem}>
                 <Text style={styles.priceLabel}>Price / Seat</Text>
-                <Text style={styles.priceValue}>{currency} {unitPrice.toFixed(2)}</Text>
+                <Text style={styles.priceValue}>{fmtMoney(unitPrice)}</Text>
               </View>
               <View style={styles.priceDivider} />
               <View style={styles.priceItem}>
@@ -514,7 +514,7 @@ const BookingScreen = ({ route, navigation }) => {
                     insufficientBalance && { color: COLORS.danger },
                   ]}
                 >
-                  {currency} {walletBalance?.toFixed(2) ?? "0.00"}
+                  {fmtMoney(walletBalance ?? 0)}
                 </Text>
               </View>
             </View>
@@ -536,7 +536,7 @@ const BookingScreen = ({ route, navigation }) => {
                       <Text style={styles.warningText}>
                         You need{" "}
                         <Text style={{ fontWeight: "800" }}>
-                          {currency} {shortfall} more
+                          {fmtMoney(shortfall)} more
                         </Text>{" "}
                         to book {selectedSeats.length} seat(s).
                       </Text>
@@ -548,7 +548,7 @@ const BookingScreen = ({ route, navigation }) => {
                         Total ({selectedSeats.length}×)
                       </Text>
                       <Text style={styles.warningAmtVal}>
-                        {currency} {totalPrice.toFixed(2)}
+                        {fmtMoney(totalPrice)}
                       </Text>
                     </View>
                     <Ionicons
@@ -561,7 +561,7 @@ const BookingScreen = ({ route, navigation }) => {
                       <Text
                         style={[styles.warningAmtVal, { color: COLORS.danger }]}
                       >
-                        {currency} {walletBalance.toFixed(2)}
+                        {fmtMoney(walletBalance)}
                       </Text>
                     </View>
                     <Ionicons
@@ -577,7 +577,7 @@ const BookingScreen = ({ route, navigation }) => {
                           { color: COLORS.danger, fontWeight: "900" },
                         ]}
                       >
-                        ${shortfall}
+                        {fmtMoney(shortfall)}
                       </Text>
                     </View>
                   </View>
@@ -705,11 +705,11 @@ const BookingScreen = ({ route, navigation }) => {
           <Text style={styles.bottomLabel}>Total</Text>
           <View style={{ flexDirection: "row", alignItems: "flex-end" }}>
             <Text style={[styles.bottomValue, { color: PURPLE.primary }]}>
-              $
+              {currency}{" "}
             </Text>
             <CountUp
-              value={selectedSeats.length > 0 ? totalPrice : unitPrice}
-              decimals={2}
+              value={(selectedSeats.length > 0 ? totalPrice : unitPrice) * exchangeRate}
+              decimals={exchangeRate >= 100 ? 0 : 2}
               style={[styles.bottomValue, { color: PURPLE.primary }]}
             />
           </View>

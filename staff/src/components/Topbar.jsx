@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { Menu, RefreshCw, Clock, CheckCircle, AlertCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useShift } from "../context/ShiftContext";
@@ -9,7 +9,7 @@ import { C } from "../styles/themes";
 export default function Topbar({ onMenuToggle, pageTitle }) {
   const { user }                 = useAuth();
   const { isShiftOpen, shift }   = useShift();
-  const { currency }             = useSettings();
+  const { currency, exchangeRate } = useSettings();
   const [stats,   setStats]      = useState(null);
   const [loading, setLoading]    = useState(false);
 
@@ -98,7 +98,7 @@ export default function Topbar({ onMenuToggle, pageTitle }) {
           </span>
           <span style={{ fontSize: 11, color: C.textMuted }}>·</span>
           <span style={{ fontSize: 12, fontWeight: 700, color: C.primaryDark }}>
-            {currency} {parseFloat(stats.today_amount).toFixed(2)}
+            {currency} {(parseFloat(stats.today_amount) * exchangeRate).toLocaleString("en", { minimumFractionDigits: exchangeRate >= 100 ? 0 : 2, maximumFractionDigits: exchangeRate >= 100 ? 0 : 2 })}
           </span>
         </div>
       )}

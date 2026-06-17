@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback } from "react";
 import { History, Filter, RefreshCw, ChevronDown, ChevronUp, Search, X } from "lucide-react";
 import apiClient from "../api/apiClient";
 import { C, cardStyle } from "../styles/themes";
 import { useSettings } from "../context/SettingsContext";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
-const fmt      = (n, cur = "USD") => `${cur} ${parseFloat(n ?? 0).toFixed(2)}`;
+const fmt      = (n, cur = "USD", rate = 1) => { const v = (parseFloat(n ?? 0)) * rate; const dec = rate >= 100 ? 0 : 2; return `${cur} ${v.toLocaleString("en", { minimumFractionDigits: dec, maximumFractionDigits: dec })}`; };
 const fmtDate  = (d) => d
   ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })
   : "—";
@@ -26,7 +26,7 @@ const tdStyle = { padding: "13px 14px", verticalAlign: "middle" };
 
 // ─── HistoryPage ─────────────────────────────────────────────────────────────
 export default function HistoryPage() {
-  const { currency } = useSettings();
+  const { currency, exchangeRate } = useSettings();
   const [records,      setRecords]      = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [filtersOpen,  setFiltersOpen]  = useState(false);
@@ -81,7 +81,7 @@ export default function HistoryPage() {
       {/* Summary strip */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 24 }}>
         <SummaryCard label="Total Top-Ups"     value={records.length}           sub="all time (filtered)" />
-        <SummaryCard label="Total Amount"      value={fmt(totalAmount, currency)}         sub="all time (filtered)" accent />
+        <SummaryCard label="Total Amount"      value={fmt(totalAmount, currency, exchangeRate)}         sub="all time (filtered)" accent />
         <SummaryCard label="Today's Top-Ups"   value={todayCount}               sub="processed today" />
       </div>
 
@@ -202,7 +202,7 @@ export default function HistoryPage() {
                       </td>
                       <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
                         <span style={{ background: "#D1FAE5", color: "#065F46", padding: "3px 10px", borderRadius: 99, fontWeight: 700, fontSize: 13 }}>
-                          {fmt(r.amount, currency)}
+                          {fmt(r.amount, currency, exchangeRate)}
                         </span>
                       </td>
                       <td style={{ ...tdStyle, whiteSpace: "nowrap", color: C.textSecond }}>
@@ -276,9 +276,9 @@ function DetailModal({ record, onClose }) {
     ["Passenger",          record.user_name],
     ["Passenger Email",    record.user_email],
     ["Passenger Phone",    record.user_phone ?? "—"],
-    ["Amount",             fmt(record.amount, currency)],
-    ["Balance Before",     fmt(record.balance_before, currency)],
-    ["Balance After",      fmt(record.balance_after, currency)],
+    ["Amount",             fmt(record.amount, currency, exchangeRate)],
+    ["Balance Before",     fmt(record.balance_before, currency, exchangeRate)],
+    ["Balance After",      fmt(record.balance_after, currency, exchangeRate)],
     ["Payment Method",     record.payment_method],
     ["Location",           record.recharge_location],
     ["Transaction Ref",    record.transaction_reference],

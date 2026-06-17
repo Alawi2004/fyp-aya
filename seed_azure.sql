@@ -17,6 +17,7 @@ USING (VALUES
   ('app.name',                  'Yalla Transit',        'general',  'Application Name',        'Public name shown in the UI',               'string'),
   ('app.timezone',              'Asia/Beirut',          'general',  'Timezone',                'System-wide timezone',                      'string'),
   ('app.currency',              'USD',                  'general',  'Currency Code',           'ISO 4217 currency code',                    'string'),
+  ('app.exchange_rate',         '1',                    'general',  'Exchange Rate',           'Units of currency per 1 USD (1 = USD)',      'number'),
   ('app.language',              'en',                   'general',  'Default Language',        'BCP-47 language tag',                       'string'),
   ('app.support_email',         'support@yallatransit.lb','general','Support Email',           'Contact email shown to users',              'string'),
   ('app.support_phone',         '+961 1 999 000',       'general',  'Support Phone',           'Contact phone shown to users',              'string'),

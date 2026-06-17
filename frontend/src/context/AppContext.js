@@ -28,7 +28,7 @@
 
 // export const useApp = () => useContext(AppContext);
 
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import apiClient, { registerPushToken, registerFcmToken } from '../api/apiClient';
@@ -52,6 +52,7 @@ export const AppProvider = ({ children }) => {
   // they'd show the stale $0.00 default until the Wallet tab was opened.
   const [walletBalance, setWalletBalance] = useState(0);
   const [currency, setCurrency] = useState('USD');
+  const [exchangeRate, setExchangeRate] = useState(1);
 
   useEffect(() => {
     if (role !== 'passenger' || !user) return;
@@ -66,11 +67,19 @@ export const AppProvider = ({ children }) => {
     if (!user) return;
     apiClient.get('/settings')
       .then((res) => {
-        const cur = res.data?.flat?.['app.currency'];
-        if (cur) setCurrency(cur);
+        const flat = res.data?.flat ?? {};
+        if (flat['app.currency']) setCurrency(flat['app.currency']);
+        const rate = parseFloat(flat['app.exchange_rate']);
+        if (rate > 0) setExchangeRate(rate);
       })
       .catch(() => {});
   }, [user]);
+
+  const fmtMoney = useCallback((n) => {
+    const v = (parseFloat(n) || 0) * exchangeRate;
+    const dec = exchangeRate >= 100 ? 0 : 2;
+    return `${currency} ${v.toLocaleString('en', { minimumFractionDigits: dec, maximumFractionDigits: dec })}`;
+  }, [currency, exchangeRate]);
 
   // Register push tokens on mount — skipped in Expo Go (removed in SDK 53)
   useEffect(() => {
@@ -224,7 +233,7 @@ export const AppProvider = ({ children }) => {
   return (
     <AppContext.Provider value={{
       walletBalance, updateBalance,
-      currency,
+      currency, exchangeRate, fmtMoney,
       activeBooking, setActiveBooking,
       bookings, addBooking, cancelBooking, refreshBookings,
       ratings, addRating, averageRating,

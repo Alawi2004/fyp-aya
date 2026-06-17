@@ -31,7 +31,7 @@ const STATUS_CONFIG = {
 
 const TripHistoryScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { bookings, cancelBooking, refreshBookings, currency } = useApp();
+  const { bookings, cancelBooking, refreshBookings, currency, fmtMoney } = useApp();
   const { user } = useAuth();
   const [filter, setFilter]       = useState('all');
   const [exporting, setExporting] = useState(false);
@@ -52,7 +52,7 @@ const TripHistoryScreen = ({ navigation }) => {
       const rows = filtered.map((b, i) => {
         const isTaxi = b.type === 'taxi';
         const seatCell = isTaxi ? 'Taxi' : b.seats?.length > 1 ? `${b.seats.length} Seats` : (b.seatId || '—');
-        const priceCell = isTaxi ? '—' : `${currency} ${parseFloat(b.price || 0).toFixed(2)}`;
+        const priceCell = isTaxi ? '—' : fmtMoney(parseFloat(b.price || 0));
         return `
         <tr style="background:${i % 2 === 0 ? '#F8FAFC' : '#FFFFFF'}">
           <td>${b.bus?.name || '—'}</td>
@@ -105,7 +105,7 @@ const TripHistoryScreen = ({ navigation }) => {
   <div class="summary">
     <div class="stat"><div class="stat-num">${filtered.length}</div><div class="stat-lbl">Trips Shown</div></div>
     <div class="stat"><div class="stat-num">${filtered.filter(b=>b.status==='completed').length}</div><div class="stat-lbl">Completed</div></div>
-    <div class="stat"><div class="stat-num">${currency} ${total.toFixed(2)}</div><div class="stat-lbl">Total Spent</div></div>
+    <div class="stat"><div class="stat-num">${fmtMoney(total)}</div><div class="stat-lbl">Total Spent</div></div>
   </div>
   <table>
     <thead><tr><th>Bus</th><th>Route</th><th>Date & Time</th><th>Seat</th><th>Fare</th><th>Status</th></tr></thead>
@@ -134,7 +134,7 @@ const TripHistoryScreen = ({ navigation }) => {
       ? `taxi from ${booking.bus?.origin} to ${booking.bus?.destination}`
       : `seat ${booking.seatId} on ${booking.bus?.name}`;
     const refundLine = !isTaxi && booking.price > 0
-      ? `\n\n${currency} ${booking.price?.toFixed(2)} will be refunded.`
+      ? `\n\n${fmtMoney(booking.price)} will be refunded.`
       : '';
     Alert.alert(
       'Cancel Booking',
@@ -151,7 +151,7 @@ const TripHistoryScreen = ({ navigation }) => {
               return;
             }
             if (!isTaxi && result.refund > 0) {
-              Alert.alert('Cancelled', `${currency} ${result.refund.toFixed(2)} refunded to your wallet.`);
+              Alert.alert('Cancelled', `${fmtMoney(result.refund)} refunded to your wallet.`);
             } else {
               Alert.alert('Cancelled', 'Reservation has been cancelled.');
             }
@@ -226,7 +226,7 @@ const TripHistoryScreen = ({ navigation }) => {
             {!isTaxi && (
               <View style={styles.pill}>
                 <Ionicons name="cash-outline" size={12} color={PURPLE.primary} />
-                <Text style={styles.pillText}>{currency} {item.price?.toFixed(2)}</Text>
+                <Text style={styles.pillText}>{fmtMoney(item.price)}</Text>
               </View>
             )}
             {isTaxi && item.scheduledFor && item.scheduledFor !== 'Now' && (
@@ -295,7 +295,7 @@ const TripHistoryScreen = ({ navigation }) => {
               <Ionicons name="checkmark-circle" size={14} color={COLORS.secondary} />
               <Text style={styles.refundText}>
                 {!isTaxi && item.price > 0
-                  ? `${currency} ${item.price?.toFixed(2)} refunded to wallet`
+                  ? `${fmtMoney(item.price)} refunded to wallet`
                   : 'Reservation cancelled'}
               </Text>
             </View>

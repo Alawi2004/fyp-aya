@@ -508,7 +508,7 @@ const ScanLine = () => {
 };
 
 // ── Count-up balance (isolated so re-renders don't touch the whole screen) ───
-const AnimatedBalance = ({ value, style, currency = 'USD' }) => {
+const AnimatedBalance = ({ value, style, currency = 'USD', decimals = 2 }) => {
   const anim = useRef(new Animated.Value(0)).current;
   const [display, setDisplay] = useState(0);
   useEffect(() => {
@@ -521,12 +521,12 @@ const AnimatedBalance = ({ value, style, currency = 'USD' }) => {
     }).start();
     return () => anim.removeListener(id);
   }, [value]);
-  const [whole, cents] = display.toFixed(2).split(".");
+  const parts = display.toFixed(decimals).split(".");
   return (
     <Text style={style}>
       <Text>{currency} </Text>
-      {whole}
-      <Text style={{ fontSize: 26 }}>.{cents}</Text>
+      {parts[0]}
+      {decimals > 0 && <Text style={{ fontSize: 26 }}>.{parts[1]}</Text>}
     </Text>
   );
 };
@@ -535,7 +535,7 @@ const WalletScreen = () => {
   const navigation = useNavigation();
   const headerInsets = useHeaderInsets(12);
   const insets = useSafeAreaInsets();
-  const { walletBalance, updateBalance, currency } = useApp();
+  const { walletBalance, updateBalance, currency, exchangeRate, fmtMoney } = useApp();
   const { user } = useAuth();
   const [walletId, setWalletId] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -755,7 +755,7 @@ const WalletScreen = () => {
     const lines = [
       "🧾 YALLA TRANSIT — WALLET RECEIPT",
       `Type: ${isCredit ? "Top-Up (Credit)" : "Payment (Debit)"}`,
-      `Amount: ${isCredit ? "+" : "-"}${currency} ${parseFloat(t.amount).toFixed(2)}`,
+      `Amount: ${isCredit ? "+" : "-"}${fmtMoney(parseFloat(t.amount))}`,
       `Description: ${t.description ?? "—"}`,
       t.location_name ? `Location: ${t.location_name}` : null,
       t.tx_ref ? `Reference: ${t.tx_ref}` : null,
@@ -794,9 +794,7 @@ const WalletScreen = () => {
       <body>
         <div class="brand">YALLA WALLET</div>
         <div class="title">Transaction Receipt</div>
-        <div class="amt">${isCredit ? "+" : "-"}${currency} ${parseFloat(t.amount).toFixed(
-      2
-    )}</div>
+        <div class="amt">${isCredit ? "+" : "-"}${fmtMoney(parseFloat(t.amount))}</div>
         <div class="type">${
           isCredit ? "Wallet Top-Up" : "Trip Payment"
         } · Completed</div>
@@ -983,9 +981,10 @@ const WalletScreen = () => {
             <View style={styles.balanceBlock}>
               <Text style={styles.balanceLabel}>Available Balance</Text>
               <AnimatedBalance
-                value={walletBalance}
+                value={walletBalance * exchangeRate}
                 style={styles.balanceAmount}
                 currency={currency}
+                decimals={exchangeRate >= 100 ? 0 : 2}
               />
             </View>
 
@@ -1014,7 +1013,7 @@ const WalletScreen = () => {
               <Ionicons name="trending-up" size={16} color={COLORS.danger} />
             </View>
             <Bump trigger={totalSpent} style={{ alignSelf: "flex-start" }}>
-              <Text style={styles.statValue}>{currency} {totalSpent.toFixed(2)}</Text>
+              <Text style={styles.statValue}>{fmtMoney(totalSpent)}</Text>
             </Bump>
             <Text style={styles.statLabel}>Total Spent</Text>
           </View>
@@ -1482,8 +1481,7 @@ const WalletScreen = () => {
                           },
                         ]}
                       >
-                        {group.total >= 0 ? "+" : "−"}{currency}{" "}
-                        {Math.abs(group.total).toFixed(2)}
+                        {group.total >= 0 ? "+" : "−"}{fmtMoney(Math.abs(group.total))}
                       </Text>
                     </View>
                     <View style={styles.txGroupCard}>
@@ -1537,8 +1535,7 @@ const WalletScreen = () => {
                                   },
                                 ]}
                               >
-                                {isCredit ? "+" : "-"}{currency}{" "}
-                                {parseFloat(t.amount).toFixed(2)}
+                                {isCredit ? "+" : "-"}{fmtMoney(parseFloat(t.amount))}
                               </Text>
                               <Text style={styles.txTime}>
                                 {fmtTime(t.created_at)}
@@ -1776,8 +1773,7 @@ const WalletScreen = () => {
                           />
                         </View>
                         <Text style={styles.receiptHeaderAmount}>
-                          {isCredit ? "+" : "-"}{currency}{" "}
-                          {parseFloat(selectedTx.amount).toFixed(2)}
+                          {isCredit ? "+" : "-"}{fmtMoney(parseFloat(selectedTx.amount))}
                         </Text>
                         <Text style={styles.receiptHeaderType}>
                           {isCredit ? "Wallet Top-Up" : "Trip Payment"}
