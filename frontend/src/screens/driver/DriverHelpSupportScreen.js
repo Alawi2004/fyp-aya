@@ -6,6 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, PURPLE } from '../../constants/colors';
+import { useApp } from '../../context/AppContext';
 
 const FAQS = [
   {
@@ -94,30 +95,22 @@ const FAQS = [
   },
 ];
 
-const CONTACT_CARDS = [
+const makeContactCards = (phone, email) => [
   {
     icon: 'call-outline',
-    label: 'Dispatch Hotline',
-    value: '+60 3-1234 5678',
+    label: 'Support Hotline',
+    value: phone,
     sub: 'Available 24/7',
     color: PURPLE.primary,
-    onPress: () => Linking.openURL('tel:+60312345678'),
+    onPress: () => Linking.openURL(`tel:${phone.replace(/\s/g, '')}`),
   },
   {
     icon: 'mail-outline',
     label: 'Support Email',
-    value: 'support@busapp.com',
+    value: email,
     sub: 'Reply within 24 hours',
     color: '#8B5CF6',
-    onPress: () => Linking.openURL('mailto:support@busapp.com'),
-  },
-  {
-    icon: 'chatbubble-ellipses-outline',
-    label: 'Fleet Manager',
-    value: '+60 12-888 9999',
-    sub: 'Mon–Fri, 8am–6pm',
-    color: COLORS.secondary,
-    onPress: () => Linking.openURL('tel:+60128889999'),
+    onPress: () => Linking.openURL(`mailto:${email}`),
   },
 ];
 
@@ -146,6 +139,8 @@ const FaqItem = ({ item }) => {
 // ── Main screen ───────────────────────────────────────────────────────────────
 const DriverHelpSupportScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
+  const { supportPhone, supportEmail } = useApp();
+  const CONTACT_CARDS = makeContactCards(supportPhone, supportEmail);
 
   const handleContact = (card) => {
     Alert.alert(card.label, card.value, [

@@ -29,12 +29,13 @@
 // export const useApp = () => useContext(AppContext);
 
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import apiClient, { registerPushToken, registerFcmToken } from '../api/apiClient';
 
 // Expo Go removed Android push notifications in SDK 53 — skip registration there
 const IS_EXPO_GO = Constants.executionEnvironment === 'storeClient';
+// Lazy-load to avoid the module emitting warnings when imported in Expo Go
+const Notifications = IS_EXPO_GO ? null : require('expo-notifications');
 import { getWalletApi } from '../api/walletApi';
 import { getBookingsApi, cancelBookingApi } from '../api/bookingApi';
 import { cancelTaxiReservation } from '../api/apiClient';
@@ -53,6 +54,8 @@ export const AppProvider = ({ children }) => {
   const [walletBalance, setWalletBalance] = useState(0);
   const [currency, setCurrency] = useState('USD');
   const [exchangeRate, setExchangeRate] = useState(1);
+  const [supportPhone, setSupportPhone] = useState('+961 1 999 000');
+  const [supportEmail, setSupportEmail] = useState('support@yallatransit.lb');
 
   useEffect(() => {
     if (role !== 'passenger' || !user) return;
@@ -74,6 +77,16 @@ export const AppProvider = ({ children }) => {
       })
       .catch(() => {});
   }, [user]);
+
+  // Fetch public settings (support phone/email) — no auth required
+  useEffect(() => {
+    apiClient.get('/settings/public')
+      .then((res) => {
+        if (res.data?.['app.support_phone']) setSupportPhone(res.data['app.support_phone']);
+        if (res.data?.['app.support_email']) setSupportEmail(res.data['app.support_email']);
+      })
+      .catch(() => {});
+  }, []);
 
   const fmtMoney = useCallback((n) => {
     const v = (parseFloat(n) || 0) * exchangeRate;
@@ -240,6 +253,7 @@ export const AppProvider = ({ children }) => {
       notifications, addNotification,
       emergencyAlerts, sendEmergencyAlert,
       busLocations, updateBusLocation, getBusLocation,
+      supportPhone, supportEmail,
     }}>
       {children}
     </AppContext.Provider>

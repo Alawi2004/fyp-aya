@@ -71,6 +71,23 @@ export const updateSettings = async (req, res) => {
   }
 };
 
+// ── GET /api/settings/public — no auth, returns safe app.* keys only ─────────
+export const getPublicSettings = async (req, res) => {
+  const PUBLIC_KEYS = ["app.name", "app.support_phone", "app.support_email"];
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(
+      `SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('${PUBLIC_KEYS.join("','")}')`
+    );
+    const flat = {};
+    for (const row of result.recordset) flat[row.setting_key] = row.setting_value;
+    res.json(flat);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch public settings" });
+  }
+};
+
 // ── GET /api/settings/:key ────────────────────────────────────────────────────
 export const getSetting = async (req, res) => {
   try {

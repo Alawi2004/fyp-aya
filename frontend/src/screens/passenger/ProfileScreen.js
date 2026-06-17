@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, Alert, StatusBar, RefreshControl, ActivityIndicator,
+  TouchableOpacity, Alert, StatusBar, RefreshControl, ActivityIndicator, Linking,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -65,7 +65,7 @@ const MenuItem = ({ icon, label, value, onPress, danger = false, rightEl, last =
 const ProfileScreen = ({ navigation }) => {
   const headerInsets = useHeaderInsets();
   const { user, setUser, logout } = useAuth();
-  const { walletBalance, updateBalance, bookings, refreshBookings, currency } = useApp();
+  const { walletBalance, updateBalance, bookings, refreshBookings, currency, supportPhone } = useApp();
 
   const [refreshing, setRefreshing] = useState(false);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -264,6 +264,12 @@ const ProfileScreen = ({ navigation }) => {
           <View style={styles.menuCard}>
             <MenuItem icon="shield-checkmark-outline" label="Privacy Policy" onPress={() => navigation.push('PrivacyPolicy')} />
             <MenuItem icon="help-buoy-outline" label="Help & Support" onPress={() => navigation.push('MyComplaints')} />
+            <MenuItem
+              icon="call-outline"
+              label="Call Support"
+              value={supportPhone}
+              onPress={() => Linking.openURL(`tel:${supportPhone.replace(/\s/g, '')}`)}
+            />
             <MenuItem icon="star-outline" label="Rate the App" onPress={() => navigation.push('RateApp')} />
             <MenuItem icon="log-out-outline" label="Sign Out" onPress={handleLogout} danger last />
           </View>
