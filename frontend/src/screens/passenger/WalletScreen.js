@@ -526,7 +526,7 @@ const AnimatedBalance = ({ value, style, currency = 'USD', decimals = 2 }) => {
     <Text style={style}>
       <Text>{currency} </Text>
       {parts[0]}
-      {decimals > 0 && <Text style={{ fontSize: 26 }}>.{parts[1]}</Text>}
+      {decimals > 0 && <Text style={{ fontSize: 18 }}>.{parts[1]}</Text>}
     </Text>
   );
 };
@@ -2012,7 +2012,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   balanceAmount: {
-    fontSize: 44,
+    fontSize: 30,
     fontWeight: "900",
     color: COLORS.white,
     letterSpacing: -1,
