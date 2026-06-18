@@ -458,17 +458,19 @@ BEGIN
     ('fare.night_surcharge',        '10',     'fare',        'Night Surcharge (%)',        'number',  'Extra charge for journeys between 10 pm and 5 am'),
     ('wallet.max_balance',          '500',    'wallet',      'Max Wallet Balance ($)',     'number',  'Maximum balance a passenger wallet may hold'),
     ('wallet.min_topup',            '5',      'wallet',      'Min Top-Up Amount ($)',      'number',  'Minimum single top-up transaction'),
-    ('wallet.max_topup_daily',      '200',    'wallet',      'Max Top-Up Per Day ($)',     'number',  'Daily cap on top-ups per passenger'),
+    ('wallet.max_topup',            '500',    'wallet',      'Max Top-Up Amount ($)',      'number',  'Maximum single top-up transaction'),
     ('wallet.low_balance_alert',    '25',     'wallet',      'Low-Balance Alert Threshold ($)', 'number', 'Send alert when balance drops below this amount'),
     ('wallet.freeze_on_fraud',      'true',   'wallet',      'Auto-freeze on Fraud Flag', 'boolean', 'Automatically freeze wallet when fraud is flagged'),
-    ('gps.broadcast_interval_sec',  '5',      'gps',         'Broadcast Interval (s)',    'number',  'How often drivers send GPS updates'),
+    ('gps.update_interval_sec',     '10',     'gps',         'Update Interval (s)',       'number',  'How often driver apps send GPS pings to the server'),
+    ('gps.stale_threshold_sec',     '60',     'gps',         'Stale Threshold (s)',       'number',  'Mark vehicle offline if no update within this window'),
     ('gps.accuracy_threshold_m',    '20',     'gps',         'Accuracy Threshold (m)',    'number',  'Ignore GPS readings with accuracy worse than this'),
     ('gps.history_retention_days',  '90',     'gps',         'History Retention (days)',  'number',  'How long GPS logs are kept before purging'),
-    ('gps.geofence_radius_m',       '200',    'gps',         'Geofence Alert Radius (m)', 'number',  'Radius used to detect route deviation'),
+    ('gps.geofence_radius_m',       '150',    'gps',         'Geofence Alert Radius (m)', 'number',  'Radius used to detect route deviation'),
     ('gps.offline_buffer_minutes',  '10',     'gps',         'Offline Buffer (min)',      'number',  'Buffer GPS points offline for this long before alerting'),
-    ('security.max_login_attempts', '5',      'security',    'Max Login Attempts',        'number',  'Failed attempts before account lockout triggers'),
-    ('security.lockout_base_min',   '1',      'security',    'Lockout Base Duration (min)','number', 'Starting lockout duration — doubles exponentially per lockout'),
-    ('security.jwt_expiry_min',     '15',     'security',    'JWT Access Token Expiry (min)','number','Short-lived access token TTL'),
+    ('security.max_login_attempts', '5',      'security',    'Max Login Attempts',          'number',  'Failed attempts before account lockout triggers'),
+    ('security.lockout_minutes',    '15',     'security',    'Lockout Duration (min)',       'number',  'How long an account stays locked after too many failures'),
+    ('security.jwt_access_ttl',     '900',    'security',    'Access Token TTL (s)',         'number',  'JWT access token lifetime in seconds'),
+    ('security.jwt_refresh_ttl',    '604800', 'security',    'Refresh Token TTL (s)',        'number',  'Refresh token lifetime in seconds'),
     ('security.max_sessions',       '3',      'security',    'Max Concurrent Sessions',   'number',  'Maximum simultaneous sessions per user'),
     ('security.force_2fa_admin',    'false',  'security',    'Force 2FA for All Admins',  'boolean', 'Require TOTP 2FA at login for every admin account'),
     ('security.strong_password',    'true',   'security',    'Require Strong Password',   'boolean', 'Enforce uppercase, lowercase, digit, and special char'),
@@ -493,6 +495,50 @@ IF NOT EXISTS (SELECT 1 FROM system_settings WHERE setting_key='app.name')
 IF NOT EXISTS (SELECT 1 FROM system_settings WHERE setting_key='app.language')
   INSERT INTO system_settings(setting_key,setting_value,category,label,value_type,description)
   VALUES('app.language','en','app','Default Language','string','Default UI language for passengers and drivers');
+
+IF NOT EXISTS (SELECT 1 FROM system_settings WHERE setting_key='wallet.max_topup')
+  INSERT INTO system_settings(setting_key,setting_value,category,label,value_type,description)
+  VALUES('wallet.max_topup','500','wallet','Max Top-Up Amount ($)','number','Maximum single top-up transaction');
+
+IF NOT EXISTS (SELECT 1 FROM system_settings WHERE setting_key='wallet.max_balance')
+  INSERT INTO system_settings(setting_key,setting_value,category,label,value_type,description)
+  VALUES('wallet.max_balance','1000','wallet','Max Wallet Balance ($)','number','Maximum balance a passenger wallet may hold');
+
+IF NOT EXISTS (SELECT 1 FROM system_settings WHERE setting_key='wallet.min_topup')
+  INSERT INTO system_settings(setting_key,setting_value,category,label,value_type,description)
+  VALUES('wallet.min_topup','5','wallet','Min Top-Up Amount ($)','number','Minimum single top-up transaction');
+
+IF NOT EXISTS (SELECT 1 FROM system_settings WHERE setting_key='wallet.low_balance_alert')
+  INSERT INTO system_settings(setting_key,setting_value,category,label,value_type,description)
+  VALUES('wallet.low_balance_alert','5','wallet','Low-Balance Alert ($)','number','Show warning in mobile app when balance falls below this amount');
+
+IF NOT EXISTS (SELECT 1 FROM system_settings WHERE setting_key='security.max_login_attempts')
+  INSERT INTO system_settings(setting_key,setting_value,category,label,value_type,description)
+  VALUES('security.max_login_attempts','5','security','Max Login Attempts','number','Failed attempts before account lockout triggers');
+
+IF NOT EXISTS (SELECT 1 FROM system_settings WHERE setting_key='security.lockout_minutes')
+  INSERT INTO system_settings(setting_key,setting_value,category,label,value_type,description)
+  VALUES('security.lockout_minutes','15','security','Lockout Duration (min)','number','How long an account stays locked after too many failures');
+
+IF NOT EXISTS (SELECT 1 FROM system_settings WHERE setting_key='security.jwt_access_ttl')
+  INSERT INTO system_settings(setting_key,setting_value,category,label,value_type,description)
+  VALUES('security.jwt_access_ttl','900','security','Access Token TTL (s)','number','JWT access token lifetime in seconds');
+
+IF NOT EXISTS (SELECT 1 FROM system_settings WHERE setting_key='security.jwt_refresh_ttl')
+  INSERT INTO system_settings(setting_key,setting_value,category,label,value_type,description)
+  VALUES('security.jwt_refresh_ttl','604800','security','Refresh Token TTL (s)','number','Refresh token lifetime in seconds');
+
+IF NOT EXISTS (SELECT 1 FROM system_settings WHERE setting_key='gps.update_interval_sec')
+  INSERT INTO system_settings(setting_key,setting_value,category,label,value_type,description)
+  VALUES('gps.update_interval_sec','10','gps','Update Interval (s)','number','How often driver apps send GPS pings to the server');
+
+IF NOT EXISTS (SELECT 1 FROM system_settings WHERE setting_key='gps.stale_threshold_sec')
+  INSERT INTO system_settings(setting_key,setting_value,category,label,value_type,description)
+  VALUES('gps.stale_threshold_sec','60','gps','Stale Threshold (s)','number','Mark vehicle offline if no update within this window');
+
+IF NOT EXISTS (SELECT 1 FROM system_settings WHERE setting_key='gps.geofence_radius_m')
+  INSERT INTO system_settings(setting_key,setting_value,category,label,value_type,description)
+  VALUES('gps.geofence_radius_m','150','gps','Geofence Alert Radius (m)','number','Trigger alert when vehicle strays beyond this distance from its route');
 
 IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='scheduled_reports')
 BEGIN

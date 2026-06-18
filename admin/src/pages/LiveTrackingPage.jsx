@@ -1,6 +1,6 @@
 ﻿// pages/LiveTrackingPage.jsx
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { getTripGpsLogs, getGpsHeatmap, getLiveGps, getTrips, getWaypoints, getRouteStops } from '../api/endpoints';
+import { getTripGpsLogs, getGpsHeatmap, getLiveGps, getTrips, getWaypoints, getRouteStops, getSystemSettings } from '../api/endpoints';
 
 // ── WebSocket GPS stream (admin "subscribe_all") ──────────────────────────────
 const WS_URL = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api')
@@ -136,9 +136,7 @@ function tripToBus(t) {
   };
 }
 
-// ─── GPS Signal Loss ─────────────────────────────────────────────────────────
-
-const SIGNAL_LOSS_MS = 30_000; // 30 s without a GPS update → signal lost
+// ─── GPS Signal Loss (default — overridden by DB setting gps.stale_threshold_sec) ──
 
 // ─── Heatmap density points (pre-computed at module load) ────────────────────
 
@@ -183,9 +181,7 @@ const HEATMAP_POINTS = (() => {
   return pts;
 })();
 
-// ─── Geofence detection ──────────────────────────────────────────────────────
-
-const GEOFENCE_RADIUS_M = 500; // metres off the planned corridor
+// ─── Geofence detection (radius loaded from DB via gps.geofence_radius_m) ───
 
 function haversineDist(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -522,7 +518,9 @@ export default function LiveTrackingPage() {
   const [showGeoAlerts,  setShowGeoAlerts] = useState(true);
 
   const lastSeenRef = useRef({});
-  const [signalLostIds,   setSignalLostIds]   = useState(() => new Set());
+  const [signalLossMs,    setSignalLossMs]     = useState(30_000);
+  const [geofenceRadiusM, setGeofenceRadiusM]  = useState(150);
+  const [signalLostIds,   setSignalLostIds]    = useState(() => new Set());
   const [signalAlerts,    setSignalAlerts]     = useState([]);
   const [showSignalAlerts, setShowSignalAlerts] = useState(true);
   const busesRef = useRef([]);
@@ -541,6 +539,19 @@ export default function LiveTrackingPage() {
 
   // Keep busesRef in sync so the signal-loss check sees the latest bus list
   useEffect(() => { busesRef.current = buses; }, [buses]);
+
+  // Load GPS settings from DB on mount
+  useEffect(() => {
+    getSystemSettings('gps')
+      .then(res => {
+        const flat = res?.data?.flat ?? {};
+        const sec  = parseInt(flat['gps.stale_threshold_sec'] ?? '30',  10);
+        const rad  = parseInt(flat['gps.geofence_radius_m']  ?? '150', 10);
+        if (!isNaN(sec) && sec > 0) setSignalLossMs(sec * 1000);
+        if (!isNaN(rad) && rad > 0) setGeofenceRadiusM(rad);
+      })
+      .catch(() => {});
+  }, []);
 
   // Load real active trips from the backend on mount
   useEffect(() => {
@@ -675,7 +686,7 @@ export default function LiveTrackingPage() {
       if (bus.status === 'Scheduled') return;
       if (bus.lat == null || bus.lng == null) return;
       const dist = distToRoutePath(bus.lat, bus.lng, bus.route);
-      if (dist > GEOFENCE_RADIUS_M) {
+      if (dist > geofenceRadiusM) {
         breached.add(bus.id);
         newAlerts.push({
           busId: bus.id, vehicle: bus.vehicle, route: bus.route,
@@ -691,7 +702,7 @@ export default function LiveTrackingPage() {
       const fresh = newAlerts.filter((a) => !existingIds.has(a.busId));
       return [...prev.filter((a) => a.dismissed || breached.has(a.busId)), ...fresh];
     });
-  }, []);
+  }, [geofenceRadiusM]);
 
   // Poll real GPS every 5 s — replaces fake-delta simulation
   useEffect(() => {
@@ -743,7 +754,7 @@ export default function LiveTrackingPage() {
         busesRef.current.forEach((b) => {
           if (b.status === 'Scheduled') return;
           const lastSeen = lastSeenRef.current[b.id] ?? 0;
-          if (lastSeen > 0 && now - lastSeen > SIGNAL_LOSS_MS) {
+          if (lastSeen > 0 && now - lastSeen > signalLossMs) {
             lost.add(b.id);
             newAlerts.push({
               busId: b.id, vehicle: b.vehicle, route: b.route, driver: b.driver,
@@ -892,7 +903,7 @@ export default function LiveTrackingPage() {
                       )}
                     </div>
                     <div style={{ fontSize: 12, color: '#7C3AED' }}>
-                      {alert.route} · Last GPS ping: <strong>{staleLabel}</strong> · No updates for {Math.round(SIGNAL_LOSS_MS / 1000)}s+
+                      {alert.route} · Last GPS ping: <strong>{staleLabel}</strong> · No updates for {Math.round(signalLossMs / 1000)}s+
                     </div>
                   </div>
                   <button onClick={() => setSelected(alert.busId)} style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid #DDD6FE', background: '#F5F3FF', color: '#7C3AED', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>

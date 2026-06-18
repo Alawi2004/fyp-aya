@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react';
 import * as Location from 'expo-location';
 import apiClient from '../api/apiClient';
-
-const INTERVAL_MS = 5000;
+import { useApp } from '../context/AppContext';
 
 export function useGpsTracking(tripId) {
   const subRef = useRef(null);
+  const { gpsSettings } = useApp();
+  const intervalMs = (gpsSettings?.updateIntervalSec ?? 10) * 1000;
 
   useEffect(() => {
     if (!tripId) {
@@ -29,7 +30,7 @@ export function useGpsTracking(tripId) {
           // Balanced fell back to wifi/cell (~100m–1km off) which is why the
           // driver's pin showed the wrong place.
           accuracy:         Location.Accuracy.BestForNavigation,
-          timeInterval:     INTERVAL_MS,
+          timeInterval:     intervalMs,
           distanceInterval: 0,          // fire on time alone — not requiring movement
         },
         ({ coords }) => {
@@ -51,5 +52,5 @@ export function useGpsTracking(tripId) {
       mounted = false;
       if (subRef.current) { subRef.current.remove(); subRef.current = null; }
     };
-  }, [tripId]);
+  }, [tripId, intervalMs]);
 }

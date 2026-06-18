@@ -28,8 +28,8 @@
 
 // export const useApp = () => useContext(AppContext);
 
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import { I18nManager } from 'react-native';
+import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from 'react';
+import { I18nManager, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import apiClient, { registerPushToken, registerFcmToken } from '../api/apiClient';
@@ -60,6 +60,8 @@ export const AppProvider = ({ children }) => {
   const [supportPhone, setSupportPhone] = useState('+961 1 999 000');
   const [supportEmail, setSupportEmail] = useState('support@yallatransit.lb');
   const [language, setLanguage] = useState('en');
+  const [walletLimits, setWalletLimits] = useState({ minTopup: 5, maxTopup: 500, maxBalance: 1000, lowBalanceAlert: 5 });
+  const [gpsSettings, setGpsSettings]  = useState({ updateIntervalSec: 10, staleThresholdSec: 60, geofenceRadiusM: 150 });
 
   useEffect(() => {
     if (role !== 'passenger' || !user) return;
@@ -82,35 +84,67 @@ export const AppProvider = ({ children }) => {
       .catch(() => {});
   }, [user]);
 
-  // Fetch public settings (support phone/email/language) — no auth required
-  useEffect(() => {
-    // Restore persisted language immediately so the app doesn't flash the wrong layout
-    AsyncStorage.getItem('app.language').then((stored) => {
-      if (stored) applyLanguage(stored);
-    });
-
-    apiClient.get('/settings/public')
-      .then((res) => {
-        if (res.data?.['app.support_phone']) setSupportPhone(res.data['app.support_phone']);
-        if (res.data?.['app.support_email']) setSupportEmail(res.data['app.support_email']);
-        const lang = res.data?.['app.language'];
-        if (lang) applyLanguage(lang);
-      })
-      .catch(() => {});
+  // Fetch public settings (support phone/email/language/limits) — no auth required.
+  // Called on mount and every time the app comes to the foreground so admin
+  // changes to language (or wallet/GPS limits) take effect without a full restart.
+  const applyLanguageRef = useRef(null);
+  const fetchPublicSettings = useCallback(async () => {
+    try {
+      const res = await apiClient.get('/settings/public');
+      if (res.data?.['app.support_phone']) setSupportPhone(res.data['app.support_phone']);
+      if (res.data?.['app.support_email']) setSupportEmail(res.data['app.support_email']);
+      const lang = res.data?.['app.language'];
+      if (lang && applyLanguageRef.current) applyLanguageRef.current(lang);
+      const minTopup    = parseFloat(res.data?.['wallet.min_topup']);
+      const maxTopup    = parseFloat(res.data?.['wallet.max_topup']);
+      const maxBalance  = parseFloat(res.data?.['wallet.max_balance']);
+      const lowBalAlert = parseFloat(res.data?.['wallet.low_balance_alert']);
+      setWalletLimits({
+        minTopup:        isNaN(minTopup)    ? 5    : minTopup,
+        maxTopup:        isNaN(maxTopup)    ? 500  : maxTopup,
+        maxBalance:      isNaN(maxBalance)  ? 1000 : maxBalance,
+        lowBalanceAlert: isNaN(lowBalAlert) ? 5    : lowBalAlert,
+      });
+      const updateInt = parseFloat(res.data?.['gps.update_interval_sec']);
+      const staleInt  = parseFloat(res.data?.['gps.stale_threshold_sec']);
+      const geoRad    = parseFloat(res.data?.['gps.geofence_radius_m']);
+      setGpsSettings({
+        updateIntervalSec: isNaN(updateInt) ? 10  : updateInt,
+        staleThresholdSec: isNaN(staleInt)  ? 60  : staleInt,
+        geofenceRadiusM:   isNaN(geoRad)    ? 150 : geoRad,
+      });
+    } catch { /* backend unavailable — keep current values */ }
   }, []);
 
-  const applyLanguage = (lang) => {
+  useEffect(() => {
+    // On first mount: restore persisted language immediately (no flash), then
+    // fetch from API so any admin change takes effect even across restarts.
+    AsyncStorage.getItem('app.language').then((stored) => {
+      if (stored && applyLanguageRef.current) applyLanguageRef.current(stored);
+    });
+    fetchPublicSettings();
+
+    // Re-fetch whenever the app returns to foreground
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') fetchPublicSettings();
+    });
+    return () => sub.remove();
+  }, [fetchPublicSettings]);
+
+  const applyLanguage = useCallback((lang) => {
     setLanguage(lang);
-    // Update Accept-Language for all subsequent API calls
     apiClient.defaults.headers.common['Accept-Language'] = lang;
-    // Apply RTL layout for Arabic; requires an app restart to fully take effect
     const isRTL = lang === 'ar';
     if (I18nManager.isRTL !== isRTL) {
       I18nManager.allowRTL(isRTL);
       I18nManager.forceRTL(isRTL);
     }
     AsyncStorage.setItem('app.language', lang).catch(() => {});
-  };
+  }, []);
+
+  // Keep a stable ref so fetchPublicSettings (and the AsyncStorage restore) can
+  // call applyLanguage without capturing a stale closure.
+  applyLanguageRef.current = applyLanguage;
 
   const fmtMoney = useCallback((n) => {
     const v = (parseFloat(n) || 0) * exchangeRate;
@@ -282,6 +316,8 @@ export const AppProvider = ({ children }) => {
       busLocations, updateBusLocation, getBusLocation,
       supportPhone, supportEmail,
       language, t,
+      walletLimits,
+      gpsSettings,
     }}>
       {children}
     </AppContext.Provider>

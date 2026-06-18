@@ -6,20 +6,17 @@ import qrcode from "qrcode";
 import { poolPromise, sql } from "../db/db.js";
 import { ensureAuthTables } from "../db/featureSetup.js";
 import { sendPasswordResetEmail, sendOTPEmail } from "../services/email.service.js";
-import { isForce2FA } from "../db/settingsCache.js";
+import { isForce2FA, getSecuritySettings } from "../db/settingsCache.js";
 
-const ACCESS_TOKEN_TTL     = "15m";
-const ACCESS_TOKEN_TTL_MS  = 15 * 60 * 1000;
-const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const TEMP_2FA_TTL         = "5m";
 const RESET_TOKEN_TTL_MS   = 60 * 60 * 1000;
 
 const isProd = process.env.NODE_ENV === "production";
 const COOKIE_BASE = { httpOnly: true, secure: isProd, sameSite: "strict", path: "/" };
 
-function setCookies(res, accessToken, refreshToken) {
-  res.cookie("access_token",  accessToken,  { ...COOKIE_BASE, maxAge: ACCESS_TOKEN_TTL_MS  });
-  res.cookie("refresh_token", refreshToken, { ...COOKIE_BASE, maxAge: REFRESH_TOKEN_TTL_MS });
+function setCookies(res, accessToken, refreshToken, accessTtlMs, refreshTtlMs) {
+  res.cookie("access_token",  accessToken,  { ...COOKIE_BASE, maxAge: accessTtlMs  });
+  res.cookie("refresh_token", refreshToken, { ...COOKIE_BASE, maxAge: refreshTtlMs });
 }
 
 function clearCookies(res) {
@@ -27,8 +24,6 @@ function clearCookies(res) {
   res.clearCookie("refresh_token", { ...COOKIE_BASE });
 }
 
-const MAX_ATTEMPTS        = 5;
-const MAX_LOCKOUT_MIN     = 60;
 const MAX_SESSIONS        = 3;
 
 // ── Token helpers ────────────────────────────────────────────────────────────
@@ -37,8 +32,8 @@ function hashToken(raw) {
   return crypto.createHash("sha256").update(raw).digest("hex");
 }
 
-function issueAccessToken(user) {
-  return jwt.sign({ user_id: user.user_id, role: user.role }, process.env.JWT_SECRET, { expiresIn: ACCESS_TOKEN_TTL });
+function issueAccessToken(user, ttlSec) {
+  return jwt.sign({ user_id: user.user_id, role: user.role }, process.env.JWT_SECRET, { expiresIn: ttlSec });
 }
 
 function issue2FATempToken(userId) {
@@ -46,10 +41,10 @@ function issue2FATempToken(userId) {
 }
 
 // Returns { raw, hash, expiresAt }
-async function issueRefreshToken(pool, userId) {
+async function issueRefreshToken(pool, userId, ttlSec) {
   const raw      = crypto.randomBytes(40).toString("hex");
   const hash     = hashToken(raw);
-  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
+  const expiresAt = new Date(Date.now() + ttlSec * 1000);
 
   await pool.request()
     .input("user_id",    sql.Int,       userId)
@@ -107,10 +102,6 @@ async function writeLoginAudit(pool, { userId, email, req, success, failureReaso
 
 // ── Account lockout ──────────────────────────────────────────────────────────
 
-function lockoutDurationMs(lockoutCount) {
-  return Math.min(Math.pow(2, lockoutCount), MAX_LOCKOUT_MIN) * 60 * 1000;
-}
-
 async function checkLockout(pool, email) {
   const res = await pool.request()
     .input("email", sql.NVarChar(120), email)
@@ -126,7 +117,7 @@ async function checkLockout(pool, email) {
   return { locked: false };
 }
 
-async function recordFailedAttempt(pool, email) {
+async function recordFailedAttempt(pool, email, maxAttempts, lockoutMinutes) {
   const now = new Date();
   await pool.request()
     .input("email", sql.NVarChar(120), email)
@@ -143,8 +134,8 @@ async function recordFailedAttempt(pool, email) {
     .query("SELECT failed_attempts, lockout_count FROM login_lockouts WHERE email=@email");
 
   const row = res.recordset[0];
-  if (row && row.failed_attempts >= MAX_ATTEMPTS) {
-    const durationMs  = lockoutDurationMs(row.lockout_count);
+  if (row && row.failed_attempts >= maxAttempts) {
+    const durationMs  = lockoutMinutes * 60 * 1000;
     const lockedUntil = new Date(Date.now() + durationMs);
 
     await pool.request()
@@ -283,6 +274,8 @@ export const login = async (req, res) => {
     const pool = await poolPromise;
     await ensureAuthTables(pool);
 
+    const { maxAttempts, lockoutMinutes, accessTtlSec, refreshTtlSec } = await getSecuritySettings();
+
     // 1. Check lockout
     const lockout = await checkLockout(pool, email);
     if (lockout.locked) {
@@ -301,7 +294,7 @@ export const login = async (req, res) => {
     const user = result.recordset[0];
 
     if (!user) {
-      const lock = await recordFailedAttempt(pool, email);
+      const lock = await recordFailedAttempt(pool, email, maxAttempts, lockoutMinutes);
       await writeLoginAudit(pool, { userId: null, email, req, success: false, failureReason: "user_not_found" });
       if (lock.just_locked) {
         return res.status(429).json({
@@ -316,7 +309,7 @@ export const login = async (req, res) => {
     // 3. Check password
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) {
-      const lock = await recordFailedAttempt(pool, email);
+      const lock = await recordFailedAttempt(pool, email, maxAttempts, lockoutMinutes);
       await writeLoginAudit(pool, { userId: user.user_id, email, req, success: false, failureReason: "wrong_password" });
       if (lock.just_locked) {
         return res.status(429).json({
@@ -356,8 +349,8 @@ export const login = async (req, res) => {
     }
 
     // 6. Issue tokens + create session
-    const access_token = issueAccessToken(user);
-    const { raw: refresh_token, hash: tokenHash, expiresAt } = await issueRefreshToken(pool, user.user_id);
+    const access_token = issueAccessToken(user, accessTtlSec);
+    const { raw: refresh_token, hash: tokenHash, expiresAt } = await issueRefreshToken(pool, user.user_id, refreshTtlSec);
 
     try {
       await createSession(pool, user.user_id, tokenHash, expiresAt, req);
@@ -368,7 +361,7 @@ export const login = async (req, res) => {
 
     await writeLoginAudit(pool, { userId: user.user_id, email, req, success: true });
 
-    setCookies(res, access_token, refresh_token);
+    setCookies(res, access_token, refresh_token, accessTtlSec * 1000, refreshTtlSec * 1000);
     const { password_hash, ...safeUser } = user;
 
     // For driver users, include driver_id so mobile app can use it
@@ -421,8 +414,9 @@ export const verify2fa = async (req, res) => {
     const user = userRow.recordset[0];
     if (!user) return res.status(401).json({ error: "User not found" });
 
-    const access_token = issueAccessToken(user);
-    const { raw: refresh_token, hash: tokenHash, expiresAt } = await issueRefreshToken(pool, user.user_id);
+    const { accessTtlSec, refreshTtlSec } = await getSecuritySettings();
+    const access_token = issueAccessToken(user, accessTtlSec);
+    const { raw: refresh_token, hash: tokenHash, expiresAt } = await issueRefreshToken(pool, user.user_id, refreshTtlSec);
 
     try {
       await createSession(pool, user.user_id, tokenHash, expiresAt, req);
@@ -433,7 +427,7 @@ export const verify2fa = async (req, res) => {
 
     await writeLoginAudit(pool, { userId: user.user_id, email: user.email, req, success: true });
 
-    setCookies(res, access_token, refresh_token);
+    setCookies(res, access_token, refresh_token, accessTtlSec * 1000, refreshTtlSec * 1000);
     const { password_hash, ...safeUser } = user;
     return res.json({ user: safeUser });
   } catch (err) {
@@ -815,12 +809,13 @@ export const refresh = async (req, res) => {
           VALUES(@user_id,@token_hash,@reason,@expires_at)
       `);
 
-    const { raw: new_refresh_token, hash: newHash, expiresAt: newExpiresAt } = await issueRefreshToken(pool, record.user_id);
+    const { accessTtlSec, refreshTtlSec } = await getSecuritySettings();
+    const { raw: new_refresh_token, hash: newHash, expiresAt: newExpiresAt } = await issueRefreshToken(pool, record.user_id, refreshTtlSec);
 
     try { await rotateSession(pool, hash, newHash, newExpiresAt); } catch {}
 
-    const access_token = issueAccessToken({ user_id: record.user_id, role: record.role });
-    setCookies(res, access_token, new_refresh_token);
+    const access_token = issueAccessToken({ user_id: record.user_id, role: record.role }, accessTtlSec);
+    setCookies(res, access_token, new_refresh_token, accessTtlSec * 1000, refreshTtlSec * 1000);
     // Return the rotated refresh token in the body too — mobile clients have no
     // cookie jar, and the old token is now blacklisted, so they need this to refresh again later.
     res.json({ ok: true, access_token, refresh_token: new_refresh_token });

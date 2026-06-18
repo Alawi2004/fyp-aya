@@ -71,13 +71,20 @@ export const updateSettings = async (req, res) => {
   }
 };
 
-// ── GET /api/settings/public — no auth, returns safe app.* keys only ─────────
+// ── GET /api/settings/public — no auth, returns safe app.* and wallet.* keys ──
 export const getPublicSettings = async (req, res) => {
   const DEFAULTS = {
-    "app.name":          "Yalla Transit",
-    "app.support_phone": "+961 1 999 000",
-    "app.support_email": "support@yallatransit.lb",
-    "app.language":      "en",
+    "app.name":             "Yalla Transit",
+    "app.support_phone":    "+961 1 999 000",
+    "app.support_email":    "support@yallatransit.lb",
+    "app.language":         "en",
+    "wallet.max_balance":       "1000",
+    "wallet.min_topup":         "5",
+    "wallet.max_topup":         "500",
+    "wallet.low_balance_alert": "5",
+    "gps.update_interval_sec":  "10",
+    "gps.stale_threshold_sec":  "60",
+    "gps.geofence_radius_m":    "150",
   };
   try {
     const pool = await poolPromise;

@@ -535,7 +535,7 @@ const WalletScreen = () => {
   const navigation = useNavigation();
   const headerInsets = useHeaderInsets(12);
   const insets = useSafeAreaInsets();
-  const { walletBalance, updateBalance, currency, exchangeRate, fmtMoney, t } = useApp();
+  const { walletBalance, updateBalance, currency, exchangeRate, fmtMoney, t, walletLimits } = useApp();
   const { user } = useAuth();
   const [walletId, setWalletId] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -1003,6 +1003,18 @@ const WalletScreen = () => {
             </View>
           </View>
         </Animated.View>
+
+        {/* ── Low-balance warning ── */}
+        {!walletFrozen && walletBalance < walletLimits.lowBalanceAlert && walletLimits.lowBalanceAlert > 0 && (
+          <Animated.View style={[{ paddingHorizontal: 16, marginTop: 10 }, sect(1)]}>
+            <View style={styles.lowBalanceBanner}>
+              <Ionicons name="warning-outline" size={16} color="#92400E" />
+              <Text style={styles.lowBalanceBannerText}>
+                Low balance — you have {currency} {(walletBalance * exchangeRate).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} remaining. Top up to continue using transit services.
+              </Text>
+            </View>
+          </Animated.View>
+        )}
 
         {/* ── Floating stat cards ── */}
         <Animated.View style={[styles.statsRow, sect(1)]}>
@@ -2105,6 +2117,26 @@ const styles = StyleSheet.create({
 
   /* Body */
   body: { paddingHorizontal: 16, marginTop: 20 },
+
+  /* Low-balance warning banner */
+  lowBalanceBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#FEF3C7",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  lowBalanceBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#92400E",
+    lineHeight: 17,
+  },
 
   /* Frozen banner */
   frozenBanner: {

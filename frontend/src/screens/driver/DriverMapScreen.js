@@ -14,14 +14,13 @@ import {
   getDriverTripsApi, startTripApi, completeTripApi, cancelTripApi,
   updateLocationApi,
 } from '../../api/driverApi';
+import { useApp } from '../../context/AppContext';
 
 // ─── constants ────────────────────────────────────────────────────────────────
 const SCREEN_H           = Dimensions.get('window').height;
 const ARRIVAL_RADIUS_M   = 50;
 const APPROACH_RADIUS_M  = 200;
-const DEVIATION_RADIUS_M = 150;
 const SPEED_KMH          = 25;
-const BROADCAST_MS       = 5000;
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const haversine = (lat1, lon1, lat2, lon2) => {
@@ -187,6 +186,9 @@ const DriverMapScreen = ({ navigation, route }) => {
   const paramRouteName = route?.params?.routeName ?? null;
   const paramBusNumber = route?.params?.busNumber ?? '';
   const insets         = useSafeAreaInsets();
+  const { gpsSettings } = useApp();
+  const broadcastMs      = (gpsSettings?.updateIntervalSec ?? 10) * 1000;
+  const deviationRadiusM = gpsSettings?.geofenceRadiusM ?? 150;
 
   const mapRef       = useRef(null);
   const pulseAnim    = useRef(new Animated.Value(1)).current;
@@ -274,7 +276,7 @@ const DriverMapScreen = ({ navigation, route }) => {
       // when the bus is stationary (Android needs BOTH time + distance otherwise).
       // BestForNavigation forces the GPS chip (~5m) instead of wifi/cell (~100m+).
       sub = await ExpoLocation.watchPositionAsync(
-        { accuracy: ExpoLocation.Accuracy.BestForNavigation, timeInterval: 5000, distanceInterval: 0 },
+        { accuracy: ExpoLocation.Accuracy.BestForNavigation, timeInterval: broadcastMs, distanceInterval: 0 },
         l => {
           setLocation({ latitude: l.coords.latitude, longitude: l.coords.longitude });
         }
@@ -289,7 +291,7 @@ const DriverMapScreen = ({ navigation, route }) => {
     if (!broadcasting || !effectiveTripId || !location) return;
     const post = () => updateLocationApi({ trip_id: effectiveTripId, latitude: location.latitude, longitude: location.longitude }).catch(() => {});
     post();
-    broadcastRef.current = setInterval(post, BROADCAST_MS);
+    broadcastRef.current = setInterval(post, broadcastMs);
     return () => clearInterval(broadcastRef.current);
   }, [broadcasting, effectiveTripId, location?.latitude, location?.longitude]);
 
@@ -339,7 +341,7 @@ const DriverMapScreen = ({ navigation, route }) => {
   useEffect(() => {
     if (!location || !routeWaypoints.length) return;
     const minDist = Math.min(...routeWaypoints.map(pt => haversine(location.latitude, location.longitude, pt.latitude, pt.longitude)));
-    const off = minDist > DEVIATION_RADIUS_M;
+    const off = minDist > deviationRadiusM;
     setDeviating(off);
     if (!off) setDeviationDismissed(false);
   }, [location, routeWaypoints]);

@@ -21,7 +21,6 @@ import { poolPromise, sql } from "../db/db.js";
 import { dispatchToTokens } from "./fcm.service.js";
 import { broadcastEvent }   from "./gps.stream.service.js";
 
-const GEOFENCE_RADIUS_M  = 500;
 const CHECK_INTERVAL_MS  = 30_000;   // 30 seconds
 let   _running = false;
 
@@ -57,6 +56,12 @@ function distToPath(lat, lon, waypoints) {
 
 async function _runCheck() {
   const pool = await poolPromise;
+
+  // ── 0. Read geofence radius from system_settings (fallback 150 m) ────────
+  const radRes = await pool.request().query(
+    `SELECT setting_value FROM system_settings WHERE setting_key='gps.geofence_radius_m'`
+  );
+  const GEOFENCE_RADIUS_M = parseInt(radRes.recordset[0]?.setting_value ?? "150", 10);
 
   // ── 1. Active trips with a GPS ping in the last 5 minutes ────────────────
   const tripRes = await pool.request().query(`
@@ -196,4 +201,4 @@ export function startGeofencingEngine() {
   console.log(`[geofence] engine started — checking every ${CHECK_INTERVAL_MS / 1000}s`);
 }
 
-export { haversineM, distToPath, GEOFENCE_RADIUS_M };
+export { haversineM, distToPath };

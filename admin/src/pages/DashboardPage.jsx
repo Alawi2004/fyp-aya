@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import {
   MapPin, Clock,
   AlertTriangle, Zap,
-  DollarSign, MessageSquareWarning, UserCheck, Bell,
+  DollarSign, MessageSquareWarning, UserCheck, Bell, Star,
 } from "lucide-react";
 import { Panel }     from "../components/Panel";
 import DashboardMap  from "../components/map/DashboardMap";
@@ -13,6 +13,7 @@ import { fmtMoneyRound } from "../utils/fmt";
 import {
   getDashboardStats, getDashboardOverview, getEmergencyAlerts,
   createTrip, getRoutes, getDrivers, getVehicles,
+  getComplaints, getRatings, getNotifications,
 } from "../api/endpoints";
 
 function fmtAgo(dt) {
@@ -133,6 +134,9 @@ export default function DashboardPage({ onNavigate }) {
   const [driverOpts,    setDriverOpts]    = useState([]);
   const [vehicleOpts,   setVehicleOpts]   = useState([]);
   const [statsError,    setStatsError]    = useState(null);
+  const [recentComplaints, setRecentComplaints] = useState([]);
+  const [recentRatings,    setRecentRatings]    = useState([]);
+  const [recentNotifs,     setRecentNotifs]     = useState([]);
 
   useEffect(() => {
     getDashboardStats()
@@ -145,6 +149,9 @@ export default function DashboardPage({ onNavigate }) {
     getRoutes().then(d => setRouteOpts(Array.isArray(d) ? d : [])).catch(() => {});
     getDrivers().then(d => setDriverOpts(Array.isArray(d?.data ?? d) ? (d?.data ?? d) : [])).catch(() => {});
     getVehicles().then(d => setVehicleOpts(Array.isArray(d?.data ?? d) ? (d?.data ?? d) : [])).catch(() => {});
+    getComplaints().then(d => setRecentComplaints((Array.isArray(d) ? d : (d?.data ?? [])).slice(0, 4))).catch(() => {});
+    getRatings().then(d => setRecentRatings((Array.isArray(d) ? d : (d?.data ?? [])).slice(0, 4))).catch(() => {});
+    getNotifications().then(d => setRecentNotifs((Array.isArray(d) ? d : (d?.data ?? [])).slice(0, 4))).catch(() => {});
   }, []);
 
   async function handleSaveTrip(form) {
@@ -488,6 +495,113 @@ export default function DashboardPage({ onNavigate }) {
             </span>
           </div>
         </Panel>
+      </div>
+
+      {/* ── 5. Quick Previews ─────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+
+        {/* Recent Complaints */}
+        <Panel
+          title="Recent Complaints"
+          action="View All →"
+          onAction={() => onNavigate?.("complaints")}
+          icon={<MessageSquareWarning size={14} color="#EF4444" />}
+          accent="#EF4444"
+        >
+          {recentComplaints.length === 0 ? (
+            <div style={{ fontSize: 12, color: "#94A3B8", textAlign: "center", padding: "14px 0" }}>No complaints</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              {recentComplaints.map((c, i) => (
+                <div key={c.complaint_id ?? i} style={{
+                  display: "flex", alignItems: "center", gap: 8, padding: "6px 0",
+                  borderBottom: i < recentComplaints.length - 1 ? "1px solid #F8FAFC" : "none",
+                }}>
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 10, flexShrink: 0,
+                    background: c.status === "pending" || c.status === "open" ? "#FEF2F2" : "#ECFDF5",
+                    color:      c.status === "pending" || c.status === "open" ? "#DC2626"  : "#059669",
+                    border:     `1px solid ${c.status === "pending" || c.status === "open" ? "#FECACA" : "#A7F3D0"}`,
+                  }}>
+                    {c.status ?? "open"}
+                  </span>
+                  <span style={{ flex: 1, fontSize: 11, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {c.subject ?? c.message ?? c.description ?? "Complaint"}
+                  </span>
+                  <span style={{ fontSize: 10, color: "#94A3B8", flexShrink: 0 }}>{fmtAgo(c.created_at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
+
+        {/* Recent Ratings */}
+        <Panel
+          title="Recent Ratings"
+          action="View All →"
+          onAction={() => onNavigate?.("ratings")}
+          icon={<Star size={14} color="#F59E0B" />}
+          accent="#F59E0B"
+        >
+          {recentRatings.length === 0 ? (
+            <div style={{ fontSize: 12, color: "#94A3B8", textAlign: "center", padding: "14px 0" }}>No ratings yet</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              {recentRatings.map((r, i) => {
+                const score = r.rating ?? r.score ?? r.stars ?? 0;
+                return (
+                  <div key={r.rating_id ?? i} style={{
+                    display: "flex", alignItems: "center", gap: 8, padding: "6px 0",
+                    borderBottom: i < recentRatings.length - 1 ? "1px solid #F8FAFC" : "none",
+                  }}>
+                    <span style={{ fontSize: 11, color: "#F59E0B", flexShrink: 0, letterSpacing: 1 }}>
+                      {"★".repeat(Math.round(score))}{"☆".repeat(Math.max(0, 5 - Math.round(score)))}
+                    </span>
+                    <span style={{ flex: 1, fontSize: 11, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {r.passenger_name ?? r.user_name ?? r.full_name ?? "Passenger"}
+                    </span>
+                    <span style={{ fontSize: 10, color: "#94A3B8", flexShrink: 0 }}>{fmtAgo(r.created_at)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Panel>
+
+        {/* Recent Notifications */}
+        <Panel
+          title="Recent Notifications"
+          action="View All →"
+          onAction={() => onNavigate?.("notifications")}
+          icon={<Bell size={14} color="#3B82F6" />}
+          accent="#3B82F6"
+        >
+          {recentNotifs.length === 0 ? (
+            <div style={{ fontSize: 12, color: "#94A3B8", textAlign: "center", padding: "14px 0" }}>No notifications</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+              {recentNotifs.map((n, i) => (
+                <div key={n.notification_id ?? n.id ?? i} style={{
+                  display: "flex", alignItems: "center", gap: 8, padding: "6px 0",
+                  borderBottom: i < recentNotifs.length - 1 ? "1px solid #F8FAFC" : "none",
+                }}>
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 10, flexShrink: 0,
+                    background: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE",
+                    maxWidth: 70, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>
+                    {n.type ?? "system"}
+                  </span>
+                  <span style={{ flex: 1, fontSize: 11, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {n.title ?? n.message ?? n.body ?? "Notification"}
+                  </span>
+                  <span style={{ fontSize: 10, color: "#94A3B8", flexShrink: 0 }}>{fmtAgo(n.created_at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
+
       </div>
 
       {tripModal !== null && (

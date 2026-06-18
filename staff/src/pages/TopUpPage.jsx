@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useCallback } from "react";
+﻿import { useState, useRef, useCallback, useEffect } from "react";
 import {
   Search, User, CheckCircle, XCircle, AlertTriangle,
   ChevronRight, ArrowLeft, Loader, BadgeCheck, QrCode,
@@ -62,6 +62,23 @@ export default function TopUpPage() {
   const [submitErr,    setSubmitErr]    = useState(null);
   const [showScanner,  setShowScanner]  = useState(false);
   const [dupWarning,   setDupWarning]   = useState(null); // { secondsLeft }
+
+  // Wallet limits from system settings
+  const [walletLimits, setWalletLimits] = useState({ min: 5, max: 500, maxBalance: 1000 });
+  useEffect(() => {
+    apiClient.get("/settings/public")
+      .then(data => {
+        const min = parseFloat(data?.["wallet.min_topup"]);
+        const max = parseFloat(data?.["wallet.max_topup"]);
+        const mb  = parseFloat(data?.["wallet.max_balance"]);
+        setWalletLimits({
+          min:        isNaN(min) ? 5    : min,
+          max:        isNaN(max) ? 500  : max,
+          maxBalance: isNaN(mb)  ? 1000 : mb,
+        });
+      })
+      .catch(() => {});
+  }, []);
 
   const searchTimer = useRef(null);
 
@@ -129,10 +146,17 @@ export default function TopUpPage() {
   const validate = () => {
     const e = {};
     const amt = parseFloat(form.amount);
-    if (!form.amount || isNaN(amt) || amt <= 0)  e.amount            = "Enter a positive amount";
-    if (amt > 500)                                e.amount            = "Single top-up cannot exceed $500 per transaction";
-    if (!form.recharge_location.trim())           e.recharge_location = "Location is required";
-    if (!form.transaction_reference.trim())       e.transaction_reference = "Transaction reference is required";
+    const currentBal = parseFloat(selectedUser?.balance ?? 0);
+    if (!form.amount || isNaN(amt) || amt <= 0)
+      e.amount = "Enter a positive amount";
+    else if (amt < walletLimits.min)
+      e.amount = `Minimum top-up is $${walletLimits.min.toFixed(2)}`;
+    else if (amt > walletLimits.max)
+      e.amount = `Single top-up cannot exceed $${walletLimits.max.toFixed(2)}`;
+    else if (currentBal + amt > walletLimits.maxBalance)
+      e.amount = `Would exceed max wallet balance of $${walletLimits.maxBalance.toFixed(2)} (current: $${currentBal.toFixed(2)})`;
+    if (!form.recharge_location.trim())     e.recharge_location     = "Location is required";
+    if (!form.transaction_reference.trim()) e.transaction_reference = "Transaction reference is required";
     setFormErr(e);
     return Object.keys(e).length === 0;
   };
@@ -391,6 +415,9 @@ export default function TopUpPage() {
                     <input type="number" min="0.01" step="0.01" max="10000" value={form.amount} onChange={e => set("amount", e.target.value)} placeholder="0.00" style={{ ...inputStyle, paddingLeft: 28, fontSize: 20, fontWeight: 800 }} />
                   </div>
                   {formErr.amount && <ErrMsg msg={formErr.amount} />}
+                  <div style={{ fontSize: 11, color: C.textMuted, marginTop: 4 }}>
+                    Min: ${walletLimits.min} &nbsp;·&nbsp; Max per transaction: ${walletLimits.max} &nbsp;·&nbsp; Max balance: ${walletLimits.maxBalance}
+                  </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                     {[5,10,20,50,100,200].map(a => (
                       <button key={a} onClick={() => set("amount", String(a))} style={{ padding: "5px 14px", borderRadius: 99, fontSize: 12, fontWeight: 700, cursor: "pointer", border: `1.5px solid ${form.amount === String(a) ? C.primary : C.border}`, background: form.amount === String(a) ? C.primaryLight : "#fff", color: form.amount === String(a) ? C.primary : C.textSecond }}>${a}</button>

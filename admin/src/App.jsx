@@ -25,6 +25,7 @@ import PassengersPage   from "./pages/PassengersPage";
 import AuditLogPage        from "./pages/AuditLogPage";
 import SystemSettingsPage  from "./pages/SystemSettingsPage";
 import IssuesPage          from "./pages/IssuesPage";
+import GeofencePage        from "./pages/GeofencePage";
 
 export default function App() {
   return (
@@ -74,6 +75,7 @@ function AppShell() {
     staff:         <StaffPage />,
     complaints:    <ComplaintsPage />,
     issues:        <IssuesPage />,
+    geofence:      <GeofencePage />,
   };
 
   return (

@@ -12,9 +12,13 @@ let lastLoaded = 0;
 let loadPromise = null;
 
 const DEFAULTS = {
-  "maintenance.mode":        "false",
-  "maintenance_allowed_ips": "",
-  "force_2fa_enabled":       "false",
+  "maintenance.mode":              "false",
+  "maintenance_allowed_ips":       "",
+  "force_2fa_enabled":             "false",
+  "security.max_login_attempts":   "5",
+  "security.lockout_minutes":      "15",
+  "security.jwt_access_ttl":       "900",
+  "security.jwt_refresh_ttl":      "604800",
 };
 
 export async function getSetting(key) {
@@ -28,6 +32,16 @@ export async function isMaintenance() {
 
 export async function isForce2FA() {
   return (await getSetting("force_2fa_enabled")) === "true";
+}
+
+export async function getSecuritySettings() {
+  const map = await _getAll();
+  return {
+    maxAttempts:    parseInt(map["security.max_login_attempts"] ?? "5",      10),
+    lockoutMinutes: parseInt(map["security.lockout_minutes"]    ?? "15",     10),
+    accessTtlSec:   parseInt(map["security.jwt_access_ttl"]    ?? "900",    10),
+    refreshTtlSec:  parseInt(map["security.jwt_refresh_ttl"]   ?? "604800", 10),
+  };
 }
 
 export async function getAllowedIps() {
@@ -54,7 +68,7 @@ async function _load() {
   try {
     const pool   = await poolPromise;
     const result = await pool.request().query(
-      "SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('maintenance.mode','maintenance_allowed_ips','force_2fa_enabled')"
+      "SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('maintenance.mode','maintenance_allowed_ips','force_2fa_enabled','security.max_login_attempts','security.lockout_minutes','security.jwt_access_ttl','security.jwt_refresh_ttl')"
     );
 
     const map = { ...DEFAULTS };

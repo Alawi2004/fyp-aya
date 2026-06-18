@@ -109,6 +109,36 @@ export const adminTopUpWallet = async (req, res) => {
   const staffId = req.user.user_id;
 
   const pool = await poolPromise;
+
+  // Read wallet limits from system_settings (fall back to safe defaults)
+  const limitsRes = await pool.request().query(`
+    SELECT setting_key, setting_value FROM system_settings
+    WHERE setting_key IN ('wallet.min_topup','wallet.max_topup','wallet.max_balance')
+  `);
+  const limitsMap = {};
+  for (const r of limitsRes.recordset) limitsMap[r.setting_key] = parseFloat(r.setting_value);
+  const minTopup   = limitsMap["wallet.min_topup"]   ?? 5;
+  const maxTopup   = limitsMap["wallet.max_topup"]   ?? 500;
+  const maxBalance = limitsMap["wallet.max_balance"] ?? 1000;
+
+  if (parsedAmount < minTopup) {
+    return res.status(400).json({ error: `Minimum top-up is $${minTopup.toFixed(2)}` });
+  }
+  if (parsedAmount > maxTopup) {
+    return res.status(400).json({ error: `Single top-up cannot exceed $${maxTopup.toFixed(2)}` });
+  }
+
+  // Check current balance won't exceed max
+  const balCheckRes = await pool.request()
+    .input("uid", sql.Int, user_id)
+    .query("SELECT COALESCE((SELECT balance FROM wallets WHERE user_id=@uid), 0) AS balance");
+  const currentBalance = parseFloat(balCheckRes.recordset[0]?.balance ?? 0);
+  if (currentBalance + parsedAmount > maxBalance) {
+    return res.status(400).json({
+      error: `Top-up would exceed the maximum wallet balance of $${maxBalance.toFixed(2)}. Current balance: $${currentBalance.toFixed(2)}`,
+    });
+  }
+
   const tx = pool.transaction();
 
   try {
