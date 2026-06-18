@@ -2,11 +2,11 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, Modal, TextInput, FlatList,
   Platform, Pressable, ScrollView, Animated,
-  Dimensions, Keyboard, StatusBar,
+  Dimensions, Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useApp } from '../../context/AppContext';
+import apiClient from '../../api/apiClient';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS, PURPLE } from '../../constants/colors';
 import PressableScale from '../../components/common/PressableScale';
@@ -24,110 +24,14 @@ const QUICK_REPLIES = [
   { id: 'help',     label: 'Help',         icon: 'help-circle-outline'  },
 ];
 
-// ── Bot response engine (mock — swap with API call when backend is ready) ─────
-function buildBotResponse(input, ctx) {
-  const msg = String(input).toLowerCase().trim();
-
-  if (msg === 'balance' || msg.includes('balance') || msg.includes('wallet') || msg.includes('money')) {
-    return (
-      `Your current wallet balance is **${ctx.currency} ${Number(ctx.walletBalance).toFixed(2)}**.\n\n` +
-      `• Minimum top-up: **${ctx.currency} ${ctx.walletLimits.minTopup}**\n` +
-      `• Max per transaction: **${ctx.currency} ${ctx.walletLimits.maxTopup}**\n` +
-      `• Max wallet balance: **${ctx.currency} ${ctx.walletLimits.maxBalance}**\n\n` +
-      `Go to the **Wallet** tab to top up or view transactions.`
-    );
-  }
-
-  if (msg === 'find_bus' || msg.includes('bus') || msg.includes('route') || msg.includes('find')) {
-    return (
-      `I can help you find the right bus!\n\n` +
-      `• **Trip Planner** — enter origin & destination\n` +
-      `• **Nearby Stops** — see stops closest to you\n` +
-      `• **Home screen** — browse all available buses\n\n` +
-      `What's your destination?`
-    );
-  }
-
-  if (msg === 'report' || msg.includes('complaint') || msg.includes('report') || msg.includes('issue')) {
-    return (
-      `To file a complaint or report an issue:\n\n` +
-      `1. Go to **Profile** tab\n` +
-      `2. Tap **My Complaints**\n` +
-      `3. Press **+** to file a new one\n\n` +
-      `You can report driver behaviour, bus conditions, or delays. Staff review within **24 hours**.`
-    );
-  }
-
-  if (msg === 'ticket' || msg.includes('ticket') || msg.includes('qr')) {
-    return (
-      `Your tickets are in the **Wallet** tab. Each ticket has a **QR code** the driver scans when you board.\n\n` +
-      `• Valid for one trip\n` +
-      `• Show the QR before boarding\n` +
-      `• Check Wallet → Transactions for history`
-    );
-  }
-
-  if (msg.includes('trip') || msg.includes('booking') || msg === 'next_trip') {
-    return (
-      `Your trips and bookings are in the **Trips** tab.\n\n` +
-      `• View past trips & details\n` +
-      `• Check booking status\n` +
-      `• Rate your driver after each trip\n` +
-      `• Cancel upcoming bookings\n\n` +
-      `Need help with a specific trip?`
-    );
-  }
-
-  if (msg.includes('top up') || msg.includes('topup') || msg.includes('recharge')) {
-    return (
-      `To top up your wallet:\n\n` +
-      `1. Open the **Wallet** tab\n` +
-      `2. Tap **Top Up**\n` +
-      `3. Enter between **${ctx.currency} ${ctx.walletLimits.minTopup}** and **${ctx.currency} ${ctx.walletLimits.maxTopup}**\n\n` +
-      `You can also top up at any authorised Yalla Transit agent.`
-    );
-  }
-
-  if (msg.includes('cancel')) {
-    return (
-      `To cancel a booking:\n\n` +
-      `1. Go to **Trips** tab\n` +
-      `2. Find the booking\n` +
-      `3. Tap **Cancel Booking**\n\n` +
-      `Taxi reservations can be cancelled up to **30 minutes** before pickup.`
-    );
-  }
-
-  if (msg.includes('hello') || msg.includes('hi') || msg.includes('hey')) {
-    const h = new Date().getHours();
-    const greet = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-    return (
-      `${greet}, **${ctx.userName}**!\n\n` +
-      `I'm your Yalla Transit assistant. Ask me anything about:\n\n` +
-      `• **Wallet & balance**\n• **Bus routes & schedules**\n• **Tickets & bookings**\n• **Complaints & support**`
-    );
-  }
-
-  if (msg === 'help' || msg.includes('help') || msg.includes('support')) {
-    return (
-      `Here's what I can help with:\n\n` +
-      `• **My Balance** — wallet balance & top-up info\n` +
-      `• **Find a Bus** — routes, schedules, nearby stops\n` +
-      `• **Report Issue** — complaints & feedback\n` +
-      `• **My Ticket** — how to use your QR ticket\n` +
-      `• **Trips** — bookings, history, ratings\n\n` +
-      `Or contact support:\n` +
-      `📞 **${ctx.supportPhone}**\n✉️ **${ctx.supportEmail}**`
-    );
-  }
-
-  return (
-    `I'm still learning, but I'm here to help!\n\n` +
-    `Try asking me about:\n` +
-    `• Your wallet balance\n• Finding a bus route\n• Filing a complaint\n• Your tickets\n\n` +
-    `For urgent help: **${ctx.supportPhone}**`
-  );
-}
+// Quick-reply IDs map to natural-language prompts the backend understands
+const CHIP_PROMPTS = {
+  balance:  'What is my current wallet balance?',
+  find_bus: 'Help me find a bus route',
+  report:   'I want to report an issue or complaint',
+  ticket:   'Is my ticket valid?',
+  help:     'What can you help me with?',
+};
 
 // ── Typing indicator (3-dot staggered bounce) ─────────────────────────────────
 const TypingIndicator = () => {
@@ -269,25 +173,25 @@ const WELCOME = (userName) => ({
 });
 
 const ChatbotScreen = ({ visible, onClose }) => {
-  const insets        = useSafeAreaInsets();
-  const { walletBalance, walletLimits, currency, supportPhone, supportEmail } = useApp();
-  const { user }      = useAuth();
+  const insets    = useSafeAreaInsets();
+  const { user }  = useAuth();
 
-  const [messages,   setMessages]   = useState([]);
-  const [input,      setInput]      = useState('');
-  const [typing,     setTyping]     = useState(false);
-  const [showChips,  setShowChips]  = useState(true);
-  const [kbHeight,   setKbHeight]   = useState(0);
+  const [messages,  setMessages]  = useState([]);
+  const [input,     setInput]     = useState('');
+  const [typing,    setTyping]    = useState(false);
+  const [showChips, setShowChips] = useState(true);
+  const [kbHeight,  setKbHeight]  = useState(0);
 
-  const listRef   = useRef(null);
-  const inputRef  = useRef(null);
-  const slideAnim = useRef(new Animated.Value(0)).current;
+  const listRef    = useRef(null);
+  const inputRef   = useRef(null);
+  const slideAnim  = useRef(new Animated.Value(0)).current;
+  // Conversation history sent to the backend on every request
+  const historyRef = useRef([]);
 
-  // ── Keyboard height tracking (reliable cross-platform alternative to KAV) ──
+  // ── Keyboard height tracking ──────────────────────────────────────────────
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-
     const show = Keyboard.addListener(showEvent, (e) => setKbHeight(e.endCoordinates.height));
     const hide = Keyboard.addListener(hideEvent, ()  => setKbHeight(0));
     return () => { show.remove(); hide.remove(); };
@@ -296,6 +200,7 @@ const ChatbotScreen = ({ visible, onClose }) => {
   // ── Open / close ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (visible) {
+      historyRef.current = [];
       setMessages([WELCOME(user?.full_name ?? user?.name)]);
       setShowChips(true);
       setKbHeight(0);
@@ -310,16 +215,10 @@ const ChatbotScreen = ({ visible, onClose }) => {
     }
   }, [visible]);
 
-  const ctx = {
-    walletBalance, walletLimits, currency,
-    supportPhone, supportEmail,
-    userName: user?.full_name ?? user?.name ?? 'there',
-  };
-
-  // ── Send message ──────────────────────────────────────────────────────────
-  const sendMessage = useCallback((text) => {
+  // ── Send message — calls real backend ─────────────────────────────────────
+  const sendMessage = useCallback(async (text) => {
     const trimmed = String(text ?? input).trim();
-    if (!trimmed) return;
+    if (!trimmed || typing) return;
     setInput('');
     setShowChips(false);
 
@@ -327,18 +226,39 @@ const ChatbotScreen = ({ visible, onClose }) => {
     setMessages(prev => [...prev, userMsg]);
     setTyping(true);
 
-    const delay = 1200 + Math.random() * 800;
-    setTimeout(() => {
-      const botText = buildBotResponse(trimmed, ctx);
+    // Snapshot history before the new message (backend handles the new message separately)
+    const historySnapshot = [...historyRef.current];
+
+    try {
+      const res = await apiClient.post('/chatbot/message', {
+        message: trimmed,
+        history: historySnapshot,
+      });
+
+      const botText = res.data?.reply ?? "I'm having a moment — please try again.";
+
+      // Append to history for next turn
+      historyRef.current = [
+        ...historySnapshot,
+        { role: 'user',      content: trimmed  },
+        { role: 'assistant', content: botText  },
+      ].slice(-20); // keep last 10 turns
+
       setMessages(prev => [...prev, { id: mkId(), role: 'bot', text: botText }]);
+    } catch {
+      setMessages(prev => [
+        ...prev,
+        { id: mkId(), role: 'bot', text: "Sorry, I couldn't reach the server. Please check your connection and try again." },
+      ]);
+    } finally {
       setTyping(false);
       setShowChips(true);
-    }, delay);
-  }, [input, ctx]);
+    }
+  }, [input, typing]);
 
   const handleChip = useCallback((id) => {
     Keyboard.dismiss();
-    sendMessage(id);
+    sendMessage(CHIP_PROMPTS[id] ?? id);
   }, [sendMessage]);
 
   // Sheet shrinks when keyboard is up so input stays above keyboard

@@ -47,6 +47,7 @@ import shareTicketRoutes       from "./routes/shareTicket.routes.js";
 import mlRoutes                from "./routes/ml.routes.js";
 import taxiReservationsRoutes  from "./routes/taxiReservations.routes.js";
 import stopRequestsRoutes      from "./routes/stopRequests.routes.js";
+import chatbotRoutes           from "./routes/chatbot.routes.js";
 import { startReportScheduler } from "./services/reportScheduler.js";
 import { poolPromise }          from "./db/db.js";
 import { ensureAuthTables, ensureOperationalTables } from "./db/featureSetup.js";
@@ -158,6 +159,7 @@ app.use("/api/share",              shareTicketRoutes);
 app.use("/api/ml",                 mlRoutes);
 app.use("/api/taxi-reservations",  taxiReservationsRoutes);
 app.use("/api/stop-requests",      stopRequestsRoutes);
+app.use("/api/chatbot",            chatbotRoutes);
 
 // Run DB setup batches at startup so login requests don't pay the cold cost
 poolPromise.then(pool => {
