@@ -539,7 +539,7 @@ export default function RoutesPage() {
     if (!routeForm.from.trim() || !routeForm.to.trim()) { setRouteSaveErr("From and To locations are required."); return; }
     setRouteSaveErr(null);
     setIsSavingRoute(true);
-    const routeName = `${routeForm.from.trim()} → ${routeForm.to.trim()}`;
+    const routeName = `${routeForm.from.trim()} to ${routeForm.to.trim()}`;
     try {
       if (editRoute) {
         await updateRoute(editRoute, {
