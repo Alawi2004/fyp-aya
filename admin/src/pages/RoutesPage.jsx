@@ -13,20 +13,22 @@ import { fmtMoney } from "../utils/fmt";
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function normalizeRoute(r) {
+  const from = r.start_location ?? r.origin ?? "";
+  const to   = r.end_location   ?? r.destination ?? "";
   return {
     id:       r.route_id ?? r.id,
     code:     r.route_name ?? r.code ?? r.name ?? "",
-    name:     r.start_location && r.end_location
-      ? `${r.start_location} → ${r.end_location}`
-      : (r.origin && r.destination ? `${r.origin} → ${r.destination}` : (r.name ?? "")),
+    from,
+    to,
+    name:     from && to ? `${from} → ${to}` : (r.route_name ?? r.name ?? ""),
     distance: r.distance ?? "",
     duration: r.duration ?? "",
     active:   r.is_active !== undefined ? Boolean(r.is_active) : (r.active !== undefined ? r.active : true),
-    stops:    Array.isArray(r.stops) ? r.stops : [],  // mock data has stops as a count (number), not array
+    stops:    Array.isArray(r.stops) ? r.stops : [],
   };
 }
 
-const EMPTY_ROUTE = { code: "", name: "", distance: "", duration: "", active: true };
+const EMPTY_ROUTE = { from: "", to: "", distance: "", duration: "", active: true };
 const EMPTY_STOP  = { name: "", lat: "", lng: "" };
 
 const ZONE_COLORS = [
@@ -528,29 +530,29 @@ export default function RoutesPage() {
   function openAddRoute()  { setEditRoute(null); setRouteForm(EMPTY_ROUTE); setRouteSaveErr(null); setRouteModal(true); }
   function openEditRoute(r) {
     setEditRoute(r.id);
-    setRouteForm({ code: r.code, name: r.name, distance: r.distance, duration: r.duration, active: r.active });
+    setRouteForm({ from: r.from, to: r.to, distance: r.distance, duration: r.duration, active: r.active });
     setRouteSaveErr(null);
     setRouteModal(true);
   }
 
   async function saveRoute() {
-    if (!routeForm.code || !routeForm.name) { setRouteSaveErr("Route code and name are required."); return; }
+    if (!routeForm.from.trim() || !routeForm.to.trim()) { setRouteSaveErr("From and To locations are required."); return; }
     setRouteSaveErr(null);
     setIsSavingRoute(true);
+    const routeName = `${routeForm.from.trim()} → ${routeForm.to.trim()}`;
     try {
-      const [start, end] = routeForm.name.split("→").map(s => s.trim());
       if (editRoute) {
         await updateRoute(editRoute, {
-          route_name:     routeForm.code,
-          start_location: start || routeForm.name,
-          end_location:   end   || "",
+          route_name:     routeName,
+          start_location: routeForm.from.trim(),
+          end_location:   routeForm.to.trim(),
           is_active:      routeForm.active,
         });
       } else {
         await createRoute({
-          route_name:     routeForm.code,
-          start_location: start || routeForm.name,
-          end_location:   end   || "",
+          route_name:     routeName,
+          start_location: routeForm.from.trim(),
+          end_location:   routeForm.to.trim(),
         });
       }
       setRouteModal(false);
@@ -775,18 +777,42 @@ export default function RoutesPage() {
       {routeModal && (
         <Modal title={editRoute ? "Edit route" : "Add new route"} onClose={() => { setRouteModal(false); setRouteSaveErr(null); }} onSave={saveRoute} saving={isSavingRoute}>
           {routeSaveErr && <div style={{ padding: "8px 12px", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, marginBottom: 12, fontSize: 12, color: "#B91C1C", fontWeight: 600 }}>{routeSaveErr}</div>}
-          {[
-            { label: "Route code", key: "code",     placeholder: "e.g. Route 14F" },
-            { label: "Route name", key: "name",     placeholder: "e.g. Airport → Downtown" },
-            { label: "Distance",   key: "distance", placeholder: "e.g. 15 km" },
-            { label: "Duration",   key: "duration", placeholder: "e.g. 30 min" },
-          ].map(f => (
-            <div key={f.key} style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 }}>{f.label}</label>
-              <input placeholder={f.placeholder} value={routeForm[f.key]} onChange={e => setRouteForm(p => ({ ...p, [f.key]: e.target.value }))}
+
+          {/* From / To */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 }}>From *</label>
+              <input placeholder="e.g. Beirut" value={routeForm.from} onChange={e => setRouteForm(p => ({ ...p, from: e.target.value }))}
                 style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, boxSizing: "border-box" }} />
             </div>
-          ))}
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 }}>To *</label>
+              <input placeholder="e.g. Jounieh" value={routeForm.to} onChange={e => setRouteForm(p => ({ ...p, to: e.target.value }))}
+                style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, boxSizing: "border-box" }} />
+            </div>
+          </div>
+
+          {/* Auto-generated name preview */}
+          {(routeForm.from || routeForm.to) && (
+            <div style={{ marginBottom: 14, padding: "8px 12px", background: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: 8, fontSize: 12, color: "#5B21B6" }}>
+              Route name: <strong>{routeForm.from || "…"} → {routeForm.to || "…"}</strong>
+            </div>
+          )}
+
+          {/* Distance / Duration */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+            {[
+              { label: "Distance", key: "distance", placeholder: "e.g. 15 km" },
+              { label: "Duration", key: "duration", placeholder: "e.g. 30 min" },
+            ].map(f => (
+              <div key={f.key}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 }}>{f.label}</label>
+                <input placeholder={f.placeholder} value={routeForm[f.key]} onChange={e => setRouteForm(p => ({ ...p, [f.key]: e.target.value }))}
+                  style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, boxSizing: "border-box" }} />
+              </div>
+            ))}
+          </div>
+
           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer" }}>
             <input type="checkbox" checked={routeForm.active} onChange={e => setRouteForm(p => ({ ...p, active: e.target.checked })) } />
             Active route
