@@ -17,20 +17,32 @@ const SHEET_MAX_H = SCREEN_H * 0.88;
 
 // ── Quick reply chip definitions ──────────────────────────────────────────────
 const QUICK_REPLIES = [
-  { id: 'balance',  label: 'My Balance',   icon: 'wallet-outline'      },
-  { id: 'find_bus', label: 'Find a Bus',   icon: 'bus-outline'          },
-  { id: 'report',   label: 'Report Issue', icon: 'flag-outline'         },
-  { id: 'ticket',   label: 'My Ticket',    icon: 'qr-code-outline'      },
-  { id: 'help',     label: 'Help',         icon: 'help-circle-outline'  },
+  { id: 'balance',    label: 'My Balance',    icon: 'wallet-outline'         },
+  { id: 'find_bus',   label: 'Find a Bus',    icon: 'bus-outline'            },
+  { id: 'book_taxi',  label: 'Book Taxi',     icon: 'car-outline'            },
+  { id: 'cancel',     label: 'Cancel Booking',icon: 'close-circle-outline'   },
+  { id: 'seats',      label: 'Seat Availability', icon: 'people-outline'    },
+  { id: 'rate',       label: 'Rate My Trip',  icon: 'star-outline'           },
+  { id: 'topup',      label: 'Top-Up Locations', icon: 'location-outline'   },
+  { id: 'lost',       label: 'Lost Item',     icon: 'search-outline'         },
+  { id: 'report',     label: 'Report Issue',  icon: 'flag-outline'           },
+  { id: 'ticket',     label: 'My Ticket',     icon: 'qr-code-outline'        },
+  { id: 'help',       label: 'Help',          icon: 'help-circle-outline'    },
 ];
 
 // Quick-reply IDs map to natural-language prompts the backend understands
 const CHIP_PROMPTS = {
-  balance:  'What is my current wallet balance?',
-  find_bus: 'Help me find a bus route',
-  report:   'I want to report an issue or complaint',
-  ticket:   'Is my ticket valid?',
-  help:     'What can you help me with?',
+  balance:    'What is my current wallet balance?',
+  find_bus:   'Help me find a bus route',
+  book_taxi:  'I want to book a private taxi',
+  cancel:     'I want to cancel a booking',
+  seats:      'Check seat availability on a route',
+  rate:       'I want to rate my last trip',
+  topup:      'Where can I top up my wallet?',
+  lost:       'I lost something on the bus',
+  report:     'I want to report an issue or complaint',
+  ticket:     'Is my ticket valid?',
+  help:       'What can you help me with?',
 };
 
 // ── Typing indicator (3-dot staggered bounce) ─────────────────────────────────
@@ -172,7 +184,7 @@ const WELCOME = (userName) => ({
     `What can I do for you today?`,
 });
 
-const ChatbotScreen = ({ visible, onClose }) => {
+const ChatbotScreen = ({ visible, onClose, onAction }) => {
   const insets    = useSafeAreaInsets();
   const { user }  = useAuth();
 
@@ -245,6 +257,11 @@ const ChatbotScreen = ({ visible, onClose }) => {
       ].slice(-20); // keep last 10 turns
 
       setMessages(prev => [...prev, { id: mkId(), role: 'bot', text: botText }]);
+
+      // If the backend returned a navigation action, forward it to the parent
+      if (res.data?.action && onAction) {
+        onAction(res.data.action);
+      }
     } catch {
       setMessages(prev => [
         ...prev,

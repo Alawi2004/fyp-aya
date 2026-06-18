@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import PressableScale from '../components/common/PressableScale';
 import { useApp } from '../context/AppContext';
 import GradientFill from '../components/common/GradientFill';
 import ChatbotScreen from '../screens/passenger/ChatbotScreen';
+import { navigationRef } from './navigationRef';
 
 import HomeScreen from '../screens/passenger/HomeScreen';
 import BusTrackingScreen from '../screens/passenger/BusTrackingScreen';
@@ -120,6 +121,28 @@ const PassengerNavigator = () => {
   // Position the FAB above the tab bar: tab bar is ~65 px tall + bottom inset
   const fabBottom = 65 + Math.max(insets.bottom, 12) + 14;
 
+  // Handle actions returned by the chatbot backend
+  const handleChatAction = useCallback((action) => {
+    if (!action?.type) return;
+
+    if (action.type === 'open_taxi_booking') {
+      // Close the chatbot first, then navigate after the modal animates out
+      setChatOpen(false);
+      setTimeout(() => {
+        if (navigationRef.isReady()) {
+          navigationRef.navigate('HomeStack', {
+            screen: 'TaxiReservation',
+            params: {
+              prefillPickup:      action.pickup      ?? '',
+              prefillDestination: action.destination ?? '',
+              prefillNotes:       action.notes       ?? '',
+            },
+          });
+        }
+      }, 350);
+    }
+  }, []);
+
   return (
     <View style={{ flex: 1 }}>
       <Tab.Navigator
@@ -145,7 +168,11 @@ const PassengerNavigator = () => {
       </PressableScale>
 
       {/* ── Chat modal ───────────────────────────────────────────────── */}
-      <ChatbotScreen visible={chatOpen} onClose={() => setChatOpen(false)} />
+      <ChatbotScreen
+        visible={chatOpen}
+        onClose={() => setChatOpen(false)}
+        onAction={handleChatAction}
+      />
     </View>
   );
 };

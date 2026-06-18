@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { NavigationContainer }   from '@react-navigation/native';
+import { navigationRef }          from './navigationRef';
 import { useAuth }               from '../context/AuthContext';
 import AuthNavigator             from './AuthNavigator';
 import PassengerNavigator        from './PassengerNavigator';
@@ -50,7 +51,7 @@ const AppNavigator = () => {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       {!user
         ? <AuthNavigator />
         : role === 'driver'
