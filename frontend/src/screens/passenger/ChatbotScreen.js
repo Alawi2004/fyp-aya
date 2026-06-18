@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Location from 'expo-location';
 import apiClient from '../../api/apiClient';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS, PURPLE } from '../../constants/colors';
@@ -194,11 +195,11 @@ const ChatbotScreen = ({ visible, onClose, onAction }) => {
   const [showChips, setShowChips] = useState(true);
   const [kbHeight,  setKbHeight]  = useState(0);
 
-  const listRef    = useRef(null);
-  const inputRef   = useRef(null);
-  const slideAnim  = useRef(new Animated.Value(0)).current;
-  // Conversation history sent to the backend on every request
-  const historyRef = useRef([]);
+  const listRef     = useRef(null);
+  const inputRef    = useRef(null);
+  const slideAnim   = useRef(new Animated.Value(0)).current;
+  const historyRef  = useRef([]);
+  const locationRef = useRef(null); // cached { latitude, longitude }
 
   // ── Keyboard height tracking ──────────────────────────────────────────────
   useEffect(() => {
@@ -208,6 +209,24 @@ const ChatbotScreen = ({ visible, onClose, onAction }) => {
     const hide = Keyboard.addListener(hideEvent, ()  => setKbHeight(0));
     return () => { show.remove(); hide.remove(); };
   }, []);
+
+  // ── Background location fetch — fires once when chat opens ───────────────
+  useEffect(() => {
+    if (!visible) return;
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        const pos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        locationRef.current = {
+          latitude:  pos.coords.latitude,
+          longitude: pos.coords.longitude,
+        };
+      } catch { /* location is optional — silently skip */ }
+    })();
+  }, [visible]);
 
   // ── Open / close ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -243,8 +262,9 @@ const ChatbotScreen = ({ visible, onClose, onAction }) => {
 
     try {
       const res = await apiClient.post('/chatbot/message', {
-        message: trimmed,
-        history: historySnapshot,
+        message:  trimmed,
+        history:  historySnapshot,
+        location: locationRef.current ?? undefined,
       });
 
       const botText = res.data?.reply ?? "I'm having a moment — please try again.";
@@ -278,8 +298,9 @@ const ChatbotScreen = ({ visible, onClose, onAction }) => {
     sendMessage(CHIP_PROMPTS[id] ?? id);
   }, [sendMessage]);
 
-  // Sheet shrinks when keyboard is up so input stays above keyboard
-  const sheetH    = SHEET_MAX_H - kbHeight;
+  // When keyboard is up: push the sheet above it (paddingBottom on overlay)
+  // and cap the sheet height so it fits in the available space.
+  const sheetH    = Math.min(SHEET_MAX_H, SCREEN_H - kbHeight - 20);
   const slideStyle = {
     transform: [{
       translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [SHEET_MAX_H, 0] }),
@@ -294,7 +315,7 @@ const ChatbotScreen = ({ visible, onClose, onAction }) => {
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <View style={styles.overlay}>
+      <View style={[styles.overlay, kbHeight > 0 && { paddingBottom: kbHeight }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={() => { Keyboard.dismiss(); onClose(); }} />
 
         <Animated.View style={[styles.sheet, { height: sheetH }, slideStyle]}>

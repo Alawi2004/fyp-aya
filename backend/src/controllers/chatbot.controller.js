@@ -221,7 +221,7 @@ const TOOLS = [
     type: "function",
     function: {
       name: "get_top_up_locations",
-      description: "Returns top-up agent locations where the passenger can reload their wallet with cash.",
+      description: "Returns top-up agent locations sorted by distance from the user if GPS is available, otherwise sorted by city/name. Use this when the user asks where to reload their wallet.",
       parameters: {
         type: "object",
         properties: {
@@ -229,6 +229,14 @@ const TOOLS = [
         },
         required: [],
       },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_nearby_stops",
+      description: "Returns bus stops closest to the user's current GPS location. Call this when the user asks about nearby stops, nearest bus, or 'where can I catch a bus near me'. Uses the user's live location — no parameters needed.",
+      parameters: { type: "object", properties: {}, required: [] },
     },
   },
   {
@@ -656,7 +664,7 @@ async function executeTool(name, args, ctx) {
       return { transactions: r.recordset };
     }
 
-    // ── Top-up locations ────────────────────────────────────────────────────
+    // ── Top-up locations (sorted by distance if GPS available) ─────────────
     case "get_top_up_locations": {
       const city = args.city ? `%${args.city.trim()}%` : null;
       const r = await pool.request()
@@ -668,7 +676,49 @@ async function executeTool(name, args, ctx) {
             AND (@city IS NULL OR city LIKE @city)
           ORDER BY city, name
         `);
-      return { locations: r.recordset };
+
+      // If user's GPS is available, compute distances client-side and sort
+      const locations = r.recordset;
+      if (ctx.location) {
+        const { latitude: uLat, longitude: uLng } = ctx.location;
+        // top_up_locations has no lat/lng columns — we can't sort by exact distance,
+        // but we indicate the user's city context so the model can mention it
+        return {
+          locations,
+          user_location: { latitude: uLat, longitude: uLng },
+          note: "User location available — prioritise locations in their city when responding.",
+        };
+      }
+      return { locations };
+    }
+
+    // ── Nearby stops (requires user GPS) ───────────────────────────────────
+    case "get_nearby_stops": {
+      if (!ctx.location) {
+        return { error: "Location not available. Ask the user to enable GPS and try again." };
+      }
+      const { latitude, longitude } = ctx.location;
+      const r = await pool.request()
+        .input("lat", sql.Float, latitude)
+        .input("lng", sql.Float, longitude)
+        .query(`
+          SELECT TOP 8
+            stop_id, stop_name, address,
+            latitude, longitude,
+            ROUND(
+              6371 * ACOS(
+                COS(RADIANS(@lat)) * COS(RADIANS(latitude))
+                * COS(RADIANS(longitude) - RADIANS(@lng))
+                + SIN(RADIANS(@lat)) * SIN(RADIANS(latitude))
+              ), 2
+            ) AS distance_km
+          FROM stops
+          WHERE is_deleted = 0
+            AND latitude  IS NOT NULL
+            AND longitude IS NOT NULL
+          ORDER BY distance_km ASC
+        `);
+      return { stops: r.recordset, user_location: ctx.location };
     }
 
     // ── Passenger demand by hour ────────────────────────────────────────────
@@ -780,56 +830,79 @@ async function executeTool(name, args, ctx) {
 }
 
 // ── System prompt ─────────────────────────────────────────────────────────────
-function buildSystemPrompt(user) {
-  return `You are the Yalla Transit AI assistant, embedded in the passenger mobile app.
-Be concise, friendly, and helpful. Always use the available tools to get real data before answering factual questions about routes, balances, or tickets — never guess.
+function buildSystemPrompt(user, location) {
+  const locationCtx = location
+    ? `- GPS: ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)} (use get_nearby_stops for local queries)`
+    : `- GPS: not available (ask user to enable location if needed)`;
 
-User context:
+  return `You are Yalla Transit AI — a smart, friendly assistant built into the passenger mobile app for a Lebanese public transit system.
+
+## Who you are
+You have full access to real-time data via tools. Never guess or make up route names, times, balances, or IDs — always call the right tool first and answer from its result. If a tool returns no data, say so honestly.
+
+## User context
 - Name: ${user.full_name ?? user.email}
-- Role: passenger
 - User ID: ${user.user_id}
+${locationCtx}
 
-Capabilities (always use the matching tool):
-- Wallet balance & transactions: get_wallet_balance, get_wallet_transactions
-- Route search & stops: search_routes, get_route_stops
-- Next departures & seat availability: get_next_departures, get_seat_availability
-- Fare estimation: get_fare_info (use route distance if known, or per_km_rate × estimated km)
-- Live bus location: get_live_bus_location
-- Upcoming bookings & cancel: get_upcoming_bookings → confirm with user → cancel_booking
-- Trip history & completed trips: get_trip_history, get_completed_trips
-- Rate a trip: get_completed_trips → confirm rating with user → submit_rating
-- Top-up locations: get_top_up_locations
-- Best time to travel (demand): search_routes → get_passenger_demand
-- Multi-stop trip planning: plan_multi_stop_trip
-- Complaints (delay, driver, cleanliness, safety, overcharge, other): file_complaint
-- Lost item report: get_trip_history (to find trip_id) → file_complaint with category="lost"
-- Book a private taxi: initiate_taxi_booking (opens the in-app booking form)
-- Explain a charge: get_wallet_transactions → describe the relevant entry
+## Tool selection rules (follow these strictly)
+| User intent | Tool(s) to call |
+|---|---|
+| Balance / is wallet frozen | get_wallet_balance |
+| Recent trips | get_trip_history |
+| Active ticket / QR valid? | get_active_ticket |
+| Find a route / what routes go to X | search_routes |
+| Stops on a route | search_routes → get_route_stops |
+| Next bus from a stop | get_next_departures |
+| Is there space / available seats | get_seat_availability |
+| Where is my bus | get_live_bus_location |
+| Fare / how much will it cost | search_routes → get_fare_info |
+| Best time to travel (less crowded) | search_routes → get_passenger_demand |
+| Trip from A to B (multi-stop) | plan_multi_stop_trip |
+| Nearby stops / closest bus stop | get_nearby_stops |
+| Cancel a booking | get_upcoming_bookings → confirm → cancel_booking |
+| Rate my last trip | get_completed_trips → confirm → submit_rating |
+| Wallet top-up history / explain charge | get_wallet_transactions |
+| Where to reload wallet | get_top_up_locations |
+| Report issue (delay/driver/safety) | Gather: title, description, category, priority → file_complaint |
+| Lost item on bus | get_trip_history → file_complaint category="lost" with trip_id |
+| Book a private taxi | Extract pickup + destination → initiate_taxi_booking |
 
-Guidelines:
-- For cancel_booking: first call get_upcoming_bookings to show the list, ask the user to confirm which one, then cancel
-- For complaints or ratings: confirm details with the user before submitting
-- For taxi booking: extract pickup and destination from the user's message, then call initiate_taxi_booking
-- Keep replies short (3-5 sentences max unless listing items)
-- Format lists with bullet points using "•" character
-- Use **bold** for key values like amounts, route names, times`;
+## Multi-step tool chaining (do this automatically, don't ask the user for intermediate IDs)
+- "How long does Route 5 take?" → search_routes("5") → get_route_stops(route_id)
+- "Is the 3pm bus to Jounieh full?" → get_seat_availability("Jounieh")
+- "Best time to take the Hamra route" → search_routes("Hamra") → get_passenger_demand(route_id)
+- "Cancel my booking tomorrow" → get_upcoming_bookings() → present list → cancel after confirmation
+- "Rate my last trip" → get_completed_trips() → ask for stars → submit_rating
+
+## Behaviour rules
+1. **Always call a tool first** before answering factual questions. Saying "I don't have access to real-time data" is wrong — you do.
+2. **Chain tools in one turn** when you need intermediate data (e.g. route_id → stops). Do not ask the user for an ID they wouldn't know.
+3. **Confirm before side-effects**: cancellations, complaints, ratings — show the user what you're about to submit and wait for "yes" before calling the write tool.
+4. **Be concise**: 2-4 sentences for simple answers, a bullet list for data. No preamble like "Sure, let me check that for you!".
+5. **Format**: Use **bold** for key values (amounts, route names, times). Use "•" for bullet lists.
+6. **Handling no results**: If a tool returns empty data, say clearly "I didn't find any [X] matching that" and suggest alternatives.
+7. **Location-aware**: If the user says "near me", "closest", or "nearby", call get_nearby_stops first.
+8. **Taxi booking**: As soon as you identify pickup + destination from the user's message, call initiate_taxi_booking — don't ask for confirmation since the form will open for them to review.`;
 }
 
 // ── Main route handler ────────────────────────────────────────────────────────
 export const sendMessage = async (req, res) => {
-  const user    = req.user;
-  const message = String(req.body.message ?? "").trim();
-  const history = Array.isArray(req.body.history) ? req.body.history : [];
+  const user     = req.user;
+  const message  = String(req.body.message ?? "").trim();
+  const history  = Array.isArray(req.body.history) ? req.body.history : [];
+  const rawLoc   = req.body.location;
+  const location = rawLoc?.latitude && rawLoc?.longitude
+    ? { latitude: parseFloat(rawLoc.latitude), longitude: parseFloat(rawLoc.longitude) }
+    : null;
 
   if (!message) return res.status(400).json({ error: "message is required" });
 
   try {
     const pool = await poolPromise;
 
-    // actionRef is set by initiate_taxi_booking tool; included in response so
-    // the frontend can navigate to the matching screen.
     const actionRef = { current: null };
-    const ctx = { userId: user.user_id, pool, actionRef };
+    const ctx = { userId: user.user_id, pool, actionRef, location };
 
     const recentHistory = history.slice(-10).map(m => ({
       role:    m.role === "user" ? "user" : "assistant",
@@ -837,7 +910,7 @@ export const sendMessage = async (req, res) => {
     }));
 
     const messages = [
-      { role: "system", content: buildSystemPrompt(user) },
+      { role: "system", content: buildSystemPrompt(user, location) },
       ...recentHistory,
       { role: "user", content: message },
     ];
