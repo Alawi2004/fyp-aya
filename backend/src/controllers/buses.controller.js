@@ -78,7 +78,12 @@ export const getBusById = async (req, res) => {
                   JOIN trips tr ON tr.trip_id = rt.trip_id
                   WHERE tr.driver_id = d.driver_id), 0)            AS driver_rating,
           (SELECT COUNT(*) FROM trips tr
-           WHERE tr.driver_id = d.driver_id AND tr.status = 'completed') AS driver_trips
+           WHERE tr.driver_id = d.driver_id AND tr.status = 'completed') AS driver_trips,
+          LOWER(ISNULL(v.vehicle_type, 'bus'))                     AS type,
+          ISNULL((SELECT MIN(fz.base_fare) FROM fare_zones fz
+                  WHERE fz.route_id = r.route_id AND fz.zone_name = 'Default'), 0) AS price,
+          (SELECT TOP 1 fz.base_fare FROM fare_zones fz
+           WHERE fz.route_id = r.route_id AND fz.zone_name = 'Carpool')            AS carpool_price
         FROM trips t
         JOIN vehicles v ON t.vehicle_id = v.vehicle_id
         JOIN routes  r ON t.route_id   = r.route_id

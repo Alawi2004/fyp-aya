@@ -59,17 +59,20 @@ function normalizeTrip(t) {
     time = iso.slice(11, 16);
   }
   return {
-    id:         t.trip_id  ?? t.id,
-    route_id:   t.route_id   ?? null,
-    driver_id:  t.driver_id  ?? t.drv_id ?? null,
-    vehicle_id: t.vehicle_id ?? null,
-    route:      t.route_name   ?? t.route   ?? "",
-    driver:     t.driver_name  ?? t.driver  ?? "",
-    vehicle:    t.plate_number ?? t.vehicle ?? "",
-    seats:      t.seats ?? `0/${t.capacity ?? 30}`,
+    id:               t.trip_id  ?? t.id,
+    route_id:         t.route_id   ?? null,
+    driver_id:        t.driver_id  ?? t.drv_id ?? null,
+    vehicle_id:       t.vehicle_id ?? null,
+    vehicle_type:     t.vehicle_type ?? null,
+    route:            t.route_name   ?? t.route   ?? "",
+    driver:           t.driver_name  ?? t.driver  ?? "",
+    vehicle:          t.plate_number ?? t.vehicle ?? "",
+    seats:            t.seats ?? `0/${t.capacity ?? 30}`,
     date,
     time,
-    status:     capitalizeStatus(t.status),
+    status:           capitalizeStatus(t.status),
+    price:            t.price        != null ? String(t.price) : "",
+    carpool_price:    t.carpool_price ?? null,
   };
 }
 
@@ -1203,11 +1206,13 @@ export default function TripsPage() {
     if (isEdit) {
       try {
         await updateTrip(tripModal.id, {
-          route_id:   form.route_id   ?? null,
-          driver_id:  form.driver_id  ?? null,
-          vehicle_id: form.vehicle_id ?? null,
+          route_id:         form.route_id   ?? null,
+          driver_id:        form.driver_id  ?? null,
+          vehicle_id:       form.vehicle_id ?? null,
           start_time,
-          status:     form.status.toLowerCase(),
+          status:           form.status.toLowerCase(),
+          price:            form.price !== "" && form.price != null ? Number(form.price) : null,
+          carpool_discount: form.carpool_discount !== "" && form.carpool_discount != null ? Number(form.carpool_discount) : null,
         });
         loadTrips();
         loadConflicts();

@@ -102,7 +102,12 @@ export const getTrips = async (req, res) => {
         r.route_name, r.start_location, r.end_location,
         d.driver_id AS drv_id,
         du.full_name AS driver_name,
-        v.plate_number, v.model AS vehicle_model, v.capacity
+        v.plate_number, v.model AS vehicle_model, v.capacity,
+        LOWER(ISNULL(v.vehicle_type, 'bus')) AS vehicle_type,
+        ISNULL((SELECT MIN(fz.base_fare) FROM fare_zones fz
+                WHERE fz.route_id = t.route_id AND fz.zone_name = 'Default'), NULL) AS price,
+        (SELECT TOP 1 fz.base_fare FROM fare_zones fz
+         WHERE fz.route_id = t.route_id AND fz.zone_name = 'Carpool') AS carpool_price
       ${JOINS}
       ${where}
       ORDER BY t.start_time DESC
@@ -146,12 +151,22 @@ export const updateTripStatus = async (req, res) => {
 export const updateTrip = async (req, res) => {
   try {
     const pool = await poolPromise;
-    const { route_id, driver_id, vehicle_id, start_time, status } = req.body;
+    const { route_id, driver_id, vehicle_id, start_time, status, price, carpool_discount } = req.body;
     // tedious requires a Date object for sql.DateTime — passing a raw string throws TypeError
     const startTimeParsed = start_time ? new Date(start_time) : null;
     if (startTimeParsed && isNaN(startTimeParsed.getTime())) {
       return res.status(400).json({ error: `Invalid start_time: "${start_time}"` });
     }
+
+    // Resolve the route_id to use for fare zones (may come from body or must be looked up)
+    let effectiveRouteId = route_id ?? null;
+    if (!effectiveRouteId) {
+      const tr = await pool.request()
+        .input("id", sql.Int, Number(req.params.id))
+        .query("SELECT route_id FROM trips WHERE trip_id = @id");
+      effectiveRouteId = tr.recordset[0]?.route_id ?? null;
+    }
+
     await pool.request()
       .input("id",         sql.Int,      Number(req.params.id))
       .input("route_id",   sql.Int,      route_id   ?? null)
@@ -168,6 +183,45 @@ export const updateTrip = async (req, res) => {
           status     = COALESCE(@status,     status)
         WHERE trip_id = @id
       `);
+
+    if (price != null && !isNaN(Number(price)) && effectiveRouteId) {
+      await pool.request()
+        .input("route_id",  sql.Int,            effectiveRouteId)
+        .input("base_fare", sql.Decimal(10, 2), Number(price))
+        .query(`
+          MERGE fare_zones AS tgt
+          USING (SELECT @route_id AS route_id, N'Default' AS zone_name) AS src
+            ON tgt.route_id = src.route_id AND tgt.zone_name = src.zone_name
+          WHEN MATCHED THEN
+            UPDATE SET base_fare = @base_fare, updated_at = GETUTCDATE()
+          WHEN NOT MATCHED THEN
+            INSERT (route_id, zone_name, zone_color, base_fare)
+            VALUES (@route_id, N'Default', N'#2563EB', @base_fare);
+        `);
+
+      if (carpool_discount != null && !isNaN(Number(carpool_discount))) {
+        const carpoolFare = Number(price) * (1 - Number(carpool_discount) / 100);
+        await pool.request()
+          .input("route_id",     sql.Int,            effectiveRouteId)
+          .input("carpool_fare", sql.Decimal(10, 2), carpoolFare)
+          .query(`
+            MERGE fare_zones AS tgt
+            USING (SELECT @route_id AS route_id, N'Carpool' AS zone_name) AS src
+              ON tgt.route_id = src.route_id AND tgt.zone_name = src.zone_name
+            WHEN MATCHED THEN
+              UPDATE SET base_fare = @carpool_fare, updated_at = GETUTCDATE()
+            WHEN NOT MATCHED THEN
+              INSERT (route_id, zone_name, zone_color, base_fare)
+              VALUES (@route_id, N'Carpool', N'#059669', @carpool_fare);
+          `);
+      } else if (carpool_discount === null || carpool_discount === 0) {
+        // Explicitly clearing carpool discount — remove the Carpool zone
+        await pool.request()
+          .input("route_id", sql.Int, effectiveRouteId)
+          .query(`DELETE FROM fare_zones WHERE route_id = @route_id AND zone_name = 'Carpool'`);
+      }
+    }
+
     res.json({ message: "Trip updated" });
   } catch (err) {
     console.error("updateTrip error:", err);

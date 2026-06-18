@@ -203,9 +203,15 @@ const BookingScreen = ({ route, navigation }) => {
   const { bus } = route.params;
   const { walletBalance, updateBalance, addBooking, refreshBookings, currency, exchangeRate, fmtMoney, t } =
     useApp();
-  const isTuktuk      = bus.type === 'tuktuk';
-  const isTaxi        = bus.type === 'taxi';
-  const hasCarpoolOpt = isTaxi && bus.carpool_price != null;
+
+  // Live pricing + type — starts from nav params, updated by the detail fetch below
+  const [busType,       setBusType]       = useState(bus.type ?? 'bus');
+  const [carpoolPrice,  setCarpoolPrice]  = useState(bus.carpool_price ?? null);
+  const [busPrice,      setBusPrice]      = useState(bus.price);
+
+  const isTuktuk      = busType === 'tuktuk';
+  const isTaxi        = busType === 'taxi';
+  const hasCarpoolOpt = isTaxi && carpoolPrice != null;
   const [carpool,       setCarpool]       = useState(false);
   const isFullTrip = isTuktuk || (isTaxi && !carpool);
   const [selectedSeats, setSelectedSeats] = useState([]);
@@ -232,11 +238,7 @@ const BookingScreen = ({ route, navigation }) => {
     ]).start();
   }, [heroAnim, barAnim]);
 
-  // The `bus` passed in via navigation comes from the buses list, which can
-  // go stale the moment another passenger books a seat. Re-fetch the trip's
-  // live seat map every time this screen gains focus so booked seats stay
-  // in sync with the DB instead of showing whatever was true when the list
-  // was last loaded.
+  // Re-fetch bus details on focus to keep seat map, pricing, and type in sync with DB
   const [bookedSeats, setBookedSeats] = useState(() =>
     csvToSeats(bus.bookedSeatsCsv)
   );
@@ -250,6 +252,9 @@ const BookingScreen = ({ route, navigation }) => {
           if (cancelled || !res.data) return;
           setBookedSeats(csvToSeats(res.data.bookedSeatsCsv));
           setTotalSeats(res.data.totalSeats ?? bus.totalSeats);
+          if (res.data.type)          setBusType(res.data.type);
+          if (res.data.price != null) setBusPrice(res.data.price);
+          setCarpoolPrice(res.data.carpool_price ?? null);
         })
         .catch(() => {});
       return () => {
@@ -258,9 +263,9 @@ const BookingScreen = ({ route, navigation }) => {
     }, [bus._id])
   );
 
-  const tripPrice     = parseFloat(bus.price);
-  const perSeatPrice  = isTaxi && carpool && bus.carpool_price != null
-    ? parseFloat(bus.carpool_price)
+  const tripPrice     = parseFloat(busPrice);
+  const perSeatPrice  = isTaxi && carpool && carpoolPrice != null
+    ? parseFloat(carpoolPrice)
     : tripPrice;
   const unitPrice     = perSeatPrice;
   const totalPrice    = isFullTrip ? tripPrice : selectedSeats.length * perSeatPrice;

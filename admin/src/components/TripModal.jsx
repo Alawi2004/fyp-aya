@@ -45,7 +45,11 @@ export function TripModal({ trip, allTrips = [], onClose, onSave, routeOpts = []
   const isEdit = Boolean(trip);
   const EMPTY  = { route: "", route_id: null, driver: "", driver_id: null, vehicle: "", vehicle_id: null, vehicle_type: null, date: new Date().toISOString().split("T")[0], time: "", status: "Scheduled", recurrence: "none", days: [], price: "", carpool_discount: "" };
 
-  const [form,     setForm]     = useState(isEdit ? { ...trip, route_id: trip.route_id ?? null, driver_id: trip.driver_id ?? null, vehicle_id: trip.vehicle_id ?? null, vehicle_type: null, recurrence: "none", days: [], price: "", carpool_discount: "" } : EMPTY);
+  const editPrice           = isEdit && trip.price != null && trip.price !== "" ? String(trip.price) : "";
+  const editCarpoolDiscount = isEdit && trip.carpool_price != null && trip.price > 0
+    ? String(Math.round((1 - trip.carpool_price / trip.price) * 100))
+    : "";
+  const [form,     setForm]     = useState(isEdit ? { ...trip, route_id: trip.route_id ?? null, driver_id: trip.driver_id ?? null, vehicle_id: trip.vehicle_id ?? null, vehicle_type: trip.vehicle_type ?? null, recurrence: "none", days: [], price: editPrice, carpool_discount: editCarpoolDiscount } : EMPTY);
   const [warnings, setWarnings] = useState([]);
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState(null);
