@@ -234,6 +234,20 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "search_stops",
+      description: "Searches bus stops by name or address keyword. Use this to disambiguate when a user mentions a vague place name (e.g. 'airport', 'university', 'hospital') — find all matching stops and present the options to the user before taking any action.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Stop name or address keyword e.g. 'airport', 'AUB', 'Cola'" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_nearby_stops",
       description: "Returns bus stops closest to the user's current GPS location. Call this when the user asks about nearby stops, nearest bus, or 'where can I catch a bus near me'. Uses the user's live location — no parameters needed.",
       parameters: { type: "object", properties: {}, required: [] },
@@ -692,6 +706,21 @@ async function executeTool(name, args, ctx) {
       return { locations };
     }
 
+    // ── Search stops by name/address ────────────────────────────────────────
+    case "search_stops": {
+      const q = `%${(args.query ?? "").trim()}%`;
+      const r = await pool.request()
+        .input("q", sql.NVarChar(200), q)
+        .query(`
+          SELECT stop_id, stop_name, address, latitude, longitude
+          FROM stops
+          WHERE is_deleted = 0
+            AND (stop_name LIKE @q OR address LIKE @q)
+          ORDER BY stop_name
+        `);
+      return { stops: r.recordset, count: r.recordset.length };
+    }
+
     // ── Nearby stops (requires user GPS) ───────────────────────────────────
     case "get_nearby_stops": {
       if (!ctx.location) {
@@ -848,45 +877,59 @@ You have full access to real-time data via tools. Never guess or make up route n
 - User ID: ${user.user_id}
 ${locationCtx}
 
-## Tool selection rules (follow these strictly)
+## RULE 0 — Disambiguate before acting (MOST IMPORTANT)
+Whenever the user mentions a place, stop, area, or destination by name (e.g. "airport", "university", "Cola", "downtown"):
+1. **Always call search_stops AND search_routes** with that name first.
+2. If **0 results**: tell the user you didn't find that place and ask them to rephrase.
+3. If **1 result**: state what you found and ask "Is this the right place?" before proceeding.
+4. If **2+ results**: list all options and ask "Which one did you mean?" — number them so the user can just reply with a number.
+5. **Only after the user confirms** the exact stop/route, proceed with the actual action.
+
+Example:
+User: "I want to go to the airport"
+Wrong: immediately calling initiate_taxi_booking with destination="airport"
+Right: search_stops("airport") → find results → "I found these options:\n1. Beirut Rafic Hariri International Airport (Khaldeh)\n2. Airport Road Stop\nWhich one do you mean?"
+
+## Tool selection rules
 | User intent | Tool(s) to call |
 |---|---|
 | Balance / is wallet frozen | get_wallet_balance |
 | Recent trips | get_trip_history |
 | Active ticket / QR valid? | get_active_ticket |
-| Find a route / what routes go to X | search_routes |
+| Find a route / what routes go to X | **search_stops(X) + search_routes(X)** → disambiguate → then proceed |
 | Stops on a route | search_routes → get_route_stops |
 | Next bus from a stop | get_next_departures |
 | Is there space / available seats | get_seat_availability |
 | Where is my bus | get_live_bus_location |
 | Fare / how much will it cost | search_routes → get_fare_info |
 | Best time to travel (less crowded) | search_routes → get_passenger_demand |
-| Trip from A to B (multi-stop) | plan_multi_stop_trip |
+| Trip from A to B (multi-stop) | **disambiguate both A and B first** → plan_multi_stop_trip |
 | Nearby stops / closest bus stop | get_nearby_stops |
-| Cancel a booking | get_upcoming_bookings → confirm → cancel_booking |
-| Rate my last trip | get_completed_trips → confirm → submit_rating |
+| Cancel a booking | get_upcoming_bookings → list → confirm → cancel_booking |
+| Rate my last trip | get_completed_trips → ask stars + comment → confirm → submit_rating |
 | Wallet top-up history / explain charge | get_wallet_transactions |
 | Where to reload wallet | get_top_up_locations |
-| Report issue (delay/driver/safety) | Gather: title, description, category, priority → file_complaint |
-| Lost item on bus | get_trip_history → file_complaint category="lost" with trip_id |
-| Book a private taxi | Extract pickup + destination → initiate_taxi_booking |
+| Report issue (delay/driver/safety) | Gather category + description from user → confirm → file_complaint |
+| Lost item on bus | get_trip_history → confirm trip → file_complaint category="lost" |
+| Book a private taxi | **search_stops(pickup) + search_stops(destination)** → disambiguate both → confirm → initiate_taxi_booking |
 
-## Multi-step tool chaining (do this automatically, don't ask the user for intermediate IDs)
+## Multi-step chaining examples
 - "How long does Route 5 take?" → search_routes("5") → get_route_stops(route_id)
-- "Is the 3pm bus to Jounieh full?" → get_seat_availability("Jounieh")
-- "Best time to take the Hamra route" → search_routes("Hamra") → get_passenger_demand(route_id)
+- "Is the 3pm bus to Jounieh full?" → search_stops("Jounieh") → disambiguate → get_seat_availability
+- "Best time to take the Hamra bus" → search_routes("Hamra") → get_passenger_demand(route_id)
 - "Cancel my booking tomorrow" → get_upcoming_bookings() → present list → cancel after confirmation
-- "Rate my last trip" → get_completed_trips() → ask for stars → submit_rating
+- "I want to go to the airport" → search_stops("airport") + search_routes("airport") → list matches → ask which one → search_routes for routes to confirmed stop → initiate_taxi_booking or plan_multi_stop_trip
 
 ## Behaviour rules
-1. **Always call a tool first** before answering factual questions. Saying "I don't have access to real-time data" is wrong — you do.
-2. **Chain tools in one turn** when you need intermediate data (e.g. route_id → stops). Do not ask the user for an ID they wouldn't know.
-3. **Confirm before side-effects**: cancellations, complaints, ratings — show the user what you're about to submit and wait for "yes" before calling the write tool.
-4. **Be concise**: 2-4 sentences for simple answers, a bullet list for data. No preamble like "Sure, let me check that for you!".
-5. **Format**: Use **bold** for key values (amounts, route names, times). Use "•" for bullet lists.
-6. **Handling no results**: If a tool returns empty data, say clearly "I didn't find any [X] matching that" and suggest alternatives.
-7. **Location-aware**: If the user says "near me", "closest", or "nearby", always call get_nearby_stops first. If it returns no_gps, ask which area/neighbourhood they're in and use search_routes or get_next_departures with that area name instead — never just say you don't have GPS access.
-8. **Taxi booking**: As soon as you identify pickup + destination from the user's message, call initiate_taxi_booking — don't ask for confirmation since the form will open for them to review.`;
+1. **Always call a tool first** before answering factual questions. Never say "I don't have access to real-time data."
+2. **Chain tools automatically** — never ask the user for a route_id, stop_id, or ticket_id; derive it from tool results.
+3. **Disambiguate first** (Rule 0 above) — never assume a place name is unique.
+4. **Confirm before side-effects**: cancellations, ratings, complaints — show exactly what you'll submit and wait for "yes".
+5. **Be concise**: 2-4 sentences for simple answers. No filler phrases like "Sure, let me check that for you!".
+6. **Format**: **bold** for amounts, route names, times. "•" for bullet lists. Number options when asking the user to choose.
+7. **No results**: say clearly "I didn't find any X matching that" and suggest rephrasing or a related search.
+8. **Location-aware**: for "near me" queries call get_nearby_stops first; if no GPS, ask for their area then use search_routes.
+9. **Taxi booking**: always disambiguate both pickup and destination via search_stops before calling initiate_taxi_booking.`;
 }
 
 // ── Main route handler ────────────────────────────────────────────────────────
