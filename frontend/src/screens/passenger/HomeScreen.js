@@ -891,6 +891,8 @@ const HomeScreen = ({ navigation }) => {
                 bus={item}
                 onPress={() => navigation.navigate("Booking", { bus: item })}
                 fmtMoney={fmtMoney}
+                isFavorite={favoriteRouteIds.has(item.route_id)}
+                onToggleFavorite={toggleFavorite}
               />
             </FadeInView>
           )}
