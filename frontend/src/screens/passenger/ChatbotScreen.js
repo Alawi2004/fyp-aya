@@ -211,18 +211,36 @@ const ChatbotScreen = ({ visible, onClose, onAction }) => {
   }, []);
 
   // ── Background location fetch — fires once when chat opens ───────────────
+  // Strategy: check permission → use last-known position immediately (fast),
+  // then upgrade to accurate fix in background.
   useEffect(() => {
     if (!visible) return;
     (async () => {
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') return;
-        const pos = await Location.getCurrentPositionAsync({
+        // Check existing permission without showing a dialog
+        const { status: existing } = await Location.getForegroundPermissionsAsync();
+        const granted = existing === 'granted'
+          ? true
+          : (await Location.requestForegroundPermissionsAsync()).status === 'granted';
+
+        if (!granted) return;
+
+        // Last-known position is instant — use it right away
+        const last = await Location.getLastKnownPositionAsync({});
+        if (last) {
+          locationRef.current = {
+            latitude:  last.coords.latitude,
+            longitude: last.coords.longitude,
+          };
+        }
+
+        // Upgrade to a fresh accurate fix in the background
+        const fresh = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
         locationRef.current = {
-          latitude:  pos.coords.latitude,
-          longitude: pos.coords.longitude,
+          latitude:  fresh.coords.latitude,
+          longitude: fresh.coords.longitude,
         };
       } catch { /* location is optional — silently skip */ }
     })();

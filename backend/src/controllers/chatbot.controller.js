@@ -695,7 +695,7 @@ async function executeTool(name, args, ctx) {
     // ── Nearby stops (requires user GPS) ───────────────────────────────────
     case "get_nearby_stops": {
       if (!ctx.location) {
-        return { error: "Location not available. Ask the user to enable GPS and try again." };
+        return { error: "no_gps", message: "GPS coordinates were not sent with this request. Tell the user to allow location access in their device settings and send the message again." };
       }
       const { latitude, longitude } = ctx.location;
       const r = await pool.request()
@@ -832,8 +832,8 @@ async function executeTool(name, args, ctx) {
 // ── System prompt ─────────────────────────────────────────────────────────────
 function buildSystemPrompt(user, location) {
   const locationCtx = location
-    ? `- GPS: ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)} (use get_nearby_stops for local queries)`
-    : `- GPS: not available (ask user to enable location if needed)`;
+    ? `- GPS coordinates: ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`
+    : `- GPS: coordinates not yet received — still call get_nearby_stops if the user asks for nearby stops/buses; the tool will handle it`;
 
   return `You are Yalla Transit AI — a smart, friendly assistant built into the passenger mobile app for a Lebanese public transit system.
 
