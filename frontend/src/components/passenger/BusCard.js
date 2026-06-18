@@ -4,11 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, PURPLE } from '../../constants/colors';
 import { THEME } from '../../constants/theme';
 import apiClient from '../../api/apiClient';
+import { useApp } from '../../context/AppContext';
+
 const STATUS_CONFIG = {
-  active:    { label: 'On Time',   bg: COLORS.secondaryLight, text: COLORS.secondary, dot: COLORS.secondary },
-  boarding:  { label: 'Boarding',  bg: PURPLE.mid,     text: PURPLE.primary,   dot: PURPLE.primary   },
-  delayed:   { label: 'Delayed',   bg: COLORS.warningLight,   text: COLORS.warning,   dot: COLORS.warning   },
-  cancelled: { label: 'Cancelled', bg: COLORS.dangerLight,    text: COLORS.danger,    dot: COLORS.danger    },
+  active:    { key: 'On Time',   bg: COLORS.secondaryLight, text: COLORS.secondary, dot: COLORS.secondary },
+  boarding:  { key: 'Boarding',  bg: PURPLE.mid,     text: PURPLE.primary,   dot: PURPLE.primary   },
+  delayed:   { key: 'Delayed',   bg: COLORS.warningLight,   text: COLORS.warning,   dot: COLORS.warning   },
+  cancelled: { key: 'Cancelled', bg: COLORS.dangerLight,    text: COLORS.danger,    dot: COLORS.danger    },
 };
 
 const TYPE_ICON = {
@@ -26,6 +28,7 @@ const TYPE_LABEL = {
 };
 
 const BusCard = ({ bus, onPress, fmtMoney }) => {
+  const { t } = useApp();
   const [photoUrl, setPhotoUrl] = useState(null);
 
   useEffect(() => {
@@ -45,7 +48,7 @@ const BusCard = ({ bus, onPress, fmtMoney }) => {
   const fillPct = ((bus.bookedSeats / bus.totalSeats) * 100).toFixed(0);
   const status = STATUS_CONFIG[bus.status] || STATUS_CONFIG.active;
   const vehicleIcon = TYPE_ICON[bus.type] || 'bus';
-  const vehicleLabel = TYPE_LABEL[bus.type] || 'Bus';
+  const vehicleLabel = t(TYPE_LABEL[bus.type] || 'Bus');
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.88}>
@@ -64,7 +67,7 @@ const BusCard = ({ bus, onPress, fmtMoney }) => {
             <Text style={[styles.busName, { flex: 1 }]} numberOfLines={1}>{bus.name}</Text>
             <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
               <View style={[styles.statusDot, { backgroundColor: status.dot }]} />
-              <Text style={[styles.statusText, { color: status.text }]}>{status.label}</Text>
+              <Text style={[styles.statusText, { color: status.text }]}>{t(status.key)}</Text>
             </View>
           </View>
           <View style={styles.typeTag}>
@@ -77,7 +80,7 @@ const BusCard = ({ bus, onPress, fmtMoney }) => {
       {/* Route row */}
       <View style={styles.routeRow}>
         <View style={styles.routeStop}>
-          <Text style={styles.stopLabel}>FROM</Text>
+          <Text style={styles.stopLabel}>{t('FROM')}</Text>
           <Text style={styles.stopName}>{bus.origin}</Text>
           <Text style={styles.stopTime}>{bus.departureTime}</Text>
         </View>
@@ -89,7 +92,7 @@ const BusCard = ({ bus, onPress, fmtMoney }) => {
           <View style={styles.routeLineDash} />
         </View>
         <View style={[styles.routeStop, { alignItems: 'flex-end' }]}>
-          <Text style={styles.stopLabel}>TO</Text>
+          <Text style={styles.stopLabel}>{t('TO')}</Text>
           <Text style={styles.stopName}>{bus.destination}</Text>
           <Text style={styles.stopTime}>{bus.arrivalTime}</Text>
         </View>
@@ -108,7 +111,7 @@ const BusCard = ({ bus, onPress, fmtMoney }) => {
           <View style={styles.metaItem}>
             <Ionicons name="people-outline" size={13} color={seatColor} />
             <Text style={[styles.metaText, { color: seatColor }]}>
-              {seatsLeft === 0 ? 'Full' : `${seatsLeft} seats`}
+              {seatsLeft === 0 ? t('Full') : `${seatsLeft} ${t('seats available')}`}
             </Text>
           </View>
         </View>

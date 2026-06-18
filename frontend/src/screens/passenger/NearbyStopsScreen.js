@@ -28,6 +28,7 @@ import { COLORS, PURPLE } from "../../constants/colors";
 import GradientFill from "../../components/common/GradientFill";
 import FadeInView from "../../components/common/FadeInView";
 import PressableScale from "../../components/common/PressableScale";
+import { useApp } from "../../context/AppContext";
 
 if (
   Platform.OS === "android" &&
@@ -242,7 +243,9 @@ const RouteBadge = ({ route }) => (
 );
 
 // ── Stop list item ────────────────────────────────────────────────────────────
-const StopItem = ({ stop, selected, onPress, onPlanRoute }) => (
+const StopItem = ({ stop, selected, onPress, onPlanRoute }) => {
+  const { t } = useApp();
+  return (
   <PopIn active={selected}>
     <PressableScale
       style={[styles.stopCard, selected && styles.stopCardSelected]}
@@ -269,7 +272,7 @@ const StopItem = ({ stop, selected, onPress, onPlanRoute }) => (
           <View style={styles.stopMeta}>
             <Ionicons name="walk-outline" size={12} color={COLORS.textMuted} />
             <Text style={styles.stopMetaText}>
-              {formatDist(stop.distKm)} · {stop.walkMins} min walk
+              {formatDist(stop.distKm)} · {stop.walkMins} {t('min walk')}
             </Text>
           </View>
         )}
@@ -288,15 +291,17 @@ const StopItem = ({ stop, selected, onPress, onPlanRoute }) => (
         hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
       >
         <Ionicons name="navigate-outline" size={14} color={PURPLE.primary} />
-        <Text style={styles.planBtnText}>Route</Text>
+        <Text style={styles.planBtnText}>{t('Route')}</Text>
       </PressableScale>
     </PressableScale>
   </PopIn>
-);
+  );
+};
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 const NearbyStopsScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
+  const { t } = useApp();
   const mapRef = useRef(null);
 
   const [permStatus, setPermStatus] = useState(null); // 'granted' | 'denied' | null
@@ -444,7 +449,7 @@ const NearbyStopsScreen = ({ navigation }) => {
           <Ionicons name="arrow-back" size={20} color={COLORS.white} />
         </PressableScale>
         <View style={{ flex: 1 }}>
-          <Text style={styles.heroTitle}>Nearby Stops</Text>
+          <Text style={styles.heroTitle}>{t('Nearby Stops')}</Text>
           {permStatus === "granted" && !loading && (
             <Bump
               trigger={`${stops.length}-${radiusKm}`}
@@ -481,7 +486,7 @@ const NearbyStopsScreen = ({ navigation }) => {
         <View style={styles.loadingWrap}>
           <Radar />
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Text style={styles.loadingText}>Finding nearby stops</Text>
+            <Text style={styles.loadingText}>{t('Finding nearby stops')}</Text>
             <Dots color={PURPLE.primary} />
           </View>
         </View>
@@ -606,7 +611,7 @@ const NearbyStopsScreen = ({ navigation }) => {
             {/* Count badge */}
             <Bump trigger={stops.length} style={styles.countBadge}>
               <Ionicons name="bus-outline" size={12} color={COLORS.white} />
-              <Text style={styles.countBadgeText}>{stops.length} stops</Text>
+              <Text style={styles.countBadgeText}>{stops.length} {t('stops')}</Text>
             </Bump>
           </View>
         </FadeInView>
@@ -624,7 +629,7 @@ const NearbyStopsScreen = ({ navigation }) => {
               />
             </View>
           </Float>
-          <Text style={styles.emptyTitle}>No stops nearby</Text>
+          <Text style={styles.emptyTitle}>{t('No stops nearby')}</Text>
           <Text style={styles.emptySub}>
             {permStatus === "granted"
               ? `There are no stops within ${radiusLabel(
@@ -643,8 +648,8 @@ const NearbyStopsScreen = ({ navigation }) => {
             <View style={styles.listHeader}>
               <Text style={styles.listHeaderText}>
                 {permStatus === "granted"
-                  ? `Sorted by distance · walking at 5 km/h`
-                  : "All stops"}
+                  ? t('Sorted by distance · walking at 5 km/h')
+                  : t('All stops')}
               </Text>
             </View>
           }

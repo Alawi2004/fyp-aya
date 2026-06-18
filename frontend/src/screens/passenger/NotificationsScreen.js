@@ -11,6 +11,7 @@ import FadeInView from '../../components/common/FadeInView';
 import PressableScale from '../../components/common/PressableScale';
 import { SkeletonCardList } from '../../components/common/Skeleton';
 import { useAuth } from '../../context/AuthContext';
+import { useApp } from '../../context/AppContext';
 import apiClient from '../../api/apiClient';
 
 const POLL_MS = 15000;
@@ -37,6 +38,7 @@ function timeAgo(dateStr) {
 const NotificationsScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { t } = useApp();
   const [notifs,     setNotifs]     = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -109,15 +111,15 @@ const NotificationsScreen = ({ navigation }) => {
               <Ionicons name="chevron-back" size={22} color={COLORS.white} />
             </TouchableOpacity>
           ) : null}
-          <Text style={styles.pageTitle}>Notifications</Text>
+          <Text style={styles.pageTitle}>{t('Notifications')}</Text>
           {unreadCount > 0 && (
             <View style={styles.unreadBadge}>
-              <Text style={styles.unreadBadgeText}>{unreadCount} new</Text>
+              <Text style={styles.unreadBadgeText}>{unreadCount} {t('new')}</Text>
             </View>
           )}
           {unreadCount > 0 && (
             <TouchableOpacity onPress={markAllRead} style={styles.markAllBtn}>
-              <Text style={styles.markAllText}>Mark all read</Text>
+              <Text style={styles.markAllText}>{t('Mark all read')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -160,7 +162,7 @@ const NotificationsScreen = ({ navigation }) => {
                     </View>
                     <Text style={styles.itemText}>{item.body || item.message}</Text>
                     {!item.is_read && (
-                      <Text style={[styles.tapHint, { color: cfg.color }]}>Tap to mark as read</Text>
+                      <Text style={[styles.tapHint, { color: cfg.color }]}>{t('Tap to mark as read')}</Text>
                     )}
                   </View>
                   {!item.is_read && <View style={[styles.unreadDot, { backgroundColor: cfg.color }]} />}
@@ -173,9 +175,9 @@ const NotificationsScreen = ({ navigation }) => {
               <View style={styles.emptyIcon}>
                 <Ionicons name="notifications-off-outline" size={42} color={PURPLE.primary} />
               </View>
-              <Text style={styles.emptyText}>No notifications yet</Text>
+              <Text style={styles.emptyText}>{t('No notifications yet')}</Text>
               <Text style={styles.emptySubText}>
-                Updates from the transit system will appear here
+                {t('Updates from the transit system will appear here')}
               </Text>
             </View>
           }

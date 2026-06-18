@@ -95,7 +95,7 @@ const TripActionModal = ({ trip, loading, insets, onClose, onStart, onEnd, onCan
             </View>
             <View style={[mS.badge, { backgroundColor: cfg.bg }]}>
               <View style={[mS.dot, { backgroundColor: cfg.dot }]} />
-              <Text style={[mS.badgeText, { color: cfg.text }]}>{cfg.label}</Text>
+              <Text style={[mS.badgeText, { color: cfg.text }]}>{t(cfg.label)}</Text>
             </View>
           </View>
 
@@ -120,7 +120,7 @@ const TripActionModal = ({ trip, loading, insets, onClose, onStart, onEnd, onCan
               {busy
                 ? <ActivityIndicator size="small" color={COLORS.white} />
                 : <Ionicons name="play-circle" size={20} color={COLORS.white} />}
-              <Text style={mS.startBtnText}>{busy ? 'Starting…' : 'Start Trip'}</Text>
+              <Text style={mS.startBtnText}>{busy ? 'Starting…' : t('Start Trip')}</Text>
             </TouchableOpacity>
           )}
 
@@ -132,7 +132,7 @@ const TripActionModal = ({ trip, loading, insets, onClose, onStart, onEnd, onCan
               {busy
                 ? <ActivityIndicator size="small" color={COLORS.white} />
                 : <Ionicons name="stop-circle" size={20} color={COLORS.white} />}
-              <Text style={mS.endBtnText}>{busy ? 'Ending…' : 'End Trip'}</Text>
+              <Text style={mS.endBtnText}>{busy ? 'Ending…' : t('End Trip')}</Text>
             </TouchableOpacity>
           )}
 
@@ -142,7 +142,7 @@ const TripActionModal = ({ trip, loading, insets, onClose, onStart, onEnd, onCan
               onPress={() => onCancel(trip)} disabled={busy} activeOpacity={0.85}
             >
               <Ionicons name="close-circle-outline" size={18} color={COLORS.danger} />
-              <Text style={mS.cancelBtnText}>Cancel Trip</Text>
+              <Text style={mS.cancelBtnText}>{t('Cancel Trip')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -186,7 +186,7 @@ const DriverMapScreen = ({ navigation, route }) => {
   const paramRouteName = route?.params?.routeName ?? null;
   const paramBusNumber = route?.params?.busNumber ?? '';
   const insets         = useSafeAreaInsets();
-  const { gpsSettings } = useApp();
+  const { gpsSettings, t } = useApp();
   const broadcastMs      = (gpsSettings?.updateIntervalSec ?? 10) * 1000;
   const deviationRadiusM = gpsSettings?.geofenceRadiusM ?? 150;
 
@@ -414,7 +414,7 @@ const DriverMapScreen = ({ navigation, route }) => {
       <View style={styles.gpsError}>
         <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
         <Ionicons name="location-outline" size={44} color={COLORS.danger} />
-        <Text style={styles.gpsErrorTitle}>Location Access Needed</Text>
+        <Text style={styles.gpsErrorTitle}>{t('Location Access Needed')}</Text>
         <Text style={styles.gpsErrorSub}>Please enable location permissions for the Navigate screen to work.</Text>
       </View>
     );
@@ -482,7 +482,7 @@ const DriverMapScreen = ({ navigation, route }) => {
       {!location && (
         <View style={styles.gpsOverlay}>
           <ActivityIndicator size="small" color={PURPLE.primary} />
-          <Text style={styles.gpsOverlayText}>Getting GPS…</Text>
+          <Text style={styles.gpsOverlayText}>{t('Getting GPS...')}</Text>
         </View>
       )}
 
@@ -529,7 +529,7 @@ const DriverMapScreen = ({ navigation, route }) => {
       {deviating && !deviationDismissed && (
         <View style={[styles.deviationBanner, { top: Platform.OS === 'ios' ? 170 : (StatusBar.currentHeight ?? 24) + 124 }]}>
           <Ionicons name="warning" size={16} color={COLORS.white} />
-          <Text style={styles.deviationText}>Off Route — You have left the planned path</Text>
+          <Text style={styles.deviationText}>{t('Off Route')}</Text>
           <TouchableOpacity onPress={() => setDeviationDismissed(true)} style={styles.deviationClose}>
             <Ionicons name="close" size={14} color={COLORS.white} />
           </TouchableOpacity>
@@ -570,7 +570,7 @@ const DriverMapScreen = ({ navigation, route }) => {
                 <Ionicons name="location" size={15} color={PURPLE.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.nextStopLbl}>Next Stop</Text>
+                <Text style={styles.nextStopLbl}>{t('Next Stop')}</Text>
                 <Text style={styles.nextStopName} numberOfLines={1}>{nextStopEta.name}</Text>
               </View>
             </View>
@@ -654,7 +654,7 @@ const DriverMapScreen = ({ navigation, route }) => {
                   <View style={[styles.tripRowBadge, { backgroundColor: cfg.bg }]}>
                     {busy
                       ? <ActivityIndicator size="small" color={cfg.text} />
-                      : <Text style={[styles.tripRowBadgeText, { color: cfg.text }]}>{cfg.label}</Text>}
+                      : <Text style={[styles.tripRowBadgeText, { color: cfg.text }]}>{t(cfg.label)}</Text>}
                   </View>
                   {!isDone(trip.status) && (
                     <Ionicons name="chevron-forward" size={14} color={COLORS.textMuted} style={{ marginLeft: 4 }} />

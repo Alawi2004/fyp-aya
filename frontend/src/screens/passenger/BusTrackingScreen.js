@@ -28,7 +28,7 @@ import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
-// AppContext import removed — passenger tracking uses backend GPS directly
+import { useApp } from "../../context/AppContext";
 import { getTripEtaPredictions } from "../../api/etaApi";
 import { useGpsWebSocket } from "../../hooks/useGpsWebSocket";
 import { COLORS, PURPLE } from "../../constants/colors";
@@ -286,6 +286,7 @@ const SeatBar = ({ pct, color }) => {
 // ── Component ─────────────────────────────────────────────────────────────────
 const BusTrackingScreen = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
+  const { t } = useApp();
   const { tripId, busName = "Bus", booking } = route.params || {};
   const isTaxi = booking?.type === "taxi";
   const vehicleId = String(tripId ?? "");
@@ -692,8 +693,8 @@ const BusTrackingScreen = ({ route, navigation }) => {
               {isLive
                 ? timeSinceUpdate !== null
                   ? `Updated ${timeSinceUpdate}s ago`
-                  : "Live Tracking"
-                : "Connecting..."}
+                  : t("Live Tracking")
+                : t("Connecting...")}
             </Text>
           </View>
         </View>
@@ -759,7 +760,7 @@ const BusTrackingScreen = ({ route, navigation }) => {
                     : "— km"}
                 </Text>
               </Bump>
-              <Text style={styles.etaLabel}>Road dist.</Text>
+              <Text style={styles.etaLabel}>{t('Road dist.')}</Text>
             </View>
 
             <View style={styles.etaDivider} />
@@ -776,7 +777,7 @@ const BusTrackingScreen = ({ route, navigation }) => {
               <Text style={[styles.etaValue, { color: confidence.color, fontSize: 14 }]}>
                 {confidence.label}
               </Text>
-              <Text style={styles.etaLabel}>GPS signal</Text>
+              <Text style={styles.etaLabel}>{t('GPS signal')}</Text>
             </View>
           </View>
 
@@ -873,12 +874,12 @@ const BusTrackingScreen = ({ route, navigation }) => {
                 <View style={styles.seatSection}>
                   <View style={styles.seatHeader}>
                     <Ionicons name="people-outline" size={14} color="#64748B" />
-                    <Text style={styles.seatTitle}>Seat Availability</Text>
+                    <Text style={styles.seatTitle}>{t('Seat Availability')}</Text>
                     <Bump trigger={seatInfo.available}>
                       <Text style={[styles.seatCount, { color: seatColor }]}>
                         {seatInfo.available === 0
-                          ? "Full"
-                          : `${seatInfo.available} free`}
+                          ? t("Full")
+                          : `${seatInfo.available} ${t("free")}`}
                       </Text>
                     </Bump>
                   </View>
@@ -901,7 +902,7 @@ const BusTrackingScreen = ({ route, navigation }) => {
           <FadeInView index={4}>
             <View style={styles.stopsSection}>
               <View style={styles.stopsHeaderRow}>
-                <Text style={styles.stopsSectionTitle}>Upcoming Stops</Text>
+                <Text style={styles.stopsSectionTitle}>{t('Upcoming Stops')}</Text>
                 {etaLoading && (
                   <Spin>
                     <Ionicons name="sync" size={12} color={PURPLE.primary} />
@@ -938,8 +939,8 @@ const BusTrackingScreen = ({ route, navigation }) => {
                         ]}
                       >
                         {stop.eta_min < 1
-                          ? "Now"
-                          : `${Math.round(stop.eta_min)}m`}
+                          ? t("Now")
+                          : `${Math.round(stop.eta_min)}${t("min")}`}
                       </Text>
                       {stop.eta_time !== "—" && (
                         <Text style={styles.stopChipTime}>{stop.eta_time}</Text>
@@ -1037,7 +1038,7 @@ const BusTrackingScreen = ({ route, navigation }) => {
         <FadeInView index={vehiclePhoto ? 7 : 6}>
           <PressableScale style={styles.emergencyBtn} scaleTo={0.97}>
             <Ionicons name="warning-outline" size={18} color={COLORS.danger} />
-            <Text style={styles.emergencyText}>Report an Issue</Text>
+            <Text style={styles.emergencyText}>{t('Report an Issue')}</Text>
           </PressableScale>
         </FadeInView>
         </ScrollView>

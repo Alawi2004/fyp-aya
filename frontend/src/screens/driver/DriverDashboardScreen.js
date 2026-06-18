@@ -390,7 +390,7 @@ const modalStyles = StyleSheet.create({
 const DriverDashboardScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { currency, fmtMoney } = useApp();
+  const { currency, fmtMoney, t } = useApp();
   const fadeAnim   = useRef(new Animated.Value(0)).current;
   const slideAnim  = useRef(new Animated.Value(20)).current;
   const pulseAnim  = useRef(new Animated.Value(1)).current;
@@ -621,10 +621,10 @@ const DriverDashboardScreen = ({ navigation }) => {
           {/* ─── Quick Actions ─── */}
           <View style={styles.actionsRow}>
             {[
-              { icon: 'navigate',      label: 'Navigate',   color: PURPLE.primary,    bg: PURPLE.light,   onPress: () => navigation.navigate('TripChecklist')   },
-              { icon: 'qr-code',       label: 'Scan QR',    color: COLORS.secondary,  bg: COLORS.secondaryLight, onPress: () => navigation.navigate('PassengerVerify', { tripId: activeTrip?.trip_id ?? null })  },
-              { icon: 'calendar',      label: 'Schedule',   color: PURPLE.primary,    bg: PURPLE.light,   onPress: () => navigation.navigate('WeeklySchedule')   },
-              { icon: 'warning',       label: 'Emergency',  color: COLORS.danger,     bg: COLORS.dangerLight,    onPress: () => navigation.navigate('Emergency')        },
+              { icon: 'navigate',      label: t('Navigate'),   color: PURPLE.primary,    bg: PURPLE.light,   onPress: () => navigation.navigate('TripChecklist')   },
+              { icon: 'qr-code',       label: t('Scan QR'),    color: COLORS.secondary,  bg: COLORS.secondaryLight, onPress: () => navigation.navigate('PassengerVerify', { tripId: activeTrip?.trip_id ?? null })  },
+              { icon: 'calendar',      label: t('Schedule'),   color: PURPLE.primary,    bg: PURPLE.light,   onPress: () => navigation.navigate('WeeklySchedule')   },
+              { icon: 'warning',       label: t('Emergency'),  color: COLORS.danger,     bg: COLORS.dangerLight,    onPress: () => navigation.navigate('Emergency')        },
             ].map(a => (
               <TouchableOpacity key={a.label} style={styles.actionBtn} activeOpacity={0.8} onPress={a.onPress}>
                 <View style={[styles.actionIcon, { backgroundColor: a.bg }]}>
@@ -650,22 +650,22 @@ const DriverDashboardScreen = ({ navigation }) => {
               <View style={styles.bannerLeft}>
                 <View style={styles.bannerLiveDot} />
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.bannerTitle} numberOfLines={1}>Active Trip in Progress</Text>
+                  <Text style={styles.bannerTitle} numberOfLines={1}>{t('Active Trip in Progress')}</Text>
                   <Text style={styles.bannerSub} numberOfLines={1}>{activeTrip.origin} → {activeTrip.destination}</Text>
                 </View>
               </View>
               <View style={styles.bannerBtn}>
                 <Ionicons name="map" size={13} color={COLORS.white} />
-                <Text style={styles.bannerBtnText} numberOfLines={1}>Open Map</Text>
+                <Text style={styles.bannerBtnText} numberOfLines={1}>{t('Open Map')}</Text>
               </View>
             </TouchableOpacity>
           )}
 
           {/* ─── Today's Schedule ─── */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Today's Schedule</Text>
+            <Text style={styles.sectionTitle}>{t("Today's Schedule")}</Text>
             <TouchableOpacity onPress={() => navigation.navigate('WeeklySchedule')}>
-              <Text style={styles.sectionLink}>Week View</Text>
+              <Text style={styles.sectionLink}>{t('Week View')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -692,7 +692,7 @@ const DriverDashboardScreen = ({ navigation }) => {
                   </View>
                   <View style={[styles.tripStatusBadge, { backgroundColor: cfg.bg }]}>
                     <View style={[styles.tripStatusDot, { backgroundColor: cfg.dot }]} />
-                    <Text style={[styles.tripStatusText, { color: cfg.text }]}>{cfg.label}</Text>
+                    <Text style={[styles.tripStatusText, { color: cfg.text }]}>{t(cfg.label)}</Text>
                   </View>
                 </View>
 
@@ -705,12 +705,12 @@ const DriverDashboardScreen = ({ navigation }) => {
                   </View>
                   <View style={styles.journeyCol}>
                     <View>
-                      <Text style={styles.journeyLbl}>FROM</Text>
+                      <Text style={styles.journeyLbl}>{t('FROM')}</Text>
                       <Text style={styles.journeyPlace} numberOfLines={2}>{trip.origin}</Text>
                       <Text style={styles.journeyTime}>{trip.departureTime}</Text>
                     </View>
                     <View>
-                      <Text style={styles.journeyLbl}>TO</Text>
+                      <Text style={styles.journeyLbl}>{t('TO')}</Text>
                       <Text style={styles.journeyPlace} numberOfLines={2}>{trip.destination}</Text>
                       <Text style={styles.journeyTime}>{trip.arrivalTime}</Text>
                     </View>

@@ -920,7 +920,7 @@ const WalletScreen = () => {
           ) : (
             <View style={styles.iconBtn} />
           )}
-          <Text style={styles.topTitle}>Yalla Wallet</Text>
+          <Text style={styles.topTitle}>{t('Yalla Wallet')}</Text>
           <Bounce onPress={onRefresh} style={styles.iconBtn}>
             <Ionicons name="refresh" size={19} color={COLORS.textPrimary} />
           </Bounce>
@@ -1027,7 +1027,7 @@ const WalletScreen = () => {
             <Bump trigger={totalSpent} style={{ alignSelf: "flex-start" }}>
               <Text style={styles.statValue}>{fmtMoney(totalSpent)}</Text>
             </Bump>
-            <Text style={styles.statLabel}>Total Spent</Text>
+            <Text style={styles.statLabel}>{t('Total Spent')}</Text>
           </View>
           <View style={styles.statCard}>
             <View style={[styles.statIcon, { backgroundColor: PURPLE.light }]}>
@@ -1036,7 +1036,7 @@ const WalletScreen = () => {
             <Bump trigger={tripsPaid} style={{ alignSelf: "flex-start" }}>
               <Text style={styles.statValue}>{tripsPaid}</Text>
             </Bump>
-            <Text style={styles.statLabel}>Trips Paid</Text>
+            <Text style={styles.statLabel}>{t('Trips Paid')}</Text>
           </View>
         </Animated.View>
 
@@ -1059,9 +1059,9 @@ const WalletScreen = () => {
                 <Ionicons name="qr-code" size={22} color={COLORS.white} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.cashierCtaTitle}>Show to Cashier</Text>
+                <Text style={styles.cashierCtaTitle}>{t('Show to Cashier')}</Text>
                 <Text style={styles.cashierCtaSub}>
-                  Scan your code to top up instantly
+                  {t('Scan your code to top up instantly')}
                 </Text>
               </View>
               <Ionicons
@@ -1086,7 +1086,7 @@ const WalletScreen = () => {
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.frozenTitle}>Wallet Frozen</Text>
+                  <Text style={styles.frozenTitle}>{t('Wallet Frozen')}</Text>
                   <Text style={styles.frozenText}>
                     {freezeReason
                       ? `Temporarily frozen: ${freezeReason}. Payments are paused — contact support.`
@@ -1102,7 +1102,7 @@ const WalletScreen = () => {
             <View style={styles.sectionHeader}>
               <View style={styles.sectionTitleRow}>
                 <View style={styles.sectionDot} />
-                <Text style={styles.sectionTitle}>Top-Up Stations</Text>
+                <Text style={styles.sectionTitle}>{t('Top-Up Stations')}</Text>
               </View>
               <View style={styles.viewToggle}>
                 {["map", "list"].map((mode) => {
@@ -1128,7 +1128,7 @@ const WalletScreen = () => {
                             active && styles.toggleTextActive,
                           ]}
                         >
-                          {mode === "map" ? "Map" : "List"}
+                          {mode === "map" ? t("Map") : t("List")}
                         </Text>
                       </Bounce>
                     </PopSel>
@@ -1433,7 +1433,7 @@ const WalletScreen = () => {
                           active && styles.filterChipTextActive,
                         ]}
                       >
-                        {f.label}
+                        {t(f.label)}
                       </Text>
                     </Bounce>
                   </PopSel>
@@ -1481,7 +1481,7 @@ const WalletScreen = () => {
                     style={styles.txGroup}
                   >
                     <View style={styles.txGroupHeader}>
-                      <Text style={styles.txGroupLabel}>{group.label}</Text>
+                      <Text style={styles.txGroupLabel}>{t(group.label)}</Text>
                       <Text
                         style={[
                           styles.txGroupTotal,
@@ -1497,13 +1497,13 @@ const WalletScreen = () => {
                       </Text>
                     </View>
                     <View style={styles.txGroupCard}>
-                      {group.items.map((t, idx) => {
-                        const isCredit = t.type === "credit";
+                      {group.items.map((tx, idx) => {
+                        const isCredit = tx.type === "credit";
                         return (
                           <Bounce
-                            key={t.transaction_id ?? idx}
+                            key={tx.transaction_id ?? idx}
                             scaleTo={0.99}
-                            onPress={() => setSelectedTx(t)}
+                            onPress={() => setSelectedTx(tx)}
                             style={[
                               styles.txRow,
                               idx < group.items.length - 1 &&
@@ -1530,10 +1530,10 @@ const WalletScreen = () => {
                             </View>
                             <View style={{ flex: 1 }}>
                               <Text style={styles.txTitle} numberOfLines={1}>
-                                {txTitle(t)}
+                                {t(txTitle(tx))}
                               </Text>
                               <Text style={styles.txSub} numberOfLines={1}>
-                                {txSubtitle(t)}
+                                {t(txSubtitle(tx))}
                               </Text>
                             </View>
                             <View style={{ alignItems: "flex-end" }}>
@@ -1547,10 +1547,10 @@ const WalletScreen = () => {
                                   },
                                 ]}
                               >
-                                {isCredit ? "+" : "-"}{fmtMoney(parseFloat(t.amount))}
+                                {isCredit ? "+" : "-"}{fmtMoney(parseFloat(tx.amount))}
                               </Text>
                               <Text style={styles.txTime}>
-                                {fmtTime(t.created_at)}
+                                {fmtTime(tx.created_at)}
                               </Text>
                             </View>
                           </Bounce>
@@ -1605,7 +1605,7 @@ const WalletScreen = () => {
                 />
                 <View style={styles.cashierHeaderRow}>
                   <Text style={styles.cashierHeaderTitle}>
-                    Top Up at a Counter
+                    {t('Top Up at a Counter')}
                   </Text>
                   <Bounce onPress={closeCashier} style={styles.cashierClose}>
                     <Ionicons name="close" size={18} color={COLORS.white} />

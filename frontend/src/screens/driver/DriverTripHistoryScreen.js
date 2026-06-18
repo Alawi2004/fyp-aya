@@ -79,7 +79,7 @@ const FILTERS = [
 
 const DriverTripHistoryScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { currency, fmtMoney } = useApp();
+  const { currency, fmtMoney, t } = useApp();
   const [trips,      setTrips]      = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -129,11 +129,11 @@ const DriverTripHistoryScreen = ({ navigation }) => {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.cardRoute}>{item.routeName}</Text>
-              <Text style={styles.cardBus}>{item.busNumber} · {item.date}</Text>
+              <Text style={styles.cardBus}>{item.busNumber} · {t(item.date)}</Text>
             </View>
             <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
               <Ionicons name={cfg.icon} size={10} color={cfg.text} />
-              <Text style={[styles.statusText, { color: cfg.text }]}>{cfg.label}</Text>
+              <Text style={[styles.statusText, { color: cfg.text }]}>{t(cfg.label)}</Text>
             </View>
           </View>
 
@@ -146,12 +146,12 @@ const DriverTripHistoryScreen = ({ navigation }) => {
             </View>
             <View style={styles.journeyCol}>
               <View style={styles.journeyStop}>
-                <Text style={styles.jLbl}>FROM</Text>
+                <Text style={styles.jLbl}>{t('FROM')}</Text>
                 <Text style={styles.jPlace} numberOfLines={2}>{item.origin}</Text>
                 <Text style={styles.jTime}>{item.departureTime}</Text>
               </View>
               <View style={styles.journeyStop}>
-                <Text style={styles.jLbl}>TO</Text>
+                <Text style={styles.jLbl}>{t('TO')}</Text>
                 <Text style={styles.jPlace} numberOfLines={2}>{item.destination}</Text>
                 <Text style={styles.jTime}>{item.arrivalTime}</Text>
               </View>
@@ -161,7 +161,7 @@ const DriverTripHistoryScreen = ({ navigation }) => {
           <View style={styles.pillRow}>
             <View style={styles.pill}>
               <Ionicons name="people-outline" size={11} color={COLORS.textMuted} />
-              <Text style={styles.pillText}>{item.passengers} pax</Text>
+              <Text style={styles.pillText}>{item.passengers} {t('pax')}</Text>
             </View>
             <View style={styles.pill}>
               <Ionicons name="hourglass-outline" size={11} color={COLORS.textMuted} />
@@ -206,23 +206,23 @@ const DriverTripHistoryScreen = ({ navigation }) => {
             <Ionicons name="arrow-back" size={20} color={COLORS.white} />
           </PressableScale>
           <View style={{ alignItems: 'center' }}>
-            <Text style={styles.headerTitle}>Trip History</Text>
-            <Text style={styles.headerSub}>{fmtMoney(totalEarned)} total · {completedCnt} trips done</Text>
+            <Text style={styles.headerTitle}>{t('Trip History')}</Text>
+            <Text style={styles.headerSub}>{fmtMoney(totalEarned)} {t('Total')} · {completedCnt} {t('trips')}</Text>
           </View>
           <View style={{ width: 40 }} />
         </View>
 
         <View style={styles.summaryRow}>
           {[
-            { icon: 'checkmark-circle', label: 'Completed', value: completedCnt,                 color: '#A7F3D0'               },
-            { icon: 'calendar-outline', label: 'Upcoming',  value: upcomingCnt,                  color: 'rgba(255,255,255,0.95)' },
-            { icon: 'close-circle',     label: 'Cancelled', value: cancelledCnt,                 color: '#FCA5A5'               },
+            { icon: 'checkmark-circle', label: 'Completed', value: completedCnt,          color: '#A7F3D0'               },
+            { icon: 'calendar-outline', label: 'Upcoming',  value: upcomingCnt,           color: 'rgba(255,255,255,0.95)' },
+            { icon: 'close-circle',     label: 'Cancelled', value: cancelledCnt,          color: '#FCA5A5'               },
             { icon: 'cash-outline',     label: 'Earned',    value: fmtMoney(totalEarned), color: 'rgba(255,255,255,0.95)' },
           ].map((s, i) => (
             <View key={s.label} style={[styles.summaryCell, i < 3 && styles.summaryCellBorder]}>
               <Ionicons name={s.icon} size={14} color={s.color} />
               <Text style={[styles.summaryVal, { color: s.color }]}>{s.value}</Text>
-              <Text style={styles.summaryLbl}>{s.label}</Text>
+              <Text style={styles.summaryLbl}>{t(s.label)}</Text>
             </View>
           ))}
         </View>
@@ -240,7 +240,7 @@ const DriverTripHistoryScreen = ({ navigation }) => {
               style={[styles.filterText, filter === f.key && styles.filterTextActive]}
               numberOfLines={1}
             >
-              {f.label}
+              {t(f.label)}
             </Text>
           </PressableScale>
         ))}
@@ -272,17 +272,17 @@ const DriverTripHistoryScreen = ({ navigation }) => {
                   color={error ? COLORS.danger : PURPLE.primary}
                 />
               </View>
-              <Text style={styles.emptyText}>{error ? "Couldn't load trips" : 'No trips found'}</Text>
+              <Text style={styles.emptyText}>{error ? t("Couldn't load trips") : t('No trips found')}</Text>
               {error ? (
                 <>
                   <Text style={styles.emptySub}>{error}</Text>
                   <PressableScale style={styles.retryBtn} onPress={() => loadTrips()} scaleTo={0.94}>
                     <Ionicons name="refresh" size={15} color={COLORS.white} />
-                    <Text style={styles.retryText}>Retry</Text>
+                    <Text style={styles.retryText}>{t('Retry')}</Text>
                   </PressableScale>
                 </>
               ) : (
-                <Text style={styles.emptySub}>Your assigned trips will appear here.</Text>
+                <Text style={styles.emptySub}>{t('Your assigned trips will appear here.')}</Text>
               )}
             </View>
           }

@@ -11,6 +11,7 @@ import FadeInView from '../../components/common/FadeInView';
 import PressableScale from '../../components/common/PressableScale';
 import { SkeletonCardList } from '../../components/common/Skeleton';
 import { getDriverVehicleApi } from '../../api/driverApi';
+import { useApp } from '../../context/AppContext';
 
 const STATUS_META = {
   active:      { label: 'Operational',    color: COLORS.secondary, bg: COLORS.secondaryLight },
@@ -28,6 +29,7 @@ const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '—');
 
 const VehicleStatusScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
+  const { t } = useApp();
   const [vehicle,     setVehicle]     = useState(null);
   const [maintenance, setMaintenance] = useState(null);
   const [loading,     setLoading]     = useState(true);
@@ -59,16 +61,16 @@ const VehicleStatusScreen = ({ navigation }) => {
   const quickStats = [
     { icon: 'speedometer-outline', label: 'Odometer',     value: maintenance?.odometer_km != null ? `${Number(maintenance.odometer_km).toLocaleString()} km` : '—', color: PURPLE.primary },
     { icon: 'construct-outline',   label: 'Next Service', value: fmtDate(maintenance?.next_service), color: COLORS.warning   },
-    { icon: 'people-outline',      label: 'Capacity',     value: vehicle ? `${vehicle.capacity} seats` : '—', color: COLORS.secondary },
+    { icon: 'people-outline',      label: 'Capacity',     value: vehicle ? `${vehicle.capacity} ${t('Seats')}` : '—', color: COLORS.secondary },
   ];
 
   const specs = [
     { label: 'Model',        value: vehicle?.model || '—',                    icon: 'bus-outline'      },
     { label: 'Plate No.',    value: vehicle?.plate_number || '—',             icon: 'card-outline'     },
     { label: 'Type',         value: cap(vehicle?.vehicle_type),               icon: 'pricetag-outline' },
-    { label: 'Capacity',     value: vehicle ? `${vehicle.capacity} seats` : '—', icon: 'people-outline' },
+    { label: 'Capacity',     value: vehicle ? `${vehicle.capacity} ${t('Seats')}` : '—', icon: 'people-outline' },
     { label: 'Last Service', value: fmtDate(maintenance?.last_service),       icon: 'time-outline'     },
-    { label: 'Status',       value: status.label,                             icon: 'ellipse-outline'  },
+    { label: 'Status',       value: t(status.label),                          icon: 'ellipse-outline'  },
   ];
 
   return (
@@ -87,7 +89,7 @@ const VehicleStatusScreen = ({ navigation }) => {
           <PressableScale style={styles.backBtn} onPress={() => navigation.goBack()} scaleTo={0.88}>
             <Ionicons name="arrow-back" size={20} color={COLORS.white} />
           </PressableScale>
-          <Text style={styles.headerTitle}>Vehicle Status</Text>
+          <Text style={styles.headerTitle}>{t('Vehicle Status')}</Text>
           <View style={{ width: 40 }} />
         </View>
 
@@ -98,11 +100,11 @@ const VehicleStatusScreen = ({ navigation }) => {
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={styles.vehicleId} numberOfLines={1}>{title}</Text>
-            <Text style={styles.vehiclePlate}>{vehicle?.plate_number || (loading ? 'Loading…' : 'No vehicle assigned')}</Text>
+            <Text style={styles.vehiclePlate}>{vehicle?.plate_number || (loading ? t('Loading...') : t('No vehicle assigned'))}</Text>
           </View>
           <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
             <View style={[styles.statusDot, { backgroundColor: status.color }]} />
-            <Text style={[styles.statusBadgeText, { color: status.color }]}>{status.label}</Text>
+            <Text style={[styles.statusBadgeText, { color: status.color }]}>{t(status.label)}</Text>
           </View>
         </View>
       </View>
@@ -126,13 +128,13 @@ const VehicleStatusScreen = ({ navigation }) => {
               <Ionicons name="cloud-offline-outline" size={22} color={COLORS.danger} />
               <Text style={styles.errorText}>{error}</Text>
               <PressableScale style={styles.retryBtn} onPress={() => load()} scaleTo={0.94}>
-                <Text style={styles.retryText}>Retry</Text>
+                <Text style={styles.retryText}>{t('Retry')}</Text>
               </PressableScale>
             </View>
           ) : !vehicle ? (
             <View style={styles.errorCard}>
               <Ionicons name="bus-outline" size={28} color={COLORS.textMuted} />
-              <Text style={styles.errorText}>No vehicle is currently assigned to you.</Text>
+              <Text style={styles.errorText}>{t('No vehicle is currently assigned to you.')}</Text>
             </View>
           ) : (
             <>
@@ -145,7 +147,7 @@ const VehicleStatusScreen = ({ navigation }) => {
                         <Ionicons name={s.icon} size={16} color={s.color} />
                       </View>
                       <Text style={styles.quickStatVal} numberOfLines={1} adjustsFontSizeToFit>{s.value}</Text>
-                      <Text style={styles.quickStatLbl}>{s.label}</Text>
+                      <Text style={styles.quickStatLbl}>{t(s.label)}</Text>
                     </View>
                   ))}
                 </View>
@@ -153,7 +155,7 @@ const VehicleStatusScreen = ({ navigation }) => {
 
               {/* Maintenance — scheduled service only */}
               <FadeInView index={1}>
-                <Text style={styles.sectionTitle}>Maintenance</Text>
+                <Text style={styles.sectionTitle}>{t('Maintenance')}</Text>
                 <PressableScale
                   style={styles.alertCard}
                   onPress={() => navigation.navigate('ScheduleService')}
@@ -163,7 +165,7 @@ const VehicleStatusScreen = ({ navigation }) => {
                     <Ionicons name="construct-outline" size={18} color={PURPLE.primary} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.alertTitle}>Scheduled Service</Text>
+                    <Text style={styles.alertTitle}>{t('Scheduled Service')}</Text>
                     <Text style={styles.alertDesc}>
                       {maintenance?.next_service
                         ? `Next service due on ${fmtDate(maintenance.next_service)}`
@@ -176,13 +178,13 @@ const VehicleStatusScreen = ({ navigation }) => {
 
               {/* Specs */}
               <FadeInView index={2}>
-                <Text style={styles.sectionTitle}>Vehicle Specifications</Text>
+                <Text style={styles.sectionTitle}>{t('Vehicle Specifications')}</Text>
                 <View style={styles.specsCard}>
                   {specs.map((spec, i) => (
                     <View key={spec.label} style={[styles.specRow, i < specs.length - 1 && styles.specRowBorder]}>
                       <View style={styles.specLeft}>
                         <Ionicons name={spec.icon} size={14} color={COLORS.textMuted} />
-                        <Text style={styles.specLabel}>{spec.label}</Text>
+                        <Text style={styles.specLabel}>{t(spec.label)}</Text>
                       </View>
                       <Text style={styles.specValue} numberOfLines={1}>{spec.value}</Text>
                     </View>
@@ -198,8 +200,8 @@ const VehicleStatusScreen = ({ navigation }) => {
                       <Ionicons name="document-text-outline" size={18} color={PURPLE.primary} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.reportCtaTitle}>Report a Vehicle Issue</Text>
-                      <Text style={styles.reportCtaSub}>Notify management about any problems</Text>
+                      <Text style={styles.reportCtaTitle}>{t('Report a Vehicle Issue')}</Text>
+                      <Text style={styles.reportCtaSub}>{t('Notify management about any problems')}</Text>
                     </View>
                   </View>
                   <Ionicons name="arrow-forward-circle" size={22} color={PURPLE.primary} />

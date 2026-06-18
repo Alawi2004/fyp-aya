@@ -201,7 +201,7 @@ const Shuttle = ({ style, children }) => {
 const BookingScreen = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
   const { bus } = route.params;
-  const { walletBalance, updateBalance, addBooking, refreshBookings, currency, exchangeRate, fmtMoney } =
+  const { walletBalance, updateBalance, addBooking, refreshBookings, currency, exchangeRate, fmtMoney, t } =
     useApp();
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -386,7 +386,7 @@ const BookingScreen = ({ route, navigation }) => {
             size={18}
             color={COLORS.white}
           />
-          <Text style={styles.bookBtnText}>Book Now</Text>
+          <Text style={styles.bookBtnText}>{t('Book Now')}</Text>
         </>
       )}
     </PressableScale>
@@ -419,7 +419,7 @@ const BookingScreen = ({ route, navigation }) => {
             <Ionicons name="arrow-back" size={20} color={COLORS.white} />
           </PressableScale>
           <View style={{ flex: 1 }}>
-            <Text style={styles.heroTitle}>Book a Seat</Text>
+            <Text style={styles.heroTitle}>{t('Book a Seat')}</Text>
             <Text style={styles.heroSub} numberOfLines={1}>
               {bus.name}
             </Text>
@@ -502,12 +502,12 @@ const BookingScreen = ({ route, navigation }) => {
             {/* Price + Balance row */}
             <View style={styles.priceRow}>
               <View style={styles.priceItem}>
-                <Text style={styles.priceLabel}>Price / Seat</Text>
+                <Text style={styles.priceLabel}>{t('Price / Seat')}</Text>
                 <Text style={styles.priceValue}>{fmtMoney(unitPrice)}</Text>
               </View>
               <View style={styles.priceDivider} />
               <View style={styles.priceItem}>
-                <Text style={styles.priceLabel}>Your Balance</Text>
+                <Text style={styles.priceLabel}>{t('Your Balance')}</Text>
                 <Text
                   style={[
                     styles.priceValue,
@@ -531,7 +531,7 @@ const BookingScreen = ({ route, navigation }) => {
                     />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.warningTitle}>
-                        Insufficient Balance
+                        {t('Insufficient Balance')}
                       </Text>
                       <Text style={styles.warningText}>
                         You need{" "}
@@ -557,7 +557,7 @@ const BookingScreen = ({ route, navigation }) => {
                       color={COLORS.textMuted}
                     />
                     <View style={styles.warningAmt}>
-                      <Text style={styles.warningAmtLabel}>Your balance</Text>
+                      <Text style={styles.warningAmtLabel}>{t('Your Balance')}</Text>
                       <Text
                         style={[styles.warningAmtVal, { color: COLORS.danger }]}
                       >
@@ -592,7 +592,7 @@ const BookingScreen = ({ route, navigation }) => {
                       color={COLORS.white}
                     />
                     <Text style={styles.topUpInlineBtnText}>
-                      Top Up Wallet Now
+                      {t('Top Up Wallet')}
                     </Text>
                   </PressableScale>
                 </View>
@@ -606,7 +606,7 @@ const BookingScreen = ({ route, navigation }) => {
           <Card style={styles.seatCard}>
             <View style={styles.seatCardHeader}>
               <View>
-                <Text style={styles.seatCardTitle}>Choose Your Seat</Text>
+                <Text style={styles.seatCardTitle}>{t('Choose Your Seat')}</Text>
                 <Text style={styles.seatCardSub}>
                   {availableSeats} of {totalSeats} seats free
                 </Text>
@@ -642,7 +642,7 @@ const BookingScreen = ({ route, navigation }) => {
                       { backgroundColor: l.color, borderColor: l.border },
                     ]}
                   />
-                  <Text style={styles.legendText}>{l.label}</Text>
+                  <Text style={styles.legendText}>{t(l.label)}</Text>
                 </View>
               ))}
             </View>
@@ -689,7 +689,7 @@ const BookingScreen = ({ route, navigation }) => {
         ]}
       >
         <View style={styles.bottomInfo}>
-          <Text style={styles.bottomLabel}>Seats</Text>
+          <Text style={styles.bottomLabel}>{t('Seats')}</Text>
           <Bump trigger={selectedSeats.join(",")}>
             <Text style={styles.bottomValue}>
               {selectedSeats.length === 0
@@ -702,7 +702,7 @@ const BookingScreen = ({ route, navigation }) => {
         </View>
         <View style={styles.bottomDivider} />
         <View style={styles.bottomInfo}>
-          <Text style={styles.bottomLabel}>Total</Text>
+          <Text style={styles.bottomLabel}>{t('Total')}</Text>
           <View style={{ flexDirection: "row", alignItems: "flex-end" }}>
             <Text style={[styles.bottomValue, { color: PURPLE.primary }]}>
               {currency}{" "}

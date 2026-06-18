@@ -821,7 +821,7 @@ const AlternativeChip = ({ alt, label, selected, onPress, fmt }) => (
 // ── Main Screen ────────────────────────────────────────────────────────────────
 const TripPlannerScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
-  const { walletBalance, currency, exchangeRate, fmtMoney } = useApp();
+  const { walletBalance, currency, exchangeRate, fmtMoney, t } = useApp();
 
   const [stops, setStops] = useState([]);
   const [loadingStops, setLoadingStops] = useState(false);
@@ -1198,7 +1198,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
           >
             <Ionicons name="arrow-back" size={22} color={COLORS.white} />
           </PressableScale>
-          <Text style={styles.headerTitle}>Plan a Trip</Text>
+          <Text style={styles.headerTitle}>{t('Plan a Trip')}</Text>
           <View style={{ width: 38 }} />
         </View>
       </View>
@@ -1222,7 +1222,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
                 style={[styles.stopDot, { backgroundColor: COLORS.secondary }]}
               />
               <View style={styles.stopTextWrap}>
-                <Text style={styles.stopLabel}>From</Text>
+                <Text style={styles.stopLabel}>{t('From')}</Text>
                 <Bump trigger={fromStop?.stop_id}>
                   <Text
                     style={[
@@ -1231,7 +1231,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
                     ]}
                     numberOfLines={1}
                   >
-                    {fromStop ? fromStop.stop_name : "Search stop or address…"}
+                    {fromStop ? fromStop.stop_name : t('Search stop or address…')}
                   </Text>
                 </Bump>
                 {fromStop && fromWalkInfo ? (
@@ -1245,7 +1245,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
                       {fromWalkInfo.distKm < 1
                         ? `${Math.round(fromWalkInfo.distKm * 1000)} m`
                         : `${fromWalkInfo.distKm.toFixed(1)} km`}{" "}
-                      walk · {fromWalkInfo.walkMins} min
+                      {t('walk')} · {fromWalkInfo.walkMins} {t('min')}
                     </Text>
                   </View>
                 ) : null}
@@ -1287,7 +1287,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
                 style={[styles.stopDot, { backgroundColor: COLORS.danger }]}
               />
               <View style={styles.stopTextWrap}>
-                <Text style={styles.stopLabel}>To</Text>
+                <Text style={styles.stopLabel}>{t('To')}</Text>
                 <Bump trigger={toStop?.stop_id}>
                   <Text
                     style={[
@@ -1296,7 +1296,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
                     ]}
                     numberOfLines={1}
                   >
-                    {toStop ? toStop.stop_name : "Search stop or address…"}
+                    {toStop ? toStop.stop_name : t('Search stop or address…')}
                   </Text>
                 </Bump>
                 {toStop && toWalkInfo ? (
@@ -1312,7 +1312,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
                       {toWalkInfo.distKm < 1
                         ? `${Math.round(toWalkInfo.distKm * 1000)} m`
                         : `${toWalkInfo.distKm.toFixed(1)} km`}{" "}
-                      walk · {toWalkInfo.walkMins} min
+                      {t('walk')} · {toWalkInfo.walkMins} {t('min')}
                     </Text>
                   </View>
                 ) : null}
@@ -1346,7 +1346,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
                           on && styles.modeTabTextActive,
                         ]}
                       >
-                        {m.label}
+                        {t(m.label)}
                       </Text>
                     </PressableScale>
                   </PopIn>
@@ -1370,11 +1370,11 @@ const TripPlannerScreen = ({ navigation, route }) => {
                   color={PURPLE.primary}
                 />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.leaveAtLabel}>Leave at</Text>
+                  <Text style={styles.leaveAtLabel}>{t('Leave at')}</Text>
                   <Bump trigger={departureTime.getTime()}>
                     <Text style={styles.leaveAtValue} numberOfLines={1}>
                       {isLeaveNow
-                        ? "Now (leave immediately)"
+                        ? t('Now (leave immediately)')
                         : formatDepTime(departureTime)}
                     </Text>
                   </Bump>
@@ -1394,7 +1394,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
                   }}
                   scaleTo={0.9}
                 >
-                  <Text style={styles.leaveNowText}>Now</Text>
+                  <Text style={styles.leaveNowText}>{t('Now')}</Text>
                 </PressableScale>
               )}
             </View>
@@ -1417,8 +1417,8 @@ const TripPlannerScreen = ({ navigation, route }) => {
                   <Ionicons name="search" size={17} color={COLORS.white} />
                   <Text style={styles.searchBtnText}>
                     {isLeaveNow
-                      ? "Find Route"
-                      : `Find Route · ${formatDepTime(departureTime)}`}
+                      ? t('Find Route')
+                      : `${t('Find Route')} · ${formatDepTime(departureTime)}`}
                   </Text>
                 </>
               )}
@@ -1946,7 +1946,7 @@ const TripPlannerScreen = ({ navigation, route }) => {
       {/* ── Stop Picker Modal ── */}
       <StopPickerModal
         visible={pickerFor !== null}
-        title={pickerFor === "from" ? "Select Origin" : "Select Destination"}
+        title={pickerFor === "from" ? t('Select Origin') : t('Select Destination')}
         stops={stops}
         loadingStops={loadingStops}
         onSelect={handleSelectStop}

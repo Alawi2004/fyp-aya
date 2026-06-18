@@ -7,6 +7,7 @@ import useHeaderInsets from '../../hooks/useHeaderInsets';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, PURPLE } from '../../constants/colors';
 import { getDriverTripsApi } from '../../api/driverApi';
+import { useApp } from '../../context/AppContext';
 
 const hhmm = (d) => (d ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '—');
 
@@ -46,6 +47,7 @@ const tripStatus = (dayDate, time) => {
 
 const WeeklyScheduleScreen = ({ navigation }) => {
   const headerInsets  = useHeaderInsets();
+  const { t } = useApp();
   const weekScrollRef = useRef(null);
   const weekDays      = useMemo(() => getWeekDays(), []);
 
@@ -161,7 +163,7 @@ const WeeklyScheduleScreen = ({ navigation }) => {
             </View>
             <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
               <Ionicons name={cfg.icon} size={10} color={cfg.text} />
-              <Text style={[styles.statusText, { color: cfg.text }]}>{cfg.label}</Text>
+              <Text style={[styles.statusText, { color: cfg.text }]}>{t(cfg.label)}</Text>
             </View>
           </View>
 
@@ -186,14 +188,14 @@ const WeeklyScheduleScreen = ({ navigation }) => {
             <View style={styles.pill}>
               <Ionicons name="people-outline" size={10} color={COLORS.textMuted} />
               <Text style={styles.pillText}>
-                {item.status === 'completed' ? `${item.actualPax}/${item.seats} pax` : `${item.seats} seats`}
+                {item.status === 'completed' ? `${item.actualPax}/${item.seats} ${t('pax')}` : `${item.seats} ${t('Seats')}`}
               </Text>
             </View>
             {item.status === 'completed' && item.actualPax > 0 && (
               <View style={[styles.pill, { backgroundColor: COLORS.secondaryLight }]}>
                 <Ionicons name="trending-up-outline" size={10} color={COLORS.secondary} />
                 <Text style={[styles.pillText, { color: COLORS.secondary }]}>
-                  {Math.round(fill * 100)}% full
+                  {Math.round(fill * 100)}% {t('full')}
                 </Text>
               </View>
             )}
@@ -215,8 +217,8 @@ const WeeklyScheduleScreen = ({ navigation }) => {
             <Ionicons name="arrow-back" size={20} color={COLORS.white} />
           </TouchableOpacity>
           <View style={{ alignItems: 'center' }}>
-            <Text style={styles.headerTitle}>Weekly Schedule</Text>
-            <Text style={styles.headerSub}>{totalTrips} trips · {workDays} working days</Text>
+            <Text style={styles.headerTitle}>{t('Weekly Schedule')}</Text>
+            <Text style={styles.headerSub}>{totalTrips} {t('trips')} · {workDays} {t('working days')}</Text>
           </View>
           <View style={{ width: 40 }} />
         </View>
@@ -271,7 +273,7 @@ const WeeklyScheduleScreen = ({ navigation }) => {
                     ]}>{count}</Text>
                   </View>
                 ) : (
-                  <Text style={styles.offText}>Off</Text>
+                  <Text style={styles.offText}>{t('Off')}</Text>
                 )}
               </TouchableOpacity>
             );
@@ -284,7 +286,7 @@ const WeeklyScheduleScreen = ({ navigation }) => {
         <View>
           <Text style={styles.dayBarDate}>{dayLabel}</Text>
           {isToday(selectedIdx) && (
-            <Text style={styles.dayBarToday}>Today</Text>
+            <Text style={styles.dayBarToday}>{t('Today')}</Text>
           )}
         </View>
         <View style={[
@@ -295,7 +297,7 @@ const WeeklyScheduleScreen = ({ navigation }) => {
             styles.dayBarBadgeText,
             dayTrips.length === 0 && { color: COLORS.textMuted },
           ]}>
-            {dayTrips.length > 0 ? `${dayTrips.length} trip${dayTrips.length !== 1 ? 's' : ''}` : 'Rest day'}
+            {dayTrips.length > 0 ? `${dayTrips.length} ${t('trips')}` : t('Rest day')}
           </Text>
         </View>
       </View>
@@ -317,8 +319,8 @@ const WeeklyScheduleScreen = ({ navigation }) => {
               <View style={styles.emptyIconWrap}>
                 <Ionicons name="bed-outline" size={36} color={COLORS.textMuted} />
               </View>
-              <Text style={styles.emptyTitle}>Rest day</Text>
-              <Text style={styles.emptySub}>No trips scheduled — enjoy your day off!</Text>
+              <Text style={styles.emptyTitle}>{t('Rest day')}</Text>
+              <Text style={styles.emptySub}>{t('No trips scheduled — enjoy your day off!')}</Text>
             </View>
           }
         />

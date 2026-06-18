@@ -54,7 +54,7 @@ const TicketScreen = ({ route, navigation }) => {
   const headerInsets        = useHeaderInsets();
   const { booking }         = route.params;
   const { user }            = useAuth();
-  const { currency, fmtMoney } = useApp();
+  const { currency, fmtMoney, t } = useApp();
 
   // A booking can hold several seats — each gets its own ticket record,
   // its own rotating QR, and its own share/PDF. Fall back to a single
@@ -128,8 +128,8 @@ const TicketScreen = ({ route, navigation }) => {
           <Ionicons name="arrow-back" size={20} color={COLORS.white} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Your Ticket</Text>
-          <Text style={styles.headerSub}>Present QR code to board</Text>
+          <Text style={styles.headerTitle}>{t('Your Ticket')}</Text>
+          <Text style={styles.headerSub}>{t('Present QR code to board')}</Text>
         </View>
         <TouchableOpacity style={styles.shareBtn} onPress={shareTicket}>
           <Ionicons name="share-social-outline" size={20} color={COLORS.white} />
@@ -153,7 +153,7 @@ const TicketScreen = ({ route, navigation }) => {
           <View style={[styles.ticketBanner, !isOnline && { backgroundColor: COLORS.warning }]}>
             <Ionicons name={isOnline ? 'checkmark-circle' : 'cloud-offline-outline'} size={16} color={COLORS.white} />
             <Text style={styles.ticketBannerText}>
-              {isOnline ? 'Booking Confirmed' : 'Offline Mode'}
+              {isOnline ? t('Booking Confirmed') : t('Offline Mode')}
             </Text>
           </View>
 
@@ -203,11 +203,11 @@ const TicketScreen = ({ route, navigation }) => {
           <View style={styles.detailsGrid}>
             {[
               booking.type === 'taxi'
-                ? { label: 'VEHICLE', value: booking.vehicleLabel ?? 'Taxi', highlight: false }
-                : { label: 'SEAT',    value: activeTicket.seat_number,        highlight: false },
+                ? { label: t('Vehicle').toUpperCase(), value: booking.vehicleLabel ?? t('Taxi'), highlight: false }
+                : { label: t('seat').toUpperCase(),    value: activeTicket.seat_number,           highlight: false },
               { label: 'FARE',   value: fmtMoney(parseFloat(activeTicket.amount ?? booking.price ?? 0)), highlight: true },
               { label: 'DATE',   value: formatDateTime(booking.date), highlight: false },
-              { label: 'STATUS', value: 'Confirmed', highlight: true, green: true },
+              { label: 'STATUS', value: t('Confirmed'), highlight: true, green: true },
             ].map((d) => (
               <View key={d.label} style={styles.detailItem}>
                 <Text style={styles.detailLabel}>{d.label}</Text>

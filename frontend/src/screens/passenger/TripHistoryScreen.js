@@ -31,7 +31,7 @@ const STATUS_CONFIG = {
 
 const TripHistoryScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { bookings, cancelBooking, refreshBookings, currency, fmtMoney } = useApp();
+  const { bookings, cancelBooking, refreshBookings, currency, fmtMoney, t } = useApp();
   const { user } = useAuth();
   const [filter, setFilter]       = useState('all');
   const [exporting, setExporting] = useState(false);
@@ -189,7 +189,7 @@ const TripHistoryScreen = ({ navigation }) => {
             <View style={[styles.statusBadge, { backgroundColor: st.bg }]}>
               <Ionicons name={st.icon} size={12} color={st.text} />
               <Text style={[styles.statusText, { color: st.text }]}>
-                {(item.status || 'upcoming').charAt(0).toUpperCase() + (item.status || 'upcoming').slice(1)}
+                {t((item.status || 'upcoming').charAt(0).toUpperCase() + (item.status || 'upcoming').slice(1))}
               </Text>
             </View>
           </View>
@@ -252,7 +252,7 @@ const TripHistoryScreen = ({ navigation }) => {
                   onPress={() => navigation.navigate('HomeStack', { screen: 'Ticket', params: { booking: item } })}
                 >
                   <Ionicons name="ticket-outline" size={14} color={PURPLE.primary} />
-                  <Text style={styles.actionTextBlue}>View Ticket</Text>
+                  <Text style={styles.actionTextBlue}>{t('View Ticket')}</Text>
                 </PressableScale>
               )}
               {!isTaxi && (
@@ -261,12 +261,12 @@ const TripHistoryScreen = ({ navigation }) => {
                   onPress={() => navigation.navigate('HomeStack', { screen: 'BusTracking', params: { tripId: item.bus?._id, busName: item.bus?.name } })}
                 >
                   <Ionicons name="navigate-outline" size={14} color={PURPLE.primary} />
-                  <Text style={styles.actionTextBlue}>Track Bus</Text>
+                  <Text style={styles.actionTextBlue}>{t('Track Bus')}</Text>
                 </PressableScale>
               )}
               <PressableScale style={styles.actionBtnRed} onPress={() => handleCancel(item)}>
                 <Ionicons name="close-circle-outline" size={14} color={COLORS.danger} />
-                <Text style={styles.actionTextRed}>Cancel</Text>
+                <Text style={styles.actionTextRed}>{t('Cancel')}</Text>
               </PressableScale>
             </View>
           )}
@@ -278,14 +278,14 @@ const TripHistoryScreen = ({ navigation }) => {
                 onPress={() => navigation.navigate('HomeStack', { screen: 'Feedback', params: { booking: item } })}
               >
                 <Ionicons name="star-outline" size={14} color={COLORS.warning} />
-                <Text style={[styles.actionTextBlue, { color: COLORS.warning }]}>Rate</Text>
+                <Text style={[styles.actionTextBlue, { color: COLORS.warning }]}>{t('Rate')}</Text>
               </PressableScale>
               <PressableScale
                 style={[styles.actionBtnBlue, { backgroundColor: COLORS.dangerLight }]}
                 onPress={() => navigation.navigate('HomeStack', { screen: 'Complaint', params: { booking: item } })}
               >
                 <Ionicons name="flag-outline" size={14} color={COLORS.danger} />
-                <Text style={[styles.actionTextBlue, { color: COLORS.danger }]}>Complaint</Text>
+                <Text style={[styles.actionTextBlue, { color: COLORS.danger }]}>{t('Complaint')}</Text>
               </PressableScale>
             </View>
           )}
@@ -324,8 +324,8 @@ const TripHistoryScreen = ({ navigation }) => {
             </TouchableOpacity>
           ) : null}
           <View style={{ flex: 1 }}>
-            <Text style={styles.pageTitle}>My Trips</Text>
-            <Text style={styles.pageSubtitle}>{(bookings || []).length} bookings total</Text>
+            <Text style={styles.pageTitle}>{t('My Trips')}</Text>
+            <Text style={styles.pageSubtitle}>{(bookings || []).length} {t('bookings total')}</Text>
           </View>
           <PressableScale
             style={[styles.exportBtn, (exporting || filtered.length === 0) && { opacity: 0.5 }]}
@@ -333,7 +333,7 @@ const TripHistoryScreen = ({ navigation }) => {
             disabled={exporting || filtered.length === 0}
           >
             <Ionicons name={exporting ? 'hourglass-outline' : 'download-outline'} size={16} color={COLORS.white} />
-            <Text style={styles.exportBtnText}>{exporting ? 'Exporting…' : 'Export'}</Text>
+            <Text style={styles.exportBtnText}>{exporting ? 'Exporting…' : t('Export')}</Text>
           </PressableScale>
         </View>
 
@@ -351,7 +351,7 @@ const TripHistoryScreen = ({ navigation }) => {
               scaleTo={0.92}
             >
               <Text style={[styles.filterText, filter === f.key && styles.filterTextActive]}>
-                {f.label}
+                {t(f.label)}
               </Text>
             </PressableScale>
           ))}

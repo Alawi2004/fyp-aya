@@ -58,7 +58,7 @@ function normalise(t) {
 
 const EarningsScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { currency, exchangeRate, fmtMoney } = useApp();
+  const { currency, exchangeRate, fmtMoney, t } = useApp();
   const [trips,     setTrips]     = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
@@ -203,7 +203,7 @@ const EarningsScreen = ({ navigation }) => {
           <PressableScale style={styles.iconBtn} onPress={() => navigation.goBack()} scaleTo={0.88}>
             <Ionicons name="arrow-back" size={20} color={COLORS.white} />
           </PressableScale>
-          <Text style={styles.heroTitle}>Earnings</Text>
+          <Text style={styles.heroTitle}>{t('Earnings')}</Text>
           <PressableScale
             style={[styles.iconBtn, (exporting || count === 0) && { opacity: 0.5 }]}
             onPress={handleExport}
@@ -216,7 +216,7 @@ const EarningsScreen = ({ navigation }) => {
 
         {/* Balance */}
         <View style={styles.balanceBlock}>
-          <Text style={styles.balanceLbl}>Total Earned · {period}</Text>
+          <Text style={styles.balanceLbl}>{t('Total Earned')} · {t(period)}</Text>
           <View style={styles.balanceRow}>
             <Text style={styles.balanceCurrency}>{currency}</Text>
             <CountUp value={total * exchangeRate} decimals={exchangeRate >= 100 ? 0 : 2} style={styles.balanceAmt} />
@@ -224,7 +224,7 @@ const EarningsScreen = ({ navigation }) => {
           {count > 0 && (
             <View style={styles.perTripChip}>
               <Ionicons name="trending-up" size={11} color={COLORS.white} />
-              <Text style={styles.perTripText}>{fmtMoney(perTrip)} / trip avg · {count} trip{count !== 1 ? 's' : ''}</Text>
+              <Text style={styles.perTripText}>{fmtMoney(perTrip)} avg · {count} {t('trips')}</Text>
             </View>
           )}
         </View>
@@ -238,7 +238,7 @@ const EarningsScreen = ({ navigation }) => {
               onPress={() => setPeriod(p)}
               scaleTo={0.94}
             >
-              <Text style={[styles.periodText, period === p && styles.periodTextActive]} numberOfLines={1}>{p}</Text>
+              <Text style={[styles.periodText, period === p && styles.periodTextActive]} numberOfLines={1}>{t(p)}</Text>
             </PressableScale>
           ))}
         </View>
@@ -253,7 +253,7 @@ const EarningsScreen = ({ navigation }) => {
               <Ionicons name="cloud-offline-outline" size={20} color={COLORS.danger} />
               <Text style={styles.errorText}>{error}</Text>
               <PressableScale style={styles.retryBtn} onPress={load} scaleTo={0.94}>
-                <Text style={styles.retryText}>Retry</Text>
+                <Text style={styles.retryText}>{t('Retry')}</Text>
               </PressableScale>
             </View>
           ) : (
@@ -267,7 +267,7 @@ const EarningsScreen = ({ navigation }) => {
                         <Ionicons name={c.icon} size={15} color={COLORS.white} />
                       </View>
                       <Text style={styles.summaryVal} numberOfLines={1} adjustsFontSizeToFit>{c.value}</Text>
-                      <Text style={styles.summaryLbl}>{c.label}</Text>
+                      <Text style={styles.summaryLbl}>{t(c.label)}</Text>
                     </View>
                   ))}
                 </View>
@@ -277,7 +277,7 @@ const EarningsScreen = ({ navigation }) => {
               {breakdown.length > 0 && (
                 <FadeInView index={1}>
                   <View style={styles.breakdownCard}>
-                    <Text style={styles.breakdownTitle}>Earnings by Route</Text>
+                    <Text style={styles.breakdownTitle}>{t('Earnings by Route')}</Text>
                     <View style={styles.breakdownBar}>
                       {breakdown.map((b, i) => (
                         <View key={i} style={{ width: `${Math.max(b.pct, 2)}%`, height: '100%', backgroundColor: b.color }} />
@@ -298,38 +298,38 @@ const EarningsScreen = ({ navigation }) => {
               )}
 
               {/* Trip earnings */}
-              <Text style={styles.sectionTitle}>Trip Earnings</Text>
+              <Text style={styles.sectionTitle}>{t('Trip Earnings')}</Text>
               {periodTrips.length === 0 ? (
                 <View style={styles.emptyWrap}>
                   <View style={styles.emptyIcon}>
                     <Ionicons name="wallet-outline" size={34} color={PURPLE.primary} />
                   </View>
-                  <Text style={styles.emptyText}>No earnings in this period</Text>
-                  <Text style={styles.emptySub}>Completed trips will appear here.</Text>
+                  <Text style={styles.emptyText}>{t('No earnings in this period')}</Text>
+                  <Text style={styles.emptySub}>{t('Completed trips will appear here.')}</Text>
                 </View>
               ) : (
-                periodTrips.map((t, i) => (
-                  <FadeInView key={t.id} index={i}>
-                    <PressableScale style={styles.txCard} onPress={() => setSelected(t)} scaleTo={0.98}>
+                periodTrips.map((trip, i) => (
+                  <FadeInView key={trip.id} index={i}>
+                    <PressableScale style={styles.txCard} onPress={() => setSelected(trip)} scaleTo={0.98}>
                       <View style={styles.txIconWrap}>
                         <Ionicons name="bus" size={16} color={PURPLE.primary} />
                       </View>
                       <View style={styles.txBody}>
-                        <Text style={styles.txRoute} numberOfLines={1}>{t.route}</Text>
-                        <Text style={styles.txDate}>{fmtDate(t.start)} · {fmtTime(t.start)}</Text>
+                        <Text style={styles.txRoute} numberOfLines={1}>{trip.route}</Text>
+                        <Text style={styles.txDate}>{t(fmtDate(trip.start))} · {fmtTime(trip.start)}</Text>
                         <View style={styles.txPills}>
                           <View style={styles.txPill}>
                             <Ionicons name="people-outline" size={10} color={COLORS.textMuted} />
-                            <Text style={styles.txPillText}>{t.pax} pax</Text>
+                            <Text style={styles.txPillText}>{trip.pax} {t('pax')}</Text>
                           </View>
                           <View style={styles.txPill}>
                             <Ionicons name="hourglass-outline" size={10} color={COLORS.textMuted} />
-                            <Text style={styles.txPillText}>{fmtDur(t.durationMin)}</Text>
+                            <Text style={styles.txPillText}>{fmtDur(trip.durationMin)}</Text>
                           </View>
                         </View>
                       </View>
                       <View style={styles.txRight}>
-                        <Text style={styles.txAmount}>+{fmtMoney(t.amount)}</Text>
+                        <Text style={styles.txAmount}>+{fmtMoney(trip.amount)}</Text>
                         <Ionicons name="chevron-forward" size={15} color={COLORS.textMuted} />
                       </View>
                     </PressableScale>
@@ -358,25 +358,25 @@ const EarningsScreen = ({ navigation }) => {
               <Text style={styles.sheetAmountSub}>{selected.route}</Text>
               <View style={styles.sheetStatusPill}>
                 <Ionicons name="checkmark-circle" size={13} color={COLORS.white} />
-                <Text style={styles.sheetStatusText}>{(selected.status || 'completed').charAt(0).toUpperCase() + (selected.status || 'completed').slice(1)}</Text>
+                <Text style={styles.sheetStatusText}>{t((selected.status || 'completed').charAt(0).toUpperCase() + (selected.status || 'completed').slice(1))}</Text>
               </View>
             </View>
 
             {/* Detail rows */}
             <View style={styles.detailCard}>
-              <DetailRow icon="navigate-outline" label="Journey" value={`${selected.origin}  →  ${selected.destination}`} />
-              <DetailRow icon="calendar-outline" label="Date" value={fmtDate(selected.start)} />
-              <DetailRow icon="time-outline"     label="Time" value={fmtTime(selected.start)} />
-              <DetailRow icon="hourglass-outline" label="Duration" value={fmtDur(selected.durationMin)} />
-              <DetailRow icon="people-outline"   label="Passengers" value={selected.totalSeats ? `${selected.pax} / ${selected.totalSeats} seats` : `${selected.pax}`} />
+              <DetailRow icon="navigate-outline" label={t('Journey')} value={`${selected.origin}  →  ${selected.destination}`} />
+              <DetailRow icon="calendar-outline" label={t('Date')} value={t(fmtDate(selected.start))} />
+              <DetailRow icon="time-outline"     label={t('Time')} value={fmtTime(selected.start)} />
+              <DetailRow icon="hourglass-outline" label={t('Duration')} value={fmtDur(selected.durationMin)} />
+              <DetailRow icon="people-outline"   label={t('Passengers')} value={selected.totalSeats ? `${selected.pax} / ${selected.totalSeats} ${t('Seats')}` : `${selected.pax}`} />
               {selected.vehicle || selected.plate ? (
-                <DetailRow icon="car-outline" label="Vehicle" value={[selected.vehicle, selected.plate].filter(Boolean).join(' · ')} />
+                <DetailRow icon="car-outline" label={t('Vehicle')} value={[selected.vehicle, selected.plate].filter(Boolean).join(' · ')} />
               ) : null}
-              <DetailRow icon="pricetag-outline" label="Trip ID" value={`#${selected.id}`} last />
+              <DetailRow icon="pricetag-outline" label={t('Trip ID')} value={`#${selected.id}`} last />
             </View>
 
             <PressableScale style={styles.closeBtn} onPress={() => setSelected(null)} scaleTo={0.96}>
-              <Text style={styles.closeText}>Close</Text>
+              <Text style={styles.closeText}>{t('Close')}</Text>
             </PressableScale>
           </View>
         )}

@@ -248,7 +248,7 @@ const BellWiggle = ({ children }) => {
 const HomeScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { walletBalance, bookings, currency, exchangeRate, fmtMoney } = useApp();
+  const { walletBalance, bookings, currency, exchangeRate, fmtMoney, t } = useApp();
 
   const [buses, setBuses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -285,7 +285,7 @@ const HomeScreen = ({ navigation }) => {
     () => [
       {
         key: "plan",
-        label: "Plan Trip",
+        label: t("Plan Trip"),
         icon: "git-branch",
         color: PURPLE.primary,
         bg: PURPLE.light,
@@ -293,7 +293,7 @@ const HomeScreen = ({ navigation }) => {
       },
       {
         key: "taxi",
-        label: "Reserve Taxi",
+        label: t("Reserve Taxi"),
         icon: "car-sport",
         color: COLORS.warning,
         bg: COLORS.warningLight,
@@ -301,7 +301,7 @@ const HomeScreen = ({ navigation }) => {
       },
       {
         key: "nearby",
-        label: "Nearby Stops",
+        label: t("Nearby Stops"),
         icon: "walk",
         color: COLORS.secondary,
         bg: COLORS.secondaryLight,
@@ -309,7 +309,7 @@ const HomeScreen = ({ navigation }) => {
       },
       {
         key: "saved",
-        label: "Saved",
+        label: t("Saved"),
         icon: "heart",
         color: COLORS.danger,
         bg: "#FFEBEE",
@@ -318,7 +318,7 @@ const HomeScreen = ({ navigation }) => {
           navigation.navigate("ProfileStack", { screen: "FavoriteRoutes" }),
       },
     ],
-    [favCount, navigation]
+    [favCount, navigation, t]
   );
 
   // ── Data ────────────────────────────────────────────────────────────────────
@@ -495,7 +495,7 @@ const HomeScreen = ({ navigation }) => {
             </View>
             <LivePulse />
             <View style={{ flex: 1 }}>
-              <Text style={styles.activeRideLabel}>ACTIVE RIDE</Text>
+              <Text style={styles.activeRideLabel}>{t('Active Ride').toUpperCase()}</Text>
               <Text style={styles.activeRideName} numberOfLines={1}>
                 {activeBooking.bus?.name}
               </Text>
@@ -505,7 +505,7 @@ const HomeScreen = ({ navigation }) => {
             </View>
             <View style={styles.activeRideTrackBtn}>
               <Ionicons name="navigate" size={15} color={COLORS.white} />
-              <Text style={styles.activeRideTrackText}>Track</Text>
+              <Text style={styles.activeRideTrackText}>{t('Track')}</Text>
             </View>
           </PressableScale>
         </FadeInView>
@@ -544,24 +544,24 @@ const HomeScreen = ({ navigation }) => {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.typeRow}
         >
-          {VEHICLE_TYPES.map((t) => {
-            const on = activeType === t.key;
+          {VEHICLE_TYPES.map((typeItem) => {
+            const on = activeType === typeItem.key;
             return (
-              <PopIn key={t.key} active={on}>
+              <PopIn key={typeItem.key} active={on}>
                 <PressableScale
                   style={[styles.typeChip, on && styles.typeChipOn]}
-                  onPress={() => selectType(t.key)}
+                  onPress={() => selectType(typeItem.key)}
                   scaleTo={0.92}
                 >
                   <Ionicons
-                    name={t.icon}
+                    name={typeItem.icon}
                     size={14}
                     color={on ? COLORS.white : PURPLE.primary}
                   />
                   <Text
                     style={[styles.typeChipText, on && styles.typeChipTextOn]}
                   >
-                    {t.label}
+                    {t(typeItem.label)}
                   </Text>
                 </PressableScale>
               </PopIn>
@@ -573,7 +573,7 @@ const HomeScreen = ({ navigation }) => {
       {/* Section header + status filter */}
       <FadeInView index={3}>
         <View style={styles.sectionRow}>
-          <Text style={styles.sectionTitle}>Available Rides</Text>
+          <Text style={styles.sectionTitle}>{t('Available Rides')}</Text>
           <Bump trigger={filtered.length} style={styles.sectionCountWrap}>
             <Text style={styles.sectionCountText}>{filtered.length} found</Text>
           </Bump>
@@ -594,7 +594,7 @@ const HomeScreen = ({ navigation }) => {
                       on && styles.statusChipTextOn,
                     ]}
                   >
-                    {f}
+                    {t(f)}
                   </Text>
                 </PressableScale>
               </PopIn>
@@ -671,7 +671,7 @@ const HomeScreen = ({ navigation }) => {
                 <Ionicons name="wallet" size={20} color={COLORS.white} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.walletLabel}>Available balance</Text>
+                <Text style={styles.walletLabel}>{t('Available balance')}</Text>
                 <View style={styles.walletAmountRow}>
                   <Text style={styles.walletCurrency}>{currency}</Text>
                   <CountUp
@@ -682,7 +682,7 @@ const HomeScreen = ({ navigation }) => {
                 </View>
               </View>
               <View style={styles.topUpBtn}>
-                <Text style={styles.topUpText}>Top Up</Text>
+                <Text style={styles.topUpText}>{t('Top Up')}</Text>
                 <Ionicons
                   name="chevron-forward"
                   size={13}
