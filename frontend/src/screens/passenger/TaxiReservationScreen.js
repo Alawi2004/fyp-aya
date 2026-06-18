@@ -570,11 +570,11 @@ const VEHICLE_TYPES = [
 
 const TaxiReservationScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
-  const { refreshBookings, updateBalance, walletBalance, currency, fmtMoney } = useApp();
-  const { fromStop, toStop, tripSummary } = route?.params ?? {};
+  const { refreshBookings, updateBalance, walletBalance, currency, fmtMoney, t } = useApp();
+  const { fromStop, toStop, tripSummary, prefillPickup, prefillDestination, prefillNotes } = route?.params ?? {};
 
-  const [pickup, setPickup] = useState(fromStop?.stop_name ?? "");
-  const [dest, setDest] = useState(toStop?.stop_name ?? "");
+  const [pickup, setPickup] = useState(prefillPickup || fromStop?.stop_name || "");
+  const [dest, setDest] = useState(prefillDestination || toStop?.stop_name || "");
   const [pickupLatLng, setPickupLatLng] = useState(null);
   const [destLatLng, setDestLatLng] = useState(null);
   // Intermediate stops: [{address: string, latLng: {latitude, longitude} | null}]
@@ -585,7 +585,7 @@ const TaxiReservationScreen = ({ navigation, route }) => {
   const [minute, setMinute] = useState("00");
   const [ampm, setAmpm] = useState("AM");
   const [recurr, setRecurr] = useState("once");
-  const [notes, setNotes] = useState("");
+  const [notes, setNotes] = useState(prefillNotes || "");
   const [timeMod, setTimeMod] = useState(false);
   const [vehicleType, setVehicleType] = useState("sedan");
   const [drivers, setDrivers] = useState(null);
@@ -1013,8 +1013,8 @@ const TaxiReservationScreen = ({ navigation, route }) => {
         {confirming
           ? "Saving…"
           : bookNow
-          ? "Confirm Booking"
-          : "Confirm Reservation"}
+          ? t("Confirm Booking")
+          : t("Confirm Reservation")}
       </Text>
     </PressableScale>
   );
@@ -1257,7 +1257,7 @@ const TaxiReservationScreen = ({ navigation, route }) => {
         {/* ── Vehicle Type Card ── */}
         <FadeInView index={3}>
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Choose your ride</Text>
+            <Text style={styles.cardTitle}>{t('Choose your ride')}</Text>
             {VEHICLE_TYPES.map((v) => {
               const active = vehicleType === v.key;
               return (

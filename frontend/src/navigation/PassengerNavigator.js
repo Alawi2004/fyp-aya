@@ -1,12 +1,15 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, PURPLE } from '../constants/colors';
 import PressableScale from '../components/common/PressableScale';
 import { useApp } from '../context/AppContext';
+import GradientFill from '../components/common/GradientFill';
+import ChatbotScreen from '../screens/passenger/ChatbotScreen';
+import { navigationRef } from './navigationRef';
 
 import HomeScreen from '../screens/passenger/HomeScreen';
 import BusTrackingScreen from '../screens/passenger/BusTrackingScreen';
@@ -111,19 +114,86 @@ const CustomTabBar = ({ state, navigation }) => {
   );
 };
 
-const PassengerNavigator = () => (
-  <Tab.Navigator
-    tabBar={props => <CustomTabBar {...props} />}
-    screenOptions={{ headerShown: false }}
-  >
-    <Tab.Screen name="HomeStack"    component={HomeStack}        options={{ tabBarLabel: 'Home' }} />
-    <Tab.Screen name="TripHistory"  component={TripHistoryScreen} options={{ tabBarLabel: 'Trips' }} />
-    <Tab.Screen name="Wallet"       component={WalletScreen}      options={{ tabBarLabel: 'Wallet' }} />
-    <Tab.Screen name="ProfileStack" component={ProfileStack}      options={{ tabBarLabel: 'Profile' }} />
-  </Tab.Navigator>
-);
+const PassengerNavigator = () => {
+  const insets = useSafeAreaInsets();
+  const [chatOpen, setChatOpen] = useState(false);
+
+  // Position the FAB above the tab bar: tab bar is ~65 px tall + bottom inset
+  const fabBottom = 65 + Math.max(insets.bottom, 12) + 14;
+
+  // Handle actions returned by the chatbot backend
+  const handleChatAction = useCallback((action) => {
+    if (!action?.type) return;
+
+    if (action.type === 'open_taxi_booking') {
+      // Close the chatbot first, then navigate after the modal animates out
+      setChatOpen(false);
+      setTimeout(() => {
+        if (navigationRef.isReady()) {
+          navigationRef.navigate('HomeStack', {
+            screen: 'TaxiReservation',
+            params: {
+              prefillPickup:      action.pickup      ?? '',
+              prefillDestination: action.destination ?? '',
+              prefillNotes:       action.notes       ?? '',
+            },
+          });
+        }
+      }, 350);
+    }
+  }, []);
+
+  return (
+    <View style={{ flex: 1 }}>
+      <Tab.Navigator
+        tabBar={props => <CustomTabBar {...props} />}
+        screenOptions={{ headerShown: false }}
+      >
+        <Tab.Screen name="HomeStack"    component={HomeStack}         options={{ tabBarLabel: 'Home' }} />
+        <Tab.Screen name="TripHistory"  component={TripHistoryScreen} options={{ tabBarLabel: 'Trips' }} />
+        <Tab.Screen name="Wallet"       component={WalletScreen}      options={{ tabBarLabel: 'Wallet' }} />
+        <Tab.Screen name="ProfileStack" component={ProfileStack}      options={{ tabBarLabel: 'Profile' }} />
+      </Tab.Navigator>
+
+      {/* ── Floating AI chat button ───────────────────────────────────── */}
+      <PressableScale
+        onPress={() => setChatOpen(true)}
+        scaleTo={0.9}
+        style={[styles.fab, { bottom: fabBottom }]}
+      >
+        <View style={StyleSheet.absoluteFill}>
+          <GradientFill id="fab-grad" colors={PURPLE.gradient} />
+        </View>
+        <Ionicons name="chatbubble-ellipses" size={22} color={COLORS.white} />
+      </PressableScale>
+
+      {/* ── Chat modal ───────────────────────────────────────────────── */}
+      <ChatbotScreen
+        visible={chatOpen}
+        onClose={() => setChatOpen(false)}
+        onAction={handleChatAction}
+      />
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
+  // Floating AI chat button
+  fab: {
+    position: 'absolute',
+    right: 20,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: PURPLE.deep,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.38,
+    shadowRadius: 12,
+    elevation: 10,
+  },
   tabBar: {
     flexDirection: 'row',
     backgroundColor: COLORS.white,
