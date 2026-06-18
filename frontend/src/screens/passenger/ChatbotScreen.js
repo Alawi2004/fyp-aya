@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, Modal, TextInput, FlatList,
-  KeyboardAvoidingView, Platform, Pressable, ScrollView,
-  Animated, Dimensions, StatusBar,
+  Platform, Pressable, ScrollView, Animated,
+  Dimensions, Keyboard, StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,20 +12,21 @@ import { COLORS, PURPLE } from '../../constants/colors';
 import PressableScale from '../../components/common/PressableScale';
 import GradientFill from '../../components/common/GradientFill';
 
-const { width: SCREEN_W } = Dimensions.get('window');
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const SHEET_MAX_H = SCREEN_H * 0.88;
 
 // ── Quick reply chip definitions ──────────────────────────────────────────────
 const QUICK_REPLIES = [
-  { id: 'balance',  label: 'My Balance',   icon: 'wallet-outline'       },
-  { id: 'find_bus', label: 'Find a Bus',   icon: 'bus-outline'           },
-  { id: 'report',   label: 'Report Issue', icon: 'flag-outline'          },
-  { id: 'ticket',   label: 'My Ticket',    icon: 'qr-code-outline'       },
-  { id: 'help',     label: 'Help',         icon: 'help-circle-outline'   },
+  { id: 'balance',  label: 'My Balance',   icon: 'wallet-outline'      },
+  { id: 'find_bus', label: 'Find a Bus',   icon: 'bus-outline'          },
+  { id: 'report',   label: 'Report Issue', icon: 'flag-outline'         },
+  { id: 'ticket',   label: 'My Ticket',    icon: 'qr-code-outline'      },
+  { id: 'help',     label: 'Help',         icon: 'help-circle-outline'  },
 ];
 
-// ── Bot response engine (mock — replace with API call when backend is ready) ──
+// ── Bot response engine (mock — swap with API call when backend is ready) ─────
 function buildBotResponse(input, ctx) {
-  const msg = (typeof input === 'string' ? input : '').toLowerCase().trim();
+  const msg = String(input).toLowerCase().trim();
 
   if (msg === 'balance' || msg.includes('balance') || msg.includes('wallet') || msg.includes('money')) {
     return (
@@ -33,7 +34,7 @@ function buildBotResponse(input, ctx) {
       `• Minimum top-up: **${ctx.currency} ${ctx.walletLimits.minTopup}**\n` +
       `• Max per transaction: **${ctx.currency} ${ctx.walletLimits.maxTopup}**\n` +
       `• Max wallet balance: **${ctx.currency} ${ctx.walletLimits.maxBalance}**\n\n` +
-      `Go to the **Wallet** tab to top up or view your transaction history.`
+      `Go to the **Wallet** tab to top up or view transactions.`
     );
   }
 
@@ -53,16 +54,16 @@ function buildBotResponse(input, ctx) {
       `1. Go to **Profile** tab\n` +
       `2. Tap **My Complaints**\n` +
       `3. Press **+** to file a new one\n\n` +
-      `You can report driver behaviour, bus conditions, delays, or other issues. Staff review within **24 hours**.`
+      `You can report driver behaviour, bus conditions, or delays. Staff review within **24 hours**.`
     );
   }
 
   if (msg === 'ticket' || msg.includes('ticket') || msg.includes('qr')) {
     return (
-      `Your tickets are in the **Wallet** tab. Each ticket has a **QR code** that the driver scans when you board.\n\n` +
-      `• Tickets are valid for one trip\n` +
-      `• Show the QR to the driver before boarding\n` +
-      `• Check Wallet → Transactions for your history`
+      `Your tickets are in the **Wallet** tab. Each ticket has a **QR code** the driver scans when you board.\n\n` +
+      `• Valid for one trip\n` +
+      `• Show the QR before boarding\n` +
+      `• Check Wallet → Transactions for history`
     );
   }
 
@@ -70,7 +71,7 @@ function buildBotResponse(input, ctx) {
     return (
       `Your trips and bookings are in the **Trips** tab.\n\n` +
       `• View past trips & details\n` +
-      `• Check ticket & booking status\n` +
+      `• Check booking status\n` +
       `• Rate your driver after each trip\n` +
       `• Cancel upcoming bookings\n\n` +
       `Need help with a specific trip?`
@@ -82,7 +83,7 @@ function buildBotResponse(input, ctx) {
       `To top up your wallet:\n\n` +
       `1. Open the **Wallet** tab\n` +
       `2. Tap **Top Up**\n` +
-      `3. Enter an amount between **${ctx.currency} ${ctx.walletLimits.minTopup}** and **${ctx.currency} ${ctx.walletLimits.maxTopup}**\n\n` +
+      `3. Enter between **${ctx.currency} ${ctx.walletLimits.minTopup}** and **${ctx.currency} ${ctx.walletLimits.maxTopup}**\n\n` +
       `You can also top up at any authorised Yalla Transit agent.`
     );
   }
@@ -115,7 +116,7 @@ function buildBotResponse(input, ctx) {
       `• **Report Issue** — complaints & feedback\n` +
       `• **My Ticket** — how to use your QR ticket\n` +
       `• **Trips** — bookings, history, ratings\n\n` +
-      `Or reach support directly:\n` +
+      `Or contact support:\n` +
       `📞 **${ctx.supportPhone}**\n✉️ **${ctx.supportEmail}**`
     );
   }
@@ -128,11 +129,13 @@ function buildBotResponse(input, ctx) {
   );
 }
 
-// ── Typing indicator (3-dot bounce) ──────────────────────────────────────────
+// ── Typing indicator (3-dot staggered bounce) ─────────────────────────────────
 const TypingIndicator = () => {
-  const dots = [useRef(new Animated.Value(0)).current,
-                useRef(new Animated.Value(0)).current,
-                useRef(new Animated.Value(0)).current];
+  const dots = [
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+    useRef(new Animated.Value(0)).current,
+  ];
 
   useEffect(() => {
     const anims = dots.map((dot, i) =>
@@ -163,7 +166,7 @@ const TypingIndicator = () => {
   );
 };
 
-// ── Inline markdown renderer (bold + line breaks) ─────────────────────────────
+// ── Inline markdown renderer ───────────────────────────────────────────────────
 function renderInline(text, baseStyle) {
   const parts = String(text).split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
@@ -206,7 +209,6 @@ function MarkdownText({ text, style }) {
 // ── Message bubble ────────────────────────────────────────────────────────────
 const MessageBubble = ({ item }) => {
   const isUser = item.role === 'user';
-
   if (isUser) {
     return (
       <View style={[styles.row, styles.rowUser]}>
@@ -217,7 +219,6 @@ const MessageBubble = ({ item }) => {
       </View>
     );
   }
-
   return (
     <View style={styles.row}>
       <View style={styles.botAvatar}>
@@ -232,17 +233,26 @@ const MessageBubble = ({ item }) => {
 
 // ── Quick reply chip strip ────────────────────────────────────────────────────
 const QuickReplies = ({ onSelect }) => (
-  <ScrollView horizontal showsHorizontalScrollIndicator={false}
-    contentContainerStyle={styles.chipsRow}
-    keyboardShouldPersistTaps="handled"
-  >
-    {QUICK_REPLIES.map(q => (
-      <PressableScale key={q.id} style={styles.chip} scaleTo={0.92} onPress={() => onSelect(q.id, q.label)}>
-        <Ionicons name={q.icon} size={13} color={PURPLE.onLight} style={{ marginRight: 5 }} />
-        <Text style={styles.chipText}>{q.label}</Text>
-      </PressableScale>
-    ))}
-  </ScrollView>
+  <View style={styles.chipsWrapper}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.chipsRow}
+      keyboardShouldPersistTaps="handled"
+    >
+      {QUICK_REPLIES.map((q, idx) => (
+        <PressableScale
+          key={q.id}
+          style={[styles.chip, idx < QUICK_REPLIES.length - 1 && { marginRight: 8 }]}
+          scaleTo={0.92}
+          onPress={() => onSelect(q.id, q.label)}
+        >
+          <Ionicons name={q.icon} size={13} color={PURPLE.onLight} style={{ marginRight: 5 }} />
+          <Text style={styles.chipText}>{q.label}</Text>
+        </PressableScale>
+      ))}
+    </ScrollView>
+  </View>
 );
 
 // ── Main chatbot modal ────────────────────────────────────────────────────────
@@ -259,22 +269,36 @@ const WELCOME = (userName) => ({
 });
 
 const ChatbotScreen = ({ visible, onClose }) => {
-  const insets = useSafeAreaInsets();
+  const insets        = useSafeAreaInsets();
   const { walletBalance, walletLimits, currency, supportPhone, supportEmail } = useApp();
-  const { user } = useAuth();
+  const { user }      = useAuth();
 
-  const [messages, setMessages] = useState([]);
-  const [input, setInput]       = useState('');
-  const [typing, setTyping]     = useState(false);
-  const [showChips, setShowChips] = useState(true);
-  const listRef = useRef(null);
+  const [messages,   setMessages]   = useState([]);
+  const [input,      setInput]      = useState('');
+  const [typing,     setTyping]     = useState(false);
+  const [showChips,  setShowChips]  = useState(true);
+  const [kbHeight,   setKbHeight]   = useState(0);
+
+  const listRef   = useRef(null);
+  const inputRef  = useRef(null);
   const slideAnim = useRef(new Animated.Value(0)).current;
 
-  // Slide in when opened
+  // ── Keyboard height tracking (reliable cross-platform alternative to KAV) ──
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const show = Keyboard.addListener(showEvent, (e) => setKbHeight(e.endCoordinates.height));
+    const hide = Keyboard.addListener(hideEvent, ()  => setKbHeight(0));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+
+  // ── Open / close ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (visible) {
       setMessages([WELCOME(user?.full_name ?? user?.name)]);
       setShowChips(true);
+      setKbHeight(0);
       Animated.spring(slideAnim, {
         toValue: 1, useNativeDriver: true,
         tension: 60, friction: 11,
@@ -292,8 +316,9 @@ const ChatbotScreen = ({ visible, onClose }) => {
     userName: user?.full_name ?? user?.name ?? 'there',
   };
 
+  // ── Send message ──────────────────────────────────────────────────────────
   const sendMessage = useCallback((text) => {
-    const trimmed = (text ?? input).trim();
+    const trimmed = String(text ?? input).trim();
     if (!trimmed) return;
     setInput('');
     setShowChips(false);
@@ -302,7 +327,6 @@ const ChatbotScreen = ({ visible, onClose }) => {
     setMessages(prev => [...prev, userMsg]);
     setTyping(true);
 
-    // Simulate AI thinking delay (1.2 – 2.0 s)
     const delay = 1200 + Math.random() * 800;
     setTimeout(() => {
       const botText = buildBotResponse(trimmed, ctx);
@@ -312,13 +336,16 @@ const ChatbotScreen = ({ visible, onClose }) => {
     }, delay);
   }, [input, ctx]);
 
-  const handleChip = useCallback((id, label) => {
+  const handleChip = useCallback((id) => {
+    Keyboard.dismiss();
     sendMessage(id);
   }, [sendMessage]);
 
+  // Sheet shrinks when keyboard is up so input stays above keyboard
+  const sheetH    = SHEET_MAX_H - kbHeight;
   const slideStyle = {
     transform: [{
-      translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [700, 0] }),
+      translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [SHEET_MAX_H, 0] }),
     }],
   };
 
@@ -331,10 +358,10 @@ const ChatbotScreen = ({ visible, onClose }) => {
       statusBarTranslucent
     >
       <View style={styles.overlay}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => { Keyboard.dismiss(); onClose(); }} />
 
-        <Animated.View style={[styles.sheet, { paddingBottom: insets.bottom }, slideStyle]}>
-          {/* ── Header ───────────────────────────────────────────── */}
+        <Animated.View style={[styles.sheet, { height: sheetH }, slideStyle]}>
+          {/* ── Header ─────────────────────────────────────────────── */}
           <View style={styles.header}>
             <GradientFill id="chat-hdr" colors={PURPLE.gradient} />
             <View style={styles.headerContent}>
@@ -356,56 +383,49 @@ const ChatbotScreen = ({ visible, onClose }) => {
             </View>
           </View>
 
-          {/* ── Message list ─────────────────────────────────────── */}
-          <KeyboardAvoidingView
-            style={{ flex: 1 }}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={0}
-          >
-            <FlatList
-              ref={listRef}
-              data={messages}
-              keyExtractor={m => m.id}
-              renderItem={({ item }) => <MessageBubble item={item} />}
-              contentContainerStyle={styles.listContent}
-              showsVerticalScrollIndicator={false}
-              onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
-              ListFooterComponent={typing ? <TypingIndicator /> : null}
-              keyboardShouldPersistTaps="handled"
+          {/* ── Message list ────────────────────────────────────────── */}
+          <FlatList
+            ref={listRef}
+            data={messages}
+            keyExtractor={m => m.id}
+            renderItem={({ item }) => <MessageBubble item={item} />}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+            ListFooterComponent={typing ? <TypingIndicator /> : null}
+            keyboardShouldPersistTaps="handled"
+          />
+
+          {/* ── Quick reply chips ─────────────────────────────────── */}
+          {showChips && !typing && <QuickReplies onSelect={handleChip} />}
+
+          {/* ── Input bar ────────────────────────────────────────── */}
+          <View style={[styles.inputBar, { paddingBottom: kbHeight > 0 ? 10 : Math.max(insets.bottom, 10) }]}>
+            <TextInput
+              ref={inputRef}
+              style={styles.input}
+              placeholder="Ask me anything…"
+              placeholderTextColor={COLORS.textMuted}
+              value={input}
+              onChangeText={setInput}
+              multiline
+              maxLength={400}
+              returnKeyType="send"
+              blurOnSubmit
+              onSubmitEditing={() => sendMessage()}
             />
-
-            {/* ── Quick reply chips ─────────────────────────────── */}
-            {showChips && !typing && (
-              <QuickReplies onSelect={handleChip} />
-            )}
-
-            {/* ── Input bar ─────────────────────────────────────── */}
-            <View style={styles.inputBar}>
-              <TextInput
-                style={styles.input}
-                placeholder="Ask me anything…"
-                placeholderTextColor={COLORS.textMuted}
-                value={input}
-                onChangeText={setInput}
-                multiline
-                maxLength={400}
-                onSubmitEditing={() => sendMessage()}
-                returnKeyType="send"
-                blurOnSubmit
-              />
-              <PressableScale
-                onPress={() => sendMessage()}
-                scaleTo={0.88}
-                style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]}
-                disabled={!input.trim()}
-              >
-                <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                  {input.trim() && <GradientFill id="send-btn" colors={PURPLE.gradient} />}
-                </View>
-                <Ionicons name="send" size={17} color={input.trim() ? COLORS.white : COLORS.textMuted} />
-              </PressableScale>
-            </View>
-          </KeyboardAvoidingView>
+            <PressableScale
+              onPress={() => sendMessage()}
+              scaleTo={0.88}
+              style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]}
+              disabled={!input.trim()}
+            >
+              <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                {input.trim() && <GradientFill id="send-btn" colors={PURPLE.gradient} />}
+              </View>
+              <Ionicons name="send" size={17} color={input.trim() ? COLORS.white : COLORS.textMuted} />
+            </PressableScale>
+          </View>
         </Animated.View>
       </View>
     </Modal>
@@ -420,23 +440,18 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    height: '88%',
+    // height set dynamically: SHEET_MAX_H - kbHeight
     backgroundColor: COLORS.background,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     overflow: 'hidden',
   },
 
-  // Header
-  header: {
-    height: 70,
-    overflow: 'hidden',
-  },
+  // ── Header ────────────────────────────────────────────────────────────────
+  header: { height: 70, overflow: 'hidden' },
   headerContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flex: 1, flexDirection: 'row',
+    alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 18,
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -458,69 +473,51 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
 
-  // Message list
+  // ── Message list ──────────────────────────────────────────────────────────
   listContent: {
     paddingHorizontal: 14,
     paddingTop: 14,
     paddingBottom: 8,
-    gap: 10,
+    rowGap: 10,
   },
 
-  // Bubbles
+  // ── Bubbles ───────────────────────────────────────────────────────────────
   row: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 8,
     maxWidth: SCREEN_W * 0.85,
   },
-  rowUser: {
-    alignSelf: 'flex-end',
-    flexDirection: 'row-reverse',
-  },
+  rowUser: { alignSelf: 'flex-end', flexDirection: 'row-reverse' },
   botAvatar: {
     width: 28, height: 28, borderRadius: 14,
     backgroundColor: PURPLE.primary,
     alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0,
-    marginBottom: 2,
+    flexShrink: 0, marginBottom: 2,
   },
   botBubble: {
     backgroundColor: PURPLE.light,
-    borderRadius: 18,
-    borderBottomLeftRadius: 5,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderRadius: 18, borderBottomLeftRadius: 5,
+    paddingHorizontal: 14, paddingVertical: 10,
     flexShrink: 1,
   },
-  botText: {
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    lineHeight: 20,
-  },
+  botText: { color: COLORS.textPrimary, fontSize: 14, lineHeight: 20 },
   userBubble: {
-    borderRadius: 18,
-    borderBottomRightRadius: 5,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    overflow: 'hidden',
-    flexShrink: 1,
+    borderRadius: 18, borderBottomRightRadius: 5,
+    paddingHorizontal: 14, paddingVertical: 10,
+    overflow: 'hidden', flexShrink: 1,
   },
   userText: {
-    color: COLORS.white,
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '500',
+    color: COLORS.white, fontSize: 14,
+    lineHeight: 20, fontWeight: '500',
   },
 
-  // Typing indicator
+  // ── Typing indicator ──────────────────────────────────────────────────────
   typingBubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center',
     backgroundColor: PURPLE.light,
-    borderRadius: 18,
-    borderBottomLeftRadius: 5,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    borderRadius: 18, borderBottomLeftRadius: 5,
+    paddingHorizontal: 16, paddingVertical: 14,
     gap: 5,
   },
   typingDot: {
@@ -528,39 +525,43 @@ const styles = StyleSheet.create({
     backgroundColor: PURPLE.primary,
   },
 
-  // Markdown helpers
+  // ── Markdown ──────────────────────────────────────────────────────────────
   mdBulletRow: { flexDirection: 'row', marginVertical: 1 },
   mdBulletDot: { fontWeight: '700', color: PURPLE.primary },
 
-  // Quick reply chips
+  // ── Quick reply chips ─────────────────────────────────────────────────────
+  // Explicit height wrapper prevents the flex child (FlatList) from
+  // squishing the chip strip when the list is tall.
+  chipsWrapper: {
+    height: 54,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+    justifyContent: 'center',
+  },
   chipsRow: {
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 8,
+    alignItems: 'center',
+    // marginRight on each chip instead of gap (more reliable on Android)
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: PURPLE.mid,
     borderRadius: 20,
-    paddingHorizontal: 13,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderWidth: 1,
     borderColor: PURPLE.midStrong,
   },
-  chipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: PURPLE.onLight,
-  },
+  chipText: { fontSize: 12, fontWeight: '600', color: PURPLE.onLight },
 
-  // Input bar
+  // ── Input bar ─────────────────────────────────────────────────────────────
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 14,
-    paddingTop: 8,
-    paddingBottom: 12,
+    paddingTop: 10,
+    // paddingBottom set dynamically based on kbHeight / safeArea
     backgroundColor: COLORS.white,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
@@ -573,11 +574,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surfaceAlt,
     borderRadius: 21,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: Platform.OS === 'ios' ? 11 : 8,
     fontSize: 14,
     color: COLORS.textPrimary,
     borderWidth: 1,
     borderColor: COLORS.border,
+    textAlignVertical: 'center',
   },
   sendBtn: {
     width: 42, height: 42, borderRadius: 21,
@@ -585,9 +587,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: COLORS.surfaceAlt,
   },
-  sendBtnDisabled: {
-    backgroundColor: COLORS.surfaceAlt,
-  },
+  sendBtnDisabled: { backgroundColor: COLORS.surfaceAlt },
 });
 
 export default ChatbotScreen;
