@@ -3,7 +3,7 @@ import { poolPromise, sql } from "../db/db.js";
 export const createTrip = async (req, res) => {
   try {
     const pool = await poolPromise;
-    const { vehicle_id, driver_id, route_id, start_time, status } = req.body;
+    const { vehicle_id, driver_id, route_id, start_time, status, price, carpool_discount } = req.body;
 
     const startTimeParsed = start_time ? new Date(start_time) : null;
     const result = await pool
@@ -19,7 +19,44 @@ export const createTrip = async (req, res) => {
         VALUES(@vehicle_id,@driver_id,@route_id,@start_time,@status)
       `);
 
-    res.status(201).json({ trip_id: result.recordset[0].trip_id, message: "Trip created" });
+    const trip_id = result.recordset[0].trip_id;
+
+    if (price != null && !isNaN(Number(price)) && route_id) {
+      await pool
+        .request()
+        .input("route_id",  sql.Int,            route_id)
+        .input("base_fare", sql.Decimal(10, 2), Number(price))
+        .query(`
+          MERGE fare_zones AS tgt
+          USING (SELECT @route_id AS route_id, N'Default' AS zone_name) AS src
+            ON tgt.route_id = src.route_id AND tgt.zone_name = src.zone_name
+          WHEN MATCHED THEN
+            UPDATE SET base_fare = @base_fare, updated_at = GETUTCDATE()
+          WHEN NOT MATCHED THEN
+            INSERT (route_id, zone_name, zone_color, base_fare)
+            VALUES (@route_id, N'Default', N'#2563EB', @base_fare);
+        `);
+
+      if (carpool_discount != null && !isNaN(Number(carpool_discount))) {
+        const carpoolFare = Number(price) * (1 - Number(carpool_discount) / 100);
+        await pool
+          .request()
+          .input("route_id",     sql.Int,            route_id)
+          .input("carpool_fare", sql.Decimal(10, 2), carpoolFare)
+          .query(`
+            MERGE fare_zones AS tgt
+            USING (SELECT @route_id AS route_id, N'Carpool' AS zone_name) AS src
+              ON tgt.route_id = src.route_id AND tgt.zone_name = src.zone_name
+            WHEN MATCHED THEN
+              UPDATE SET base_fare = @carpool_fare, updated_at = GETUTCDATE()
+            WHEN NOT MATCHED THEN
+              INSERT (route_id, zone_name, zone_color, base_fare)
+              VALUES (@route_id, N'Carpool', N'#059669', @carpool_fare);
+          `);
+      }
+    }
+
+    res.status(201).json({ trip_id, message: "Trip created" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to create trip" });
@@ -273,19 +310,26 @@ export const getRecurringSchedules = async (req, res) => {
     const pool   = await poolPromise;
     const result = await pool.request().query(`
       SELECT
-        schedule_id  AS id,
-        route_name   AS route,
-        driver_name  AS driver,
-        vehicle_plate AS vehicle,
-        CONVERT(VARCHAR(5), departure_time, 108) AS time,
-        recurrence,
-        ISNULL(JSON_QUERY(custom_days), '[]') AS days_json,
-        status,
-        CONVERT(VARCHAR(10), active_from, 23) AS active_from,
-        CONVERT(VARCHAR(10), next_run,    23) AS next_run,
-        created_at
-      FROM recurring_trip_schedules
-      ORDER BY route_name, departure_time
+        rts.schedule_id   AS id,
+        rts.route_name    AS route,
+        r.route_id,
+        ISNULL(r.start_location, rts.route_name) AS origin,
+        ISNULL(r.end_location,   '')             AS destination,
+        rts.driver_name   AS driver,
+        rts.vehicle_plate AS vehicle,
+        CONVERT(VARCHAR(5), rts.departure_time, 108) AS time,
+        rts.recurrence,
+        ISNULL(JSON_QUERY(rts.custom_days), '[]') AS days_json,
+        rts.status,
+        ISNULL((SELECT MIN(fz.base_fare) FROM fare_zones fz
+                WHERE fz.route_id = r.route_id), 0)  AS price,
+        CONVERT(VARCHAR(10), rts.active_from, 23) AS active_from,
+        CONVERT(VARCHAR(10), rts.next_run,    23) AS next_run,
+        rts.created_at
+      FROM recurring_trip_schedules rts
+      LEFT JOIN routes r ON r.route_name = rts.route_name
+      WHERE rts.status = 'Active'
+      ORDER BY rts.route_name, rts.departure_time
     `);
 
     const rows = result.recordset.map(r => ({

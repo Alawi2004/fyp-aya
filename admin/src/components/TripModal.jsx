@@ -13,13 +13,6 @@ const RECURRENCE_LABEL = {
   custom:   "Custom days",
 };
 
-const ROUTE_DURATIONS = {
-  "Route 12A": 55,
-  "Route 7B":  80,
-  "Route 3C":  90,
-  "Route 5D":  75,
-  "Route 9E":  110,
-};
 
 function timeToMin(t = "") {
   const [h, m] = t.split(":").map(Number);
@@ -31,11 +24,11 @@ function checkFormConflicts(form, allTrips, excludeId = null) {
   if (!form.date || !form.time) return [];
   const warnings = [];
   const fS = timeToMin(form.time);
-  const fE = fS + (ROUTE_DURATIONS[form.route] ?? 60);
+  const fE = fS + (60);
   allTrips
     .filter(t => t.date === form.date && t.id !== excludeId)
     .forEach(t => {
-      const tS = timeToMin(t.time), tE = tS + (ROUTE_DURATIONS[t.route] ?? 60);
+      const tS = timeToMin(t.time), tE = tS + (60);
       if (fS >= tE || tS >= fE) return;
       if (form.driver && form.driver === t.driver)
         warnings.push({ type: "driver",  msg: `${form.driver} is already on ${t.id} (${t.route}) at ${t.time}` });
@@ -50,9 +43,9 @@ const inp = { width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", b
 
 export function TripModal({ trip, allTrips = [], onClose, onSave, routeOpts = [], driverOpts = [], vehicleOpts = [] }) {
   const isEdit = Boolean(trip);
-  const EMPTY  = { route: "", route_id: null, driver: "", driver_id: null, vehicle: "", vehicle_id: null, date: new Date().toISOString().split("T")[0], time: "", status: "Scheduled", recurrence: "none", days: [] };
+  const EMPTY  = { route: "", route_id: null, driver: "", driver_id: null, vehicle: "", vehicle_id: null, vehicle_type: null, date: new Date().toISOString().split("T")[0], time: "", status: "Scheduled", recurrence: "none", days: [], price: "", carpool_discount: "" };
 
-  const [form,     setForm]     = useState(isEdit ? { ...trip, route_id: trip.route_id ?? null, driver_id: trip.driver_id ?? null, vehicle_id: trip.vehicle_id ?? null, recurrence: "none", days: [] } : EMPTY);
+  const [form,     setForm]     = useState(isEdit ? { ...trip, route_id: trip.route_id ?? null, driver_id: trip.driver_id ?? null, vehicle_id: trip.vehicle_id ?? null, vehicle_type: null, recurrence: "none", days: [], price: "", carpool_discount: "" } : EMPTY);
   const [warnings, setWarnings] = useState([]);
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState(null);
@@ -74,6 +67,7 @@ export function TripModal({ trip, allTrips = [], onClose, onSave, routeOpts = []
     setError(null);
     if (!form.date || !form.time) { setError("Date and time are required."); return; }
     if (!form.route_id)           { setError("Please select a route."); return; }
+    if (form.price === "" || Number(form.price) < 1) { setError("Price must be at least $1."); return; }
     setSaving(true);
     const err = await onSave(form);
     setSaving(false);
@@ -103,6 +97,7 @@ export function TripModal({ trip, allTrips = [], onClose, onSave, routeOpts = []
         </div>
       )}
 
+      {/* Route */}
       <div style={{ marginBottom: 13 }}>
         <label style={lbl}>Route *</label>
         <select
@@ -121,42 +116,45 @@ export function TripModal({ trip, allTrips = [], onClose, onSave, routeOpts = []
         </select>
       </div>
 
-      <div style={{ marginBottom: 13 }}>
-        <label style={lbl}>Driver</label>
-        <select
-          value={form.driver_id ?? ""}
-          onChange={e => {
-            const id  = e.target.value ? Number(e.target.value) : null;
-            const obj = driverOpts.find(d => d.driver_id === id);
-            setForm(f => ({ ...f, driver_id: id, driver: obj?.full_name ?? obj?.name ?? "" }));
-          }}
-          style={inp}
-        >
-          <option value="">— Select driver —</option>
-          {driverOpts.map(d => (
-            <option key={d.driver_id} value={d.driver_id}>{d.full_name ?? d.name}</option>
-          ))}
-        </select>
+      {/* Driver + Vehicle */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 13 }}>
+        <div>
+          <label style={lbl}>Driver</label>
+          <select
+            value={form.driver_id ?? ""}
+            onChange={e => {
+              const id  = e.target.value ? Number(e.target.value) : null;
+              const obj = driverOpts.find(d => d.driver_id === id);
+              setForm(f => ({ ...f, driver_id: id, driver: obj?.full_name ?? obj?.name ?? "" }));
+            }}
+            style={inp}
+          >
+            <option value="">— Select driver —</option>
+            {driverOpts.map(d => (
+              <option key={d.driver_id} value={d.driver_id}>{d.full_name ?? d.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label style={lbl}>Vehicle</label>
+          <select
+            value={form.vehicle_id ?? ""}
+            onChange={e => {
+              const id  = e.target.value ? Number(e.target.value) : null;
+              const obj = vehicleOpts.find(v => v.vehicle_id === id);
+              setForm(f => ({ ...f, vehicle_id: id, vehicle: obj?.plate_number ?? obj?.plate ?? "", vehicle_type: obj?.vehicle_type?.toLowerCase() ?? null }));
+            }}
+            style={inp}
+          >
+            <option value="">— Select vehicle —</option>
+            {vehicleOpts.map(v => (
+              <option key={v.vehicle_id} value={v.vehicle_id}>{v.plate_number ?? v.plate}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      <div style={{ marginBottom: 13 }}>
-        <label style={lbl}>Vehicle</label>
-        <select
-          value={form.vehicle_id ?? ""}
-          onChange={e => {
-            const id  = e.target.value ? Number(e.target.value) : null;
-            const obj = vehicleOpts.find(v => v.vehicle_id === id);
-            setForm(f => ({ ...f, vehicle_id: id, vehicle: obj?.plate_number ?? obj?.plate ?? "" }));
-          }}
-          style={inp}
-        >
-          <option value="">— Select vehicle —</option>
-          {vehicleOpts.map(v => (
-            <option key={v.vehicle_id} value={v.vehicle_id}>{v.plate_number ?? v.plate}</option>
-          ))}
-        </select>
-      </div>
-
+      {/* Date + Time */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 13 }}>
         <div>
           <label style={lbl}>Date</label>
@@ -168,11 +166,59 @@ export function TripModal({ trip, allTrips = [], onClose, onSave, routeOpts = []
         </div>
       </div>
 
+      {/* Status */}
       <div style={{ marginBottom: 13 }}>
         <label style={lbl}>Status</label>
         <select value={form.status} onChange={e => set("status")(e.target.value)} style={inp}>
           {STATUSES.map(s => <option key={s}>{s}</option>)}
         </select>
+      </div>
+
+      {/* Pricing */}
+      <div style={{ border: "1px solid #E2E8F0", borderRadius: 10, padding: "12px 14px", marginBottom: 13, background: "#F8FAFC" }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", marginBottom: 10 }}>Pricing</div>
+        <div style={{ display: "grid", gridTemplateColumns: form.vehicle_type === "taxi" ? "1fr 1fr" : "1fr", gap: 12 }}>
+          <div>
+            <label style={lbl}>
+              {["taxi", "tuktuk"].includes(form.vehicle_type) ? "Price per Trip ($)" : "Price per Seat ($)"}
+            </label>
+            <input
+              type="number" min="1" step="0.01" placeholder="1.00"
+              value={form.price}
+              onChange={e => setForm(f => ({ ...f, price: e.target.value }))}
+              style={{ ...inp, background: "#fff" }}
+            />
+          </div>
+          {form.vehicle_type === "taxi" && (
+            <div>
+              <label style={lbl}>Carpool Discount (%)</label>
+              <input
+                type="number" min="1" max="99" step="1" placeholder="e.g. 30"
+                value={form.carpool_discount}
+                onChange={e => setForm(f => ({ ...f, carpool_discount: e.target.value }))}
+                style={{ ...inp, background: "#fff" }}
+              />
+            </div>
+          )}
+        </div>
+        {form.vehicle_type === "taxi" && form.price && form.carpool_discount && (
+          <div style={{ marginTop: 10, padding: "8px 12px", background: "#ECFDF5", border: "1px solid #A7F3D0", borderRadius: 8, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 16 }}>🪑</span>
+            <div>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#059669" }}>
+                Carpool seat: ${(Number(form.price) * (1 - Number(form.carpool_discount) / 100)).toFixed(2)}
+              </span>
+              <span style={{ fontSize: 11, color: "#6EE7B7", marginLeft: 6 }}>
+                ({form.carpool_discount}% off ${Number(form.price).toFixed(2)})
+              </span>
+            </div>
+          </div>
+        )}
+        {form.vehicle_type === "tuktuk" && (
+          <div style={{ marginTop: 8, fontSize: 11, color: "#64748B" }}>
+            Passengers book the whole tuktuk — no seat splitting.
+          </div>
+        )}
       </div>
 
       {!isEdit && (

@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView,
+  View, Text, StyleSheet, ScrollView, Modal,
   TouchableOpacity, Alert, StatusBar, RefreshControl, ActivityIndicator, Linking,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -15,6 +15,25 @@ import { getWalletApi } from '../../api/walletApi';
 import { COLORS, PURPLE } from '../../constants/colors';
 
 const BRAND = PURPLE.gradient;
+
+const LANGUAGES = [
+  { code: 'en', native: 'English' },
+  { code: 'ar', native: 'العربية' },
+  { code: 'fr', native: 'Français' },
+  { code: 'de', native: 'Deutsch' },
+  { code: 'es', native: 'Español' },
+  { code: 'tr', native: 'Türkçe' },
+];
+
+const CURRENCIES = [
+  { code: 'USD', label: 'US Dollar' },
+  { code: 'EUR', label: 'Euro' },
+  { code: 'GBP', label: 'British Pound' },
+  { code: 'LBP', label: 'Lebanese Pound' },
+  { code: 'AED', label: 'UAE Dirham' },
+  { code: 'SAR', label: 'Saudi Riyal' },
+  { code: 'TRY', label: 'Turkish Lira' },
+];
 
 const CATEGORY_META = {
   regular:      { label: 'Regular Passenger', icon: 'person-outline',    color: COLORS.primary,    bg: COLORS.primaryLight,    discount: 'Full fare' },
@@ -65,11 +84,13 @@ const MenuItem = ({ icon, label, value, onPress, danger = false, rightEl, last =
 const ProfileScreen = ({ navigation }) => {
   const headerInsets = useHeaderInsets();
   const { user, setUser, logout } = useAuth();
-  const { walletBalance, updateBalance, bookings, refreshBookings, currency, supportPhone, t } = useApp();
+  const { walletBalance, updateBalance, bookings, refreshBookings, currency, fmtMoney, supportPhone, language, applyLanguage, setPreferredCurrency, t } = useApp();
 
   const [refreshing, setRefreshing] = useState(false);
   const [statsLoading, setStatsLoading] = useState(true);
   const [ratingStats, setRatingStats] = useState({ count: 0, avg: null });
+  const [langModal, setLangModal] = useState(false);
+  const [currencyModal, setCurrencyModal] = useState(false);
 
   // ── Pull everything fresh from the backend ──────────────────────────────────
   const loadAll = useCallback(async (showSpinner = false) => {
@@ -201,7 +222,7 @@ const ProfileScreen = ({ navigation }) => {
           {/* Stats row */}
           <View style={styles.statsRow}>
             <View style={styles.stat}>
-              <StatValue>{currency} {(walletBalance ?? 0).toFixed(2)}</StatValue>
+              <StatValue>{fmtMoney(walletBalance ?? 0)}</StatValue>
               <Text style={styles.statLabel}>Balance</Text>
             </View>
             <View style={styles.statDivider} />
@@ -231,7 +252,7 @@ const ProfileScreen = ({ navigation }) => {
             <MenuItem
               icon="wallet-outline"
               label={t('Wallet')}
-              value={`${currency} ${(walletBalance ?? 0).toFixed(2)} available`}
+              value={`${fmtMoney(walletBalance ?? 0)} available`}
               onPress={() => navigation.push('Wallet')}
             />
             <MenuItem
@@ -255,6 +276,24 @@ const ProfileScreen = ({ navigation }) => {
               icon="notifications-outline"
               label={t('Notifications')}
               onPress={() => navigation.push('Notifications')}
+              last
+            />
+          </View>
+
+          {/* Preferences */}
+          <Text style={styles.sectionLabel}>{t('Preferences')}</Text>
+          <View style={styles.menuCard}>
+            <MenuItem
+              icon="language-outline"
+              label={t('Language')}
+              value={LANGUAGES.find((l) => l.code === language)?.native ?? 'English'}
+              onPress={() => setLangModal(true)}
+            />
+            <MenuItem
+              icon="cash-outline"
+              label={t('Currency')}
+              value={currency}
+              onPress={() => setCurrencyModal(true)}
               last
             />
           </View>
@@ -288,6 +327,55 @@ const ProfileScreen = ({ navigation }) => {
           </View>
         </View>
       </ScrollView>
+
+      {/* Language picker modal */}
+      <Modal visible={langModal} transparent animationType="fade" onRequestClose={() => setLangModal(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setLangModal(false)}>
+          <View style={styles.pickerSheet}>
+            <Text style={styles.pickerTitle}>{t('Select Language')}</Text>
+            {LANGUAGES.map((l) => (
+              <TouchableOpacity
+                key={l.code}
+                style={[styles.pickerRow, l.code === language && styles.pickerRowActive]}
+                onPress={() => { applyLanguage(l.code); setLangModal(false); }}
+              >
+                <Text style={[styles.pickerRowText, l.code === language && styles.pickerRowTextActive]}>
+                  {l.native}
+                </Text>
+                {l.code === language && (
+                  <Ionicons name="checkmark" size={18} color={PURPLE.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Currency picker modal */}
+      <Modal visible={currencyModal} transparent animationType="fade" onRequestClose={() => setCurrencyModal(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setCurrencyModal(false)}>
+          <View style={styles.pickerSheet}>
+            <Text style={styles.pickerTitle}>{t('Select Currency')}</Text>
+            {CURRENCIES.map((c) => (
+              <TouchableOpacity
+                key={c.code}
+                style={[styles.pickerRow, c.code === currency && styles.pickerRowActive]}
+                onPress={() => { setPreferredCurrency(c.code); setCurrencyModal(false); }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.pickerRowText, c.code === currency && styles.pickerRowTextActive]}>
+                    {c.code}
+                  </Text>
+                  <Text style={styles.pickerRowSub}>{c.label}</Text>
+                </View>
+                {c.code === currency && (
+                  <Ionicons name="checkmark" size={18} color={PURPLE.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -397,6 +485,29 @@ const styles = StyleSheet.create({
   menuIconDanger: { backgroundColor: COLORS.dangerLight },
   menuLabel: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary },
   menuValue: { fontSize: 12, color: COLORS.textMuted, marginTop: 1, fontWeight: '600' },
+
+  /* Picker modals */
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  pickerSheet: {
+    backgroundColor: COLORS.white, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: 20, paddingTop: 20, paddingBottom: 36,
+  },
+  pickerTitle: {
+    fontSize: 14, fontWeight: '800', color: COLORS.textMuted,
+    textTransform: 'uppercase', letterSpacing: 0.8,
+    marginBottom: 12,
+  },
+  pickerRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 14, paddingHorizontal: 12, borderRadius: 12, marginBottom: 4,
+  },
+  pickerRowActive: { backgroundColor: PURPLE.light },
+  pickerRowText: { fontSize: 16, fontWeight: '700', color: COLORS.textPrimary, flex: 1 },
+  pickerRowTextActive: { color: PURPLE.primary },
+  pickerRowSub: { fontSize: 12, color: COLORS.textMuted, marginTop: 1, fontWeight: '500' },
 });
 
 export default ProfileScreen;

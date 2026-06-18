@@ -29,13 +29,6 @@ const RECURRENCE_LABEL = {
   custom:   "Custom days",
 };
 
-const ROUTE_DURATIONS = {
-  "Route 12A": 55,
-  "Route 7B":  80,
-  "Route 3C":  90,
-  "Route 5D":  75,
-  "Route 9E":  110,
-};
 
 const STATUS_COLORS = {
   Completed: { bg: "#ECFDF5", color: "#059669", border: "#A7F3D0" },
@@ -91,8 +84,8 @@ function detectConflicts(trips) {
     for (let j = i + 1; j < trips.length; j++) {
       const a = trips[i], b = trips[j];
       if (a.date !== b.date) continue;
-      const aS = timeToMin(a.time), aE = aS + (ROUTE_DURATIONS[a.route] ?? 60);
-      const bS = timeToMin(b.time), bE = bS + (ROUTE_DURATIONS[b.route] ?? 60);
+      const aS = timeToMin(a.time), aE = aS + (60);
+      const bS = timeToMin(b.time), bE = bS + (60);
       if (aS >= bE || bS >= aE) continue;          // no time overlap
       if (a.driver && a.driver === b.driver)
         conflicts.push({ type: "driver",  resource: a.driver,  a, b });
@@ -108,11 +101,11 @@ function checkFormConflicts(form, allTrips, excludeId = null) {
   if (!form.date || !form.time) return [];
   const warnings = [];
   const fS = timeToMin(form.time);
-  const fE = fS + (ROUTE_DURATIONS[form.route] ?? 60);
+  const fE = fS + (60);
   allTrips
     .filter(t => t.date === form.date && t.id !== excludeId)
     .forEach(t => {
-      const tS = timeToMin(t.time), tE = tS + (ROUTE_DURATIONS[t.route] ?? 60);
+      const tS = timeToMin(t.time), tE = tS + (60);
       if (fS >= tE || tS >= fE) return;
       if (form.driver && form.driver === t.driver)
         warnings.push({ type: "driver",  msg: `${form.driver} is already on ${t.id} (${t.route}) at ${t.time}` });
@@ -259,7 +252,7 @@ function TimetableTab({ routeOpts = [] }) {
   }
 
   function tripLeft(t)  { return Math.max(0, (timeToMin(t.time) - GRID_START) / 30 * SLOT_W); }
-  function tripWidth(t) { return Math.max(SLOT_W, (ROUTE_DURATIONS[t.route] ?? 60) / 30 * SLOT_W); }
+  function tripWidth(t) { return Math.max(SLOT_W, (60) / 30 * SLOT_W); }
 
   const visibleRoutes = routeFilter === "All" ? routesWithTrips : [routeFilter];
   const totalW = SLOTS * SLOT_W;
@@ -411,7 +404,7 @@ function TimetableTab({ routeOpts = [] }) {
           minWidth: 180,
         }}>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>{tooltip.t.id} — {tooltip.t.route}</div>
-          <div style={{ color: "#94A3B8", marginBottom: 2 }}>{tooltip.t.time} · {ROUTE_DURATIONS[tooltip.t.route] ?? "—"} min</div>
+          <div style={{ color: "#94A3B8", marginBottom: 2 }}>{tooltip.t.time} · {"—"} min</div>
           <div style={{ color: "#94A3B8", marginBottom: 2 }}>Driver: {tooltip.t.driver ?? "—"}</div>
           <div style={{ color: "#94A3B8", marginBottom: 2 }}>Vehicle: {tooltip.t.vehicle ?? "—"}</div>
           <div style={{ marginTop: 6 }}>
@@ -748,7 +741,7 @@ function ConflictsTab({ conflicts, onResolve }) {
                       <div key={0} style={{ background: "#fff", borderRadius: 9, padding: "10px 12px", border: "1px solid #F1F5F9" }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: "#6D28D9", marginBottom: 3, fontFamily: "monospace" }}>{t.id}</div>
                         <div style={{ fontSize: 12, fontWeight: 600, color: "#0F172A", marginBottom: 2 }}>{t.route}</div>
-                        <div style={{ fontSize: 11, color: "#64748B" }}>{t.time} · {ROUTE_DURATIONS[t.route] ?? "?"} min</div>
+                        <div style={{ fontSize: 11, color: "#64748B" }}>{t.time}</div>
                         <div style={{ fontSize: 11, color: "#64748B" }}>{t.driver} · {t.vehicle}</div>
                         <div style={{ marginTop: 6 }}><StatusPill status={t.status} /></div>
                       </div>
@@ -760,7 +753,7 @@ function ConflictsTab({ conflicts, onResolve }) {
                       <div key={1} style={{ background: "#fff", borderRadius: 9, padding: "10px 12px", border: "1px solid #F1F5F9" }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: "#6D28D9", marginBottom: 3, fontFamily: "monospace" }}>{t.id}</div>
                         <div style={{ fontSize: 12, fontWeight: 600, color: "#0F172A", marginBottom: 2 }}>{t.route}</div>
-                        <div style={{ fontSize: 11, color: "#64748B" }}>{t.time} · {ROUTE_DURATIONS[t.route] ?? "?"} min</div>
+                        <div style={{ fontSize: 11, color: "#64748B" }}>{t.time}</div>
                         <div style={{ fontSize: 11, color: "#64748B" }}>{t.driver} · {t.vehicle}</div>
                         <div style={{ marginTop: 6 }}><StatusPill status={t.status} /></div>
                       </div>,
@@ -1230,6 +1223,8 @@ export default function TripsPage() {
           vehicle_id: form.vehicle_id ?? null,
           start_time,
           status:     form.status.toLowerCase(),
+          price:            form.price !== "" && form.price != null ? Number(form.price) : null,
+          carpool_discount: form.carpool_discount !== "" && form.carpool_discount != null ? Number(form.carpool_discount) : null,
         });
         loadTrips();
         if (form.recurrence !== "none") {

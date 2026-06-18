@@ -19,13 +19,24 @@ export const getBuses = async (req, res) => {
           ISNULL(t.end_time, DATEADD(MINUTE,60,t.start_time)))
         AS VARCHAR) + ' min'                                    AS duration,
         t.status,
+        r.route_id,
+        (SELECT TOP 1 rts.recurrence
+         FROM recurring_trip_schedules rts
+         WHERE rts.route_name = r.route_name AND rts.status = 'Active'
+         ORDER BY rts.active_from DESC)                         AS schedule_recurrence,
+        (SELECT TOP 1 rts.custom_days
+         FROM recurring_trip_schedules rts
+         WHERE rts.route_name = r.route_name AND rts.status = 'Active'
+         ORDER BY rts.active_from DESC)                         AS schedule_custom_days,
         v.capacity                                              AS totalSeats,
         (SELECT COUNT(*) FROM tickets tk
          WHERE tk.trip_id = t.trip_id AND tk.status != 'cancelled') AS bookedSeats,
         ISNULL((SELECT STRING_AGG(tk.seat_number, ',') FROM tickets tk
                 WHERE tk.trip_id = t.trip_id AND tk.status != 'cancelled'), '') AS bookedSeatsCsv,
         ISNULL((SELECT MIN(fz.base_fare) FROM fare_zones fz
-                WHERE fz.route_id = r.route_id), 0)            AS price
+                WHERE fz.route_id = r.route_id AND fz.zone_name = 'Default'), 0) AS price,
+        (SELECT TOP 1 fz.base_fare FROM fare_zones fz
+         WHERE fz.route_id = r.route_id AND fz.zone_name = 'Carpool')            AS carpool_price
       FROM trips t
       JOIN vehicles v ON t.vehicle_id = v.vehicle_id
       JOIN routes  r ON t.route_id   = r.route_id

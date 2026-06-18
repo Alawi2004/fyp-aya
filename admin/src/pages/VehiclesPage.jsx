@@ -12,15 +12,15 @@ import {
   getMaintenanceLog, addMaintenanceRecord,
   getFuelLog, addFuelRecord,
   getVehiclePhotos, uploadVehiclePhoto, deleteVehiclePhotoApi,
+  getDrivers,
 } from "../api/endpoints";
 import { PageLoading, PageError, PageEmpty } from "../components/DataStates";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const TODAY            = new Date("2026-05-10");
+const TODAY            = new Date();
 const VEHICLE_STATUSES = ["Active", "Maintenance", "Inactive"];
 const VEHICLE_TYPES    = ["Bus", "Minibus", "Van", "Taxi", "Tuktuk"];
 const SERVICE_TYPES    = ["Oil Change", "Tire Rotation", "Brake Check", "Engine Service", "Full Inspection", "AC Service", "Body Work", "Other"];
-const AVAILABLE_DRIVERS = ["Karim Moussa","Lara Abi Nader","Joe Pharaon","Maya Salameh","Rami Khoury","Sara Khoury","Fadi Gemayel","Hassan Nasser","Nadia Haddad","Ziad Mansour"];
 
 const STATUS_STYLE = {
   Active:      { bg: "#ECFDF5", color: "#059669", dot: "#10B981" },
@@ -1291,6 +1291,7 @@ export default function VehiclesPage() {
   const [deleteError,   setDeleteError]   = useState(null);
   const [isDeleting,    setIsDeleting]    = useState(false);
   const [profile,       setProfile]       = useState(null);
+  const [driverOpts,    setDriverOpts]    = useState([]);
 
   // Load persisted photos for all vehicles on mount
   const loadAllPhotos = useCallback(async (vehicleList) => {
@@ -1345,6 +1346,10 @@ export default function VehiclesPage() {
     getFuelLog()
       .then(d => setFuelLog(Array.isArray(d) ? d : []))
       .catch(() => setFuelLog([]));
+
+    getDrivers()
+      .then(d => setDriverOpts(Array.isArray(d?.data) ? d.data : Array.isArray(d) ? d : []))
+      .catch(() => setDriverOpts([]));
   }, [loadVehicles]);
 
   // Alert badge count for tab
@@ -1581,7 +1586,10 @@ export default function VehiclesPage() {
             <label style={lbl}>Assigned Driver</label>
             <select value={form.driver} onChange={e => setForm(p => ({ ...p, driver: e.target.value }))} style={{ ...inp, color: form.driver === "—" ? "#aaa" : "#111" }}>
               <option value="—">— No driver assigned —</option>
-              {AVAILABLE_DRIVERS.map(n => <option key={n}>{n}</option>)}
+              {driverOpts.map(d => {
+                const name = d.full_name ?? d.name ?? "";
+                return <option key={d.driver_id ?? name} value={name}>{name}</option>;
+              })}
             </select>
           </div>
         </Modal>

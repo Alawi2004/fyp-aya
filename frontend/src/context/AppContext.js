@@ -46,6 +46,31 @@ import { useAuth } from './AuthContext';
 
 const AppContext = createContext();
 
+// Approximate rates vs USD — used as fallback when the live API is unavailable
+// or doesn't support the requested currency (e.g. LBP).
+const FALLBACK_RATES_VS_USD = {
+  USD: 1, EUR: 0.92, GBP: 0.79,
+  LBP: 89500, AED: 3.67, SAR: 3.75, TRY: 32.5,
+};
+
+// Returns how many `to` units equal 1 `from` unit.
+// Primary: fawazahmed0 open-source API (no key, 150+ currencies).
+// Fallback: ratio of hardcoded USD rates.
+async function fetchConversionRate(from, to) {
+  if (from === to) return 1;
+  try {
+    const res = await fetch(
+      `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/${from.toLowerCase()}.json`,
+      { signal: AbortSignal.timeout?.(5000) }
+    );
+    const data = await res.json();
+    const rate = data?.[from.toLowerCase()]?.[to.toLowerCase()];
+    if (rate) return rate;
+  } catch { /* fall through to hardcoded fallback */ }
+  const fromUsd = FALLBACK_RATES_VS_USD[from] ?? 1;
+  const toUsd   = FALLBACK_RATES_VS_USD[to]   ?? 1;
+  return toUsd / fromUsd;
+}
 
 export const AppProvider = ({ children }) => {
   const { user, role } = useAuth();
@@ -57,6 +82,9 @@ export const AppProvider = ({ children }) => {
   const [walletBalance, setWalletBalance] = useState(0);
   const [currency, setCurrency] = useState('USD');
   const [exchangeRate, setExchangeRate] = useState(1);
+  // The backend's base currency and its rate — used to derive cross-currency rates.
+  const backendCurrencyRef = useRef('USD');
+  const backendRateRef = useRef(1);
   const [supportPhone, setSupportPhone] = useState('+961 1 999 000');
   const [supportEmail, setSupportEmail] = useState('support@yallatransit.lb');
   const [language, setLanguage] = useState('en');
@@ -72,17 +100,49 @@ export const AppProvider = ({ children }) => {
     return () => { cancelled = true; };
   }, [role, user]);
 
+  // Applies a display currency by fetching the real conversion rate from the
+  // backend's base currency to `targetCode`, then updating both currency + rate.
+  const applyConversion = useCallback(async (targetCode) => {
+    setCurrency(targetCode);
+    const convRate = await fetchConversionRate(backendCurrencyRef.current, targetCode);
+    setExchangeRate(backendRateRef.current * convRate);
+  }, []);
+
+  // Restore user's currency preference immediately (no flash of wrong symbol),
+  // then the backend-settings effect below will correct the exchange rate.
+  useEffect(() => {
+    AsyncStorage.getItem('app.currency').then((saved) => {
+      if (saved) setCurrency(saved);
+    });
+  }, []);
+
   useEffect(() => {
     if (!user) return;
     apiClient.get('/settings')
-      .then((res) => {
+      .then(async (res) => {
         const flat = res.data?.flat ?? {};
-        if (flat['app.currency']) setCurrency(flat['app.currency']);
-        const rate = parseFloat(flat['app.exchange_rate']);
-        if (rate > 0) setExchangeRate(rate);
+        const bCurrency = flat['app.currency'] || 'USD';
+        const bRate = parseFloat(flat['app.exchange_rate']);
+        backendCurrencyRef.current = bCurrency;
+        if (bRate > 0) backendRateRef.current = bRate;
+
+        // If the user has a preference, recalculate its rate against the now-known
+        // backend base; otherwise fall back to whatever the admin configured.
+        const userPref = await AsyncStorage.getItem('app.currency');
+        if (userPref) {
+          applyConversion(userPref);
+        } else {
+          setCurrency(bCurrency);
+          if (bRate > 0) setExchangeRate(bRate);
+        }
       })
       .catch(() => {});
-  }, [user]);
+  }, [user, applyConversion]);
+
+  const setPreferredCurrency = useCallback((code) => {
+    AsyncStorage.setItem('app.currency', code).catch(() => {});
+    applyConversion(code);
+  }, [applyConversion]);
 
   // Fetch public settings (support phone/email/language/limits) — no auth required.
   // Called on mount and every time the app comes to the foreground so admin
@@ -315,7 +375,8 @@ export const AppProvider = ({ children }) => {
       emergencyAlerts, sendEmergencyAlert,
       busLocations, updateBusLocation, getBusLocation,
       supportPhone, supportEmail,
-      language, t,
+      language, applyLanguage, t,
+      setPreferredCurrency,
       walletLimits,
       gpsSettings,
     }}>

@@ -15,6 +15,7 @@ import {
   Animated,
   Easing,
   ScrollView,
+  TouchableOpacity,
   LayoutAnimation,
   Platform,
 } from "react-native";
@@ -30,11 +31,77 @@ import FadeInView from "../../components/common/FadeInView";
 import PressableScale from "../../components/common/PressableScale";
 import { SkeletonCardList } from "../../components/common/Skeleton";
 import CountUp from "../../components/common/CountUp";
-import { getBusesApi } from "../../api/busApi";
-import { getFavoriteRoutes } from "../../api/apiClient";
+import { getBusesApi, getScheduledRoutesApi } from "../../api/busApi";
+import { getFavoriteRoutes, addFavoriteRoute, removeFavoriteRoute } from "../../api/apiClient";
 import { COLORS, PURPLE } from "../../constants/colors";
 
 // setLayoutAnimationEnabledExperimental is a no-op in the New Architecture (SDK 53+)
+
+const DAY_NAMES = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+function recLabel(item) {
+  if (item.recurrence === 'daily')    return 'Daily';
+  if (item.recurrence === 'weekdays') return 'Mon–Fri';
+  if (item.recurrence === 'weekends') return 'Weekends';
+  if (item.recurrence === 'custom') {
+    const days = Array.isArray(item.days) ? item.days : [];
+    return days.map((d) => DAY_NAMES[d] ?? '').filter(Boolean).join(', ') || 'Custom';
+  }
+  return item.recurrence ?? '';
+}
+
+const ScheduledRouteCard = ({ item, isFavorite, onToggle }) => (
+  <View style={schedStyles.card}>
+    <View style={schedStyles.topRow}>
+      <Text style={schedStyles.route} numberOfLines={1}>{item.route}</Text>
+      {item.route_id ? (
+        <TouchableOpacity onPress={onToggle} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name={isFavorite ? 'heart' : 'heart-outline'} size={18} color={isFavorite ? COLORS.danger : COLORS.textMuted} />
+        </TouchableOpacity>
+      ) : null}
+    </View>
+    <View style={schedStyles.routeRow}>
+      <Text style={schedStyles.stop} numberOfLines={1}>{item.origin}</Text>
+      <Ionicons name="arrow-forward" size={10} color={COLORS.textMuted} />
+      <Text style={schedStyles.stop} numberOfLines={1}>{item.destination}</Text>
+    </View>
+    <View style={schedStyles.footer}>
+      <View style={schedStyles.pill}>
+        <Ionicons name="time-outline" size={11} color={PURPLE.primary} />
+        <Text style={schedStyles.pillTextBlue}>{item.time}</Text>
+      </View>
+      <View style={[schedStyles.pill, { backgroundColor: COLORS.secondaryLight }]}>
+        <Ionicons name="repeat-outline" size={11} color={COLORS.secondary} />
+        <Text style={[schedStyles.pillTextBlue, { color: COLORS.secondary }]}>{recLabel(item)}</Text>
+      </View>
+    </View>
+  </View>
+);
+
+const schedStyles = StyleSheet.create({
+  card: {
+    width: 190,
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    padding: 14,
+    marginRight: 10,
+    shadowColor: PURPLE.deep,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.09,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  route: { fontSize: 13, fontWeight: '800', color: COLORS.textPrimary, flex: 1, marginRight: 6 },
+  routeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 10 },
+  stop: { fontSize: 11, color: COLORS.textMuted, fontWeight: '500', flex: 1 },
+  footer: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  pill: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: PURPLE.light, borderRadius: 8,
+    paddingHorizontal: 7, paddingVertical: 4,
+  },
+  pillTextBlue: { fontSize: 11, fontWeight: '700', color: PURPLE.primary },
+});
 
 const VEHICLE_TYPES = [
   { key: "all", label: "All", icon: "apps-outline" },
@@ -257,6 +324,8 @@ const HomeScreen = ({ navigation }) => {
   const [activeFilter, setActiveFilter] = useState("All");
   const [activeType, setActiveType] = useState("all");
   const [favCount, setFavCount] = useState(0);
+  const [favoriteRouteIds, setFavoriteRouteIds] = useState(new Set());
+  const [scheduledRoutes, setScheduledRoutes] = useState([]);
   const [searchFocused, setSearchFocused] = useState(false);
   const [showTop, setShowTop] = useState(false);
   // Bumped on filter changes so list cards remount and replay their cascade.
@@ -337,16 +406,44 @@ const HomeScreen = ({ navigation }) => {
   const loadFavCount = useCallback(async () => {
     try {
       const data = await getFavoriteRoutes();
-      setFavCount(Array.isArray(data) ? data.length : 0);
-    } catch {
-      /* best-effort */
-    }
+      const list = Array.isArray(data) ? data : [];
+      setFavCount(list.length);
+      setFavoriteRouteIds(new Set(list.map((f) => f.route_id)));
+    } catch { /* best-effort */ }
   }, []);
+
+  const loadScheduled = useCallback(async () => {
+    try {
+      const res = await getScheduledRoutesApi();
+      setScheduledRoutes(Array.isArray(res.data) ? res.data : []);
+    } catch { /* best-effort */ }
+  }, []);
+
+  const toggleFavorite = useCallback(async (bus) => {
+    const routeId = bus.route_id;
+    if (routeId == null) return; // guard: null or undefined only (allow 0 just in case)
+    const isFav = favoriteRouteIds.has(routeId);
+    // Optimistic update
+    setFavoriteRouteIds((prev) => {
+      const next = new Set(prev);
+      isFav ? next.delete(routeId) : next.add(routeId);
+      return next;
+    });
+    setFavCount((prev) => Math.max(0, prev + (isFav ? -1 : 1)));
+    try {
+      if (isFav) await removeFavoriteRoute(routeId);
+      else await addFavoriteRoute(routeId);
+    } catch {
+      // Revert on failure
+      loadFavCount();
+    }
+  }, [favoriteRouteIds, loadFavCount]);
 
   useEffect(() => {
     loadBuses();
     loadFavCount();
-  }, [loadBuses, loadFavCount]);
+    loadScheduled();
+  }, [loadBuses, loadFavCount, loadScheduled]);
 
 
   // Hero entrance: greeting row → wallet → search, staggered springs.
@@ -429,7 +526,8 @@ const HomeScreen = ({ navigation }) => {
     setRefreshing(true);
     loadBuses();
     loadFavCount();
-  }, [loadBuses, loadFavCount]);
+    loadScheduled();
+  }, [loadBuses, loadFavCount, loadScheduled]);
 
   const scrollToTop = () => {
     const node = listRef.current?.getNode
@@ -537,8 +635,32 @@ const HomeScreen = ({ navigation }) => {
         </View>
       </FadeInView>
 
+      {/* Scheduled Buses */}
+      {scheduledRoutes.length > 0 && (
+        <FadeInView index={2}>
+          <View style={styles.sectionRow}>
+            <Text style={styles.sectionTitle}>Scheduled Buses</Text>
+            <Text style={styles.sectionCountText}>{scheduledRoutes.length} route{scheduledRoutes.length !== 1 ? 's' : ''}</Text>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 6 }}
+          >
+            {scheduledRoutes.map((item) => (
+              <ScheduledRouteCard
+                key={item.id}
+                item={item}
+                isFavorite={favoriteRouteIds.has(item.route_id)}
+                onToggle={() => toggleFavorite({ route_id: item.route_id })}
+              />
+            ))}
+          </ScrollView>
+        </FadeInView>
+      )}
+
       {/* Vehicle type filter */}
-      <FadeInView index={2}>
+      <FadeInView index={3}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -571,7 +693,7 @@ const HomeScreen = ({ navigation }) => {
       </FadeInView>
 
       {/* Section header + status filter */}
-      <FadeInView index={3}>
+      <FadeInView index={4}>
         <View style={styles.sectionRow}>
           <Text style={styles.sectionTitle}>{t('Available Rides')}</Text>
           <Bump trigger={filtered.length} style={styles.sectionCountWrap}>

@@ -3,14 +3,14 @@ import { ensureOperationalTables } from "../db/featureSetup.js";
 import { verifyPassengerQrToken } from "../utils/passengerQr.js";
 
 // POST /api/bookings — book one or more seats on a trip.
-// Inserts one `tickets` row per seat, deducts the wallet once for the total
-// fare, and records a wallet_transactions entry — all inside a single
-// transaction so seat availability (derived live from `tickets`) and the
-// wallet balance stay consistent with what was actually booked.
-// Body: { trip_id: number, seats: string[] }   (user comes from the JWT)
+// Body: { trip_id, seats, carpool? }
+// - bus/van/minibus: seats = ['1','2',...], fare per seat from fare_zones
+// - tuktuk: seats = ['FULL'], charged full trip price
+// - taxi + carpool=false: seats = ['FULL'], charged full trip price
+// - taxi + carpool=true:  seats = ['1','2',...], per-seat = trip_price / capacity
 export const createBooking = async (req, res) => {
   const userId = req.user?.user_id;
-  const { trip_id, seats } = req.body;
+  const { trip_id, seats, carpool = true } = req.body;
 
   if (!userId) return res.status(401).json({ error: "Authentication required" });
   if (!trip_id || !Array.isArray(seats) || seats.length === 0) {
@@ -27,7 +27,9 @@ export const createBooking = async (req, res) => {
       .query(`
         SELECT
           v.capacity,
-          ISNULL((SELECT MIN(fz.base_fare) FROM fare_zones fz WHERE fz.route_id = t.route_id), 0) AS fare,
+          LOWER(ISNULL(v.vehicle_type, 'bus')) AS vehicle_type,
+          ISNULL((SELECT MIN(fz.base_fare) FROM fare_zones fz WHERE fz.route_id = t.route_id AND fz.zone_name = 'Default'), 0) AS fare,
+          (SELECT TOP 1 fz.base_fare FROM fare_zones fz WHERE fz.route_id = t.route_id AND fz.zone_name = 'Carpool') AS carpool_fare,
           (SELECT COUNT(*) FROM tickets tk WHERE tk.trip_id = t.trip_id AND tk.status != 'cancelled') AS booked,
           ISNULL((SELECT STRING_AGG(tk.seat_number, ',') FROM tickets tk
                   WHERE tk.trip_id = t.trip_id AND tk.status != 'cancelled'), '') AS bookedSeatsCsv
@@ -41,19 +43,60 @@ export const createBooking = async (req, res) => {
       return res.status(404).json({ error: "Trip not found" });
     }
 
-    const bookedSeats = new Set(trip.bookedSeatsCsv.split(",").filter(Boolean));
-    const conflict = seats.find((s) => bookedSeats.has(String(s)));
-    if (conflict) {
-      await tx.rollback();
-      return res.status(409).json({ error: `Seat ${conflict} is already booked` });
-    }
-    if (trip.booked + seats.length > trip.capacity) {
-      await tx.rollback();
-      return res.status(409).json({ error: "Not enough seats available on this trip" });
-    }
+    const vehicleType  = trip.vehicle_type;
+    const isFullTrip   = vehicleType === 'tuktuk' || (vehicleType === 'taxi' && !carpool);
+    const baseFare     = parseFloat(trip.fare);
+    const bookedSeats  = new Set(trip.bookedSeatsCsv.split(",").filter(Boolean));
 
-    const fare      = parseFloat(trip.fare);
-    const totalFare = fare * seats.length;
+    let fare, totalFare;
+
+    if (isFullTrip) {
+      // whole-vehicle booking — trip must have zero existing tickets
+      if (trip.booked > 0) {
+        await tx.rollback();
+        return res.status(409).json({ error: "This trip is already booked" });
+      }
+      fare      = baseFare;
+      totalFare = baseFare;
+    } else if (vehicleType === 'taxi' && carpool) {
+      // carpool taxi — must have a carpool fare configured
+      if (!trip.carpool_fare) {
+        await tx.rollback();
+        return res.status(400).json({ error: "Carpool is not available for this trip" });
+      }
+      if (bookedSeats.has('FULL')) {
+        await tx.rollback();
+        return res.status(409).json({ error: "This trip has been booked as a private ride" });
+      }
+      const conflict = seats.find(s => bookedSeats.has(String(s)));
+      if (conflict) {
+        await tx.rollback();
+        return res.status(409).json({ error: `Seat ${conflict} is already booked` });
+      }
+      if (trip.booked + seats.length > trip.capacity) {
+        await tx.rollback();
+        return res.status(409).json({ error: "Not enough seats available on this trip" });
+      }
+      fare      = parseFloat(trip.carpool_fare);
+      totalFare = fare * seats.length;
+    } else {
+      // bus / van / minibus — standard per-seat fare
+      if (bookedSeats.has('FULL')) {
+        await tx.rollback();
+        return res.status(409).json({ error: "This trip is already booked" });
+      }
+      const conflict = seats.find(s => bookedSeats.has(String(s)));
+      if (conflict) {
+        await tx.rollback();
+        return res.status(409).json({ error: `Seat ${conflict} is already booked` });
+      }
+      if (trip.booked + seats.length > trip.capacity) {
+        await tx.rollback();
+        return res.status(409).json({ error: "Not enough seats available on this trip" });
+      }
+      fare      = baseFare;
+      totalFare = fare * seats.length;
+    }
 
     const walletResult = await tx.request()
       .input("uid", sql.Int, userId)
@@ -96,7 +139,7 @@ export const createBooking = async (req, res) => {
     await tx.request()
       .input("uid",  sql.Int, userId)
       .input("amt",  sql.Decimal(10, 2), totalFare)
-      .input("desc", sql.NVarChar(500), `Booking — ${seats.length} seat(s) on trip #${trip_id}`)
+      .input("desc", sql.NVarChar(500), isFullTrip ? `Booking — full trip #${trip_id}` : `Booking — ${seats.length} seat(s) on trip #${trip_id}`)
       .query(`
         INSERT INTO wallet_transactions (user_id, type, amount, description, created_at)
         VALUES (@uid, 'debit', @amt, @desc, GETUTCDATE())
@@ -157,7 +200,12 @@ export const getBookings = async (req, res) => {
           END                                                                  AS ui_status,
           NULL AS vehicle_type,
           NULL AS driver_name,
-          NULL AS scheduled_for
+          NULL AS scheduled_for,
+          r.route_id,
+          (SELECT TOP 1 rts.recurrence
+           FROM recurring_trip_schedules rts
+           WHERE rts.route_name = r.route_name AND rts.status = 'Active'
+           ORDER BY rts.active_from DESC)                                       AS schedule_recurrence
         FROM tickets  tk
         JOIN trips    t ON t.trip_id    = tk.trip_id
         JOIN vehicles v ON v.vehicle_id = t.vehicle_id
@@ -189,7 +237,9 @@ export const getBookings = async (req, res) => {
           END                                                                  AS ui_status,
           tr.vehicle_type                                                      AS vehicle_type,
           tr.driver_name                                                       AS driver_name,
-          tr.scheduled_for                                                     AS scheduled_for
+          tr.scheduled_for                                                     AS scheduled_for,
+          NULL                                                                 AS route_id,
+          NULL                                                                 AS schedule_recurrence
         FROM taxi_reservations tr
         WHERE tr.user_id = @id
 
@@ -224,12 +274,14 @@ export const getBookings = async (req, res) => {
         type:   "bus",
         status: row.ui_status,
         bus: {
-          _id:         row.trip_id,
-          name:        row.bus_name,
-          type:        row.bus_type,
-          origin:      row.origin,
-          destination: row.destination,
-          duration:    row.duration,
+          _id:                 row.trip_id,
+          name:                row.bus_name,
+          type:                row.bus_type,
+          origin:              row.origin,
+          destination:         row.destination,
+          duration:            row.duration,
+          route_id:            row.route_id,
+          schedule_recurrence: row.schedule_recurrence ?? null,
         },
         seatId: row.seat_number,
         seats:  [row.seat_number],

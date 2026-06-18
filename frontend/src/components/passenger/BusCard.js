@@ -6,6 +6,22 @@ import { THEME } from '../../constants/theme';
 import apiClient from '../../api/apiClient';
 import { useApp } from '../../context/AppContext';
 
+const DAY_NAMES = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function formatRecurrence(recurrence, customDays) {
+  if (!recurrence) return null;
+  if (recurrence === 'daily')    return 'Daily';
+  if (recurrence === 'weekdays') return 'Mon–Fri';
+  if (recurrence === 'weekends') return 'Weekends';
+  if (recurrence === 'custom') {
+    try {
+      const days = JSON.parse(customDays || '[]');
+      return days.map((d) => DAY_NAMES[d] ?? '').filter(Boolean).join(', ') || 'Custom';
+    } catch { return 'Custom'; }
+  }
+  return null;
+}
+
 const STATUS_CONFIG = {
   active:    { key: 'On Time',   bg: COLORS.secondaryLight, text: COLORS.secondary, dot: COLORS.secondary },
   boarding:  { key: 'Boarding',  bg: PURPLE.mid,     text: PURPLE.primary,   dot: PURPLE.primary   },
@@ -27,8 +43,9 @@ const TYPE_LABEL = {
   tuktuk: 'Tuktuk',
 };
 
-const BusCard = ({ bus, onPress, fmtMoney }) => {
+const BusCard = ({ bus, onPress, fmtMoney, isFavorite = false, onToggleFavorite }) => {
   const { t } = useApp();
+  const recurrenceLabel = formatRecurrence(bus.schedule_recurrence, bus.schedule_custom_days);
   const [photoUrl, setPhotoUrl] = useState(null);
 
   useEffect(() => {
@@ -70,11 +87,32 @@ const BusCard = ({ bus, onPress, fmtMoney }) => {
               <Text style={[styles.statusText, { color: status.text }]}>{t(status.key)}</Text>
             </View>
           </View>
-          <View style={styles.typeTag}>
-            <Text style={styles.typeTagText}>{vehicleLabel}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+            <View style={styles.typeTag}>
+              <Text style={styles.typeTagText}>{vehicleLabel}</Text>
+            </View>
+            {recurrenceLabel && (
+              <View style={styles.recurrenceBadge}>
+                <Ionicons name="repeat-outline" size={10} color={COLORS.secondary} />
+                <Text style={styles.recurrenceText}>{recurrenceLabel}</Text>
+              </View>
+            )}
           </View>
           <Text style={styles.busRoute} numberOfLines={1}>{bus.route}</Text>
         </View>
+        {onToggleFavorite && bus.schedule_recurrence && (
+          <TouchableOpacity
+            style={styles.heartBtn}
+            onPress={() => onToggleFavorite(bus)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons
+              name={isFavorite ? 'heart' : 'heart-outline'}
+              size={20}
+              color={isFavorite ? COLORS.danger : COLORS.textMuted}
+            />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Route row */}
@@ -156,7 +194,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     alignSelf: 'flex-start',
-    marginTop: 3,
   },
   typeTagText: {
     fontSize: 9,
@@ -164,6 +201,27 @@ const styles = StyleSheet.create({
     color: PURPLE.primary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  recurrenceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: COLORS.secondaryLight,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    alignSelf: 'flex-start',
+  },
+  recurrenceText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: COLORS.secondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  heartBtn: {
+    padding: 4,
+    alignSelf: 'flex-start',
   },
   busIconWrap: {
     width: 48,

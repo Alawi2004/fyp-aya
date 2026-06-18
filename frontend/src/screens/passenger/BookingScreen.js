@@ -203,6 +203,11 @@ const BookingScreen = ({ route, navigation }) => {
   const { bus } = route.params;
   const { walletBalance, updateBalance, addBooking, refreshBookings, currency, exchangeRate, fmtMoney, t } =
     useApp();
+  const isTuktuk      = bus.type === 'tuktuk';
+  const isTaxi        = bus.type === 'taxi';
+  const hasCarpoolOpt = isTaxi && bus.carpool_price != null;
+  const [carpool,       setCarpool]       = useState(false);
+  const isFullTrip = isTuktuk || (isTaxi && !carpool);
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -253,13 +258,20 @@ const BookingScreen = ({ route, navigation }) => {
     }, [bus._id])
   );
 
-  const unitPrice = parseFloat(bus.price);
-  const totalPrice = selectedSeats.length * unitPrice;
-  const insufficientBalance =
-    selectedSeats.length > 0 && walletBalance < totalPrice;
+  const tripPrice     = parseFloat(bus.price);
+  const perSeatPrice  = isTaxi && carpool && bus.carpool_price != null
+    ? parseFloat(bus.carpool_price)
+    : tripPrice;
+  const unitPrice     = perSeatPrice;
+  const totalPrice    = isFullTrip ? tripPrice : selectedSeats.length * perSeatPrice;
+  const insufficientBalance = isFullTrip
+    ? walletBalance < tripPrice
+    : selectedSeats.length > 0 && walletBalance < totalPrice;
   const shortfall = Math.max(0, totalPrice - walletBalance);
   const availableSeats = totalSeats - bookedSeats.length;
-  const canBook = selectedSeats.length > 0 && !insufficientBalance;
+  const canBook = isFullTrip
+    ? walletBalance >= tripPrice
+    : selectedSeats.length > 0 && !insufficientBalance;
 
   const handleSeatsChange = (seats) => {
     animateLayout();
@@ -267,7 +279,7 @@ const BookingScreen = ({ route, navigation }) => {
   };
 
   const handleConfirm = async () => {
-    if (selectedSeats.length === 0) {
+    if (!isFullTrip && selectedSeats.length === 0) {
       Alert.alert(
         "No Seat Selected",
         "Please choose at least one seat to continue."
@@ -277,9 +289,7 @@ const BookingScreen = ({ route, navigation }) => {
     if (insufficientBalance) {
       Alert.alert(
         "Insufficient Balance",
-        `You need ${fmtMoney(totalPrice)} for ${
-          selectedSeats.length
-        } seat(s) but only have ${fmtMoney(walletBalance)} in your wallet.`,
+        `You need ${fmtMoney(isFullTrip ? tripPrice : totalPrice)} but only have ${fmtMoney(walletBalance)} in your wallet.`,
         [
           {
             text: "Top Up Wallet",
@@ -290,13 +300,14 @@ const BookingScreen = ({ route, navigation }) => {
       );
       return;
     }
-    const seatLabel =
-      selectedSeats.length === 1
-        ? `seat ${selectedSeats[0]}`
-        : `${selectedSeats.length} seats (${selectedSeats.join(", ")})`;
+    const seatLabel = isFullTrip
+      ? `full trip on ${bus.name}`
+      : selectedSeats.length === 1
+      ? `seat ${selectedSeats[0]}`
+      : `${selectedSeats.length} seats (${selectedSeats.join(", ")})`;
     Alert.alert(
       "Confirm Booking",
-      `Book ${seatLabel} on ${bus.name} for ${fmtMoney(totalPrice)}?`,
+      `Book ${seatLabel} for ${fmtMoney(totalPrice)}?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -306,7 +317,8 @@ const BookingScreen = ({ route, navigation }) => {
             try {
               const res = await createBookingApi({
                 trip_id: bus._id,
-                seats: selectedSeats,
+                seats: isFullTrip ? ['FULL'] : selectedSeats,
+                ...(isTaxi ? { carpool } : {}),
               });
               const { tickets, total, newBalance } = res.data;
               const newBooking = {
@@ -419,7 +431,7 @@ const BookingScreen = ({ route, navigation }) => {
             <Ionicons name="arrow-back" size={20} color={COLORS.white} />
           </PressableScale>
           <View style={{ flex: 1 }}>
-            <Text style={styles.heroTitle}>{t('Book a Seat')}</Text>
+            <Text style={styles.heroTitle}>{isFullTrip ? t('Book a Trip') : t('Book a Seat')}</Text>
             <Text style={styles.heroSub} numberOfLines={1}>
               {bus.name}
             </Text>
@@ -427,7 +439,7 @@ const BookingScreen = ({ route, navigation }) => {
           <View style={styles.heroFareChip}>
             <Ionicons name="pricetag" size={12} color={COLORS.white} />
             <Text style={styles.heroFareText}>
-              {fmtMoney(unitPrice)} / seat
+              {fmtMoney(isFullTrip ? tripPrice : unitPrice)}{isFullTrip ? ' / trip' : ' / seat'}
             </Text>
           </View>
         </Animated.View>
@@ -502,8 +514,8 @@ const BookingScreen = ({ route, navigation }) => {
             {/* Price + Balance row */}
             <View style={styles.priceRow}>
               <View style={styles.priceItem}>
-                <Text style={styles.priceLabel}>{t('Price / Seat')}</Text>
-                <Text style={styles.priceValue}>{fmtMoney(unitPrice)}</Text>
+                <Text style={styles.priceLabel}>{isFullTrip ? t('Trip Price') : (isTaxi && carpool ? t('Price / Seat') : t('Price / Seat'))}</Text>
+                <Text style={styles.priceValue}>{fmtMoney(isFullTrip ? tripPrice : unitPrice)}</Text>
               </View>
               <View style={styles.priceDivider} />
               <View style={styles.priceItem}>
@@ -601,8 +613,37 @@ const BookingScreen = ({ route, navigation }) => {
           </View>
         </FadeInView>
 
-        {/* Seat Picker Card */}
-        <FadeInView index={1}>
+        {/* Taxi: carpool toggle (only when admin set a carpool discount) */}
+        {hasCarpoolOpt && (
+          <FadeInView index={1}>
+            <View style={styles.carpoolCard}>
+              <Text style={styles.carpoolTitle}>How do you want to travel?</Text>
+              <View style={styles.carpoolRow}>
+                <PressableScale
+                  style={[styles.carpoolBtn, !carpool && styles.carpoolBtnActive]}
+                  onPress={() => { setCarpool(false); setSelectedSeats([]); }}
+                  scaleTo={0.96}
+                >
+                  <Ionicons name="car" size={18} color={!carpool ? COLORS.white : PURPLE.primary} />
+                  <Text style={[styles.carpoolBtnLabel, !carpool && styles.carpoolBtnLabelActive]}>Private</Text>
+                  <Text style={[styles.carpoolBtnSub,   !carpool && styles.carpoolBtnSubActive]}>{fmtMoney(tripPrice)}</Text>
+                </PressableScale>
+                <PressableScale
+                  style={[styles.carpoolBtn, carpool && styles.carpoolBtnActive]}
+                  onPress={() => setCarpool(true)}
+                  scaleTo={0.96}
+                >
+                  <Ionicons name="people" size={18} color={carpool ? COLORS.white : PURPLE.primary} />
+                  <Text style={[styles.carpoolBtnLabel, carpool && styles.carpoolBtnLabelActive]}>Carpool</Text>
+                  <Text style={[styles.carpoolBtnSub,   carpool && styles.carpoolBtnSubActive]}>{fmtMoney(perSeatPrice)} / seat</Text>
+                </PressableScale>
+              </View>
+            </View>
+          </FadeInView>
+        )}
+
+        {/* Seat Picker Card — hidden for tuktuk and private taxi */}
+        {!isFullTrip && <FadeInView index={2}>
           <Card style={styles.seatCard}>
             <View style={styles.seatCardHeader}>
               <View>
@@ -666,7 +707,7 @@ const BookingScreen = ({ route, navigation }) => {
               multiSelect
             />
           </Card>
-        </FadeInView>
+        </FadeInView>}
 
         <View style={{ height: 110 }} />
       </ScrollView>
@@ -688,19 +729,23 @@ const BookingScreen = ({ route, navigation }) => {
           },
         ]}
       >
-        <View style={styles.bottomInfo}>
-          <Text style={styles.bottomLabel}>{t('Seats')}</Text>
-          <Bump trigger={selectedSeats.join(",")}>
-            <Text style={styles.bottomValue}>
-              {selectedSeats.length === 0
-                ? "—"
-                : selectedSeats.length === 1
-                ? selectedSeats[0]
-                : `${selectedSeats.length}×`}
-            </Text>
-          </Bump>
-        </View>
-        <View style={styles.bottomDivider} />
+        {!isFullTrip && (
+          <>
+            <View style={styles.bottomInfo}>
+              <Text style={styles.bottomLabel}>{t('Seats')}</Text>
+              <Bump trigger={selectedSeats.join(",")}>
+                <Text style={styles.bottomValue}>
+                  {selectedSeats.length === 0
+                    ? "—"
+                    : selectedSeats.length === 1
+                    ? selectedSeats[0]
+                    : `${selectedSeats.length}×`}
+                </Text>
+              </Bump>
+            </View>
+            <View style={styles.bottomDivider} />
+          </>
+        )}
         <View style={styles.bottomInfo}>
           <Text style={styles.bottomLabel}>{t('Total')}</Text>
           <View style={{ flexDirection: "row", alignItems: "flex-end" }}>
@@ -708,7 +753,7 @@ const BookingScreen = ({ route, navigation }) => {
               {currency}{" "}
             </Text>
             <CountUp
-              value={(selectedSeats.length > 0 ? totalPrice : unitPrice) * exchangeRate}
+              value={totalPrice * exchangeRate}
               decimals={exchangeRate >= 100 ? 0 : 2}
               style={[styles.bottomValue, { color: PURPLE.primary }]}
             />
@@ -977,6 +1022,53 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   topUpInlineBtnText: { fontSize: 14, fontWeight: "700", color: COLORS.white },
+
+  /* Carpool toggle */
+  carpoolCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: PURPLE.deep,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  carpoolTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
+    marginBottom: 12,
+    letterSpacing: -0.2,
+  },
+  carpoolRow: { flexDirection: 'row', gap: 10 },
+  carpoolBtn: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: PURPLE.light,
+    borderRadius: 14,
+    paddingVertical: 14,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  carpoolBtnActive: {
+    backgroundColor: PURPLE.primary,
+    borderColor: PURPLE.primary,
+  },
+  carpoolBtnLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: PURPLE.primary,
+  },
+  carpoolBtnLabelActive: { color: COLORS.white },
+  carpoolBtnSub: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+  },
+  carpoolBtnSubActive: { color: 'rgba(255,255,255,0.82)' },
 
   /* Seat card */
   seatCard: { marginBottom: 12 },

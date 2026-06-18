@@ -15,6 +15,16 @@ import FadeInView from '../../components/common/FadeInView';
 import PressableScale from '../../components/common/PressableScale';
 import { COLORS, PURPLE } from '../../constants/colors';
 import { formatDateTime } from '../../utils/formatters';
+import { getFavoriteRoutes, addFavoriteRoute, removeFavoriteRoute } from '../../api/apiClient';
+
+const DAY_NAMES = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+function formatRecurrence(rec) {
+  if (!rec) return null;
+  if (rec === 'daily')    return 'Daily';
+  if (rec === 'weekdays') return 'Mon–Fri';
+  if (rec === 'weekends') return 'Weekends';
+  return rec.charAt(0).toUpperCase() + rec.slice(1);
+}
 
 const FILTERS = [
   { key: 'all',       label: 'All'       },
@@ -35,6 +45,31 @@ const TripHistoryScreen = ({ navigation }) => {
   const { user } = useAuth();
   const [filter, setFilter]       = useState('all');
   const [exporting, setExporting] = useState(false);
+  const [favoriteRouteIds, setFavoriteRouteIds] = useState(new Set());
+
+  const loadFavs = useCallback(async () => {
+    try {
+      const data = await getFavoriteRoutes();
+      const list = Array.isArray(data) ? data : [];
+      setFavoriteRouteIds(new Set(list.map((f) => f.route_id)));
+    } catch { /* best-effort */ }
+  }, []);
+
+  useEffect(() => { loadFavs(); }, [loadFavs]);
+
+  const toggleFavorite = useCallback(async (routeId) => {
+    if (!routeId) return;
+    const isFav = favoriteRouteIds.has(routeId);
+    setFavoriteRouteIds((prev) => {
+      const next = new Set(prev);
+      isFav ? next.delete(routeId) : next.add(routeId);
+      return next;
+    });
+    try {
+      if (isFav) await removeFavoriteRoute(routeId);
+      else await addFavoriteRoute(routeId);
+    } catch { loadFavs(); }
+  }, [favoriteRouteIds, loadFavs]);
 
   // Refresh from DB every time this screen comes into focus
   useEffect(() => {
@@ -240,6 +275,29 @@ const TripHistoryScreen = ({ navigation }) => {
                 <Ionicons name="time-outline" size={12} color={PURPLE.primary} />
                 <Text style={styles.pillText}>{item.bus.duration}</Text>
               </View>
+            )}
+            {!isTaxi && item.bus?.schedule_recurrence && (
+              <View style={[styles.pill, { backgroundColor: COLORS.secondaryLight }]}>
+                <Ionicons name="repeat-outline" size={12} color={COLORS.secondary} />
+                <Text style={[styles.pillText, { color: COLORS.secondary }]}>
+                  {formatRecurrence(item.bus.schedule_recurrence)}
+                </Text>
+              </View>
+            )}
+            {!isTaxi && item.bus?.route_id && item.bus?.schedule_recurrence && (
+              <TouchableOpacity
+                style={[styles.pill, { backgroundColor: favoriteRouteIds.has(item.bus.route_id) ? '#FFEBEE' : COLORS.borderLight }]}
+                onPress={() => toggleFavorite(item.bus.route_id)}
+              >
+                <Ionicons
+                  name={favoriteRouteIds.has(item.bus.route_id) ? 'heart' : 'heart-outline'}
+                  size={12}
+                  color={favoriteRouteIds.has(item.bus.route_id) ? COLORS.danger : COLORS.textMuted}
+                />
+                <Text style={[styles.pillText, { color: favoriteRouteIds.has(item.bus.route_id) ? COLORS.danger : COLORS.textMuted }]}>
+                  {favoriteRouteIds.has(item.bus.route_id) ? 'Saved' : 'Save Route'}
+                </Text>
+              </TouchableOpacity>
             )}
           </View>
 

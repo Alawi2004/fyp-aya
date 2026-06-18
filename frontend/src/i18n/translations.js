@@ -154,6 +154,10 @@ const STRINGS = {
   'Rate the App':      { ar: 'قيّم التطبيق', fr: "Noter l'appli",  de: 'App bewerten',  es: 'Calificar app',  tr: 'Uygulamayı Değerlendir' },
   'Sign Out':          { ar: 'تسجيل الخروج', fr: 'Se déconnecter', de: 'Abmelden',      es: 'Cerrar sesión', tr: 'Çıkış Yap' },
   'Delete Account':    { ar: 'حذف الحساب', fr: 'Supprimer le compte', de: 'Konto löschen', es: 'Eliminar cuenta', tr: 'Hesabı Sil' },
+  'Language':          { ar: 'اللغة',      fr: 'Langue',            de: 'Sprache',       es: 'Idioma',          tr: 'Dil' },
+  'Currency':          { ar: 'العملة',     fr: 'Devise',            de: 'Währung',       es: 'Moneda',          tr: 'Para Birimi' },
+  'Select Language':   { ar: 'اختر اللغة', fr: 'Choisir la langue', de: 'Sprache wählen', es: 'Seleccionar idioma', tr: 'Dil Seç' },
+  'Select Currency':   { ar: 'اختر العملة', fr: 'Choisir la devise', de: 'Währung wählen', es: 'Seleccionar moneda', tr: 'Para Birimi Seç' },
 
   // ── Common buttons / labels ──────────────────────────────────────────────────
   'Cancel':    { ar: 'إلغاء',   fr: 'Annuler',     de: 'Abbrechen',  es: 'Cancelar', tr: 'İptal' },

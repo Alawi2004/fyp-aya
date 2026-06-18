@@ -18,7 +18,7 @@ import { CAMERA_REST_URL } from '../config/camera';
 const CAMERA_SERVER_REST = CAMERA_REST_URL;
 const DEFAULT_BUS_ID = "BUS-01";
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const TODAY = new Date("2026-05-10");
+const TODAY = new Date();
 
 const SHIFT_CONFIG = {
   morning:   { label: "Morning",   time: "6:00–14:00",  color: "#6D28D9", bg: "#F5F3FF" },
@@ -1363,7 +1363,7 @@ export default function DriversPage() {
       })
       .catch(err => {
         setDrivers([]);
-        setDriversError(err?.message ?? "Could not reach server — showing demo data");
+        setDriversError(err?.message ?? "Could not reach server");
       })
       .finally(() => setDriversLoading(false));
   }, []);
