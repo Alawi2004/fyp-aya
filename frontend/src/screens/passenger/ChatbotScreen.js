@@ -172,6 +172,33 @@ const QuickReplies = ({ onSelect }) => (
   </View>
 );
 
+// ── Module-level location cache — survives modal re-opens ────────────────────
+// Populated as soon as we have coords; reused on every subsequent message.
+let _cachedLocation = null;
+
+async function fetchAndCacheLocation() {
+  try {
+    const { status: existing } = await Location.getForegroundPermissionsAsync();
+    const granted = existing === 'granted'
+      ? true
+      : (await Location.requestForegroundPermissionsAsync()).status === 'granted';
+    if (!granted) return;
+
+    // Use the last-known fix immediately (zero latency)
+    const last = await Location.getLastKnownPositionAsync({});
+    if (last) {
+      _cachedLocation = { latitude: last.coords.latitude, longitude: last.coords.longitude };
+    }
+
+    // Upgrade to a fresh accurate fix
+    const fresh = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    _cachedLocation = { latitude: fresh.coords.latitude, longitude: fresh.coords.longitude };
+  } catch { /* optional — silently ignore */ }
+}
+
+// Kick off a fetch immediately at module load so coords are ready before the first message
+fetchAndCacheLocation();
+
 // ── Main chatbot modal ────────────────────────────────────────────────────────
 let _msgId = 1;
 const mkId = () => String(_msgId++);
@@ -195,11 +222,10 @@ const ChatbotScreen = ({ visible, onClose, onAction }) => {
   const [showChips, setShowChips] = useState(true);
   const [kbHeight,  setKbHeight]  = useState(0);
 
-  const listRef     = useRef(null);
-  const inputRef    = useRef(null);
-  const slideAnim   = useRef(new Animated.Value(0)).current;
-  const historyRef  = useRef([]);
-  const locationRef = useRef(null); // cached { latitude, longitude }
+  const listRef    = useRef(null);
+  const inputRef   = useRef(null);
+  const slideAnim  = useRef(new Animated.Value(0)).current;
+  const historyRef = useRef([]);
 
   // ── Keyboard height tracking ──────────────────────────────────────────────
   useEffect(() => {
@@ -210,40 +236,9 @@ const ChatbotScreen = ({ visible, onClose, onAction }) => {
     return () => { show.remove(); hide.remove(); };
   }, []);
 
-  // ── Background location fetch — fires once when chat opens ───────────────
-  // Strategy: check permission → use last-known position immediately (fast),
-  // then upgrade to accurate fix in background.
+  // ── Refresh location each time the chat opens (non-blocking) ─────────────
   useEffect(() => {
-    if (!visible) return;
-    (async () => {
-      try {
-        // Check existing permission without showing a dialog
-        const { status: existing } = await Location.getForegroundPermissionsAsync();
-        const granted = existing === 'granted'
-          ? true
-          : (await Location.requestForegroundPermissionsAsync()).status === 'granted';
-
-        if (!granted) return;
-
-        // Last-known position is instant — use it right away
-        const last = await Location.getLastKnownPositionAsync({});
-        if (last) {
-          locationRef.current = {
-            latitude:  last.coords.latitude,
-            longitude: last.coords.longitude,
-          };
-        }
-
-        // Upgrade to a fresh accurate fix in the background
-        const fresh = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-        locationRef.current = {
-          latitude:  fresh.coords.latitude,
-          longitude: fresh.coords.longitude,
-        };
-      } catch { /* location is optional — silently skip */ }
-    })();
+    if (visible) fetchAndCacheLocation();
   }, [visible]);
 
   // ── Open / close ──────────────────────────────────────────────────────────
@@ -282,7 +277,7 @@ const ChatbotScreen = ({ visible, onClose, onAction }) => {
       const res = await apiClient.post('/chatbot/message', {
         message:  trimmed,
         history:  historySnapshot,
-        location: locationRef.current ?? undefined,
+        location: _cachedLocation ?? undefined,
       });
 
       const botText = res.data?.reply ?? "I'm having a moment — please try again.";

@@ -695,7 +695,10 @@ async function executeTool(name, args, ctx) {
     // ── Nearby stops (requires user GPS) ───────────────────────────────────
     case "get_nearby_stops": {
       if (!ctx.location) {
-        return { error: "no_gps", message: "GPS coordinates were not sent with this request. Tell the user to allow location access in their device settings and send the message again." };
+        return {
+          no_gps: true,
+          suggestion: "Ask the user which area or neighbourhood they are in, then use get_next_departures or search_routes with that area name as the query instead.",
+        };
       }
       const { latitude, longitude } = ctx.location;
       const r = await pool.request()
@@ -882,7 +885,7 @@ ${locationCtx}
 4. **Be concise**: 2-4 sentences for simple answers, a bullet list for data. No preamble like "Sure, let me check that for you!".
 5. **Format**: Use **bold** for key values (amounts, route names, times). Use "•" for bullet lists.
 6. **Handling no results**: If a tool returns empty data, say clearly "I didn't find any [X] matching that" and suggest alternatives.
-7. **Location-aware**: If the user says "near me", "closest", or "nearby", call get_nearby_stops first.
+7. **Location-aware**: If the user says "near me", "closest", or "nearby", always call get_nearby_stops first. If it returns no_gps, ask which area/neighbourhood they're in and use search_routes or get_next_departures with that area name instead — never just say you don't have GPS access.
 8. **Taxi booking**: As soon as you identify pickup + destination from the user's message, call initiate_taxi_booking — don't ask for confirmation since the form will open for them to review.`;
 }
 
