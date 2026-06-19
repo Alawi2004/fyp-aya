@@ -322,11 +322,17 @@ const NearbyStopsScreen = ({ navigation }) => {
     }).start();
   }, [heroAnim]);
 
-  // With a location we keep ALL enriched stops and filter by the selected
-  // radius; without one, radius doesn't apply.
-  const stops = useMemo(() => {
-    if (!userLocation) return allStops;
-    return allStops.filter((s) => s.distKm != null && s.distKm <= radiusKm);
+  // With a location: filter by selected radius, but always show the 5 nearest
+  // stops as a fallback so the screen is never empty when stops exist.
+  const { stops, usingFallback } = useMemo(() => {
+    if (!userLocation) return { stops: allStops, usingFallback: false };
+    const inRadius = allStops.filter((s) => s.distKm != null && s.distKm <= radiusKm);
+    if (inRadius.length > 0) return { stops: inRadius, usingFallback: false };
+    // Nothing within radius — show 5 nearest so the screen isn't blank
+    const nearest = allStops
+      .filter((s) => s.distKm != null)
+      .slice(0, 5);
+    return { stops: nearest, usingFallback: nearest.length > 0 };
   }, [allStops, userLocation, radiusKm]);
 
   // Load stops + location concurrently
@@ -366,7 +372,8 @@ const NearbyStopsScreen = ({ navigation }) => {
     try {
       const res = await getStopsApi();
       return Array.isArray(res.data) ? res.data : [];
-    } catch {
+    } catch (err) {
+      console.warn('[NearbyStops] fetchStops failed:', err?.message);
       return [];
     }
   };
@@ -456,7 +463,9 @@ const NearbyStopsScreen = ({ navigation }) => {
               style={{ alignSelf: "flex-start" }}
             >
               <Text style={styles.heroSub}>
-                {stops.length} within {radiusLabel(radiusKm)} walk
+                {usingFallback
+                  ? `${stops.length} nearest stops`
+                  : `${stops.length} within ${radiusLabel(radiusKm)} walk`}
               </Text>
             </Bump>
           )}
@@ -631,11 +640,11 @@ const NearbyStopsScreen = ({ navigation }) => {
           </Float>
           <Text style={styles.emptyTitle}>{t('No stops nearby')}</Text>
           <Text style={styles.emptySub}>
-            {permStatus === "granted"
-              ? `There are no stops within ${radiusLabel(
-                  radiusKm
-                )} of your location. Try a wider radius.`
-              : "No stops are available right now."}
+            {allStops.length === 0
+              ? "Could not load stops. Check your connection and try again."
+              : permStatus === "granted"
+              ? `No stops within ${radiusLabel(radiusKm)}. Try a wider radius.`
+              : "Enable location to see stops near you."}
           </Text>
         </View>
       ) : (
@@ -648,7 +657,9 @@ const NearbyStopsScreen = ({ navigation }) => {
             <View style={styles.listHeader}>
               <Text style={styles.listHeaderText}>
                 {permStatus === "granted"
-                  ? t('Sorted by distance · walking at 5 km/h')
+                  ? usingFallback
+                    ? `No stops within ${radiusLabel(radiusKm)} — showing ${stops.length} nearest`
+                    : t('Sorted by distance · walking at 5 km/h')
                   : t('All stops')}
               </Text>
             </View>
