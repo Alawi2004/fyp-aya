@@ -17,10 +17,13 @@ import {
 import { useApp } from '../../context/AppContext';
 
 // ─── constants ────────────────────────────────────────────────────────────────
-const SCREEN_H           = Dimensions.get('window').height;
-const ARRIVAL_RADIUS_M   = 50;
-const APPROACH_RADIUS_M  = 200;
-const SPEED_KMH          = 25;
+const SCREEN_H            = Dimensions.get('window').height;
+const ARRIVAL_RADIUS_M    = 50;
+const APPROACH_RADIUS_M   = 200;
+const SPEED_KMH_DEFAULT   = 25;   // fallback when GPS speed unavailable
+const ROAD_FACTOR         = 1.35; // haversine → actual road distance ratio
+const GPS_WATCH_MS        = 2000; // local position update (2 s — smooth ETA)
+const SPEED_BUFFER_SIZE   = 5;    // rolling window for speed smoothing
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const haversine = (lat1, lon1, lat2, lon2) => {
@@ -31,9 +34,18 @@ const haversine = (lat1, lon1, lat2, lon2) => {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-const calcEta = (fLat, fLon, toLat, toLon, dwellStops = 0) => {
-  const dist = haversine(fLat, fLon, toLat, toLon);
-  return Math.max(1, Math.round((dist / ((SPEED_KMH * 1000) / 3600) + dwellStops * 30) / 60));
+// Median of an array — rejects speed outliers better than mean.
+const median = arr => {
+  const s = [...arr].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+
+const calcEta = (fLat, fLon, toLat, toLon, dwellStops = 0, speedKmh = SPEED_KMH_DEFAULT) => {
+  const roadDist  = haversine(fLat, fLon, toLat, toLon) * ROAD_FACTOR;
+  const travelSec = roadDist / ((speedKmh * 1000) / 3600);
+  const dwellSec  = dwellStops * 45; // 45 s per intermediate stop
+  return Math.max(1, Math.round((travelSec + dwellSec) / 60));
 };
 
 const fmtTime = d => {
@@ -252,7 +264,9 @@ const DriverMapScreen = ({ navigation, route }) => {
   const displayRouteName = paramRouteName ?? activeTrip?.routeName ?? null;
   const displayBusNumber = paramBusNumber || activeTrip?.busNumber || '';
 
-  const centeredRef = useRef(false);
+  const centeredRef   = useRef(false);
+  const speedBuf      = useRef([]);          // rolling GPS speed readings (km/h)
+  const [liveSpeed, setLiveSpeed] = useState(null); // smoothed speed in km/h
 
   // ── GPS: get location immediately, independent of tripId ──
   useEffect(() => {
@@ -260,11 +274,10 @@ const DriverMapScreen = ({ navigation, route }) => {
     (async () => {
       const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
       if (status !== 'granted') { setGpsError(true); return; }
-      // Quick first fix at High accuracy, then watch at navigation-grade accuracy.
+      // Quick first fix at High accuracy.
       const loc = await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.High });
       const pos = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
       setLocation(pos);
-      // Center the map on the driver's actual position the first time.
       if (!centeredRef.current) {
         centeredRef.current = true;
         mapRef.current?.animateToRegion(
@@ -272,13 +285,24 @@ const DriverMapScreen = ({ navigation, route }) => {
           400,
         );
       }
-      // Watch for updates — distanceInterval:0 so it fires on time alone even
-      // when the bus is stationary (Android needs BOTH time + distance otherwise).
-      // BestForNavigation forces the GPS chip (~5m) instead of wifi/cell (~100m+).
+      // Watch at GPS_WATCH_MS (2 s) for smooth local ETA + arrival detection.
+      // Server broadcast runs on its own interval (broadcastMs, default 5 s).
+      // distanceInterval:0 ensures updates fire on time even when stationary.
       sub = await ExpoLocation.watchPositionAsync(
-        { accuracy: ExpoLocation.Accuracy.BestForNavigation, timeInterval: broadcastMs, distanceInterval: 0 },
+        { accuracy: ExpoLocation.Accuracy.BestForNavigation, timeInterval: GPS_WATCH_MS, distanceInterval: 0 },
         l => {
           setLocation({ latitude: l.coords.latitude, longitude: l.coords.longitude });
+
+          // Track GPS speed (m/s → km/h). Filter noise: must be 2–120 km/h.
+          const rawMs = l.coords.speed;
+          if (rawMs != null && rawMs >= 0) {
+            const kmh = rawMs * 3.6;
+            if (kmh >= 2 && kmh <= 120) {
+              const buf = [...speedBuf.current, kmh].slice(-SPEED_BUFFER_SIZE);
+              speedBuf.current = buf;
+              setLiveSpeed(Math.round(median(buf)));
+            }
+          }
         }
       );
     })();
@@ -359,9 +383,12 @@ const DriverMapScreen = ({ navigation, route }) => {
   }, []);
 
   // ── Per-stop ETAs ──
+  // Use live GPS speed when available; fall back to SPEED_KMH_DEFAULT.
+  const effectiveSpeed = liveSpeed ?? SPEED_KMH_DEFAULT;
   const stopsWithEta = stops.map((stop, idx) => {
     if (stop.done || !location) return { ...stop, eta: null };
-    return { ...stop, eta: calcEta(location.latitude, location.longitude, stop.lat, stop.lng, stops.slice(0, idx).filter(s => !s.done).length) };
+    const ahead = stops.slice(0, idx).filter(s => !s.done).length;
+    return { ...stop, eta: calcEta(location.latitude, location.longitude, stop.lat, stop.lng, ahead, effectiveSpeed) };
   });
   const nextStopEta = stopsWithEta.find(s => !s.done);
 

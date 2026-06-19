@@ -89,7 +89,7 @@ export const AppProvider = ({ children }) => {
   const [supportEmail, setSupportEmail] = useState('support@yallatransit.lb');
   const [language, setLanguage] = useState('en');
   const [walletLimits, setWalletLimits] = useState({ minTopup: 5, maxTopup: 500, maxBalance: 1000, lowBalanceAlert: 5 });
-  const [gpsSettings, setGpsSettings]  = useState({ updateIntervalSec: 10, staleThresholdSec: 60, geofenceRadiusM: 150 });
+  const [gpsSettings, setGpsSettings]  = useState({ updateIntervalSec: 5, staleThresholdSec: 60, geofenceRadiusM: 150 });
 
   useEffect(() => {
     if (role !== 'passenger' || !user) return;

@@ -461,7 +461,7 @@ BEGIN
     ('wallet.max_topup',            '500',    'wallet',      'Max Top-Up Amount ($)',      'number',  'Maximum single top-up transaction'),
     ('wallet.low_balance_alert',    '25',     'wallet',      'Low-Balance Alert Threshold ($)', 'number', 'Send alert when balance drops below this amount'),
     ('wallet.freeze_on_fraud',      'true',   'wallet',      'Auto-freeze on Fraud Flag', 'boolean', 'Automatically freeze wallet when fraud is flagged'),
-    ('gps.update_interval_sec',     '10',     'gps',         'Update Interval (s)',       'number',  'How often driver apps send GPS pings to the server'),
+    ('gps.update_interval_sec',     '5',      'gps',         'Update Interval (s)',       'number',  'How often driver apps send GPS pings to the server'),
     ('gps.stale_threshold_sec',     '60',     'gps',         'Stale Threshold (s)',       'number',  'Mark vehicle offline if no update within this window'),
     ('gps.accuracy_threshold_m',    '20',     'gps',         'Accuracy Threshold (m)',    'number',  'Ignore GPS readings with accuracy worse than this'),
     ('gps.history_retention_days',  '90',     'gps',         'History Retention (days)',  'number',  'How long GPS logs are kept before purging'),

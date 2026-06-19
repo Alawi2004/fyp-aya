@@ -82,7 +82,7 @@ export const getPublicSettings = async (req, res) => {
     "wallet.min_topup":         "5",
     "wallet.max_topup":         "500",
     "wallet.low_balance_alert": "5",
-    "gps.update_interval_sec":  "10",
+    "gps.update_interval_sec":  "5",
     "gps.stale_threshold_sec":  "60",
     "gps.geofence_radius_m":    "150",
   };
