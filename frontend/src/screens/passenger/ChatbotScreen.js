@@ -295,11 +295,21 @@ const ChatbotScreen = ({ visible, onClose, onAction }) => {
       if (res.data?.action && onAction) {
         onAction(res.data.action);
       }
-    } catch {
-      setMessages(prev => [
-        ...prev,
-        { id: mkId(), role: 'bot', text: "Sorry, I couldn't reach the server. Please check your connection and try again." },
-      ]);
+    } catch (err) {
+      const status   = err?.response?.status;
+      const serverReply = err?.response?.data?.reply; // backend may still send a friendly reply in error body
+      let errText;
+      if (serverReply) {
+        errText = serverReply;
+      } else if (status === 401 || status === 403) {
+        errText = "Your session has expired. Please log out and log back in.";
+      } else if (!status) {
+        // No response at all — network / URL issue
+        errText = "Can't reach the server. Make sure you're on the same Wi-Fi as the backend, then try again.";
+      } else {
+        errText = "Something went wrong on our end. Please try again in a moment.";
+      }
+      setMessages(prev => [...prev, { id: mkId(), role: 'bot', text: errText }]);
     } finally {
       setTyping(false);
       setShowChips(true);

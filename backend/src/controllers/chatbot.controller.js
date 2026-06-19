@@ -721,10 +721,10 @@ async function executeTool(name, args, ctx) {
       const r = await pool.request()
         .input("q", sql.NVarChar(200), q)
         .query(`
-          SELECT stop_id, stop_name, address, latitude, longitude
+          SELECT stop_id, stop_name, latitude, longitude
           FROM stops
           WHERE is_deleted = 0
-            AND (stop_name LIKE @q OR address LIKE @q)
+            AND stop_name LIKE @q
           ORDER BY stop_name
         `);
       return { stops: r.recordset, count: r.recordset.length };
@@ -744,7 +744,7 @@ async function executeTool(name, args, ctx) {
         .input("lng", sql.Float, longitude)
         .query(`
           SELECT TOP 8
-            stop_id, stop_name, address,
+            stop_id, stop_name,
             latitude, longitude,
             ROUND(
               6371 * ACOS(
@@ -1022,8 +1022,15 @@ export const sendMessage = async (req, res) => {
     const actionRef = { current: null };
     const ctx = { userId: user.user_id, pool, actionRef, location };
 
-    // Fetch user snapshot in parallel with history processing (non-blocking)
-    const snapshot = await fetchUserSnapshot(user.user_id, pool);
+    // Fetch user details and snapshot in parallel
+    const [userRow, snapshot] = await Promise.all([
+      pool.request()
+        .input("uid", sql.Int, user.user_id)
+        .query("SELECT full_name, email FROM users WHERE user_id = @uid"),
+      fetchUserSnapshot(user.user_id, pool),
+    ]);
+    const userDetails = userRow.recordset[0] ?? {};
+    const enrichedUser = { ...user, full_name: userDetails.full_name, email: userDetails.email };
 
     const recentHistory = history.slice(-10).map(m => ({
       role:    m.role === "user" ? "user" : "assistant",
@@ -1031,7 +1038,7 @@ export const sendMessage = async (req, res) => {
     }));
 
     const messages = [
-      { role: "system", content: buildSystemPrompt(user, location, snapshot) },
+      { role: "system", content: buildSystemPrompt(enrichedUser, location, snapshot) },
       ...recentHistory,
       { role: "user", content: message },
     ];
