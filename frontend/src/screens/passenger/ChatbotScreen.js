@@ -190,9 +190,17 @@ async function fetchAndCacheLocation() {
       _cachedLocation = { latitude: last.coords.latitude, longitude: last.coords.longitude };
     }
 
-    // Upgrade to a fresh accurate fix
-    const fresh = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-    _cachedLocation = { latitude: fresh.coords.latitude, longitude: fresh.coords.longitude };
+    // Upgrade to GPS-chip fix (High); timeout after 12 s to avoid hanging
+    try {
+      const fresh = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('gps-timeout')), 12000)),
+      ]);
+      _cachedLocation = { latitude: fresh.coords.latitude, longitude: fresh.coords.longitude };
+    } catch {
+      const fresh = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      _cachedLocation = { latitude: fresh.coords.latitude, longitude: fresh.coords.longitude };
+    }
   } catch { /* optional — silently ignore */ }
 }
 

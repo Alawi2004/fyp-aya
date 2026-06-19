@@ -362,10 +362,26 @@ const NearbyStopsScreen = ({ navigation }) => {
     const { status } = await Location.requestForegroundPermissionsAsync();
     setPermStatus(status);
     if (status !== "granted") return null;
-    const pos = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
+
+    const toCoords = (pos) => ({
+      latitude: pos.coords.latitude,
+      longitude: pos.coords.longitude,
     });
-    return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+
+    // Try GPS-chip (High) first with a 12-second timeout; fall back to
+    // network positioning (Balanced) so the screen never hangs outdoors.
+    try {
+      const pos = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("gps-timeout")), 12000)),
+      ]);
+      return toCoords(pos);
+    } catch {
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      return toCoords(pos);
+    }
   };
 
   const fetchStops = async () => {
