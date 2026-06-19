@@ -3,12 +3,21 @@ import { poolPromise, sql } from "../db/db.js";
 import { ensureOperationalTables } from "../db/featureSetup.js";
 
 // ── Azure AI Foundry client ───────────────────────────────────────────────────
-const openai = new OpenAI({
-  apiKey:       process.env.AZURE_OPENAI_KEY,
-  baseURL:      process.env.AZURE_OPENAI_ENDPOINT,
-  defaultHeaders: { "api-key": process.env.AZURE_OPENAI_KEY },
-  defaultQuery:   { "api-version": process.env.AZURE_OPENAI_API_VERSION ?? "2024-08-01-preview" },
-});
+// Lazily created so a missing AZURE_OPENAI_KEY doesn't crash the whole server
+// on startup — only requests to the chatbot endpoint fail until it's configured.
+let _openai = null;
+function getOpenAI() {
+  if (!process.env.AZURE_OPENAI_KEY) return null;
+  if (!_openai) {
+    _openai = new OpenAI({
+      apiKey:       process.env.AZURE_OPENAI_KEY,
+      baseURL:      process.env.AZURE_OPENAI_ENDPOINT,
+      defaultHeaders: { "api-key": process.env.AZURE_OPENAI_KEY },
+      defaultQuery:   { "api-version": process.env.AZURE_OPENAI_API_VERSION ?? "2024-08-01-preview" },
+    });
+  }
+  return _openai;
+}
 const DEPLOYMENT = process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-4.1-mini";
 
 // ── Tool definitions ──────────────────────────────────────────────────────────
@@ -1001,6 +1010,11 @@ export const sendMessage = async (req, res) => {
     : null;
 
   if (!message) return res.status(400).json({ error: "message is required" });
+
+  const openai = getOpenAI();
+  if (!openai) {
+    return res.status(503).json({ error: "Chatbot is not configured (missing AZURE_OPENAI_KEY)" });
+  }
 
   try {
     const pool = await poolPromise;
