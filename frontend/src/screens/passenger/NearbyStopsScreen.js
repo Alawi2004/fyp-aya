@@ -306,11 +306,14 @@ const NearbyStopsScreen = ({ navigation }) => {
 
   const [permStatus, setPermStatus] = useState(null); // 'granted' | 'denied' | null
   const [userLocation, setUserLocation] = useState(null);
-  const [allStops, setAllStops] = useState([]); // distance-enriched (or plain, without location)
+  const [locationAccuracy, setLocationAccuracy] = useState(null); // metres
+  const [rawStops, setRawStops] = useState([]); // plain stops from API
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
   const [viewMode, setViewMode] = useState("both"); // 'both' | 'list'
   const [radiusKm, setRadiusKm] = useState(DEFAULT_RADIUS);
+  const locationSub = useRef(null);   // watchPositionAsync subscription
+  const hasCentred = useRef(false);   // centre map only on first GPS fix
 
   const heroAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -322,66 +325,69 @@ const NearbyStopsScreen = ({ navigation }) => {
     }).start();
   }, [heroAnim]);
 
-  // With a location: filter by selected radius, but always show the 5 nearest
-  // stops as a fallback so the screen is never empty when stops exist.
+  // Recompute distances every time the live location or stop list changes.
+  // This makes the list re-sort automatically as GPS accuracy improves.
+  const allStops = useMemo(() => {
+    if (!userLocation) return rawStops.map((s) => ({ ...s, distKm: null, walkMins: null }));
+    return stopsWithDistance(rawStops, userLocation.latitude, userLocation.longitude);
+  }, [rawStops, userLocation]);
+
+  // Filter by radius; fall back to 5 nearest so the screen is never blank.
   const { stops, usingFallback } = useMemo(() => {
     if (!userLocation) return { stops: allStops, usingFallback: false };
     const inRadius = allStops.filter((s) => s.distKm != null && s.distKm <= radiusKm);
     if (inRadius.length > 0) return { stops: inRadius, usingFallback: false };
-    // Nothing within radius — show 5 nearest so the screen isn't blank
-    const nearest = allStops
-      .filter((s) => s.distKm != null)
-      .slice(0, 5);
+    const nearest = allStops.filter((s) => s.distKm != null).slice(0, 5);
     return { stops: nearest, usingFallback: nearest.length > 0 };
   }, [allStops, userLocation, radiusKm]);
 
-  // Load stops + location concurrently
+  // Boot: fetch stops + start continuous GPS watch in parallel
   useEffect(() => {
     bootstrap();
+    return () => { locationSub.current?.remove(); };
   }, []);
 
   const bootstrap = async () => {
-    const [locResult, stopsResult] = await Promise.allSettled([
-      getLocation(),
-      fetchStops(),
-    ]);
-    const loc = locResult.status === "fulfilled" ? locResult.value : null;
-    const rawSt = stopsResult.status === "fulfilled" ? stopsResult.value : [];
-
-    if (loc) {
-      setUserLocation(loc);
-      setAllStops(stopsWithDistance(rawSt, loc.latitude, loc.longitude));
-    } else {
-      // No location: show all stops without distance
-      setAllStops(rawSt.map((s) => ({ ...s, distKm: null, walkMins: null })));
-    }
+    // Kick off stops fetch and location setup at the same time
+    const stopsPromise = fetchStops();
+    await startLocationWatch();
+    const rawSt = await stopsPromise;
+    setRawStops(rawSt);
     setLoading(false);
   };
 
-  const getLocation = async () => {
+  const startLocationWatch = async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
     setPermStatus(status);
-    if (status !== "granted") return null;
+    if (status !== "granted") return;
 
-    const toCoords = (pos) => ({
-      latitude: pos.coords.latitude,
-      longitude: pos.coords.longitude,
-    });
-
-    // Try GPS-chip (High) first with a 12-second timeout; fall back to
-    // network positioning (Balanced) so the screen never hangs outdoors.
+    // Show something immediately from last-known position (zero latency)
     try {
-      const pos = await Promise.race([
-        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
-        new Promise((_, rej) => setTimeout(() => rej(new Error("gps-timeout")), 12000)),
-      ]);
-      return toCoords(pos);
-    } catch {
-      const pos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      return toCoords(pos);
-    }
+      const last = await Location.getLastKnownPositionAsync({});
+      if (last) {
+        setUserLocation({ latitude: last.coords.latitude, longitude: last.coords.longitude });
+        setLocationAccuracy(Math.round(last.coords.accuracy));
+      }
+    } catch { /* no cached fix — that's fine */ }
+
+    // Start watching: OS starts with network fix, upgrades to GPS chip automatically.
+    // Accuracy.Highest forces the GPS chip to stay on until we have a satellite fix.
+    locationSub.current = await Location.watchPositionAsync(
+      { accuracy: Location.Accuracy.Highest, distanceInterval: 3 },
+      (pos) => {
+        const loc = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+        setUserLocation(loc);
+        setLocationAccuracy(Math.round(pos.coords.accuracy));
+        // Centre map only on the first real GPS fix
+        if (!hasCentred.current && mapRef.current) {
+          hasCentred.current = true;
+          mapRef.current.animateToRegion(
+            { ...loc, latitudeDelta: 0.06, longitudeDelta: 0.06 },
+            400
+          );
+        }
+      }
+    );
   };
 
   const fetchStops = async () => {
@@ -475,13 +481,16 @@ const NearbyStopsScreen = ({ navigation }) => {
           <Text style={styles.heroTitle}>{t('Nearby Stops')}</Text>
           {permStatus === "granted" && !loading && (
             <Bump
-              trigger={`${stops.length}-${radiusKm}`}
+              trigger={`${stops.length}-${radiusKm}-${locationAccuracy}`}
               style={{ alignSelf: "flex-start" }}
             >
               <Text style={styles.heroSub}>
                 {usingFallback
                   ? `${stops.length} nearest stops`
                   : `${stops.length} within ${radiusLabel(radiusKm)} walk`}
+                {locationAccuracy != null
+                  ? `  ·  GPS ±${locationAccuracy < 1000 ? `${locationAccuracy} m` : `${(locationAccuracy / 1000).toFixed(1)} km`}`
+                  : "  ·  acquiring GPS…"}
               </Text>
             </Bump>
           )}

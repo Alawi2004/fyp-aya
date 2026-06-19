@@ -173,10 +173,12 @@ const QuickReplies = ({ onSelect }) => (
 );
 
 // ── Module-level location cache — survives modal re-opens ────────────────────
-// Populated as soon as we have coords; reused on every subsequent message.
+// Continuously updated by watchPositionAsync so every message gets the
+// most accurate GPS fix available at that moment.
 let _cachedLocation = null;
+let _locationSub = null;
 
-async function fetchAndCacheLocation() {
+async function startLocationWatch() {
   try {
     const { status: existing } = await Location.getForegroundPermissionsAsync();
     const granted = existing === 'granted'
@@ -184,28 +186,26 @@ async function fetchAndCacheLocation() {
       : (await Location.requestForegroundPermissionsAsync()).status === 'granted';
     if (!granted) return;
 
-    // Use the last-known fix immediately (zero latency)
+    // Seed with last-known position immediately (zero latency)
     const last = await Location.getLastKnownPositionAsync({});
     if (last) {
       _cachedLocation = { latitude: last.coords.latitude, longitude: last.coords.longitude };
     }
 
-    // Upgrade to GPS-chip fix (High); timeout after 12 s to avoid hanging
-    try {
-      const fresh = await Promise.race([
-        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('gps-timeout')), 12000)),
-      ]);
-      _cachedLocation = { latitude: fresh.coords.latitude, longitude: fresh.coords.longitude };
-    } catch {
-      const fresh = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      _cachedLocation = { latitude: fresh.coords.latitude, longitude: fresh.coords.longitude };
-    }
+    // Watch with Highest accuracy — OS starts with network fix and automatically
+    // upgrades to GPS-chip fix as satellites are acquired, keeping cache fresh.
+    if (_locationSub) _locationSub.remove();
+    _locationSub = await Location.watchPositionAsync(
+      { accuracy: Location.Accuracy.Highest, distanceInterval: 5 },
+      (pos) => {
+        _cachedLocation = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+      }
+    );
   } catch { /* optional — silently ignore */ }
 }
 
-// Kick off a fetch immediately at module load so coords are ready before the first message
-fetchAndCacheLocation();
+// Start watching immediately at module load so coords are ready before the first message
+startLocationWatch();
 
 // ── Main chatbot modal ────────────────────────────────────────────────────────
 let _msgId = 1;
