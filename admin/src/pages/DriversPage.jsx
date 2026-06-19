@@ -35,6 +35,7 @@ function normalizeDriver(d) {
     license: d.license_number ?? d.license ?? "",
     license_expiry: d.license_expiry ?? "",
     phone: d.phone ?? d.email ?? "",
+    gender: d.gender ?? "",
     trips: d.trips ?? 0,
     rating: d.rating ?? null,
     status: d.status ?? "Active",
@@ -44,7 +45,7 @@ function normalizeDriver(d) {
 const DEFAULT_SCHEDULE = { Mon: "off", Tue: "off", Wed: "off", Thu: "off", Fri: "off", Sat: "off", Sun: "off" };
 const EMPTY_FORM = {
   // user fields
-  name: "", email: "", password: "", phone: "", birthDate: "",
+  name: "", email: "", password: "", phone: "", birthDate: "", gender: "",
   // driver fields
   license: "", license_expiry: "", status: "Active",
   // schedule
@@ -527,6 +528,7 @@ function DriverProfile({ driver, onClose, onEdit }) {
             {[
               { label: "License No.",   value: driver.license },
               { label: "Phone",         value: driver.phone   },
+              { label: "Gender",        value: driver.gender ? driver.gender.charAt(0).toUpperCase() + driver.gender.slice(1) : "—" },
               { label: "Status",        value: driver.status  },
               { label: "Trips Today",   value: driver.trips || 0 },
               { label: "Perf. Score",   value: `${score} / 100` },
@@ -1395,6 +1397,7 @@ export default function DriversPage() {
       if (!form.name)     { setSaveError("Full name is required."); return; }
       if (!form.email)    { setSaveError("Email is required."); return; }
       if (!form.password) { setSaveError("Password is required."); return; }
+      if (!form.gender)   { setSaveError("Gender is required."); return; }
       if (form.birthDate && form.birthDate > today) { setSaveError("Date of birth cannot be in the future."); return; }
     }
     setSaveError(null);
@@ -1414,6 +1417,7 @@ export default function DriversPage() {
           password:   form.password,
           phone:      form.phone || null,
           birth_date: form.birthDate || null,
+          gender:     form.gender || null,
           role:       "driver",
         });
         // 2. Create the driver record
@@ -1545,6 +1549,16 @@ export default function DriversPage() {
                 onChange={e => setForm(f => ({ ...f, birthDate: e.target.value }))}
                 style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }}
               />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, color: "#475569", display: "block", marginBottom: 5, fontWeight: 600 }}>Gender *</label>
+              <select value={form.gender}
+                onChange={e => setForm(f => ({ ...f, gender: e.target.value }))}
+                style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", background: "#fff" }}>
+                <option value="">Select gender…</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+              </select>
             </div>
             <div style={{ height: 1, background: "#F1F5F9", margin: "4px 0 16px" }} />
           </>)}

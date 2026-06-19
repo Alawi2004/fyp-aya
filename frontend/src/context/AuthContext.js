@@ -216,6 +216,7 @@ export const AuthProvider = ({ children }) => {
         password: data.password,
         phone: data.phone ?? null,
         birth_date: data.birth_date ?? null,
+        gender: data.gender ?? null,
       }, { timeout: 15000 });
       // After registration, log in to get tokens
       const { user: rawUser, access_token, refresh_token } = await _apiLogin(data.email, data.password);
@@ -225,7 +226,8 @@ export const AuthProvider = ({ children }) => {
     }
     const mockUser = normaliseUser({
       user_id: Date.now(), full_name: data.name,
-      email: data.email, phone: data.phone, role: userRole ?? 'passenger',
+      email: data.email, phone: data.phone, gender: data.gender ?? null,
+      role: userRole ?? 'passenger',
     });
     await _saveSession(userRole ?? 'passenger', mockUser, 'mock-token');
     return mockUser;

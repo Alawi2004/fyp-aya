@@ -106,9 +106,10 @@ export const requestAccountDeletion = () => apiClient.delete('/users/me').then((
 export const submitRating = (payload) => apiClient.post('/ratings', payload).then((r) => r.data);
 
 // Drivers
-export const getAvailableDrivers = (mode, datetime) => {
+export const getAvailableDrivers = (mode, datetime, gender) => {
   const params = { mode: mode || 'now' };
   if (datetime) params.datetime = datetime;
+  if (gender) params.gender = gender;
   return apiClient.get('/drivers/available', { params }).then((r) => r.data);
 };
 

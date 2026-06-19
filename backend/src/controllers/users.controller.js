@@ -15,7 +15,7 @@ function validateBirthDate(birth_date) {
 }
 
 export const createUser = async (req, res) => {
-  const { full_name, email, password, role, phone, birth_date } = req.body;
+  const { full_name, email, password, role, phone, birth_date, gender } = req.body;
   if (!full_name || !email) {
     return res.status(400).json({ error: "full_name and email are required" });
   }
@@ -24,6 +24,9 @@ export const createUser = async (req, res) => {
   }
   if (role && !VALID_ROLES.includes(role.toLowerCase())) {
     return res.status(400).json({ error: `role must be one of: ${VALID_ROLES.join(", ")}` });
+  }
+  if (gender && !["male", "female"].includes(String(gender).toLowerCase())) {
+    return res.status(400).json({ error: "gender must be 'male' or 'female'" });
   }
   const dobError = validateBirthDate(birth_date);
   if (dobError) return res.status(400).json({ error: dobError });
@@ -39,11 +42,12 @@ export const createUser = async (req, res) => {
       .input("role",       sql.NVarChar(20),  userRole)
       .input("phone",      sql.NVarChar(30),  phone ?? null)
       .input("birth_date", sql.Date,          birth_date ? new Date(birth_date) : null)
+      .input("gender",     sql.NVarChar(10),  gender ? String(gender).toLowerCase() : null)
       .query(`
-        INSERT INTO users(full_name, email, password_hash, role, phone, birth_date)
+        INSERT INTO users(full_name, email, password_hash, role, phone, birth_date, gender)
         OUTPUT INSERTED.user_id, INSERTED.full_name, INSERTED.email, INSERTED.role,
-               INSERTED.status, INSERTED.created_at, INSERTED.birth_date
-        VALUES (@full_name, @email, @password, @role, @phone, @birth_date)
+               INSERTED.status, INSERTED.created_at, INSERTED.birth_date, INSERTED.gender
+        VALUES (@full_name, @email, @password, @role, @phone, @birth_date, @gender)
       `);
     const newUser = result.recordset[0];
     writeAuditLog(pool, { actorUserId: req.user?.user_id, actorRole: req.user?.role, actionName: "user.created", entityType: "user", entityId: newUser.user_id, newValues: { email: newUser.email, role: newUser.role }, req });
@@ -574,7 +578,7 @@ export const getMe = async (req, res) => {
     const result = await pool.request()
       .input("id", sql.Int, req.user.user_id)
       .query(`
-        SELECT user_id, full_name, email, phone, role, category, status, birth_date, created_at
+        SELECT user_id, full_name, email, phone, role, category, status, birth_date, gender, created_at
         FROM   users
         WHERE  user_id = @id
       `);

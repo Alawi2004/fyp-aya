@@ -244,19 +244,20 @@ async function enforceSessionLimit(pool, userId, currentHash) {
 export const register = async (req, res) => {
   try {
     // Never trust the client's role field — always register as passenger.
-    const { full_name, email, password, phone, birth_date } = req.body;
+    const { full_name, email, password, phone, birth_date, gender } = req.body;
     const hashed = await bcrypt.hash(password, 10);
     const pool = await poolPromise;
 
     await pool.request()
-      .input("full_name",  sql.VarChar,   full_name)
-      .input("email",      sql.VarChar,   email)
-      .input("password",   sql.VarChar,   hashed)
-      .input("phone",      sql.VarChar,   phone ?? null)
-      .input("birth_date", sql.Date,      birth_date ? new Date(birth_date) : null)
+      .input("full_name",  sql.VarChar,     full_name)
+      .input("email",      sql.VarChar,     email)
+      .input("password",   sql.VarChar,     hashed)
+      .input("phone",      sql.VarChar,     phone ?? null)
+      .input("birth_date", sql.Date,        birth_date ? new Date(birth_date) : null)
+      .input("gender",     sql.NVarChar(10), gender ?? null)
       .query(`
-        INSERT INTO users(full_name,email,password_hash,phone,birth_date,role)
-        VALUES(@full_name,@email,@password,@phone,@birth_date,'passenger')
+        INSERT INTO users(full_name,email,password_hash,phone,birth_date,gender,role)
+        VALUES(@full_name,@email,@password,@phone,@birth_date,@gender,'passenger')
       `);
 
     res.status(201).json({ message: "User registered" });

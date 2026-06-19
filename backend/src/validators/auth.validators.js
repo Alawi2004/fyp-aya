@@ -42,6 +42,12 @@ export const registerSchema = z.object({
     .or(z.literal(""))
     .transform(v => v || undefined),
 
+  gender: z
+    .enum(["male", "female"], { message: "gender must be 'male' or 'female'" })
+    .optional()
+    .or(z.literal(""))
+    .transform(v => v || undefined),
+
   // Passengers self-register; staff/admin are created by admins only.
   // z.literal ensures any value other than "passenger" is rejected outright.
   role: z.literal("passenger").default("passenger"),

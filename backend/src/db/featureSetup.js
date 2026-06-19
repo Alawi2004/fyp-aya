@@ -375,6 +375,15 @@ BEGIN
   ALTER TABLE taxi_reservations ADD stops_json NVARCHAR(MAX) NULL;
 END;
 
+-- Passenger preference: request a driver of a specific gender (e.g. female passengers)
+IF NOT EXISTS (
+  SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_NAME = 'taxi_reservations' AND COLUMN_NAME = 'preferred_driver_gender'
+)
+BEGIN
+  ALTER TABLE taxi_reservations ADD preferred_driver_gender NVARCHAR(10) NULL;
+END;
+
 -- Passenger-submitted requests to add a new bus stop at a location
 IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'stop_requests')
 BEGIN
@@ -668,6 +677,12 @@ END;
 IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='users' AND COLUMN_NAME='birth_date')
 BEGIN
   ALTER TABLE users ADD birth_date DATE NULL;
+END;
+
+-- Gender (used so female passengers can request a female taxi driver)
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='users' AND COLUMN_NAME='gender')
+BEGIN
+  ALTER TABLE users ADD gender NVARCHAR(10) NULL;
 END;
 
 -- Server-side geofence breach events

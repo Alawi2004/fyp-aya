@@ -16,6 +16,7 @@ const RegisterScreen = ({ navigation }) => {
   const [form, setForm] = useState({
     name: '', email: '', phone: '', password: '', confirmPassword: '',
   });
+  const [gender, setGender] = useState('');
   const [role, setRole] = useState('passenger');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -27,6 +28,7 @@ const RegisterScreen = ({ navigation }) => {
     if (!form.name.trim()) e.name = 'Full name is required';
     if (!form.email || !/\S+@\S+\.\S+/.test(form.email)) e.email = 'Valid email is required';
     if (!form.phone) e.phone = 'Phone number is required';
+    if (!gender) e.gender = 'Please select your gender';
     if (!form.password || form.password.length < 6) e.password = 'Minimum 6 characters';
     if (form.password !== form.confirmPassword) e.confirmPassword = 'Passwords do not match';
     setErrors(e);
@@ -37,7 +39,7 @@ const RegisterScreen = ({ navigation }) => {
     if (!validate()) return;
     setLoading(true);
     try {
-      await register(form, role);
+      await register({ ...form, gender }, role);
     } catch (err) {
       Alert.alert('Registration Failed', err.response?.data?.message || 'Please try again.');
     } finally {
@@ -134,6 +136,39 @@ const RegisterScreen = ({ navigation }) => {
               error={errors.phone}
               icon={<Ionicons name="call-outline" size={18} color={COLORS.textMuted} />}
             />
+
+            {/* Gender */}
+            <Text style={styles.fieldLabel}>Gender</Text>
+            <View style={styles.genderRow}>
+              {[
+                { key: 'male', label: 'Male', icon: 'male-outline' },
+                { key: 'female', label: 'Female', icon: 'female-outline' },
+              ].map((g) => {
+                const active = gender === g.key;
+                return (
+                  <TouchableOpacity
+                    key={g.key}
+                    style={[
+                      styles.genderBtn,
+                      active && { backgroundColor: accentColor, borderColor: accentColor },
+                    ]}
+                    onPress={() => setGender(g.key)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name={g.icon}
+                      size={17}
+                      color={active ? COLORS.white : COLORS.textSecondary}
+                    />
+                    <Text style={[styles.genderBtnText, active && styles.genderBtnTextActive]}>
+                      {g.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {errors.gender ? <Text style={styles.genderError}>{errors.gender}</Text> : null}
+
             <Input
               label="Password"
               value={form.password}
@@ -277,6 +312,45 @@ const styles = StyleSheet.create({
   },
   roleBtnTextActive: {
     color: COLORS.white,
+  },
+
+  /* Gender */
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    marginBottom: 8,
+  },
+  genderRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  genderBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingVertical: 11,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.background,
+  },
+  genderBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  genderBtnTextActive: {
+    color: COLORS.white,
+  },
+  genderError: {
+    fontSize: 12,
+    color: COLORS.danger,
+    marginTop: -8,
+    marginBottom: 12,
   },
 
   /* Divider */

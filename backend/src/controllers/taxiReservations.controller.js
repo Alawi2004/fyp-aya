@@ -13,22 +13,56 @@ export const createTaxiReservation = async (req, res) => {
     vehicle_type, pickup_address, pickup_lat, pickup_lng,
     dest_address, dest_lat, dest_lng, distance_km, estimated_fare,
     driver_id, driver_name, scheduled_for, recurrence, notes, stops,
+    preferred_gender,
   } = req.body;
 
   if (!vehicle_type || !pickup_address?.trim() || !dest_address?.trim()) {
     return res.status(400).json({ error: "vehicle_type, pickup_address, and dest_address are required" });
   }
 
+  const preferredGender = preferred_gender && ['male', 'female'].includes(String(preferred_gender).toLowerCase())
+    ? String(preferred_gender).toLowerCase()
+    : null;
+
   const fare = Math.max(0, toFloat(estimated_fare) ?? 0);
   const stopsJson = Array.isArray(stops) && stops.length > 0
     ? JSON.stringify(stops)
     : null;
+  const driverId = toInt(driver_id);
 
   const pool = await poolPromise;
   const tx = pool.transaction();
 
   try {
     await ensureOperationalTables(pool);
+
+    // A female-driver request is only offered to female passengers — enforce it
+    // server-side so the rule can't be bypassed by a crafted request.
+    if (preferredGender) {
+      const passengerRes = await pool.request()
+        .input("uid", sql.Int, userId)
+        .query("SELECT gender FROM users WHERE user_id = @uid");
+      const passengerGender = passengerRes.recordset[0]?.gender?.toLowerCase() ?? null;
+      if (preferredGender === 'female' && passengerGender !== 'female') {
+        return res.status(403).json({ error: "Only female passengers can request a female driver." });
+      }
+
+      // If a specific driver was chosen, make sure they match the requested gender
+      if (driverId) {
+        const drvRes = await pool.request()
+          .input("did", sql.Int, driverId)
+          .query(`
+            SELECT u.gender FROM drivers d
+            JOIN users u ON u.user_id = d.user_id
+            WHERE d.driver_id = @did AND ISNULL(d.is_deleted, 0) = 0
+          `);
+        const drvGender = drvRes.recordset[0]?.gender?.toLowerCase() ?? null;
+        if (drvGender !== preferredGender) {
+          return res.status(400).json({ error: "The selected driver does not match the requested gender." });
+        }
+      }
+    }
+
     await tx.begin();
 
     // 1. Verify wallet exists, is not frozen, and has enough balance
@@ -71,26 +105,29 @@ export const createTaxiReservation = async (req, res) => {
       .input("destLng",       sql.Float,          toFloat(dest_lng))
       .input("distanceKm",    sql.Float,          toFloat(distance_km))
       .input("estimatedFare", sql.Decimal(10, 2), fare)
-      .input("driverId",      sql.Int,            toInt(driver_id))
+      .input("driverId",      sql.Int,            driverId)
       .input("driverName",    sql.NVarChar(100),  driver_name ?? null)
       .input("scheduledFor",  sql.NVarChar(100),  scheduled_for ?? "Now")
       .input("recurrence",    sql.NVarChar(20),   recurrence ?? "once")
       .input("notes",         sql.NVarChar(500),  notes ?? null)
       .input("stopsJson",     sql.NVarChar(sql.MAX), stopsJson)
+      .input("preferredGender", sql.NVarChar(10), preferredGender)
       .query(`
         INSERT INTO taxi_reservations
           (user_id, vehicle_type, pickup_address, pickup_lat, pickup_lng,
            dest_address, dest_lat, dest_lng, distance_km, estimated_fare,
-           driver_id, driver_name, scheduled_for, recurrence, notes, stops_json)
+           driver_id, driver_name, scheduled_for, recurrence, notes, stops_json,
+           preferred_driver_gender)
         OUTPUT
           INSERTED.reservation_id, INSERTED.status, INSERTED.created_at,
           INSERTED.vehicle_type, INSERTED.pickup_address, INSERTED.dest_address,
           INSERTED.estimated_fare, INSERTED.scheduled_for, INSERTED.driver_name,
-          INSERTED.distance_km, INSERTED.stops_json
+          INSERTED.distance_km, INSERTED.stops_json, INSERTED.preferred_driver_gender
         VALUES
           (@userId, @vehicleType, @pickupAddress, @pickupLat, @pickupLng,
            @destAddress, @destLat, @destLng, @distanceKm, @estimatedFare,
-           @driverId, @driverName, @scheduledFor, @recurrence, @notes, @stopsJson)
+           @driverId, @driverName, @scheduledFor, @recurrence, @notes, @stopsJson,
+           @preferredGender)
       `);
 
     // 4. Log the wallet debit
@@ -316,6 +353,7 @@ export const getMyTaxiReservations = async (req, res) => {
           tr.scheduled_for,
           tr.recurrence,
           tr.notes,
+          tr.preferred_driver_gender,
           tr.status,
           tr.created_at,
           v.plate_number,
@@ -335,7 +373,8 @@ export const getMyTaxiReservations = async (req, res) => {
         GROUP BY
           tr.reservation_id, tr.vehicle_type, tr.pickup_address, tr.dest_address,
           tr.distance_km, tr.estimated_fare, tr.driver_id, tr.driver_name,
-          tr.scheduled_for, tr.recurrence, tr.notes, tr.status, tr.created_at,
+          tr.scheduled_for, tr.recurrence, tr.notes, tr.preferred_driver_gender,
+          tr.status, tr.created_at,
           v.plate_number, v.color, v.model
         ORDER BY tr.reservation_id DESC
       `);

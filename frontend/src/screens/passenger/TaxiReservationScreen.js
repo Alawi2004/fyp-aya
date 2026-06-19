@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, PURPLE } from "../../constants/colors";
 import * as Location from "expo-location";
 import { useApp } from "../../context/AppContext";
+import { useAuth } from "../../context/AuthContext";
 import GradientFill from "../../components/common/GradientFill";
 import FadeInView from "../../components/common/FadeInView";
 import PressableScale from "../../components/common/PressableScale";
@@ -571,6 +572,8 @@ const VEHICLE_TYPES = [
 const TaxiReservationScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const { refreshBookings, updateBalance, walletBalance, currency, fmtMoney, t } = useApp();
+  const { user } = useAuth();
+  const isFemalePassenger = (user?.gender ?? "").toLowerCase() === "female";
   const { fromStop, toStop, tripSummary, prefillPickup, prefillDestination, prefillNotes } = route?.params ?? {};
 
   const [pickup, setPickup] = useState(prefillPickup || fromStop?.stop_name || "");
@@ -592,6 +595,8 @@ const TaxiReservationScreen = ({ navigation, route }) => {
   const [driversLoading, setDriversLoading] = useState(false);
   const [driverVehiclePhotos, setDriverVehiclePhotos] = useState({});
   const [selectedDriverId, setSelectedDriverId] = useState(null);
+  // Female passengers may request a female driver — filters the driver list
+  const [femaleOnly, setFemaleOnly] = useState(false);
   const fetchTimerRef = useRef(null);
 
   const heroAnim = useRef(new Animated.Value(0)).current;
@@ -799,7 +804,8 @@ const TaxiReservationScreen = ({ navigation, route }) => {
     try {
       const mode = bookNow ? "now" : "scheduled";
       const datetime = bookNow ? undefined : getScheduledDatetime();
-      const res = await getAvailableDrivers(mode, datetime);
+      const genderPref = isFemalePassenger && femaleOnly ? "female" : undefined;
+      const res = await getAvailableDrivers(mode, datetime, genderPref);
       const list = res.drivers || [];
       animateLayout();
       setDrivers(list);
@@ -830,14 +836,15 @@ const TaxiReservationScreen = ({ navigation, route }) => {
     } finally {
       setDriversLoading(false);
     }
-  }, [bookNow, getScheduledDatetime, selectedDriverId]);
+  }, [bookNow, getScheduledDatetime, selectedDriverId, isFemalePassenger, femaleOnly]);
 
-  // Re-fetch when mode or scheduled time changes (debounced 600 ms for schedule changes)
+  // Re-fetch when mode, scheduled time, or the female-driver filter changes
+  // (debounced 600 ms for schedule changes)
   useEffect(() => {
     clearTimeout(fetchTimerRef.current);
     fetchTimerRef.current = setTimeout(fetchDrivers, bookNow ? 0 : 600);
     return () => clearTimeout(fetchTimerRef.current);
-  }, [bookNow, selDay, hour, minute, ampm]); // eslint-disable-line
+  }, [bookNow, selDay, hour, minute, ampm, femaleOnly]); // eslint-disable-line
 
   const toggleBookNow = (value) => {
     animateLayout();
@@ -918,6 +925,7 @@ const TaxiReservationScreen = ({ navigation, route }) => {
         scheduled_for: when,
         recurrence: recurr,
         notes: notes || null,
+        preferred_gender: isFemalePassenger && femaleOnly ? "female" : null,
         stops: stops
           .filter((s) => s.address.trim())
           .map((s) => ({
@@ -1552,6 +1560,58 @@ const TaxiReservationScreen = ({ navigation, route }) => {
                 <ActivityIndicator size="small" color={PURPLE.primary} />
               )}
             </View>
+
+            {/* Female passengers can request a female driver */}
+            {isFemalePassenger && (
+              <PressableScale
+                style={[
+                  styles.femaleToggle,
+                  femaleOnly && styles.femaleToggleActive,
+                ]}
+                onPress={() => {
+                  animateLayout();
+                  setSelectedDriverId(null);
+                  setFemaleOnly((v) => !v);
+                }}
+                scaleTo={0.98}
+              >
+                <View
+                  style={[
+                    styles.femaleToggleIcon,
+                    femaleOnly && styles.femaleToggleIconActive,
+                  ]}
+                >
+                  <Ionicons
+                    name="female"
+                    size={16}
+                    color={femaleOnly ? COLORS.white : "#DB2777"}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.femaleToggleTitle}>
+                    Request a female driver
+                  </Text>
+                  <Text style={styles.femaleToggleSub}>
+                    {femaleOnly
+                      ? "Showing female drivers only"
+                      : "Only female drivers will be shown"}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.femaleSwitch,
+                    femaleOnly && styles.femaleSwitchOn,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.femaleSwitchKnob,
+                      femaleOnly && styles.femaleSwitchKnobOn,
+                    ]}
+                  />
+                </View>
+              </PressableScale>
+            )}
 
             {!driversLoading && drivers === null ? null : driversLoading &&
               drivers === null ? (
@@ -2579,6 +2639,66 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 14,
+  },
+
+  /* Female-driver request toggle */
+  femaleToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#FBCFE8",
+    backgroundColor: "#FDF2F8",
+    marginBottom: 14,
+  },
+  femaleToggleActive: {
+    borderColor: "#DB2777",
+    backgroundColor: "#FCE7F3",
+  },
+  femaleToggleIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FBCFE8",
+  },
+  femaleToggleIconActive: {
+    backgroundColor: "#DB2777",
+  },
+  femaleToggleTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#9D174D",
+  },
+  femaleToggleSub: {
+    fontSize: 11,
+    color: "#BE185D",
+    marginTop: 1,
+  },
+  femaleSwitch: {
+    width: 44,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "#F9A8D4",
+    padding: 3,
+    justifyContent: "center",
+  },
+  femaleSwitchOn: {
+    backgroundColor: "#DB2777",
+  },
+  femaleSwitchKnob: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: COLORS.white,
+    alignSelf: "flex-start",
+  },
+  femaleSwitchKnobOn: {
+    alignSelf: "flex-end",
   },
   driverLoadingWrap: { alignItems: "center", paddingVertical: 24, gap: 10 },
   driverLoadingText: {

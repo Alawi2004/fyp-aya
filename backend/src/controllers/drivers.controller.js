@@ -58,6 +58,7 @@ export const getDrivers = async (req, res) => {
         u.full_name,
         u.email,
         u.phone,
+        u.gender,
         d.license_number,
         d.hire_date,
         CONVERT(VARCHAR(10), d.license_expiry_date, 23) AS license_expiry
@@ -87,6 +88,7 @@ export const getDriverById = async (req, res) => {
           u.full_name,
           u.email,
           u.phone,
+          u.gender,
           d.license_number,
           d.hire_date,
           CONVERT(VARCHAR(10), d.license_expiry_date, 23) AS license_expiry
@@ -185,8 +187,13 @@ export const getDriverSchedules = async (req, res) => {
 // ?mode=scheduled&datetime=2026-06-09T10:00:00  → drivers free during that slot
 export const getAvailableDrivers = async (req, res) => {
   try {
-    const { mode, datetime } = req.query;
+    const { mode, datetime, gender } = req.query;
     const pool = await poolPromise;
+
+    // Optional gender filter — e.g. a female passenger requesting a female driver
+    const genderFilter = gender && ['male', 'female'].includes(String(gender).toLowerCase())
+      ? String(gender).toLowerCase()
+      : null;
 
     let requestedAt;
     if (mode === 'scheduled' && datetime) {
@@ -210,11 +217,13 @@ export const getAvailableDrivers = async (req, res) => {
 
     const result = await pool.request()
       .input('requestedAt', sql.DateTime2, requestedAt)
+      .input('gender',      sql.NVarChar(10), genderFilter)
       .query(`
         SELECT
           d.driver_id,
           u.full_name                   AS name,
           u.phone,
+          u.gender,
           ISNULL(rs.avg_rating,    0.0) AS avg_rating,
           ISNULL(rs.total_ratings, 0)   AS total_ratings,
           lv.vehicle_id,
@@ -259,6 +268,7 @@ export const getAvailableDrivers = async (req, res) => {
           WHERE sub.rn = 1
         ) gpsPos ON gpsPos.driver_id = d.driver_id
         WHERE ISNULL(d.is_deleted, 0) = 0
+          AND (@gender IS NULL OR LOWER(u.gender) = @gender)
           AND NOT EXISTS (
             SELECT 1 FROM trips ct
             WHERE ct.driver_id = d.driver_id
