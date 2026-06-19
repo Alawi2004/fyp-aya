@@ -62,11 +62,13 @@ export const getGpsHeatmap = async (req, res) => {
 // Returns actual ticket booking activity aggregated by:
 //   • day-of-week  (0 = Sunday … 6 = Saturday)
 //   • hour-of-day  (0 … 23)
+//   • calendar day (one count per date in the range)
 //
 // Response:
 //   {
 //     heatmap: number[][],   // [7 days][24 hours] — count per cell
 //     peak_hours: { hour: number, count: number }[],
+//     daily: { date: string, count: number }[],   // one entry per day in [from, to]
 //     total: number,
 //     from: string,
 //     to: string
@@ -93,6 +95,16 @@ export const getPassengerHeatmap = async (req, res) => {
           DATEPART(HOUR,    booking_time)
       `);
 
+    const dailyResult = await pool.request()
+      .input("from", sql.Date, from)
+      .input("to",   sql.Date, to)
+      .query(`
+        SELECT CAST(booking_time AS DATE) AS day, COUNT(*) AS cnt
+        FROM tickets
+        WHERE CAST(booking_time AS DATE) BETWEEN @from AND @to
+        GROUP BY CAST(booking_time AS DATE)
+      `);
+
     // Build the 7×24 matrix (all zeros, fill from query)
     const heatmap = Array.from({ length: 7 }, () => new Array(24).fill(0));
     let total = 0;
@@ -108,7 +120,18 @@ export const getPassengerHeatmap = async (req, res) => {
       count: heatmap.reduce((s, day) => s + day[h], 0),
     })).sort((a, b) => b.count - a.count);
 
-    res.json({ heatmap, peak_hours: hourTotals, total, from, to });
+    // Daily counts: fill every calendar day in [from, to] with 0, then overlay real counts
+    const dayCounts = {};
+    for (const { day, cnt } of dailyResult.recordset) {
+      dayCounts[new Date(day).toISOString().slice(0, 10)] = cnt;
+    }
+    const daily = [];
+    for (let d = new Date(from); d <= new Date(to); d.setDate(d.getDate() + 1)) {
+      const key = d.toISOString().slice(0, 10);
+      daily.push({ date: key, count: dayCounts[key] ?? 0 });
+    }
+
+    res.json({ heatmap, peak_hours: hourTotals, daily, total, from, to });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch heatmap data" });

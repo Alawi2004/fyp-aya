@@ -6,7 +6,7 @@ import { DataTable } from "../components/Table";
 import { Modal } from "../components/Modal";
 import { StatusPill } from "../components/StatusPill";
 import { StatCard } from "../components/StatCard";
-import { getUsers, createUser, updateUser, deleteUserApi, getPassengerHeatmap, getDriverSchedules, updateDriverSchedule, getDrivers, getDriverPerformance, adminAdjustWallet, getAuditLogs } from "../api/endpoints";
+import { getUsers, createUser, updateUser, deleteUserApi, getPassengerHeatmap, getTopRoutesReport, getDriverSchedules, updateDriverSchedule, getDrivers, getDriverPerformance, adminAdjustWallet, getAuditLogs } from "../api/endpoints";
 import { useSettings } from "../context/SettingsContext";
 import { fmtMoney } from "../utils/fmt";
 
@@ -856,64 +856,45 @@ function ExportMenu({ users, roleFilter }) {
   );
 }
 
-// ── Heatmap colour helper ─────────────────────────────────────────────────────
-function heatColor(val, max) {
-  if (max === 0 || val === 0) return "#F1F5F9";
-  const t = Math.min(val / max, 1);
-  // white-ish → light blue → blue → dark blue
-  const stops = [[241,245,249],[219,234,254],[147,197,253],[37,99,235],[30,64,175]];
-  const seg  = t * (stops.length - 1);
-  const lo   = Math.floor(seg);
-  const hi   = Math.min(lo + 1, stops.length - 1);
-  const f    = seg - lo;
-  const c    = stops[lo].map((v, i) => Math.round(v + f * (stops[hi][i] - v)));
-  return `rgb(${c[0]},${c[1]},${c[2]})`;
-}
-
 // ── Passenger Activity tab ────────────────────────────────────────────────────
-const HMAP_DAYS  = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const HMAP_HOURS = Array.from({ length: 24 }, (_, i) => i);
-
-const HEATMAP_MIN_RECORDS = 100; // minimum ticket records needed to show the grid
-
 function ActivityTab({ users }) {
-  const [heatmapData,    setHeatmapData]    = useState(null);  // null = loading
-  const [peakHours,      setPeakHours]      = useState([]);
-  const [heatmapTotal,   setHeatmapTotal]   = useState(null);  // null=loading, 0=error, N=count
-  const [heatmapLoading, setHeatmapLoading] = useState(true);
+  const [daily,        setDaily]        = useState([]);
+  const [peakHours,    setPeakHours]    = useState([]);
+  const [topRoutes,    setTopRoutes]    = useState([]);
+  const [total,        setTotal]        = useState(null); // null = loading
+  const [loadErr,      setLoadErr]      = useState(false);
 
   useEffect(() => {
     const to   = new Date().toISOString().slice(0, 10);
-    const from = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-    setHeatmapLoading(true);
-    getPassengerHeatmap(from, to)
-      .then(d => {
-        const total = d?.total ?? 0;
-        setHeatmapTotal(total);
-        if (total >= HEATMAP_MIN_RECORDS && d?.heatmap) {
-          setHeatmapData(d.heatmap);
-          if (d?.peak_hours) setPeakHours(d.peak_hours);
-        } else {
-          setHeatmapData(null); // not enough data
-        }
-      })
-      .catch(() => {
-        setHeatmapTotal(0); // API unreachable — treat as insufficient
-        setHeatmapData(null);
-      })
-      .finally(() => setHeatmapLoading(false));
+    const from = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
+
+    Promise.allSettled([
+      getPassengerHeatmap(from, to),
+      getTopRoutesReport(from, to),
+    ]).then(([heatmapRes, routesRes]) => {
+      if (heatmapRes.status === "fulfilled") {
+        const d = heatmapRes.value;
+        setDaily(Array.isArray(d?.daily) ? d.daily : []);
+        setPeakHours(Array.isArray(d?.peak_hours) ? d.peak_hours : []);
+        setTotal(d?.total ?? 0);
+      } else {
+        setLoadErr(true);
+        setTotal(0);
+      }
+      if (routesRes.status === "fulfilled") {
+        const rows = routesRes.value?.data ?? routesRes.value ?? [];
+        setTopRoutes(Array.isArray(rows) ? rows : []);
+      }
+    });
   }, []);
 
   const passengers = users.filter(u => u.role === "Passenger");
+  const loading     = total === null;
 
-  const hasData  = !heatmapLoading && heatmapData !== null && heatmapTotal >= HEATMAP_MIN_RECORDS;
-
-  const heatData = hasData ? heatmapData : [];
-  const maxHeat  = hasData ? Math.max(...heatData.flat(), 1) : 1;
-
-  const peakData = peakHours;
-  const maxPeak  = Math.max(...peakData.map(h => h.count), 1);
-  const top3     = [...peakData].sort((a, b) => b.count - a.count).slice(0, 3).map(h => h.hour);
+  const maxDaily  = Math.max(...daily.map(d => d.count), 1);
+  const maxPeak   = Math.max(...peakHours.map(h => h.count), 1);
+  const top3Hours = [...peakHours].sort((a, b) => b.count - a.count).slice(0, 3).map(h => h.hour);
+  const maxRoute  = Math.max(...topRoutes.map(r => r.passengers ?? 0), 1);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -923,77 +904,44 @@ function ActivityTab({ users }) {
         <span style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>{passengers.length} total passengers</span>
       </div>
 
-      {/* Heatmap */}
-      <Panel title={`Activity Heatmap — Trips by Hour & Day${hasData ? ` · ${heatmapTotal.toLocaleString()} records` : ""}`}>
-        {heatmapLoading ? (
-          /* Loading state */
+      {/* Daily booking activity */}
+      <Panel title={`Booking Activity — Last 30 Days${!loading ? ` · ${total.toLocaleString()} bookings` : ""}`}>
+        {loading ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, padding: "40px 0", color: "#94A3B8" }}>
             <div style={{ width: 20, height: 20, borderRadius: "50%", border: "2px solid #E2E8F0", borderTopColor: "#6D28D9", animation: "spin 0.7s linear infinite" }} />
             <span style={{ fontSize: 13 }}>Loading booking data…</span>
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
           </div>
-        ) : !hasData ? (
-          /* Insufficient data state */
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: "48px 20px", color: "#94A3B8" }}>
-            <div style={{ fontSize: 36 }}>📊</div>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#374151", marginBottom: 6 }}>
-                Insufficient data
-              </div>
-              <div style={{ fontSize: 12, color: "#94A3B8", maxWidth: 380 }}>
-                {heatmapTotal === 0 && heatmapTotal !== null
-                  ? "Could not reach the analytics endpoint. Check the backend connection."
-                  : `Only ${heatmapTotal ?? 0} booking record${heatmapTotal !== 1 ? "s" : ""} found in the last 30 days. At least ${HEATMAP_MIN_RECORDS} are needed to generate a meaningful activity pattern.`}
-              </div>
-            </div>
+        ) : loadErr ? (
+          <div style={{ padding: "32px 0", textAlign: "center", color: "#94A3B8", fontSize: 13 }}>
+            Could not reach the analytics endpoint. Check the backend connection.
+          </div>
+        ) : daily.length === 0 ? (
+          <div style={{ padding: "32px 0", textAlign: "center", color: "#94A3B8", fontSize: 13 }}>
+            No bookings recorded in the last 30 days.
           </div>
         ) : (
-          /* Real heatmap grid */
-          <div style={{ overflowX: "auto" }}>
-            {/* Hour header */}
-            <div style={{ display: "flex", marginLeft: 40, marginBottom: 4, gap: 0 }}>
-              {HMAP_HOURS.map(h => (
-                <div key={h} style={{ width: 26, textAlign: "center", fontSize: 9, color: h % 6 === 0 ? "#475569" : "transparent", fontWeight: 700, flexShrink: 0 }}>
-                  {`${h}h`}
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 140, overflowX: "auto", paddingTop: 6 }}>
+            {daily.map(d => {
+              const pct  = Math.round((d.count / maxDaily) * 100);
+              const date = new Date(d.date);
+              return (
+                <div key={d.date} title={`${date.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} — ${d.count} booking${d.count !== 1 ? "s" : ""}`}
+                  style={{ flex: 1, minWidth: 8, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
+                  <div style={{
+                    width: "100%", maxWidth: 18, height: `${Math.max(pct, d.count > 0 ? 4 : 0)}%`,
+                    background: d.count > 0 ? "#6D28D9" : "#F1F5F9", borderRadius: 3,
+                    transition: "height .3s ease",
+                  }} />
                 </div>
-              ))}
-            </div>
-
-            {/* Day rows */}
-            {HMAP_DAYS.map((day, d) => (
-              <div key={day} style={{ display: "flex", alignItems: "center", marginBottom: 2 }}>
-                <div style={{ width: 36, fontSize: 10, fontWeight: 600, color: d >= 5 ? "#7C3AED" : "#64748B", textAlign: "right", paddingRight: 6, flexShrink: 0 }}>
-                  {day}
-                </div>
-                {HMAP_HOURS.map(h => {
-                  const val = heatData[d]?.[h] ?? 0;
-                  return (
-                    <div
-                      key={h}
-                      title={`${day} ${String(h).padStart(2, "0")}:00 — ${val} bookings`}
-                      style={{
-                        width: 24, height: 20, borderRadius: 3, margin: "0 1px",
-                        background: heatColor(val, maxHeat),
-                        border: "1px solid rgba(255,255,255,0.5)",
-                        cursor: "default", flexShrink: 0, transition: "transform .1s",
-                      }}
-                      onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.5)"; e.currentTarget.style.zIndex = "10"; e.currentTarget.style.position = "relative"; }}
-                      onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.zIndex = "0"; e.currentTarget.style.position = "static"; }}
-                    />
-                  );
-                })}
-              </div>
-            ))}
-
-            {/* Legend */}
-            <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 10, marginLeft: 40 }}>
-              <span style={{ fontSize: 10, color: "#94A3B8" }}>Low</span>
-              {[0, 0.15, 0.35, 0.55, 0.75, 1].map(t => (
-                <div key={t} style={{ width: 18, height: 14, borderRadius: 3, background: heatColor(Math.round(t * maxHeat), maxHeat), flexShrink: 0 }} />
-              ))}
-              <span style={{ fontSize: 10, color: "#94A3B8" }}>High</span>
-              <span style={{ fontSize: 10, color: "#CBD5E1", marginLeft: 8 }}>Hover for exact count</span>
-            </div>
+              );
+            })}
+          </div>
+        )}
+        {!loading && !loadErr && daily.length > 0 && (
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 10, color: "#94A3B8" }}>
+            <span>{new Date(daily[0].date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
+            <span>{new Date(daily[daily.length - 1].date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
           </div>
         )}
       </Panel>
@@ -1003,52 +951,55 @@ function ActivityTab({ users }) {
 
         {/* Peak hours bar chart */}
         <Panel title="Peak Hours">
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {peakData.map(h => {
-              const isTop = top3.includes(h.hour);
-              const pct   = Math.round((h.count / maxPeak) * 100);
-              return (
-                <div key={h.hour} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontSize: 11, fontWeight: isTop ? 700 : 400, color: isTop ? "#0F172A" : "#64748B", width: 36, flexShrink: 0, textAlign: "right" }}>
-                    {h.label}
-                  </span>
-                  <div style={{ flex: 1, height: 18, background: "#F1F5F9", borderRadius: 4, overflow: "hidden" }}>
-                    <div style={{
-                      width: `${pct}%`, height: "100%", borderRadius: 4,
-                      background: isTop ? "#6D28D9" : "#DDD6FE",
-                      transition: "width .4s ease",
-                    }} />
+          {peakHours.length === 0 || total === 0 ? (
+            <div style={{ padding: "24px 0", textAlign: "center", color: "#94A3B8", fontSize: 12 }}>No bookings yet.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[...peakHours].sort((a, b) => a.hour - b.hour).map(h => {
+                const isTop = top3Hours.includes(h.hour);
+                const pct   = Math.round((h.count / maxPeak) * 100);
+                return (
+                  <div key={h.hour} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: isTop ? 700 : 400, color: isTop ? "#0F172A" : "#64748B", width: 36, flexShrink: 0, textAlign: "right" }}>
+                      {`${h.hour}:00`}
+                    </span>
+                    <div style={{ flex: 1, height: 18, background: "#F1F5F9", borderRadius: 4, overflow: "hidden" }}>
+                      <div style={{
+                        width: `${pct}%`, height: "100%", borderRadius: 4,
+                        background: isTop ? "#6D28D9" : "#DDD6FE",
+                        transition: "width .4s ease",
+                      }} />
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: isTop ? 700 : 400, color: isTop ? "#0F172A" : "#94A3B8", width: 38, flexShrink: 0 }}>
+                      {h.count}
+                      {isTop && h.count > 0 && <span style={{ fontSize: 9, color: "#6D28D9", marginLeft: 2 }}>▲</span>}
+                    </span>
                   </div>
-                  <span style={{ fontSize: 11, fontWeight: isTop ? 700 : 400, color: isTop ? "#0F172A" : "#94A3B8", width: 38, flexShrink: 0 }}>
-                    {h.count}
-                    {isTop && <span style={{ fontSize: 9, color: "#6D28D9", marginLeft: 2 }}>▲</span>}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </Panel>
 
-        {/* Route popularity by category */}
+        {/* Route popularity — real top-routes data by passenger count */}
         <Panel title="Route Popularity">
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {[].map(route => {
-              const total = Object.entries(route)
-                .filter(([k]) => k !== "route")
-                .reduce((s, [, v]) => s + v, 0);
-              return (
+          {topRoutes.length === 0 ? (
+            <div style={{ padding: "24px 0", textAlign: "center", color: "#94A3B8", fontSize: 12 }}>No route activity in the last 30 days.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {topRoutes.slice(0, 6).map(route => (
                 <div key={route.route}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: "#0F172A" }}>{route.route}</span>
-                    <span style={{ fontSize: 11, color: "#64748B" }}>{total} trips</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#0F172A" }}>{route.name ?? route.route}</span>
+                    <span style={{ fontSize: 11, color: "#64748B" }}>{route.passengers} passenger{route.passengers !== 1 ? "s" : ""}</span>
                   </div>
                   <div style={{ height: 12, background: "#F1F5F9", borderRadius: 6, overflow: "hidden" }}>
-                    <div style={{ width: "100%", height: "100%", borderRadius: 6, background: "#6D28D9" }} />
+                    <div style={{ width: `${Math.round((route.passengers / maxRoute) * 100)}%`, height: "100%", borderRadius: 6, background: "#6D28D9" }} />
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
         </Panel>
       </div>
     </div>

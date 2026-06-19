@@ -194,8 +194,6 @@ export const getStaffAccounts         = ()         => apiClient.get('/staff/acco
 export const updateStaffAccount       = (id, data) => apiClient.put(`/staff/accounts/${id}`, data);
 export const getStaffTransactions     = ()         => apiClient.get('/staff/wallet/all-history');
 export const getSuspiciousTransactions = ()        => apiClient.get('/staff/wallet/suspicious');
-export const getReconciliation        = (date)     => apiClient.get(`/staff/reconciliation?date=${date}`);
-export const submitReconciliation     = (id, data) => apiClient.put(`/staff/reconciliation/${id}`, data);
 
 // Wallet Freeze
 export const getWalletStatuses  = ()         => apiClient.get('/wallet/statuses');
