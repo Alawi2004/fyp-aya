@@ -1200,7 +1200,7 @@ export default function TripsPage() {
   async function handleSaveTrip(form) {
     const isEdit = tripModal && tripModal !== false;
     const start_time = form.date && form.time
-      ? `${form.date}T${form.time}:00`
+      ? `${form.date}T${form.time}:00.000Z`
       : null;
 
     if (isEdit) {

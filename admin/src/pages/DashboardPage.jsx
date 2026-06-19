@@ -160,7 +160,7 @@ export default function DashboardPage({ onNavigate }) {
         route_id:   form.route_id   ?? null,
         driver_id:  form.driver_id  ?? null,
         vehicle_id: form.vehicle_id ?? null,
-        start_time: `${form.date}T${form.time}:00`,
+        start_time: `${form.date}T${form.time}:00.000Z`,
         status:     form.status.toLowerCase(),
       });
       getDashboardStats().then(d => setStats(d)).catch(() => {});
