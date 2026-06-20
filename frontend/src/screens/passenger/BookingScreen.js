@@ -263,6 +263,21 @@ const BookingScreen = ({ route, navigation }) => {
     }, [bus._id])
   );
 
+  // Carpool ↔ Private are mutually exclusive at the trip level: a private ride
+  // takes the whole car, while carpool riders mean the car is already shared.
+  const hasFullBooking   = bookedSeats.includes('FULL');
+  const hasCarpoolRiders = bookedSeats.some((s) => s !== 'FULL');
+  const privateAvailable = !hasFullBooking && !hasCarpoolRiders; // needs an empty car
+  const carpoolAvailable = !hasFullBooking;
+
+  // Once the car has carpool riders, the private option is gone — force carpool on.
+  useEffect(() => {
+    if (hasCarpoolOpt && hasCarpoolRiders && !carpool) {
+      setCarpool(true);
+      setSelectedSeats([]);
+    }
+  }, [hasCarpoolOpt, hasCarpoolRiders]); // eslint-disable-line
+
   const tripPrice     = parseFloat(busPrice);
   const perSeatPrice  = isTaxi && carpool && carpoolPrice != null
     ? parseFloat(carpoolPrice)
@@ -274,9 +289,12 @@ const BookingScreen = ({ route, navigation }) => {
     : selectedSeats.length > 0 && walletBalance < totalPrice;
   const shortfall = Math.max(0, totalPrice - walletBalance);
   const availableSeats = totalSeats - bookedSeats.length;
-  const canBook = isFullTrip
+  // Block booking a taxi mode that's no longer available (private on a shared car,
+  // or anything on a privately-booked car).
+  const modeUnavailable = isTaxi && ((carpool && !carpoolAvailable) || (!carpool && !privateAvailable));
+  const canBook = (isFullTrip
     ? walletBalance >= tripPrice
-    : selectedSeats.length > 0 && !insufficientBalance;
+    : selectedSeats.length > 0 && !insufficientBalance) && !modeUnavailable;
 
   const handleSeatsChange = (seats) => {
     animateLayout();
@@ -284,6 +302,15 @@ const BookingScreen = ({ route, navigation }) => {
   };
 
   const handleConfirm = async () => {
+    if (modeUnavailable) {
+      Alert.alert(
+        "Option Unavailable",
+        hasFullBooking
+          ? "This car has already been booked as a private ride and is no longer available."
+          : "This car already has carpool riders, so it can't be booked privately. Choose Carpool instead."
+      );
+      return;
+    }
     if (!isFullTrip && selectedSeats.length === 0) {
       Alert.alert(
         "No Seat Selected",
@@ -625,24 +652,49 @@ const BookingScreen = ({ route, navigation }) => {
               <Text style={styles.carpoolTitle}>How do you want to travel?</Text>
               <View style={styles.carpoolRow}>
                 <PressableScale
-                  style={[styles.carpoolBtn, !carpool && styles.carpoolBtnActive]}
-                  onPress={() => { setCarpool(false); setSelectedSeats([]); }}
-                  scaleTo={0.96}
+                  style={[
+                    styles.carpoolBtn,
+                    !carpool && privateAvailable && styles.carpoolBtnActive,
+                    !privateAvailable && styles.carpoolBtnDisabled,
+                  ]}
+                  onPress={() => {
+                    if (!privateAvailable) return;
+                    setCarpool(false); setSelectedSeats([]);
+                  }}
+                  scaleTo={privateAvailable ? 0.96 : 1}
                 >
-                  <Ionicons name="car" size={18} color={!carpool ? COLORS.white : PURPLE.primary} />
-                  <Text style={[styles.carpoolBtnLabel, !carpool && styles.carpoolBtnLabelActive]}>Private</Text>
-                  <Text style={[styles.carpoolBtnSub,   !carpool && styles.carpoolBtnSubActive]}>{fmtMoney(tripPrice)}</Text>
+                  <Ionicons name="car" size={18} color={!privateAvailable ? COLORS.textMuted : !carpool ? COLORS.white : PURPLE.primary} />
+                  <Text style={[styles.carpoolBtnLabel, !carpool && privateAvailable && styles.carpoolBtnLabelActive, !privateAvailable && styles.carpoolBtnLabelDisabled]}>Private</Text>
+                  <Text style={[styles.carpoolBtnSub, !carpool && privateAvailable && styles.carpoolBtnSubActive, !privateAvailable && styles.carpoolBtnLabelDisabled]}>
+                    {privateAvailable ? fmtMoney(tripPrice) : 'Unavailable'}
+                  </Text>
                 </PressableScale>
                 <PressableScale
-                  style={[styles.carpoolBtn, carpool && styles.carpoolBtnActive]}
-                  onPress={() => setCarpool(true)}
-                  scaleTo={0.96}
+                  style={[
+                    styles.carpoolBtn,
+                    carpool && carpoolAvailable && styles.carpoolBtnActive,
+                    !carpoolAvailable && styles.carpoolBtnDisabled,
+                  ]}
+                  onPress={() => {
+                    if (!carpoolAvailable) return;
+                    setCarpool(true);
+                  }}
+                  scaleTo={carpoolAvailable ? 0.96 : 1}
                 >
-                  <Ionicons name="people" size={18} color={carpool ? COLORS.white : PURPLE.primary} />
-                  <Text style={[styles.carpoolBtnLabel, carpool && styles.carpoolBtnLabelActive]}>Carpool</Text>
-                  <Text style={[styles.carpoolBtnSub,   carpool && styles.carpoolBtnSubActive]}>{fmtMoney(perSeatPrice)} / seat</Text>
+                  <Ionicons name="people" size={18} color={!carpoolAvailable ? COLORS.textMuted : carpool ? COLORS.white : PURPLE.primary} />
+                  <Text style={[styles.carpoolBtnLabel, carpool && carpoolAvailable && styles.carpoolBtnLabelActive, !carpoolAvailable && styles.carpoolBtnLabelDisabled]}>Carpool</Text>
+                  <Text style={[styles.carpoolBtnSub, carpool && carpoolAvailable && styles.carpoolBtnSubActive, !carpoolAvailable && styles.carpoolBtnLabelDisabled]}>
+                    {carpoolAvailable ? `${fmtMoney(perSeatPrice)} / seat` : 'Unavailable'}
+                  </Text>
                 </PressableScale>
               </View>
+              {!privateAvailable && (
+                <Text style={styles.carpoolHint}>
+                  {hasFullBooking
+                    ? 'This car has been booked as a private ride and is no longer available.'
+                    : 'This car already has carpool riders — only carpool seats can be booked.'}
+                </Text>
+              )}
             </View>
           </FadeInView>
         )}
@@ -1074,6 +1126,18 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
   },
   carpoolBtnSubActive: { color: 'rgba(255,255,255,0.82)' },
+  carpoolBtnDisabled: {
+    backgroundColor: COLORS.background,
+    borderColor: COLORS.border,
+    opacity: 0.6,
+  },
+  carpoolBtnLabelDisabled: { color: COLORS.textMuted },
+  carpoolHint: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+    marginTop: 10,
+  },
 
   /* Seat card */
   seatCard: { marginBottom: 12 },
