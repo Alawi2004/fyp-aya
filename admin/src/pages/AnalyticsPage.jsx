@@ -283,7 +283,7 @@ function makeOverviewCols(currency) {
   ];
 }
 
-function OverviewTab({ range, revenueRows, revenueTrendRows, topRoutes, hourlyLoad, kpi, loading, currency }) {
+function OverviewTab({ range, revenueRows, revenueTrendRows, topRoutes, hourlyLoad, kpi, loading, currency, exchangeRate }) {
   const barData     = groupRevenue(revenueRows, range);
   const monthlyData = groupMonthly(revenueTrendRows.length ? revenueTrendRows : revenueRows);
   const peakHour    = hourlyLoad.length ? hourlyLoad.reduce((p, c) => c.value > p.value ? c : p, { label:"—", value:0 }) : null;
@@ -936,7 +936,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Tab content */}
-      {tab === "overview"  && <OverviewTab        range={range} revenueRows={revenueRows} revenueTrendRows={revenueTrendRows} topRoutes={topRoutes} hourlyLoad={hourlyLoad} kpi={kpi} loading={loading} currency={currency} />}
+      {tab === "overview"  && <OverviewTab        range={range} revenueRows={revenueRows} revenueTrendRows={revenueTrendRows} topRoutes={topRoutes} hourlyLoad={hourlyLoad} kpi={kpi} loading={loading} currency={currency} exchangeRate={exchangeRate} />}
       {tab === "drivers"   && <DriverPerformanceTab range={range} driverPerf={driverPerf} loading={loading} />}
       {tab === "vehicles"  && <VehicleUtilizationTab range={range} vehicleUtil={vehicleUtil} loading={loading} />}
       {tab === "schedule"  && <ScheduledReportsTab />}
