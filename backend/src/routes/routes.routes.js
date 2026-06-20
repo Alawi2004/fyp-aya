@@ -6,6 +6,7 @@ import {
   getWaypoints, saveWaypoints,
   getFareZones, createFareZone, updateFareZone, deleteFareZone,
   assignStopToZone, removeStopFromZone,
+  getRouteTravelTime,
 } from "../controllers/routes.controller.js";
 import { requirePermission } from "../middleware/permissions.middleware.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
@@ -223,7 +224,8 @@ router.delete("/:route_id/stops/:stop_id", removeStopFromRoute);
 router.put("/stops/:stop_id/position", updateStopPosition);
 
 // ── Route overlap detection ───────────────────────────────────────────────────
-router.get("/:id/overlap", checkRouteOverlap);
+router.get("/:id/overlap",      checkRouteOverlap);
+router.get("/:id/travel-time",  getRouteTravelTime);
 
 // ── Waypoints ─────────────────────────────────────────────────────────────────
 router.get("/:id/waypoints",  getWaypoints);

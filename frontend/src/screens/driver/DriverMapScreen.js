@@ -14,6 +14,7 @@ import {
   getDriverTripsApi, startTripApi, completeTripApi, cancelTripApi,
   updateLocationApi,
 } from '../../api/driverApi';
+import { getTripEtaPredictions } from '../../api/etaApi';
 import { useApp } from '../../context/AppContext';
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -24,6 +25,7 @@ const SPEED_KMH_DEFAULT   = 25;   // fallback when GPS speed unavailable
 const ROAD_FACTOR         = 1.35; // haversine → actual road distance ratio
 const GPS_WATCH_MS        = 2000; // local position update (2 s — smooth ETA)
 const SPEED_BUFFER_SIZE   = 5;    // rolling window for speed smoothing
+const HERE_ETA_POLL_MS    = 30_000; // how often to refresh HERE ETAs from backend
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const haversine = (lat1, lon1, lat2, lon2) => {
@@ -268,6 +270,9 @@ const DriverMapScreen = ({ navigation, route }) => {
   const speedBuf      = useRef([]);          // rolling GPS speed readings (km/h)
   const [liveSpeed, setLiveSpeed] = useState(null); // smoothed speed in km/h
 
+  // HERE-powered ETAs from the backend (stop_id → eta_min in minutes)
+  const [hereStopEtas, setHereStopEtas] = useState({});
+
   // ── GPS: get location immediately, independent of tripId ──
   useEffect(() => {
     let sub;
@@ -382,11 +387,31 @@ const DriverMapScreen = ({ navigation, route }) => {
     return () => pulse.stop();
   }, []);
 
+  // ── HERE ETA polling — fetch backend stop ETAs every 30 s ──
+  useEffect(() => {
+    if (!effectiveTripId) { setHereStopEtas({}); return; }
+    let dead = false;
+    const fetchHere = () =>
+      getTripEtaPredictions(effectiveTripId)
+        .then(res => {
+          if (dead) return;
+          const map = {};
+          for (const s of res.data?.stops ?? []) map[s.stop_id] = s.eta_min;
+          setHereStopEtas(map);
+        })
+        .catch(() => {});
+    fetchHere();
+    const t = setInterval(fetchHere, HERE_ETA_POLL_MS);
+    return () => { dead = true; clearInterval(t); };
+  }, [effectiveTripId]);
+
   // ── Per-stop ETAs ──
-  // Use live GPS speed when available; fall back to SPEED_KMH_DEFAULT.
+  // Prefer HERE routing ETAs (live traffic); fall back to local haversine.
   const effectiveSpeed = liveSpeed ?? SPEED_KMH_DEFAULT;
   const stopsWithEta = stops.map((stop, idx) => {
     if (stop.done || !location) return { ...stop, eta: null };
+    const hereMin = hereStopEtas[stop.stop_id];
+    if (hereMin != null) return { ...stop, eta: Math.max(1, Math.round(hereMin)) };
     const ahead = stops.slice(0, idx).filter(s => !s.done).length;
     return { ...stop, eta: calcEta(location.latitude, location.longitude, stop.lat, stop.lng, ahead, effectiveSpeed) };
   });

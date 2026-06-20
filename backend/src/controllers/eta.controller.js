@@ -6,7 +6,7 @@ import {
   getDayForecast,
   formatDelayDescription,
 } from '../modules/eta/trafficModel.js';
-import { getEtasFromPosition } from '../modules/eta/osrmClient.js';
+import { getEtasFromPosition } from '../modules/eta/hereClient.js';
 import { getHistoricalStats, getRouteHourlyProfile } from '../modules/eta/historicalAnalyzer.js';
 
 const haversineMeters = (a, b) => {
@@ -111,20 +111,22 @@ export const getTripEtaPredictions = async (req, res) => {
     const trafficMult = getTrafficMultiplier(now);
     const trafficCond = getTrafficCondition(trafficMult);
 
-    // --- 7. OSRM road ETAs (single multi-waypoint request) ---
-    const osrmEtas = await getEtasFromPosition(currentPos, remainingStops);
+    // --- 7. HERE road ETAs — real-time traffic, single multi-waypoint request ---
+    const hereEtas = await getEtasFromPosition(currentPos, remainingStops);
 
     // --- 8. Historical stats for blending ---
     const historical = await getHistoricalStats(pool, trip.route_id, now.getHours(), now.getDay()).catch(() => null);
-    const totalOsrmMin = osrmEtas.at(-1)?.cumulative_min || 1;
+    const totalBaseMin = hereEtas.at(-1)?.cumulative_min || 1;
 
     // --- 9. Build per-stop ETA list ---
-    const stops = osrmEtas.map((eta, i) => {
-      const baseMin = eta.cumulative_min;
-      const trafficMin = baseMin * trafficMult;
+    const stops = hereEtas.map((eta, i) => {
+      const baseMin    = eta.cumulative_min;
+      // HERE already embeds live traffic — skip static multiplier to avoid double-counting
+      const typicalMin = eta.cumulative_min_typical ?? baseMin;
+      const trafficMin = eta.traffic_included ? baseMin : baseMin * trafficMult;
 
       // Segment ratio: proportion of total route this stop represents
-      const segRatio = totalOsrmMin > 0 ? baseMin / totalOsrmMin : 1;
+      const segRatio = totalBaseMin > 0 ? baseMin / totalBaseMin : 1;
       const blended = blendEta(trafficMin, historical, segRatio);
       const finalMin = Math.max(0.5, blended);
 
@@ -137,7 +139,7 @@ export const getTripEtaPredictions = async (req, res) => {
         stop_order: stop.stop_order,
         status: i === 0 ? 'next' : 'upcoming',
         eta_min: Math.round(finalMin * 10) / 10,
-        eta_min_base: Math.round(baseMin * 10) / 10,      // OSRM no-traffic baseline
+        eta_min_base: Math.round(typicalMin * 10) / 10,   // no-traffic baseline
         eta_time: etaTime.toTimeString().slice(0, 5),      // "HH:MM"
         eta_iso: etaTime.toISOString(),
         distance_m: eta.cumulative_distance_m,
@@ -145,7 +147,9 @@ export const getTripEtaPredictions = async (req, res) => {
       };
     });
 
-    const dataConfidence = osrmEtas.every((e) => e.source === 'osrm') ? 0.92 : 0.72;
+    const dataConfidence = hereEtas.every((e) => e.source === 'here')     ? 0.95
+                         : hereEtas.every((e) => e.source === 'osrm')    ? 0.92
+                         : 0.72;
 
     return res.json({
       trip_id: tripId,
@@ -165,6 +169,7 @@ export const getTripEtaPredictions = async (req, res) => {
       },
       stops,
       confidence: dataConfidence,
+      routing_source: hereEtas[0]?.source ?? 'fallback',
       historical_samples: historical?.samples ?? 0,
       best_departure_windows: getBestDepartureWindows(now),
       generated_at: now.toISOString(),

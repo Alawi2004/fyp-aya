@@ -1202,6 +1202,9 @@ export default function TripsPage() {
     const start_time = form.date && form.time
       ? `${form.date}T${form.time}:00.000Z`
       : null;
+    const end_time = form.date && form.end_time
+      ? `${form.date}T${form.end_time}:00.000Z`
+      : null;
 
     if (isEdit) {
       try {
@@ -1210,6 +1213,7 @@ export default function TripsPage() {
           driver_id:        form.driver_id  ?? null,
           vehicle_id:       form.vehicle_id ?? null,
           start_time,
+          end_time,
           status:           form.status.toLowerCase(),
           price:            form.price !== "" && form.price != null ? Number(form.price) : null,
           carpool_discount: form.carpool_discount !== "" && form.carpool_discount != null ? Number(form.carpool_discount) : null,
@@ -1227,6 +1231,7 @@ export default function TripsPage() {
           driver_id:  form.driver_id  ?? null,
           vehicle_id: form.vehicle_id ?? null,
           start_time,
+          end_time,
           status:     form.status.toLowerCase(),
           price:            form.price !== "" && form.price != null ? Number(form.price) : null,
           carpool_discount: form.carpool_discount !== "" && form.carpool_discount != null ? Number(form.carpool_discount) : null,

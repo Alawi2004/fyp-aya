@@ -1,6 +1,6 @@
 ﻿// pages/LiveTrackingPage.jsx
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { getTripGpsLogs, getGpsHeatmap, getLiveGps, getTrips, getWaypoints, getRouteStops, getSystemSettings } from '../api/endpoints';
+import { getTripGpsLogs, getGpsHeatmap, getLiveGps, getTrips, getWaypoints, getRouteStops, getSystemSettings, getTripEtaPredictions } from '../api/endpoints';
 
 // ── WebSocket GPS stream (admin "subscribe_all") ──────────────────────────────
 const WS_URL = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api')
@@ -537,6 +537,9 @@ export default function LiveTrackingPage() {
   const [serverGeoAlerts, setServerGeoAlerts] = useState([]);
   const tickRef = useRef(0);
 
+  // HERE ETA per trip: { [trip_id]: { stops, traffic, routing_source } }
+  const [tripEtaMap, setTripEtaMap] = useState({});
+
   // Keep busesRef in sync so the signal-loss check sees the latest bus list
   useEffect(() => { busesRef.current = buses; }, [buses]);
 
@@ -552,6 +555,20 @@ export default function LiveTrackingPage() {
       })
       .catch(() => {});
   }, []);
+
+  // Fetch HERE ETA for the selected trip and keep it fresh every 30 s
+  const _selectedTripId = buses.find(b => b.id === selected)?.trip_id ?? null;
+  useEffect(() => {
+    if (!_selectedTripId) return;
+    let dead = false;
+    const fetch30 = () =>
+      getTripEtaPredictions(_selectedTripId)
+        .then(res => { if (!dead) setTripEtaMap(prev => ({ ...prev, [_selectedTripId]: res.data })); })
+        .catch(() => {});
+    fetch30();
+    const t = setInterval(fetch30, 30_000);
+    return () => { dead = true; clearInterval(t); };
+  }, [_selectedTripId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load real active trips from the backend on mount
   useEffect(() => {
@@ -1104,7 +1121,13 @@ export default function LiveTrackingPage() {
                 </div>
                 {/* Row 4: ETA + seat pill */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 11, color: '#6D28D9', fontWeight: 700 }}>ETA {bus.trafficInfo.adjustedEta}</span>
+                  {(() => {
+                    const h = tripEtaMap[bus.trip_id]?.stops?.[0];
+                    const label = h?.eta_min != null
+                      ? (h.eta_min < 1 ? 'Arriving' : `${Math.round(h.eta_min)} min`)
+                      : bus.trafficInfo.adjustedEta;
+                    return <span style={{ fontSize: 11, color: '#6D28D9', fontWeight: 700 }}>ETA {label}</span>;
+                  })()}
                   <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 999,
                                   background: bus.seatInfo.bg, color: bus.seatInfo.color, fontWeight: 700, flexShrink: 0 }}>
                     {bus.seatInfo.label}
@@ -1165,7 +1188,12 @@ export default function LiveTrackingPage() {
             { label: 'Driver',   value: selectedBus.driver },
             { label: 'Vehicle',  value: selectedBus.vehicle },
             { label: 'Speed',    value: `${selectedBus.speed} km/h` },
-            { label: 'ETA',      value: selectedBus.trafficInfo.adjustedEta },
+            { label: 'ETA', value: (() => {
+                const h = tripEtaMap[selectedBus.trip_id]?.stops?.[0];
+                return h?.eta_min != null
+                  ? (h.eta_min < 1 ? 'Arriving' : `${Math.round(h.eta_min)} min`)
+                  : selectedBus.trafficInfo.adjustedEta;
+              })() },
             { label: 'Seats',    value: selectedBus.seatInfo.label,
                                   valueColor: selectedBus.seatInfo.color },
             { label: 'Position', value: selectedBus.lat != null

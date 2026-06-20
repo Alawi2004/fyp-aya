@@ -119,7 +119,7 @@ router.get("/:id/passenger-load", getPassengerLoad);
  *     tags: [Trips]
  *     summary: Get real-time ETA predictions for all remaining stops on a trip
  *     description: >
- *       Uses OSRM road routing, Beirut traffic model (time-of-day + day-of-week),
+ *       Uses HERE Routing API v8 (live traffic), Beirut traffic model (time-of-day + day-of-week),
  *       and historical GPS data to compute accurate ETAs from the bus's current GPS position.
  *     parameters:
  *       - in: path

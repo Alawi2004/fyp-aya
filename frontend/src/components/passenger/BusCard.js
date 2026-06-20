@@ -100,6 +100,11 @@ const BusCard = ({ bus, onPress, fmtMoney, isFavorite = false, onToggleFavorite 
           </View>
           <Text style={styles.busRoute} numberOfLines={1}>{bus.route}</Text>
         </View>
+        {/* Duration badge — matches BookingScreen's durationBadge in header */}
+        <View style={styles.durationBadge}>
+          <Ionicons name="time-outline" size={12} color={PURPLE.primary} />
+          <Text style={styles.durationText}>{bus.duration}</Text>
+        </View>
         {onToggleFavorite && bus.schedule_recurrence && (
           <TouchableOpacity
             style={styles.heartBtn}
@@ -142,10 +147,6 @@ const BusCard = ({ bus, onPress, fmtMoney, isFavorite = false, onToggleFavorite 
       {/* Footer */}
       <View style={styles.footer}>
         <View style={styles.footerMeta}>
-          <View style={styles.metaItem}>
-            <Ionicons name="time-outline" size={13} color={COLORS.textMuted} />
-            <Text style={styles.metaText}>{bus.duration}</Text>
-          </View>
           <View style={styles.metaItem}>
             <Ionicons name="people-outline" size={13} color={seatColor} />
             <Text style={[styles.metaText, { color: seatColor }]}>
@@ -224,29 +225,29 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   busIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: THEME.borderRadius.md,
+    width: 50,
+    height: 50,
+    borderRadius: 15,
     backgroundColor: PURPLE.light,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   busPhoto: {
-    width: 48,
-    height: 48,
+    width: 50,
+    height: 50,
   },
   busInfo: { flex: 1, minWidth: 0 },
   busName: {
-    fontSize: THEME.fontSize.md,
-    fontWeight: THEME.fontWeight.extrabold,
+    fontSize: 17,
+    fontWeight: '800',
     color: COLORS.textPrimary,
     letterSpacing: -0.2,
   },
   busRoute: {
-    fontSize: THEME.fontSize.xs,
+    fontSize: 12,
     color: COLORS.textMuted,
-    fontWeight: THEME.fontWeight.medium,
+    fontWeight: '500',
     marginTop: 2,
   },
   statusBadge: {
@@ -260,6 +261,19 @@ const styles = StyleSheet.create({
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusText: { fontSize: 11, fontWeight: THEME.fontWeight.bold },
 
+  /* Duration badge — pill in top row, matching BookingScreen's durationBadge */
+  durationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: PURPLE.light,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  durationText: { fontSize: 12, fontWeight: '700', color: PURPLE.primary },
+
+  /* Route row */
   routeRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -267,13 +281,6 @@ const styles = StyleSheet.create({
   },
   routeStop: {
     flex: 1,
-  },
-  dotOrigin: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: COLORS.secondary,
-    marginTop: 14,
   },
   stopLabel: {
     fontSize: 10,
@@ -283,15 +290,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   stopName: {
-    fontSize: THEME.fontSize.sm,
-    fontWeight: THEME.fontWeight.bold,
+    fontSize: 14,
+    fontWeight: '800',
     color: COLORS.textPrimary,
     marginTop: 2,
   },
   stopTime: {
     fontSize: 12,
     color: COLORS.textSecondary,
-    fontWeight: THEME.fontWeight.medium,
+    fontWeight: '500',
     marginTop: 1,
   },
   routeMid: {
@@ -299,15 +306,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 8,
   },
+  /* Route line matches BookingScreen's journeyLine color (PURPLE.midStrong) */
   routeLineDash: {
     width: 14,
     height: 1.5,
-    backgroundColor: COLORS.border,
+    backgroundColor: PURPLE.midStrong,
   },
+  /* Center bus chip matches BookingScreen's journeyBusChip sizing */
   routeArrow: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 9,
     backgroundColor: PURPLE.light,
     alignItems: 'center',
     justifyContent: 'center',
@@ -333,12 +342,6 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  priceCurrency: {
-    fontSize: 13,
-    fontWeight: THEME.fontWeight.bold,
-    color: PURPLE.primary,
-    marginTop: 3,
-  },
   priceAmount: {
     fontSize: 14,
     fontWeight: '800',

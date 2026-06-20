@@ -1,5 +1,54 @@
 import { poolPromise, sql } from "../db/db.js";
 import { ensureRouteTables } from "../db/featureSetup.js";
+import { getRouteSegments } from "../modules/eta/hereClient.js";
+
+// GET /api/routes/:id/travel-time?departure_time=HH:MM
+// Returns total road travel time for a route using HERE live traffic.
+// If departure_time is supplied, also returns the calculated arrival time.
+export const getRouteTravelTime = async (req, res) => {
+  const routeId = Number(req.params.id);
+  if (!routeId) return res.status(400).json({ error: "Invalid route ID" });
+
+  try {
+    const pool = await poolPromise;
+    const stopsRes = await pool.request()
+      .input("route_id", sql.Int, routeId)
+      .query(`
+        SELECT s.stop_id, s.stop_name,
+               CAST(s.latitude  AS FLOAT) AS latitude,
+               CAST(s.longitude AS FLOAT) AS longitude,
+               rs.stop_order
+        FROM   route_stops rs
+        JOIN   stops s ON s.stop_id = rs.stop_id
+        WHERE  rs.route_id = @route_id
+        ORDER  BY rs.stop_order
+      `);
+
+    const stops = stopsRes.recordset;
+    if (stops.length < 2) {
+      return res.status(422).json({ error: "Route needs at least 2 stops to calculate travel time" });
+    }
+
+    const segments = await getRouteSegments(stops);
+    const durationMin = Math.round(segments.reduce((s, seg) => s + seg.duration_min, 0));
+    const source      = segments.every(s => s.source === "here") ? "here" : "fallback";
+
+    let arrivalTime = null;
+    const dep = req.query.departure_time; // "HH:MM"
+    if (dep && /^\d{2}:\d{2}$/.test(dep)) {
+      const [h, m] = dep.split(":").map(Number);
+      const totalMin = h * 60 + m + durationMin;
+      const ah = String(Math.floor(totalMin / 60) % 24).padStart(2, "0");
+      const am = String(totalMin % 60).padStart(2, "0");
+      arrivalTime = `${ah}:${am}`;
+    }
+
+    return res.json({ route_id: routeId, stop_count: stops.length, duration_min: durationMin, arrival_time: arrivalTime, source });
+  } catch (err) {
+    console.error("Route travel time error:", err);
+    return res.status(500).json({ error: "Failed to calculate travel time" });
+  }
+};
 
 export const getRoutes = async (req, res) => {
   try {

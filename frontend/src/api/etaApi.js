@@ -1,7 +1,7 @@
 import apiClient from './apiClient';
 
 // GET /api/trips/:id/eta-predictions
-// Returns stop-by-stop ETAs using OSRM road data + Beirut traffic model + historical GPS
+// Returns stop-by-stop ETAs using HERE road routing + live traffic + historical GPS
 export const getTripEtaPredictions = (tripId) =>
   apiClient.get(`/trips/${tripId}/eta-predictions`);
 

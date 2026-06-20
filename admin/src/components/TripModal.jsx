@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Modal } from "./Modal";
+import { getRouteTravelTime } from "../api/endpoints";
 
 const STATUSES    = ["Scheduled", "Ongoing", "Completed", "Delayed", "Cancelled"];
 const RECURRENCES = ["none", "daily", "weekdays", "weekends", "custom"];
@@ -43,22 +44,38 @@ const inp = { width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", b
 
 export function TripModal({ trip, allTrips = [], onClose, onSave, routeOpts = [], driverOpts = [], vehicleOpts = [] }) {
   const isEdit = Boolean(trip);
-  const EMPTY  = { route: "", route_id: null, driver: "", driver_id: null, vehicle: "", vehicle_id: null, vehicle_type: null, date: new Date().toISOString().split("T")[0], time: "", status: "Scheduled", recurrence: "none", days: [], price: "", carpool_discount: "" };
+  const EMPTY  = { route: "", route_id: null, driver: "", driver_id: null, vehicle: "", vehicle_id: null, vehicle_type: null, date: new Date().toISOString().split("T")[0], time: "", end_time: "", status: "Scheduled", recurrence: "none", days: [], price: "", carpool_discount: "" };
 
   const editPrice           = isEdit && trip.price != null && trip.price !== "" ? String(trip.price) : "";
   const editCarpoolDiscount = isEdit && trip.carpool_price != null && trip.price > 0
     ? String(Math.round((1 - trip.carpool_price / trip.price) * 100))
     : "";
-  const [form,     setForm]     = useState(isEdit ? { ...trip, route_id: trip.route_id ?? null, driver_id: trip.driver_id ?? null, vehicle_id: trip.vehicle_id ?? null, vehicle_type: trip.vehicle_type ?? null, recurrence: "none", days: [], price: editPrice, carpool_discount: editCarpoolDiscount } : EMPTY);
+  const [form,     setForm]     = useState(isEdit ? { ...trip, route_id: trip.route_id ?? null, driver_id: trip.driver_id ?? null, vehicle_id: trip.vehicle_id ?? null, vehicle_type: trip.vehicle_type ?? null, recurrence: "none", days: [], price: editPrice, carpool_discount: editCarpoolDiscount, end_time: trip.end_time ?? "" } : EMPTY);
   const [warnings, setWarnings] = useState([]);
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState(null);
+  const [etaLoading, setEtaLoading] = useState(false);
+  const etaDebounce = useRef(null);
 
   const set = k => v => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
     setWarnings(checkFormConflicts(form, allTrips, trip?.id));
   }, [form.driver, form.vehicle, form.date, form.time, form.route]);
+
+  // Auto-fill arrival time via HERE when route + departure time are both set
+  useEffect(() => {
+    if (!form.route_id || !form.time) { setForm(f => ({ ...f, end_time: "" })); return; }
+    clearTimeout(etaDebounce.current);
+    etaDebounce.current = setTimeout(async () => {
+      setEtaLoading(true);
+      try {
+        const res = await getRouteTravelTime(form.route_id, form.time);
+        if (res.data?.arrival_time) setForm(f => ({ ...f, end_time: res.data.arrival_time }));
+      } catch { /* silently leave end_time empty */ }
+      finally { setEtaLoading(false); }
+    }, 400); // debounce — don't fire on every keystroke
+  }, [form.route_id, form.time]);
 
   function toggleDay(day) {
     setForm(f => ({
@@ -158,8 +175,8 @@ export function TripModal({ trip, allTrips = [], onClose, onSave, routeOpts = []
         </div>
       </div>
 
-      {/* Date + Time */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 13 }}>
+      {/* Date + Departure + Arrival */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 13 }}>
         <div>
           <label style={lbl}>Date</label>
           <input type="date" value={form.date} onChange={e => set("date")(e.target.value)} style={inp} />
@@ -168,7 +185,33 @@ export function TripModal({ trip, allTrips = [], onClose, onSave, routeOpts = []
           <label style={lbl}>Departure Time</label>
           <input type="time" value={form.time} onChange={e => set("time")(e.target.value)} style={inp} />
         </div>
+        <div>
+          <label style={{ ...lbl, display: "flex", alignItems: "center", gap: 5 }}>
+            Arrival Time
+            {etaLoading && (
+              <span style={{ fontSize: 10, color: "#6D28D9", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 3 }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" style={{ animation: "spin 1s linear infinite" }}>
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                </svg>
+                HERE…
+              </span>
+            )}
+          </label>
+          <input
+            type="time"
+            value={form.end_time}
+            onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))}
+            style={{ ...inp, background: form.end_time && !etaLoading ? "#F0FDF4" : "#F8FAFC", color: form.end_time ? "#065F46" : "#94A3B8" }}
+            placeholder="auto"
+          />
+          {form.end_time && !etaLoading && (
+            <div style={{ fontSize: 10, color: "#059669", marginTop: 3, fontWeight: 600 }}>
+              Calculated via HERE routing
+            </div>
+          )}
+        </div>
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       {/* Status */}
       <div style={{ marginBottom: 13 }}>

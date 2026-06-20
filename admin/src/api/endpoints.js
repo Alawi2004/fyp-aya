@@ -51,6 +51,8 @@ export const updateDriverSchedule = (driverId, data) => apiClient.put(`/drivers/
 // Routes
 export const getRoutes = () => apiClient.get('/routes');
 export const getRouteById = (id) => apiClient.get(`/routes/${id}`);
+export const getRouteTravelTime = (routeId, departureTime) =>
+  apiClient.get(`/routes/${routeId}/travel-time${departureTime ? `?departure_time=${encodeURIComponent(departureTime)}` : ''}`);
 export const createRoute = (data) => apiClient.post('/routes', data);
 export const updateRoute = (id, data) => apiClient.put(`/routes/${id}`, data);
 export const deleteRoute = (id) => apiClient.delete(`/routes/${id}`);

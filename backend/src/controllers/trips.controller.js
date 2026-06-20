@@ -3,20 +3,22 @@ import { poolPromise, sql } from "../db/db.js";
 export const createTrip = async (req, res) => {
   try {
     const pool = await poolPromise;
-    const { vehicle_id, driver_id, route_id, start_time, status, price, carpool_discount } = req.body;
+    const { vehicle_id, driver_id, route_id, start_time, end_time, status, price, carpool_discount } = req.body;
 
     const startTimeParsed = start_time ? new Date(start_time) : null;
+    const endTimeParsed   = end_time   ? new Date(end_time)   : null;
     const result = await pool
       .request()
       .input("vehicle_id", sql.Int,      vehicle_id)
       .input("driver_id",  sql.Int,      driver_id)
       .input("route_id",   sql.Int,      route_id)
       .input("start_time", sql.DateTime, startTimeParsed)
+      .input("end_time",   sql.DateTime, endTimeParsed)
       .input("status",     sql.VarChar,  status || "scheduled")
       .query(`
-        INSERT INTO trips(vehicle_id,driver_id,route_id,start_time,status)
+        INSERT INTO trips(vehicle_id,driver_id,route_id,start_time,end_time,status)
         OUTPUT INSERTED.trip_id
-        VALUES(@vehicle_id,@driver_id,@route_id,@start_time,@status)
+        VALUES(@vehicle_id,@driver_id,@route_id,@start_time,@end_time,@status)
       `);
 
     const trip_id = result.recordset[0].trip_id;
@@ -151,9 +153,10 @@ export const updateTripStatus = async (req, res) => {
 export const updateTrip = async (req, res) => {
   try {
     const pool = await poolPromise;
-    const { route_id, driver_id, vehicle_id, start_time, status, price, carpool_discount } = req.body;
+    const { route_id, driver_id, vehicle_id, start_time, end_time, status, price, carpool_discount } = req.body;
     // tedious requires a Date object for sql.DateTime — passing a raw string throws TypeError
     const startTimeParsed = start_time ? new Date(start_time) : null;
+    const endTimeParsed   = end_time   ? new Date(end_time)   : null;
     if (startTimeParsed && isNaN(startTimeParsed.getTime())) {
       return res.status(400).json({ error: `Invalid start_time: "${start_time}"` });
     }
@@ -173,6 +176,7 @@ export const updateTrip = async (req, res) => {
       .input("driver_id",  sql.Int,      driver_id  ?? null)
       .input("vehicle_id", sql.Int,      vehicle_id ?? null)
       .input("start_time", sql.DateTime, startTimeParsed)
+      .input("end_time",   sql.DateTime, endTimeParsed ?? null)
       .input("status",     sql.VarChar,  status     ?? null)
       .query(`
         UPDATE trips SET
@@ -180,6 +184,7 @@ export const updateTrip = async (req, res) => {
           driver_id  = COALESCE(@driver_id,  driver_id),
           vehicle_id = COALESCE(@vehicle_id, vehicle_id),
           start_time = COALESCE(@start_time, start_time),
+          end_time   = COALESCE(@end_time,   end_time),
           status     = COALESCE(@status,     status)
         WHERE trip_id = @id
       `);

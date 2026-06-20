@@ -244,9 +244,9 @@ const ChatbotScreen = ({ visible, onClose, onAction }) => {
     return () => { show.remove(); hide.remove(); };
   }, []);
 
-  // ── Refresh location each time the chat opens (non-blocking) ─────────────
+  // ── Ensure location watch is running each time the chat opens ───────────
   useEffect(() => {
-    if (visible) fetchAndCacheLocation();
+    if (visible) startLocationWatch();
   }, [visible]);
 
   // ── Open / close ──────────────────────────────────────────────────────────

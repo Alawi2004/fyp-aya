@@ -6,7 +6,7 @@ import {
   getBestDepartureWindows,
   formatDelayDescription,
 } from '../modules/eta/trafficModel.js';
-import { getSegmentDuration } from '../modules/eta/osrmClient.js';
+import { getSegmentDuration } from '../modules/eta/hereClient.js';
 
 const SUPPORTED_MODES = new Set(['fastest', 'easiest', 'cheapest']);
 
@@ -84,16 +84,17 @@ async function enrichWithTraffic(journey, stopMap, departureDate) {
         };
       }
 
-      const osrm = await getSegmentDuration(fromStop, toStop);
-      const baseMin = Math.max(1, osrm.duration_min);
-      const adjustedMin = Math.max(1, baseMin * trafficMult);
+      const seg = await getSegmentDuration(fromStop, toStop);
+      const baseMin = Math.max(1, seg.duration_min);
+      // HERE already embeds live traffic — skip static multiplier to avoid double-counting
+      const adjustedMin = seg.traffic_included ? baseMin : Math.max(1, baseMin * trafficMult);
 
       return {
         ...segment,
         estimated_time_min: Math.ceil(baseMin),
         traffic_adjusted_min: Math.ceil(adjustedMin),
-        osrm_distance_m: osrm.distance_m,
-        data_source: osrm.source,
+        road_distance_m: seg.distance_m,
+        data_source: seg.source,
       };
     })
   );
