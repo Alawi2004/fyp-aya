@@ -1,4 +1,5 @@
 import { sql, poolPromise } from "../db/db.js";
+import { sqlLocalHour } from "../utils/lebanonTime.js";
 
 const CAMERA_SERVER = process.env.CAMERA_SERVER_URL || "http://localhost:9000";
 
@@ -152,14 +153,14 @@ export const getPassengerTrends = async (req, res) => {
     const result = await request.query(`
       SELECT
         bus_id,
-        DATEPART(HOUR, recorded_at)              AS hour,
+        ${sqlLocalHour('recorded_at')}          AS hour,
         COUNT(CASE WHEN event_type='ENTER' THEN 1 END) AS entries,
         COUNT(CASE WHEN event_type='EXIT'  THEN 1 END) AS exits,
         COUNT(*)                                 AS total_events
       FROM camera_passenger_events
       WHERE recorded_at >= DATEADD(HOUR, -@hours, GETUTCDATE())
         ${whereClause}
-      GROUP BY bus_id, DATEPART(HOUR, recorded_at)
+      GROUP BY bus_id, ${sqlLocalHour('recorded_at')}
       ORDER BY bus_id, hour
     `);
     res.json(result.recordset);

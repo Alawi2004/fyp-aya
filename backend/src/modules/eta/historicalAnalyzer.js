@@ -1,4 +1,5 @@
 import { sql } from '../../db/db.js';
+import { sqlLocalHour, sqlLocalWeekday } from '../../utils/lebanonTime.js';
 
 // Average actual trip duration from GPS logs for a route + time band.
 // Looks ±1 hour around the target hour to increase sample size.
@@ -26,8 +27,8 @@ export async function getHistoricalStats(pool, routeId, hourOfDay, dayOfWeek) {
           WHERE  t.route_id   = @route_id
             AND  t.status     = 'completed'
             AND  t.start_time >= DATEADD(DAY, -120, GETDATE())
-            AND  ABS(DATEPART(HOUR, t.start_time) - @hour) <= 1
-            AND  DATEPART(WEEKDAY, t.start_time) = @day
+            AND  ABS(${sqlLocalHour('t.start_time')} - @hour) <= 1
+            AND  ${sqlLocalWeekday('t.start_time')} = @day
           GROUP  BY t.trip_id
           HAVING COUNT(g.log_id) >= 8
              AND DATEDIFF(MINUTE, MIN(g.recorded_at), MAX(g.recorded_at)) BETWEEN 1 AND 360
@@ -63,14 +64,14 @@ export async function getRouteHourlyProfile(pool, routeId) {
           COUNT(*)                AS samples
         FROM (
           SELECT
-            DATEPART(HOUR, t.start_time) AS hour_of_day,
+            ${sqlLocalHour('t.start_time')} AS hour_of_day,
             DATEDIFF(MINUTE, MIN(g.recorded_at), MAX(g.recorded_at)) AS dur
           FROM   trips t
           JOIN   gps_logs g ON g.trip_id = t.trip_id
           WHERE  t.route_id   = @route_id
             AND  t.status     = 'completed'
             AND  t.start_time >= DATEADD(DAY, -90, GETDATE())
-          GROUP  BY t.trip_id, DATEPART(HOUR, t.start_time)
+          GROUP  BY t.trip_id, ${sqlLocalHour('t.start_time')}
           HAVING COUNT(g.log_id) >= 8
              AND DATEDIFF(MINUTE, MIN(g.recorded_at), MAX(g.recorded_at)) BETWEEN 1 AND 360
         ) d

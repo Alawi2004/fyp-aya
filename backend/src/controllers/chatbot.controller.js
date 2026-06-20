@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { poolPromise, sql } from "../db/db.js";
 import { ensureOperationalTables } from "../db/featureSetup.js";
+import { sqlLocalHour } from "../utils/lebanonTime.js";
 
 // ── Azure AI Foundry client ───────────────────────────────────────────────────
 // Lazily created so a missing AZURE_OPENAI_KEY doesn't crash the whole server
@@ -772,14 +773,14 @@ async function executeTool(name, args, ctx) {
         .input("rid", sql.Int, routeId)
         .query(`
           SELECT
-            DATEPART(HOUR, pc.recorded_at) AS hour_of_day,
+            ${sqlLocalHour('pc.recorded_at')} AS hour_of_day,
             CAST(AVG(CAST(pc.passenger_count AS FLOAT)) AS DECIMAL(5,1)) AS avg_passengers,
             COUNT(*) AS sample_count
           FROM passenger_counts pc
           JOIN trips tr ON tr.trip_id = pc.trip_id
           WHERE tr.route_id = @rid
             AND pc.recorded_at >= DATEADD(DAY, -30, GETUTCDATE())
-          GROUP BY DATEPART(HOUR, pc.recorded_at)
+          GROUP BY ${sqlLocalHour('pc.recorded_at')}
           ORDER BY hour_of_day
         `);
       return { demand_by_hour: r.recordset };

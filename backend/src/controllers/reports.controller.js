@@ -1,5 +1,6 @@
 import { poolPromise } from "../db/db.js";
 import { ensureOperationalTables } from "../db/featureSetup.js";
+import { sqlLocalDate } from "../utils/lebanonTime.js";
 
 const VALID_FORMATS = new Set(["json", "csv"]);
 const tableColumnsCache = new Map();
@@ -49,8 +50,8 @@ const getFormatAndRange = (req, res) => {
 };
 
 const withDateWindow = (column, fromIso, toIso) => `
-  ${column} >= '${fromIso}'
-  AND ${column} < DATEADD(day, 1, '${toIso}')
+  ${sqlLocalDate(column)} >= '${fromIso}'
+  AND ${sqlLocalDate(column)} <= '${toIso}'
 `;
 
 const getTableColumns = async (pool, tableName) => {
@@ -94,12 +95,12 @@ export const getRevenueReport = async (req, res) => {
     const rows = (
       await pool.request().query(`
         SELECT
-          CAST(${dateColumn} AS DATE) AS report_date,
+          ${sqlLocalDate(dateColumn)} AS report_date,
           COUNT(*) AS tickets_sold,
           ISNULL(SUM(${amountExpression}), 0) AS total_revenue
         FROM tickets
         WHERE ${dateFilter}
-        GROUP BY CAST(${dateColumn} AS DATE)
+        GROUP BY ${sqlLocalDate(dateColumn)}
         ORDER BY report_date
       `)
     ).recordset;
@@ -127,11 +128,11 @@ export const getPassengerUsageReport = async (req, res) => {
         WITH trip_peaks AS (
           SELECT
             pc.trip_id,
-            CAST(pc.recorded_at AS DATE) AS report_date,
+            ${sqlLocalDate('pc.recorded_at')} AS report_date,
             MAX(pc.passenger_count) AS peak_passengers
           FROM passenger_counts pc
           WHERE ${dateFilter}
-          GROUP BY pc.trip_id, CAST(pc.recorded_at AS DATE)
+          GROUP BY pc.trip_id, ${sqlLocalDate('pc.recorded_at')}
         )
         SELECT
           tp.report_date,
@@ -205,14 +206,14 @@ export const getComplaintTrendsReport = async (req, res) => {
     const rows = (
       await pool.request().query(`
         SELECT
-          CAST(submitted_at AS DATE) AS report_date,
+          ${sqlLocalDate('submitted_at')} AS report_date,
           category,
           priority,
           status,
           COUNT(*) AS complaint_count
         FROM complaints
         WHERE ${withDateWindow("submitted_at", params.fromIso, params.toIso)}
-        GROUP BY CAST(submitted_at AS DATE), category, priority, status
+        GROUP BY ${sqlLocalDate('submitted_at')}, category, priority, status
         ORDER BY report_date, category, priority
       `)
     ).recordset;
@@ -251,8 +252,8 @@ export const getVehicleUtilizationReport = async (req, res) => {
           0                                                         AS distance_km
         FROM vehicles v
         LEFT JOIN trips t ON t.vehicle_id = v.vehicle_id
-          AND t.start_time >= '${params.fromIso}'
-          AND t.start_time <  DATEADD(day, 1, '${params.toIso}')
+          AND ${sqlLocalDate('t.start_time')} >= '${params.fromIso}'
+          AND ${sqlLocalDate('t.start_time')} <= '${params.toIso}'
           AND LOWER(ISNULL(t.status,'')) IN ('completed','ongoing','in_progress')
         WHERE v.status != 'deleted'
         GROUP BY v.vehicle_id, v.plate_number, v.vehicle_type
@@ -307,8 +308,8 @@ export const getTopRoutesReport = async (req, res) => {
             ELSE 0 END                                          AS load_pct
         FROM routes r
         LEFT JOIN trips t ON t.route_id = r.route_id
-          AND t.start_time >= '${params.fromIso}'
-          AND t.start_time <  DATEADD(day, 1, '${params.toIso}')
+          AND ${sqlLocalDate('t.start_time')} >= '${params.fromIso}'
+          AND ${sqlLocalDate('t.start_time')} <= '${params.toIso}'
         LEFT JOIN tickets tk ON tk.trip_id = t.trip_id
         LEFT JOIN vehicles v ON v.vehicle_id = t.vehicle_id
         GROUP BY r.route_id, r.route_name, r.start_location, r.end_location

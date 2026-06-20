@@ -1,4 +1,5 @@
 import { poolPromise, sql } from "../db/db.js";
+import { sqlLocalDate } from "../utils/lebanonTime.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/staff/wallet/search?q=<term>
@@ -314,11 +315,11 @@ export const getStaffHistory = async (req, res) => {
     }
     if (from) {
       request.input("from", sql.Date, from);
-      where += " AND CAST(st.created_at AS DATE) >= @from";
+      where += ` AND ${sqlLocalDate('st.created_at')} >= @from`;
     }
     if (to) {
       request.input("to", sql.Date, to);
-      where += " AND CAST(st.created_at AS DATE) <= @to";
+      where += ` AND ${sqlLocalDate('st.created_at')} <= @to`;
     }
 
     const result = await request.query(`

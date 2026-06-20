@@ -8,6 +8,7 @@ import {
 } from '../modules/eta/trafficModel.js';
 import { getEtasFromPosition } from '../modules/eta/hereClient.js';
 import { getHistoricalStats, getRouteHourlyProfile } from '../modules/eta/historicalAnalyzer.js';
+import { beirutHour, beirutDay } from '../utils/lebanonTime.js';
 
 const haversineMeters = (a, b) => {
   const R = 6371000;
@@ -115,7 +116,7 @@ export const getTripEtaPredictions = async (req, res) => {
     const hereEtas = await getEtasFromPosition(currentPos, remainingStops);
 
     // --- 8. Historical stats for blending ---
-    const historical = await getHistoricalStats(pool, trip.route_id, now.getHours(), now.getDay()).catch(() => null);
+    const historical = await getHistoricalStats(pool, trip.route_id, beirutHour(now), beirutDay(now)).catch(() => null);
     const totalBaseMin = hereEtas.at(-1)?.cumulative_min || 1;
 
     // --- 9. Build per-stop ETA list ---
@@ -184,8 +185,8 @@ export const getTripEtaPredictions = async (req, res) => {
 export const getTrafficForecast = async (req, res) => {
   try {
     const now = new Date();
-    const day = req.query.day !== undefined ? Number(req.query.day) : now.getDay();
-    const hour = req.query.hour !== undefined ? Number(req.query.hour) : now.getHours();
+    const day = req.query.day !== undefined ? Number(req.query.day) : beirutDay(now);
+    const hour = req.query.hour !== undefined ? Number(req.query.hour) : beirutHour(now);
     const routeId = req.query.route_id ? Number(req.query.route_id) : null;
 
     const targetDate = new Date(

@@ -1,4 +1,5 @@
 import { poolPromise, sql } from "../db/db.js";
+import { sqlLocalDate } from "../utils/lebanonTime.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/staff/accounts                   ← ADMIN ONLY
@@ -138,8 +139,8 @@ export const getAllStaffTransactions = async (req, res) => {
     let where = "WHERE 1=1";
     if (staff_id) { request.input("staffId", sql.Int, parseInt(staff_id, 10)); where += " AND st.processed_by_staff_id = @staffId"; }
     if (user_id)  { request.input("userId",  sql.Int, parseInt(user_id,  10)); where += " AND st.user_id = @userId"; }
-    if (from)     { request.input("from", sql.Date, from); where += " AND CAST(st.created_at AS DATE) >= @from"; }
-    if (to)       { request.input("to",   sql.Date, to);   where += " AND CAST(st.created_at AS DATE) <= @to"; }
+    if (from)     { request.input("from", sql.Date, from); where += ` AND ${sqlLocalDate('st.created_at')} >= @from`; }
+    if (to)       { request.input("to",   sql.Date, to);   where += ` AND ${sqlLocalDate('st.created_at')} <= @to`; }
 
     const result = await request.query(`
       SELECT
@@ -284,7 +285,7 @@ export const getReconciliation = async (req, res) => {
           (SELECT TOP 1 recharge_location
            FROM staff_top_ups
            WHERE processed_by_staff_id = u.user_id
-             AND CAST(created_at AS DATE) = @date
+             AND ${sqlLocalDate('created_at')} = @date
              AND recharge_location IS NOT NULL
            GROUP BY recharge_location
            ORDER BY COUNT(*) DESC)                            AS station
@@ -293,7 +294,7 @@ export const getReconciliation = async (req, res) => {
         LEFT JOIN staff_reconciliation r
           ON r.staff_id = u.user_id
          AND r.reconciliation_date = @date
-        WHERE CAST(st.created_at AS DATE) = @date
+        WHERE ${sqlLocalDate('st.created_at')} = @date
         GROUP BY u.user_id, u.full_name,
           r.reconciliation_id, r.actual_amount, r.discrepancy,
           r.status, r.notes
@@ -369,7 +370,7 @@ export const updateReconciliation = async (req, res) => {
             SELECT ISNULL(SUM(CASE WHEN LOWER(ISNULL(payment_method,'')) = 'cash' THEN amount ELSE 0 END), 0) AS expected_amount
             FROM staff_top_ups
             WHERE processed_by_staff_id = @staffId
-              AND CAST(created_at AS DATE) = @date
+              AND ${sqlLocalDate('created_at')} = @date
               AND status = 'completed'
           `);
         const expectedAmt = parseFloat(expectedRes.recordset[0]?.expected_amount || 0);

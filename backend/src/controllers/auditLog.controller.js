@@ -1,4 +1,5 @@
 import { poolPromise, sql } from "../db/db.js";
+import { sqlLocalDate } from "../utils/lebanonTime.js";
 
 export const getAuditLogs = async (req, res) => {
   try {
@@ -15,8 +16,8 @@ export const getAuditLogs = async (req, res) => {
       if (action)      { r.input("action",      sql.NVarChar(100), `%${action}%`);     where += " AND al.action_name LIKE @action"; }
       if (entity_type) { r.input("entity_type", sql.NVarChar(100), entity_type);        where += " AND al.entity_type = @entity_type"; }
       if (actor_id)    { r.input("actor_id",    sql.Int,           parseInt(actor_id)); where += " AND al.actor_user_id = @actor_id"; }
-      if (from)        { r.input("from",        sql.Date,          from);               where += " AND CAST(al.created_at AS DATE) >= @from"; }
-      if (to)          { r.input("to",          sql.Date,          to);                 where += " AND CAST(al.created_at AS DATE) <= @to"; }
+      if (from)        { r.input("from",        sql.Date,          from);               where += ` AND ${sqlLocalDate('al.created_at')} >= @from`; }
+      if (to)          { r.input("to",          sql.Date,          to);                 where += ` AND ${sqlLocalDate('al.created_at')} <= @to`; }
       if (search)      { r.input("search",      sql.NVarChar(200), `%${search}%`);      where += " AND (u.full_name LIKE @search OR al.action_name LIKE @search OR al.entity_type LIKE @search)"; }
       return where;
     }

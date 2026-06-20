@@ -1,5 +1,6 @@
 // Beirut/Lebanon calibrated traffic multipliers
 // 1.0 = free-flow baseline, >1.0 = congested, <1.0 = light traffic
+import { beirutHour, beirutDay } from "../../utils/lebanonTime.js";
 
 // Average speed drop per hour of day (24-hour local time)
 const HOUR_MULTIPLIERS = [
@@ -42,8 +43,8 @@ const DAY_MULTIPLIERS = [
 ];
 
 export const getTrafficMultiplier = (date = new Date()) => {
-  const hour = date.getHours();
-  const day = date.getDay();
+  const hour = beirutHour(date);
+  const day = beirutDay(date);
   let mult = HOUR_MULTIPLIERS[hour] * DAY_MULTIPLIERS[day];
   // Friday Jumu'ah prayer congestion burst (11:00–13:00)
   if (day === 5 && hour >= 11 && hour <= 13) mult *= 1.22;
@@ -59,7 +60,7 @@ export const getTrafficCondition = (multiplier) => {
 };
 
 // Full 24-hour forecast for a given day
-export const getDayForecast = (dayOfWeek = new Date().getDay()) => {
+export const getDayForecast = (dayOfWeek = beirutDay()) => {
   return HOUR_MULTIPLIERS.map((hourMult, hour) => {
     const mult = Math.round(hourMult * DAY_MULTIPLIERS[dayOfWeek] * 100) / 100;
     return {
@@ -73,8 +74,8 @@ export const getDayForecast = (dayOfWeek = new Date().getDay()) => {
 
 // Next 3 low-traffic windows from a given departure time
 export const getBestDepartureWindows = (date = new Date()) => {
-  const day = date.getDay();
-  const now = date.getHours();
+  const day = beirutDay(date);
+  const now = beirutHour(date);
   return getDayForecast(day)
     .filter((f) => f.hour >= now && f.multiplier <= 0.90)
     .slice(0, 3);

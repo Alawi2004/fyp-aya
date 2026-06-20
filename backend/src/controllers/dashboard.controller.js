@@ -1,4 +1,5 @@
 import { poolPromise } from "../db/db.js";
+import { beirutHour } from "../utils/lebanonTime.js";
 
 export const getTripsDashboard = async (req, res) => {
   try {
@@ -260,7 +261,7 @@ export const getDashboardOverview = async (req, res) => {
     const hourMap  = {};
     for (const r of loadR.recordset) hourMap[r.hr] = r.cnt;
     const maxLoad  = Math.max(...Object.values(hourMap), 1);
-    const nowHour  = new Date().getHours();
+    const nowHour  = beirutHour();
     const HOUR_SLOTS = [[6,"6am"],[8,"8am"],[9,"9am"],[11,"11am"],[13,"1pm"],[15,"3pm"],[17,"5pm"]];
     const load_hours = HOUR_SLOTS.map(([h, label]) => {
       const pct = Math.round(((hourMap[h] ?? 0) / maxLoad) * 100);

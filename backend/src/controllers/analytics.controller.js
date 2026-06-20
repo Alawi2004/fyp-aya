@@ -1,4 +1,5 @@
 import { poolPromise, sql } from "../db/db.js";
+import { sqlLocalDate, sqlLocalHour, sqlLocalWeekday } from "../utils/lebanonTime.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/analytics/gps-heatmap?from=YYYY-MM-DD&to=YYYY-MM-DD&trip_id=X
@@ -17,8 +18,8 @@ export const getGpsHeatmap = async (req, res) => {
     const request = pool.request();
 
     let where = "WHERE latitude IS NOT NULL AND longitude IS NOT NULL";
-    if (from)    { request.input("from",    sql.Date, from);                         where += " AND CAST(recorded_at AS DATE) >= @from"; }
-    if (to)      { request.input("to",      sql.Date, to);                           where += " AND CAST(recorded_at AS DATE) <= @to"; }
+    if (from)    { request.input("from",    sql.Date, from);                         where += ` AND ${sqlLocalDate('recorded_at')} >= @from`; }
+    if (to)      { request.input("to",      sql.Date, to);                           where += ` AND ${sqlLocalDate('recorded_at')} <= @to`; }
     if (trip_id) { request.input("trip_id", sql.Int,  parseInt(trip_id, 10));         where += " AND trip_id = @trip_id"; }
 
     const result = await request.query(`
@@ -85,24 +86,24 @@ export const getPassengerHeatmap = async (req, res) => {
       .input("to",   sql.Date, to)
       .query(`
         SELECT
-          (DATEPART(WEEKDAY, booking_time) - 1)  AS day_of_week,
-          DATEPART(HOUR,    booking_time)         AS hour_of_day,
-          COUNT(*)                                AS cnt
+          (${sqlLocalWeekday('booking_time')} - 1)  AS day_of_week,
+          ${sqlLocalHour('booking_time')}           AS hour_of_day,
+          COUNT(*)                                  AS cnt
         FROM tickets
-        WHERE CAST(booking_time AS DATE) BETWEEN @from AND @to
+        WHERE ${sqlLocalDate('booking_time')} BETWEEN @from AND @to
         GROUP BY
-          DATEPART(WEEKDAY, booking_time),
-          DATEPART(HOUR,    booking_time)
+          ${sqlLocalWeekday('booking_time')},
+          ${sqlLocalHour('booking_time')}
       `);
 
     const dailyResult = await pool.request()
       .input("from", sql.Date, from)
       .input("to",   sql.Date, to)
       .query(`
-        SELECT CAST(booking_time AS DATE) AS day, COUNT(*) AS cnt
+        SELECT ${sqlLocalDate('booking_time')} AS day, COUNT(*) AS cnt
         FROM tickets
-        WHERE CAST(booking_time AS DATE) BETWEEN @from AND @to
-        GROUP BY CAST(booking_time AS DATE)
+        WHERE ${sqlLocalDate('booking_time')} BETWEEN @from AND @to
+        GROUP BY ${sqlLocalDate('booking_time')}
       `);
 
     // Build the 7×24 matrix (all zeros, fill from query)

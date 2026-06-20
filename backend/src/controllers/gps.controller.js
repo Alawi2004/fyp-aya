@@ -1,5 +1,6 @@
 import { poolPromise, sql } from "../db/db.js";
 import { broadcastGpsUpdate } from "../services/gps.stream.service.js";
+import { sqlLocalDate } from "../utils/lebanonTime.js";
 
 // POST /api/gps — save location and broadcast to WebSocket subscribers
 export const sendGpsLocation = async (req, res) => {
@@ -63,7 +64,7 @@ export const getTripGpsHistory = async (req, res) => {
     let where = "WHERE trip_id = @trip_id";
     if (date) {
       request.input("date", sql.Date, date);
-      where += " AND CAST(recorded_at AS DATE) = @date";
+      where += ` AND ${sqlLocalDate('recorded_at')} = @date`;
     }
 
     const result = await request.query(`
