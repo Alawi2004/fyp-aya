@@ -29,6 +29,7 @@ import FadeInView from "../../components/common/FadeInView";
 import PressableScale from "../../components/common/PressableScale";
 import apiClient, {
   getAvailableDrivers,
+  getDriverAvailability,
   createTaxiReservation,
   expandMapUrl as apiExpandMapUrl,
 } from "../../api/apiClient";
@@ -597,6 +598,7 @@ const TaxiReservationScreen = ({ navigation, route }) => {
   const [selectedDriverId, setSelectedDriverId] = useState(null);
   // Female passengers may request a female driver — filters the driver list
   const [femaleOnly, setFemaleOnly] = useState(false);
+  const [femaleAvailability, setFemaleAvailability] = useState([]);
   const fetchTimerRef = useRef(null);
 
   const heroAnim = useRef(new Animated.Value(0)).current;
@@ -831,6 +833,15 @@ const TaxiReservationScreen = ({ navigation, route }) => {
           })
       );
       setDriverVehiclePhotos(photoMap);
+
+      // When female filter is on and no drivers found, fetch their availability
+      if (genderPref === 'female' && list.length === 0) {
+        getDriverAvailability('female')
+          .then((r) => setFemaleAvailability(r.drivers || []))
+          .catch(() => setFemaleAvailability([]));
+      } else {
+        setFemaleAvailability([]);
+      }
     } catch {
       setDrivers([]);
     } finally {
@@ -1637,10 +1648,58 @@ const TaxiReservationScreen = ({ navigation, route }) => {
                   No drivers available
                 </Text>
                 <Text style={styles.driverEmptyHint}>
-                  {bookNow
-                    ? "All drivers are currently on a trip. Try scheduling for later."
-                    : "No drivers are free at that time. Try a different slot."}
+                  {femaleOnly
+                    ? "No female drivers are free at this time."
+                    : bookNow
+                      ? "All drivers are currently on a trip. Try scheduling for later."
+                      : "No drivers are free at that time. Try a different slot."}
                 </Text>
+
+                {/* Female driver availability schedule */}
+                {femaleOnly && femaleAvailability.length > 0 && (
+                  <View style={styles.availabilityList}>
+                    <Text style={styles.availabilityTitle}>
+                      <Ionicons name="time-outline" size={13} color={PURPLE.primary} />
+                      {"  "}Female driver schedule
+                    </Text>
+                    {femaleAvailability.map((d) => {
+                      const freeAt = d.is_busy_now
+                        ? d.busy_until
+                          ? new Date(d.busy_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          : null
+                        : null;
+                      const busyFrom = !d.is_busy_now && d.next_trip_start
+                        ? new Date(d.next_trip_start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : null;
+                      return (
+                        <View key={d.driver_id} style={styles.availabilityRow}>
+                          <View style={styles.availabilityAvatar}>
+                            <Text style={styles.availabilityInitials}>
+                              {d.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                            </Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.availabilityName}>{d.name}</Text>
+                            {d.is_busy_now ? (
+                              <Text style={styles.availabilityBusy}>
+                                {freeAt ? `Free after ${freeAt}` : 'Currently on a trip'}
+                              </Text>
+                            ) : (
+                              <Text style={styles.availabilityFree}>
+                                {busyFrom ? `Available until ${busyFrom}` : 'Available all day'}
+                              </Text>
+                            )}
+                          </View>
+                          <View style={[
+                            styles.availabilityDot,
+                            { backgroundColor: d.is_busy_now ? '#EF4444' : '#10B981' },
+                          ]} />
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
                 <PressableScale
                   style={styles.driverRetryBtn}
                   onPress={fetchDrivers}
@@ -1746,7 +1805,15 @@ const TaxiReservationScreen = ({ navigation, route }) => {
                             )}
                           </View>
                           <View style={{ flex: 1 }}>
-                            <Text style={styles.driverName}>{d.name}</Text>
+                            <View style={styles.driverNameRow}>
+                              <Text style={styles.driverName}>{d.name}</Text>
+                              {d.gender === 'female' && (
+                                <View style={styles.femaleDriverBadge}>
+                                  <Ionicons name="female" size={10} color="#DB2777" />
+                                  <Text style={styles.femaleDriverBadgeText}>Female</Text>
+                                </View>
+                              )}
+                            </View>
                             <View style={styles.driverMeta}>
                               {d.avg_rating > 0 ? (
                                 <>
@@ -2707,6 +2774,29 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   driverEmpty: { alignItems: "center", paddingVertical: 24, gap: 6 },
+
+  /* Female driver availability schedule */
+  availabilityList: {
+    width: '100%', marginTop: 12, marginBottom: 4,
+    backgroundColor: PURPLE.light, borderRadius: 14, padding: 12, gap: 8,
+  },
+  availabilityTitle: {
+    fontSize: 12, fontWeight: '700', color: PURPLE.primary,
+    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4,
+  },
+  availabilityRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: COLORS.white, borderRadius: 10, padding: 10,
+  },
+  availabilityAvatar: {
+    width: 34, height: 34, borderRadius: 10,
+    backgroundColor: PURPLE.primary, alignItems: 'center', justifyContent: 'center',
+  },
+  availabilityInitials: { fontSize: 12, fontWeight: '800', color: COLORS.white },
+  availabilityName: { fontSize: 13, fontWeight: '700', color: COLORS.textPrimary },
+  availabilityFree: { fontSize: 11, fontWeight: '600', color: '#10B981', marginTop: 1 },
+  availabilityBusy: { fontSize: 11, fontWeight: '600', color: '#EF4444', marginTop: 1 },
+  availabilityDot: { width: 8, height: 8, borderRadius: 4 },
   driverEmptyTitle: {
     fontSize: 15,
     fontWeight: "700",
@@ -2774,7 +2864,15 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: COLORS.textPrimary,
   },
+  driverNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   driverName: { fontSize: 14, fontWeight: "700", color: COLORS.textPrimary },
+  femaleDriverBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: '#FDF2F8', borderRadius: 999,
+    paddingHorizontal: 7, paddingVertical: 2,
+    borderWidth: 1, borderColor: '#FBCFE8',
+  },
+  femaleDriverBadgeText: { fontSize: 10, fontWeight: '700', color: '#DB2777' },
   driverSub: {
     fontSize: 11,
     color: COLORS.textMuted,

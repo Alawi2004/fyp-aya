@@ -591,13 +591,18 @@ export const getMe = async (req, res) => {
 };
 
 export const updateMe = async (req, res) => {
-  const { full_name, phone, birth_date } = req.body;
+  const { full_name, phone, birth_date, gender } = req.body;
 
   if (!full_name || !String(full_name).trim()) {
     return res.status(400).json({ error: "Full name is required" });
   }
   const dobError = validateBirthDate(birth_date);
   if (dobError) return res.status(400).json({ error: dobError });
+
+  const normalizedGender = gender ? String(gender).toLowerCase() : null;
+  if (normalizedGender && !["male", "female"].includes(normalizedGender)) {
+    return res.status(400).json({ error: "gender must be 'male' or 'female'" });
+  }
 
   try {
     const pool   = await poolPromise;
@@ -606,11 +611,13 @@ export const updateMe = async (req, res) => {
       .input("full_name",  sql.NVarChar(100), String(full_name).trim())
       .input("phone",      sql.NVarChar(30),  phone ? String(phone).trim() : null)
       .input("birth_date", sql.Date,          birth_date ? new Date(birth_date) : null)
+      .input("gender",     sql.NVarChar(10),  normalizedGender)
       .query(`
         UPDATE users
-        SET full_name = @full_name, phone = @phone, birth_date = @birth_date
+        SET full_name = @full_name, phone = @phone, birth_date = @birth_date, gender = @gender
         OUTPUT INSERTED.user_id, INSERTED.full_name, INSERTED.email, INSERTED.phone,
-               INSERTED.role, INSERTED.category, INSERTED.status, INSERTED.birth_date, INSERTED.created_at
+               INSERTED.role, INSERTED.category, INSERTED.status, INSERTED.birth_date,
+               INSERTED.gender, INSERTED.created_at
         WHERE  user_id = @id
       `);
     if (!result.recordset[0]) return res.status(404).json({ error: "User not found" });

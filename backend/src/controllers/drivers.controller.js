@@ -284,6 +284,58 @@ export const getAvailableDrivers = async (req, res) => {
   }
 };
 
+// GET /api/drivers/availability?gender=female
+// Returns each matching driver with their current status and next free/busy boundary.
+export const getDriverAvailability = async (req, res) => {
+  try {
+    const { gender } = req.query;
+    const pool = await poolPromise;
+
+    const genderFilter = gender && ['male', 'female'].includes(String(gender).toLowerCase())
+      ? String(gender).toLowerCase()
+      : null;
+
+    if (!genderFilter) return res.status(400).json({ error: 'gender query param required' });
+
+    const result = await pool.request()
+      .input('gender', sql.NVarChar(10), genderFilter)
+      .query(`
+        SELECT
+          d.driver_id,
+          u.full_name                        AS name,
+          -- 1 if currently on an active trip
+          CASE WHEN EXISTS (
+            SELECT 1 FROM trips
+            WHERE driver_id = d.driver_id
+              AND status IN ('ongoing', 'in_progress')
+          ) THEN 1 ELSE 0 END                AS is_busy_now,
+          -- When their current active trip is estimated to end
+          (SELECT TOP 1 ISNULL(end_time, DATEADD(HOUR, 2, start_time))
+           FROM trips
+           WHERE driver_id = d.driver_id
+             AND status IN ('ongoing', 'in_progress')
+           ORDER BY start_time DESC)         AS busy_until,
+          -- Next future scheduled trip start
+          (SELECT TOP 1 start_time
+           FROM trips
+           WHERE driver_id = d.driver_id
+             AND status NOT IN ('completed', 'cancelled')
+             AND start_time > GETUTCDATE()
+           ORDER BY start_time ASC)          AS next_trip_start
+        FROM drivers d
+        JOIN users u ON d.user_id = u.user_id
+        WHERE LOWER(u.gender) = @gender
+          AND ISNULL(d.is_deleted, 0) = 0
+        ORDER BY is_busy_now ASC, u.full_name ASC
+      `);
+
+    res.json({ drivers: result.recordset });
+  } catch (err) {
+    console.error('[getDriverAvailability]', err);
+    res.status(500).json({ error: 'Failed to fetch driver availability' });
+  }
+};
+
 // DELETE /api/drivers/:id
 export const deleteDriver = async (req, res) => {
   try {

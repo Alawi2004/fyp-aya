@@ -92,6 +92,7 @@ const PersonalInfoScreen = ({ navigation }) => {
   const [fullName, setFullName] = useState(user?.full_name || user?.name || '');
   const [phone,    setPhone]    = useState(user?.phone || '');
   const [dobDate,  setDobDate]  = useState(parseIso(user?.birth_date));
+  const [gender,   setGender]   = useState(user?.gender || '');
   const [saving,   setSaving]   = useState(false);
   const [dirty,    setDirty]    = useState(false);
 
@@ -189,6 +190,7 @@ const PersonalInfoScreen = ({ navigation }) => {
         full_name:  trimmedName,
         phone:      phone.trim() || null,
         birth_date: toIso(dobDate),
+        gender:     gender || null,
       });
 
       const raw = res.data.user;
@@ -198,6 +200,7 @@ const PersonalInfoScreen = ({ navigation }) => {
         name:       raw.full_name,
         phone:      raw.phone,
         birth_date: raw.birth_date,
+        gender:     raw.gender,
       };
 
       setUser(updatedUser);
@@ -298,7 +301,7 @@ const PersonalInfoScreen = ({ navigation }) => {
               />
 
               {/* Date of birth — tappable row */}
-              <View style={styles.fieldRow}>
+              <View style={[styles.fieldRow, styles.fieldRowBorder]}>
                 <View style={styles.fieldIcon}>
                   <Ionicons name="calendar-outline" size={16} color={PURPLE.primary} />
                 </View>
@@ -317,6 +320,37 @@ const PersonalInfoScreen = ({ navigation }) => {
                 ) : (
                   <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
                 )}
+              </View>
+
+              {/* Gender picker */}
+              <View style={styles.fieldRow}>
+                <View style={styles.fieldIcon}>
+                  <Ionicons name="people-outline" size={16} color={PURPLE.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>Gender</Text>
+                  <View style={styles.genderRow}>
+                    {[
+                      { key: 'male',   icon: 'male-outline',   label: 'Male' },
+                      { key: 'female', icon: 'female-outline', label: 'Female' },
+                    ].map((g) => {
+                      const active = gender === g.key;
+                      return (
+                        <TouchableOpacity
+                          key={g.key}
+                          style={[styles.genderBtn, active && styles.genderBtnActive]}
+                          onPress={() => { setGender(g.key); setDirty(true); }}
+                          activeOpacity={0.75}
+                        >
+                          <Ionicons name={g.icon} size={15} color={active ? COLORS.white : PURPLE.primary} />
+                          <Text style={[styles.genderBtnText, active && styles.genderBtnTextActive]}>
+                            {g.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
               </View>
             </View>
           </FadeInView>
@@ -494,6 +528,17 @@ const styles = StyleSheet.create({
     fontSize: 12, color: COLORS.textMuted,
     textAlign: 'center', marginTop: -8, marginBottom: 20, lineHeight: 18,
   },
+
+  /* Gender toggle */
+  genderRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  genderBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10,
+    borderWidth: 1.5, borderColor: PURPLE.primary,
+  },
+  genderBtnActive: { backgroundColor: PURPLE.primary, borderColor: PURPLE.primary },
+  genderBtnText: { fontSize: 13, fontWeight: '700', color: PURPLE.primary },
+  genderBtnTextActive: { color: COLORS.white },
 
   /* Save button */
   saveBtnWrap: { paddingHorizontal: 20, marginTop: 4 },

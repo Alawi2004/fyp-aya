@@ -113,6 +113,9 @@ export const getAvailableDrivers = (mode, datetime, gender) => {
   return apiClient.get('/drivers/available', { params }).then((r) => r.data);
 };
 
+export const getDriverAvailability = (gender) =>
+  apiClient.get('/drivers/availability', { params: { gender } }).then((r) => r.data);
+
 // Complaints
 export const submitComplaint = ({ category, description, priority, trip_id, photoUri }) => {
   const form = new FormData();

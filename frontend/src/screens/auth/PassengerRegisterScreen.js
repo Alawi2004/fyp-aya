@@ -177,6 +177,7 @@ const PassengerRegisterScreen = ({ navigation }) => {
     birthMonth: '',
     birthYear: '',
   });
+  const [gender, setGender] = useState('');
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
@@ -238,6 +239,8 @@ const PassengerRegisterScreen = ({ navigation }) => {
     if (!form.confirmPassword) e.confirmPassword = 'Please confirm your password';
     else if (form.password !== form.confirmPassword) e.confirmPassword = 'Passwords do not match';
 
+    if (!gender) e.gender = 'Please select your gender';
+
     if (!form.birthDay || isNaN(Number(form.birthDay)) || Number(form.birthDay) < 1 || Number(form.birthDay) > 31)
       e.birthDay = 'Enter a valid day (1–31)';
     if (!form.birthMonth) e.birthMonth = 'Select a month';
@@ -259,20 +262,24 @@ const PassengerRegisterScreen = ({ navigation }) => {
     try {
       const monthIndex = MONTHS.indexOf(form.birthMonth) + 1;
       const birthDate = `${form.birthYear}-${String(monthIndex).padStart(2, '0')}-${String(form.birthDay).padStart(2, '0')}`;
+      const trimmedEmail = form.email.trim().toLowerCase();
 
-      const res = await sendOtpApi(form.email, 'register');
-      const devCode = res.data?.dev_code ?? null; // pre-fill in dev mode
+      const res = await sendOtpApi(trimmedEmail, 'register');
+      const devCode = res.data?.dev_code ?? null;
 
-      navigation.navigate('OtpVerify', {
-        email: form.email,
+      // Use replace so the user can't go back and accidentally resend,
+      // which would invalidate the code already delivered to their inbox.
+      navigation.replace('OtpVerify', {
+        email: trimmedEmail,
         purpose: 'register',
         devCode,
         userData: {
           name: form.name,
-          email: form.email,
+          email: trimmedEmail,
           phone: form.phone ? form.phone.replace(/\s/g, '') : '',
           password: form.password,
           birth_date: birthDate,
+          gender,
           role: 'passenger',
         },
       });
@@ -386,6 +393,34 @@ const PassengerRegisterScreen = ({ navigation }) => {
                 secure
                 error={errors.confirmPassword}
               />
+
+              {/* Gender */}
+              <Text style={styles.sectionLabel}>Gender</Text>
+              <View style={styles.genderRow}>
+                {[
+                  { key: 'male',   icon: 'male-outline',   label: 'Male'   },
+                  { key: 'female', icon: 'female-outline', label: 'Female' },
+                ].map((g) => {
+                  const active = gender === g.key;
+                  return (
+                    <TouchableOpacity
+                      key={g.key}
+                      style={[styles.genderBtn, active && styles.genderBtnActive]}
+                      onPress={() => { setGender(g.key); setErrors((e) => ({ ...e, gender: null })); }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name={g.icon} size={17} color={active ? COLORS.white : PURPLE.primary} />
+                      <Text style={[styles.genderBtnText, active && styles.genderBtnTextActive]}>{g.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {errors.gender ? (
+                <View style={[styles.errRow, { marginTop: -2, marginBottom: 12 }]}>
+                  <Ionicons name="alert-circle" size={13} color={COLORS.danger} />
+                  <Text style={styles.errText}>{errors.gender}</Text>
+                </View>
+              ) : null}
 
               {/* Date of birth */}
               <Text style={styles.sectionLabel}>Date of birth</Text>
@@ -581,6 +616,17 @@ const styles = StyleSheet.create({
   eyeBtn: { paddingHorizontal: 4 },
   errRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6, marginBottom: 10, marginLeft: 4 },
   errText: { fontSize: 12, color: COLORS.danger, fontWeight: '600' },
+
+  /* Gender */
+  genderRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  genderBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+    paddingVertical: 13, borderRadius: 16, borderWidth: 1.5,
+    borderColor: PURPLE.primary, backgroundColor: PURPLE.light,
+  },
+  genderBtnActive: { backgroundColor: PURPLE.primary },
+  genderBtnText: { fontSize: 14, fontWeight: '700', color: PURPLE.primary },
+  genderBtnTextActive: { color: COLORS.white },
 
   /* Date of birth */
   sectionLabel: { fontSize: 13, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 10, marginTop: 2 },

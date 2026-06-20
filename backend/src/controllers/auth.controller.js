@@ -249,11 +249,11 @@ export const register = async (req, res) => {
     const pool = await poolPromise;
 
     await pool.request()
-      .input("full_name",  sql.VarChar,     full_name)
-      .input("email",      sql.VarChar,     email)
-      .input("password",   sql.VarChar,     hashed)
-      .input("phone",      sql.VarChar,     phone ?? null)
-      .input("birth_date", sql.Date,        birth_date ? new Date(birth_date) : null)
+      .input("full_name",  sql.VarChar,      full_name)
+      .input("email",      sql.VarChar,      email)
+      .input("password",   sql.VarChar,      hashed)
+      .input("phone",      sql.VarChar,      phone ?? null)
+      .input("birth_date", sql.Date,         birth_date ? new Date(birth_date) : null)
       .input("gender",     sql.NVarChar(10), gender ?? null)
       .query(`
         INSERT INTO users(full_name,email,password_hash,phone,birth_date,gender,role)
@@ -263,7 +263,11 @@ export const register = async (req, res) => {
     res.status(201).json({ message: "User registered" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Registration failed" });
+    // SQL Server duplicate key (unique constraint on email)
+    if (err.number === 2627 || err.number === 2601 || (err.message && err.message.includes("duplicate key"))) {
+      return res.status(409).json({ error: "An account with this email already exists. Please sign in instead." });
+    }
+    res.status(500).json({ error: "Registration failed. Please try again." });
   }
 };
 
@@ -852,7 +856,8 @@ export const logout = async (req, res) => {
 // ── OTP (email verification for passenger registration & login) ───────────────
 
 export const sendOtp = async (req, res) => {
-  const { email, purpose } = req.body;
+  const { purpose } = req.body;
+  const email = req.body.email ? String(req.body.email).trim().toLowerCase() : null;
   if (!email) return res.status(400).json({ error: "Email required" });
 
   try {
@@ -897,7 +902,8 @@ export const sendOtp = async (req, res) => {
 };
 
 export const verifyOtp = async (req, res) => {
-  const { email, code } = req.body;
+  const email = req.body.email ? String(req.body.email).trim().toLowerCase() : null;
+  const code  = req.body.code;
   if (!email || !code) return res.status(400).json({ error: "Email and code required" });
 
   try {

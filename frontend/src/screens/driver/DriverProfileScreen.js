@@ -83,9 +83,23 @@ const DriverProfileScreen = ({ navigation }) => {
           <View style={{ flex: 1 }}>
             <Text style={styles.profileName}>{user?.name ?? 'Driver'}</Text>
             <Text style={styles.profileEmail}>{user?.email ?? 'driver@app.com'}</Text>
-            <View style={styles.profileBadge}>
-              <Ionicons name="shield-checkmark" size={11} color={COLORS.secondary} />
-              <Text style={styles.profileBadgeText}>Verified Driver</Text>
+            <View style={styles.badgeRow}>
+              <View style={styles.profileBadge}>
+                <Ionicons name="shield-checkmark" size={11} color={COLORS.secondary} />
+                <Text style={styles.profileBadgeText}>Verified Driver</Text>
+              </View>
+              {user?.gender ? (
+                <View style={[styles.profileBadge, styles.genderBadge]}>
+                  <Ionicons
+                    name={user.gender === 'female' ? 'female' : 'male'}
+                    size={11}
+                    color={user.gender === 'female' ? '#DB2777' : '#2563EB'}
+                  />
+                  <Text style={[styles.profileBadgeText, { color: user.gender === 'female' ? '#DB2777' : '#2563EB' }]}>
+                    {user.gender.charAt(0).toUpperCase() + user.gender.slice(1)}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           </View>
           <View style={styles.idChip}>
@@ -222,11 +236,13 @@ const styles = StyleSheet.create({
   },
   profileName: { fontSize: 16, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.2 },
   profileEmail: { fontSize: 12, color: COLORS.textMuted, fontWeight: '500', marginTop: 2 },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' },
   profileBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: COLORS.secondaryLight, borderRadius: 999,
-    paddingHorizontal: 8, paddingVertical: 3, marginTop: 6, alignSelf: 'flex-start',
+    paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start',
   },
+  genderBadge: { backgroundColor: '#FDF2F8' },
   profileBadgeText: { fontSize: 10, fontWeight: '700', color: COLORS.secondary },
   idChip: {
     alignItems: 'center', backgroundColor: PURPLE.light,
