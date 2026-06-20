@@ -216,6 +216,7 @@ function PassengerProfileDrawer({ passenger, onClose, onEdit, onWallet }) {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 {[
                   { label: "National ID",    value: nationalId },
+                  { label: "Gender",         value: passenger.gender ? passenger.gender.charAt(0).toUpperCase() + passenger.gender.slice(1) : "—" },
                   { label: "Date of Birth",  value: passenger.birth_date ? relDate(passenger.birth_date) : "—" },
                   { label: "Wallet Balance", value: fmtMoney(passenger.wallet_balance, currency, exchangeRate), accent: "#059669" },
                   { label: "Phone",          value: passenger.phone || "—" },
@@ -475,7 +476,7 @@ function HistoryDrawer({ passenger, onClose }) {
 //  PassengersPage
 // ══════════════════════════════════════════════════════════════════════════════
 
-const EMPTY_FORM = { name: "", email: "", password: "", phone: "", birthDate: "", status: "Active" };
+const EMPTY_FORM = { name: "", email: "", password: "", phone: "", birthDate: "", gender: "", status: "Active" };
 const today = new Date().toISOString().slice(0, 10);
 const fldSt = { width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" };
 
@@ -535,7 +536,7 @@ export default function PassengersPage() {
   function openAdd() { setEditTarget(null); setForm(EMPTY_FORM); setSaveError(null); setModalOpen(true); }
   function openEdit(p) {
     setEditTarget(p);
-    setForm({ name: p.full_name ?? "", email: p.email ?? "", password: "", phone: p.phone ?? "", birthDate: p.birth_date ? p.birth_date.slice(0, 10) : "", status: p.status ?? "active" });
+    setForm({ name: p.full_name ?? "", email: p.email ?? "", password: "", phone: p.phone ?? "", birthDate: p.birth_date ? p.birth_date.slice(0, 10) : "", gender: p.gender ?? "", status: p.status ?? "active" });
     setSaveError(null); setModalOpen(true);
   }
 
@@ -543,13 +544,14 @@ export default function PassengersPage() {
     if (!form.name)  { setSaveError("Full name is required."); return; }
     if (!form.email) { setSaveError("Email is required."); return; }
     if (!editTarget && !form.password) { setSaveError("Password is required."); return; }
+    if (!editTarget && !form.gender) { setSaveError("Gender is required."); return; }
     if (form.birthDate && form.birthDate > today) { setSaveError("Date of birth cannot be in the future."); return; }
     setSaveError(null); setIsSaving(true);
     try {
       if (editTarget) {
-        await updateUser(editTarget.user_id, { full_name: form.name, phone: form.phone || null, status: form.status, birth_date: form.birthDate || null });
+        await updateUser(editTarget.user_id, { full_name: form.name, phone: form.phone || null, status: form.status, birth_date: form.birthDate || null, gender: form.gender || null });
       } else {
-        await createUser({ full_name: form.name, email: form.email, password: form.password, phone: form.phone || null, birth_date: form.birthDate || null, role: "passenger" });
+        await createUser({ full_name: form.name, email: form.email, password: form.password, phone: form.phone || null, birth_date: form.birthDate || null, gender: form.gender || null, role: "passenger" });
       }
       setModalOpen(false); load();
     } catch (err) { setSaveError(err?.message ?? "Save failed"); }
@@ -688,6 +690,14 @@ export default function PassengersPage() {
           <div style={{ marginBottom: 14 }}>
             <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 }}>Date of Birth <span style={{ fontWeight: 400, color: "#94A3B8" }}>(optional)</span></label>
             <input type="date" value={form.birthDate ?? ""} max={today} onChange={e => setForm(f => ({ ...f, birthDate: e.target.value }))} style={fldSt} />
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5 }}>Gender {editTarget ? "" : "*"}</label>
+            <select value={form.gender ?? ""} onChange={e => setForm(f => ({ ...f, gender: e.target.value }))} style={fldSt}>
+              <option value="">Select gender…</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+            </select>
           </div>
           {editTarget && (
             <div style={{ marginBottom: 14 }}>

@@ -573,8 +573,27 @@ const VEHICLE_TYPES = [
 const TaxiReservationScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const { refreshBookings, updateBalance, walletBalance, currency, fmtMoney, t } = useApp();
-  const { user } = useAuth();
-  const isFemalePassenger = (user?.gender ?? "").toLowerCase() === "female";
+  const { user, setUser } = useAuth();
+  // Seed from the cached session, then refresh from the server below so a stale
+  // login (gender set after sign-in) still reveals the female-driver toggle.
+  const [passengerGender, setPassengerGender] = useState((user?.gender ?? "").toLowerCase());
+  const isFemalePassenger = passengerGender === "female";
+
+  useEffect(() => {
+    let alive = true;
+    apiClient.get("/users/me")
+      .then((r) => {
+        const g = (r?.data?.gender ?? "").toLowerCase();
+        if (!alive || !g) return;
+        setPassengerGender(g);
+        if (setUser && user && user.gender !== r.data.gender) {
+          setUser({ ...user, gender: r.data.gender });
+        }
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []); // eslint-disable-line
+
   const { fromStop, toStop, tripSummary, prefillPickup, prefillDestination, prefillNotes } = route?.params ?? {};
 
   const [pickup, setPickup] = useState(prefillPickup || fromStop?.stop_name || "");

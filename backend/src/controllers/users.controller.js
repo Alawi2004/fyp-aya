@@ -186,7 +186,7 @@ export const getUserProfile = async (req, res) => {
 
 export const updateUserProfile = async (req, res) => {
   try {
-    const { full_name, phone, role, status, birth_date } = req.body;
+    const { full_name, phone, role, status, birth_date, gender } = req.body;
 
     // 'me' or own user_id → self-edit (passengers allowed, role/status locked)
     const isSelf = req.params.id === 'me' || String(req.params.id) === String(req.user.user_id);
@@ -195,6 +195,10 @@ export const updateUserProfile = async (req, res) => {
 
     if (!full_name || !String(full_name).trim()) {
       return res.status(400).json({ error: "Full name is required" });
+    }
+    if (gender !== undefined && gender !== null && gender !== "" &&
+        !["male", "female"].includes(String(gender).toLowerCase())) {
+      return res.status(400).json({ error: "gender must be 'male' or 'female'" });
     }
     const dobError = validateBirthDate(birth_date);
     if (dobError) return res.status(400).json({ error: dobError });
@@ -207,6 +211,12 @@ export const updateUserProfile = async (req, res) => {
       .input("birth_date", sql.Date,          birth_date ? new Date(birth_date) : null);
 
     let sets = "full_name=@full_name, phone=@phone, birth_date=@birth_date";
+
+    // Gender is a personal attribute — allow both admins and self-edit to set it
+    if (gender !== undefined) {
+      r.input("gender", sql.NVarChar(10), gender ? String(gender).toLowerCase() : null);
+      sets += ", gender=@gender";
+    }
 
     // Only admins can change role or status — passengers editing their own profile cannot
     if (isAdmin) {
@@ -225,7 +235,7 @@ export const updateUserProfile = async (req, res) => {
     const result = await r.query(`
       UPDATE users SET ${sets}
       OUTPUT INSERTED.user_id, INSERTED.full_name, INSERTED.email, INSERTED.phone,
-             INSERTED.role, INSERTED.status, INSERTED.birth_date, INSERTED.created_at
+             INSERTED.role, INSERTED.status, INSERTED.birth_date, INSERTED.gender, INSERTED.created_at
       WHERE user_id = @id
     `);
 
@@ -322,7 +332,7 @@ export const getPassengers = async (req, res) => {
     const result = await pool.request().query(`
       SELECT
         u.user_id, u.full_name, u.email, u.phone, u.status,
-        u.birth_date, u.created_at,
+        u.birth_date, u.gender, u.created_at,
         ISNULL(w.balance, 0) AS wallet_balance,
         (SELECT COUNT(*) FROM tickets t WHERE t.user_id = u.user_id) AS trip_count,
         sl.last_action, sl.last_reason, sl.last_acted_at
