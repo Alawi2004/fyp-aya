@@ -61,9 +61,27 @@ export const getDrivers = async (req, res) => {
         u.gender,
         d.license_number,
         d.hire_date,
-        CONVERT(VARCHAR(10), d.license_expiry_date, 23) AS license_expiry
+        CONVERT(VARCHAR(10), d.license_expiry_date, 23) AS license_expiry,
+        ISNULL(tt.trips_today, 0) AS trips,
+        rs.avg_rating             AS rating
       FROM drivers d
       JOIN users u ON d.user_id = u.user_id
+      -- trips driven today
+      LEFT JOIN (
+        SELECT driver_id, COUNT(*) AS trips_today
+        FROM trips
+        WHERE driver_id IS NOT NULL
+          AND CAST(start_time AS DATE) = CAST(GETUTCDATE() AS DATE)
+        GROUP BY driver_id
+      ) tt ON tt.driver_id = d.driver_id
+      -- average passenger rating across all trips
+      LEFT JOIN (
+        SELECT t.driver_id, ROUND(AVG(CAST(r.rating AS FLOAT)), 1) AS avg_rating
+        FROM trips t
+        JOIN ratings r ON r.trip_id = t.trip_id
+        WHERE t.driver_id IS NOT NULL
+        GROUP BY t.driver_id
+      ) rs ON rs.driver_id = d.driver_id
       ${where}
       ORDER BY u.full_name
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -384,7 +402,12 @@ export const updateDriverSchedule = async (req, res) => {
 // PUT /api/drivers/:id
 export const updateDriver = async (req, res) => {
   try {
-    const { license_number, hire_date, license_expiry_date } = req.body;
+    const { license_number, hire_date, license_expiry_date, gender } = req.body;
+
+    if (gender && !["male", "female"].includes(String(gender).toLowerCase())) {
+      return res.status(400).json({ error: "gender must be 'male' or 'female'" });
+    }
+
     const pool = await poolPromise;
     await pool
       .request()
@@ -399,6 +422,22 @@ export const updateDriver = async (req, res) => {
             license_expiry_date = @license_expiry_date
         WHERE driver_id = @id
       `);
+
+    // Gender lives on the user record — update it when provided
+    if (gender) {
+      await pool
+        .request()
+        .input("id",     sql.Int,          req.params.id)
+        .input("gender", sql.NVarChar(10), String(gender).toLowerCase())
+        .query(`
+          UPDATE u
+          SET u.gender = @gender
+          FROM users u
+          JOIN drivers d ON d.user_id = u.user_id
+          WHERE d.driver_id = @id
+        `);
+    }
+
     res.json({ message: "Driver updated" });
   } catch (err) {
     res.status(500).json({ error: "Failed to update driver" });

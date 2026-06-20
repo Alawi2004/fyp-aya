@@ -431,6 +431,7 @@ function DriverProfile({ driver, onClose, onEdit }) {
   const [pickedShift,   setPickedShift]   = useState("off");
   const [schedSaving,   setSchedSaving]   = useState(false);
   const [schedError,    setSchedError]    = useState(null);
+  const [perfRaw,       setPerfRaw]       = useState(null);
 
   useEffect(() => {
     const did = Number(driver.id);
@@ -440,6 +441,18 @@ function DriverProfile({ driver, onClose, onEdit }) {
         if (match) setSchedule(match);
       })
       .catch(() => {});
+  }, [driver.id]);
+
+  // Real performance figures for this driver (this week) — from /api/drivers/performance
+  useEffect(() => {
+    const did = Number(driver.id);
+    const empty = { trips_week: 0, on_time_pct: null, complaints: 0, avg_rating: null, idle_hours: 0 };
+    getDriverPerformance()
+      .then(list => {
+        const match = (Array.isArray(list) ? list : []).find(p => Number(p.driver_id) === did);
+        setPerfRaw(match ?? empty);
+      })
+      .catch(() => setPerfRaw(empty));
   }, [driver.id]);
 
   function openDayPicker(day) {
@@ -470,14 +483,15 @@ function DriverProfile({ driver, onClose, onEdit }) {
     }
   }
 
-  const perf = {
-    trips_week: driver.trips || 0, on_time_pct: 85, complaints: 0,
-    avg_rating: driver.rating, idle_hours: 3.0,
-  };
+  const perf = perfRaw ?? { trips_week: 0, on_time_pct: null, complaints: 0, avg_rating: null, idle_hours: 0 };
+  const hasPerfData = (perf.trips_week ?? 0) > 0;
   const recentTrips = [];
   const driverRatings = [];
-  const score      = calcScore(perf);
-  const scoreColor = score >= 85 ? "#10B981" : score >= 70 ? "#F59E0B" : "#EF4444";
+  // Only score a driver once they have trip history — otherwise show "no data yet"
+  const score      = hasPerfData ? calcScore(perf) : null;
+  const scoreColor = score == null ? "#94A3B8" : score >= 85 ? "#10B981" : score >= 70 ? "#F59E0B" : "#EF4444";
+  const onTimeDisplay = hasPerfData && perf.on_time_pct != null ? `${perf.on_time_pct}%` : "—";
+  const ratingDisplay = perf.avg_rating != null ? `★ ${perf.avg_rating}` : "—";
   const initials   = driver.name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
 
   return (
@@ -530,9 +544,9 @@ function DriverProfile({ driver, onClose, onEdit }) {
               { label: "Phone",         value: driver.phone   },
               { label: "Gender",        value: driver.gender ? driver.gender.charAt(0).toUpperCase() + driver.gender.slice(1) : "—" },
               { label: "Status",        value: driver.status  },
-              { label: "Trips Today",   value: driver.trips || 0 },
-              { label: "Perf. Score",   value: `${score} / 100` },
-              { label: "Avg Rating",    value: driver.rating ? `★ ${driver.rating}` : "—" },
+              { label: "Trips (week)",  value: perf.trips_week ?? 0 },
+              { label: "Perf. Score",   value: score == null ? "—" : `${score} / 100` },
+              { label: "Avg Rating",    value: ratingDisplay },
             ].map(({ label, value }) => (
               <div key={label} style={{ background: "#F8FAFC", borderRadius: 10, padding: "11px 14px", border: "1px solid #F1F5F9" }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: "#94A3B8", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 }}>{label}</div>
@@ -547,10 +561,10 @@ function DriverProfile({ driver, onClose, onEdit }) {
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#94A3B8", marginBottom: 14 }}>This Week&apos;s Performance</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 14 }}>
             {[
-              { label: "Trips",      value: perf.trips_week,            color: "#6D28D9" },
-              { label: "On-Time",    value: `${perf.on_time_pct}%`,     color: perf.on_time_pct >= 90 ? "#10B981" : perf.on_time_pct >= 75 ? "#F59E0B" : "#EF4444" },
-              { label: "Complaints", value: perf.complaints,             color: perf.complaints === 0 ? "#10B981" : "#EF4444" },
-              { label: "Idle",       value: `${perf.idle_hours}h`,      color: perf.idle_hours > 4 ? "#EF4444" : "#64748B" },
+              { label: "Trips",      value: perf.trips_week ?? 0,       color: "#6D28D9" },
+              { label: "On-Time",    value: onTimeDisplay,              color: perf.on_time_pct >= 90 ? "#10B981" : perf.on_time_pct >= 75 ? "#F59E0B" : "#EF4444" },
+              { label: "Complaints", value: perf.complaints ?? 0,        color: (perf.complaints ?? 0) === 0 ? "#10B981" : "#EF4444" },
+              { label: "Idle",       value: `${perf.idle_hours ?? 0}h`, color: (perf.idle_hours ?? 0) > 4 ? "#EF4444" : "#64748B" },
             ].map(({ label, value, color }) => (
               <div key={label} style={{ background: "#F8FAFC", borderRadius: 10, padding: "12px 8px", textAlign: "center", border: "1px solid #F1F5F9" }}>
                 <div style={{ fontSize: 18, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
@@ -561,10 +575,10 @@ function DriverProfile({ driver, onClose, onEdit }) {
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#94A3B8", marginBottom: 6 }}>
               <span>Performance Score</span>
-              <span style={{ fontWeight: 700, color: scoreColor }}>{score} / 100</span>
+              <span style={{ fontWeight: 700, color: scoreColor }}>{score == null ? "No data yet" : `${score} / 100`}</span>
             </div>
             <div style={{ height: 8, background: "#F0F0F0", borderRadius: 4, overflow: "hidden" }}>
-              <div style={{ width: `${score}%`, height: "100%", background: scoreColor, borderRadius: 4, transition: "width .6s ease" }} />
+              <div style={{ width: `${score ?? 0}%`, height: "100%", background: scoreColor, borderRadius: 4, transition: "width .6s ease" }} />
             </div>
           </div>
         </div>
@@ -1385,7 +1399,7 @@ export default function DriversPage() {
   function openEdit(d) {
     setEditTarget(d.id);
     setSaveError(null);
-    setForm({ name: d.name, email: "", password: "", phone: d.phone ?? "", birthDate: "", license: d.license, license_expiry: d.license_expiry ?? "", status: d.status, schedule: { ...DEFAULT_SCHEDULE } });
+    setForm({ name: d.name, email: "", password: "", phone: d.phone ?? "", birthDate: "", gender: d.gender ?? "", license: d.license, license_expiry: d.license_expiry ?? "", status: d.status, schedule: { ...DEFAULT_SCHEDULE } });
     setModalOpen(true);
   }
 
@@ -1407,8 +1421,9 @@ export default function DriversPage() {
         await updateDriver(editTarget, {
           license_number:      form.license,
           license_expiry_date: form.license_expiry || null,
+          gender:              form.gender || null,
         });
-        setDrivers(prev => prev.map(d => d.id === editTarget ? { ...d, license: form.license, license_expiry: form.license_expiry, status: form.status } : d));
+        setDrivers(prev => prev.map(d => d.id === editTarget ? { ...d, license: form.license, license_expiry: form.license_expiry, gender: form.gender, status: form.status } : d));
       } else {
         // 1. Create the user with role=driver
         const newUser = await createUser({
@@ -1550,16 +1565,6 @@ export default function DriversPage() {
                 style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }}
               />
             </div>
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12, color: "#475569", display: "block", marginBottom: 5, fontWeight: 600 }}>Gender *</label>
-              <select value={form.gender}
-                onChange={e => setForm(f => ({ ...f, gender: e.target.value }))}
-                style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", background: "#fff" }}>
-                <option value="">Select gender…</option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-              </select>
-            </div>
             <div style={{ height: 1, background: "#F1F5F9", margin: "4px 0 16px" }} />
           </>)}
 
@@ -1578,6 +1583,16 @@ export default function DriversPage() {
               onChange={e => setForm(f => ({ ...f, license_expiry: e.target.value }))}
               style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box" }}
             />
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, color: "#475569", display: "block", marginBottom: 5, fontWeight: 600 }}>Gender {editTarget ? "" : "*"}</label>
+            <select value={form.gender}
+              onChange={e => setForm(f => ({ ...f, gender: e.target.value }))}
+              style={{ width: "100%", padding: "9px 12px", border: "1px solid #E2E8F0", borderRadius: 8, fontSize: 13, outline: "none", boxSizing: "border-box", background: "#fff" }}>
+              <option value="">Select gender…</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+            </select>
           </div>
           {editTarget && (
             <div style={{ marginBottom: 14 }}>
