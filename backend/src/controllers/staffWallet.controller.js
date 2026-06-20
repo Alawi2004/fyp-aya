@@ -127,7 +127,8 @@ export const staffTopUpWallet = async (req, res) => {
         SELECT ISNULL(SUM(amount), 0) AS today_total
         FROM staff_top_ups
         WHERE processed_by_staff_id = @staffId
-          AND CAST(created_at AS DATE) = CAST(GETUTCDATE() AS DATE)
+          AND CAST(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Middle East Standard Time' AS DATE)
+            = CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'Middle East Standard Time' AS DATE)
           AND status = 'completed'
       `);
     const todayTotal = parseFloat(dailyRes.recordset[0]?.today_total || 0);
@@ -367,9 +368,11 @@ export const getStaffStats = async (req, res) => {
         SELECT
           COUNT(*)                                       AS total_count,
           ISNULL(SUM(amount), 0)                        AS total_amount,
-          COUNT(CASE WHEN CAST(created_at AS DATE) = CAST(GETUTCDATE() AS DATE) THEN 1 END)
+          COUNT(CASE WHEN CAST(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Middle East Standard Time' AS DATE)
+                          = CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'Middle East Standard Time' AS DATE) THEN 1 END)
                                                         AS today_count,
-          ISNULL(SUM(CASE WHEN CAST(created_at AS DATE) = CAST(GETUTCDATE() AS DATE)
+          ISNULL(SUM(CASE WHEN CAST(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Middle East Standard Time' AS DATE)
+                               = CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'Middle East Standard Time' AS DATE)
                           THEN amount END), 0)          AS today_amount
         FROM staff_top_ups
         WHERE processed_by_staff_id = @staffId

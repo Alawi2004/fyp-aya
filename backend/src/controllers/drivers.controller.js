@@ -71,7 +71,8 @@ export const getDrivers = async (req, res) => {
         SELECT driver_id, COUNT(*) AS trips_today
         FROM trips
         WHERE driver_id IS NOT NULL
-          AND CAST(start_time AS DATE) = CAST(GETUTCDATE() AS DATE)
+          AND CAST(start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Middle East Standard Time' AS DATE)
+            = CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'Middle East Standard Time' AS DATE)
         GROUP BY driver_id
       ) tt ON tt.driver_id = d.driver_id
       -- average passenger rating across all trips

@@ -177,10 +177,12 @@ export const getDashboardOverview = async (req, res) => {
 
         // 7. Passenger load by hour today
         pool.request().query(`
-          SELECT DATEPART(HOUR, booking_time) AS hr, COUNT(*) AS cnt
+          SELECT DATEPART(HOUR, booking_time AT TIME ZONE 'UTC' AT TIME ZONE 'Middle East Standard Time') AS hr,
+                 COUNT(*) AS cnt
           FROM tickets
-          WHERE CAST(booking_time AS DATE) = CAST(GETUTCDATE() AS DATE)
-          GROUP BY DATEPART(HOUR, booking_time)
+          WHERE CAST(booking_time AT TIME ZONE 'UTC' AT TIME ZONE 'Middle East Standard Time' AS DATE)
+              = CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'Middle East Standard Time' AS DATE)
+          GROUP BY DATEPART(HOUR, booking_time AT TIME ZONE 'UTC' AT TIME ZONE 'Middle East Standard Time')
         `),
 
         // 8. Recent notifications as alerts

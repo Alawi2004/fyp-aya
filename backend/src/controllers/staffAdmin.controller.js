@@ -19,14 +19,16 @@ export const getStaffAccounts = async (req, res) => {
         u.status,
         u.created_at,
 
-        -- Today's top-up count
+        -- Today's top-up count (Lebanon local day)
         COUNT(DISTINCT CASE
-          WHEN CAST(st.created_at AS DATE) = CAST(GETUTCDATE() AS DATE)
+          WHEN CAST(st.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Middle East Standard Time' AS DATE)
+             = CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'Middle East Standard Time' AS DATE)
           THEN st.top_up_id END)                                    AS today_count,
 
-        -- Today's total amount
+        -- Today's total amount (Lebanon local day)
         ISNULL(SUM(CASE
-          WHEN CAST(st.created_at AS DATE) = CAST(GETUTCDATE() AS DATE)
+          WHEN CAST(st.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Middle East Standard Time' AS DATE)
+             = CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'Middle East Standard Time' AS DATE)
           THEN st.amount END), 0)                                   AS today_total,
 
         -- All-time totals
