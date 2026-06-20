@@ -139,9 +139,12 @@ export default function DashboardPage({ onNavigate }) {
   const [recentNotifs,     setRecentNotifs]     = useState([]);
 
   useEffect(() => {
-    getDashboardStats()
-      .then(d => { setStats(d); setStatsError(null); })
-      .catch(err => setStatsError(err?.message ?? "Failed to load dashboard stats"));
+    const loadStats = () =>
+      getDashboardStats()
+        .then(d => { setStats(d); setStatsError(null); })
+        .catch(err => setStatsError(err?.message ?? "Failed to load dashboard stats"));
+
+    loadStats();
     getDashboardOverview().then(d => {
       if (d.trips) setTrips(d.trips ?? []);
     }).catch(() => {});
@@ -152,6 +155,13 @@ export default function DashboardPage({ onNavigate }) {
     getComplaints().then(d => setRecentComplaints((Array.isArray(d) ? d : (d?.data ?? [])).slice(0, 4))).catch(() => {});
     getRatings().then(d => setRecentRatings((Array.isArray(d) ? d : (d?.data ?? [])).slice(0, 4))).catch(() => {});
     getNotifications().then(d => setRecentNotifs((Array.isArray(d) ? d : (d?.data ?? [])).slice(0, 4))).catch(() => {});
+
+    // Live-ish KPIs: refresh stats (revenue, active trips, etc.) every 45s.
+    // Pauses while the browser tab is hidden to avoid needless calls.
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") loadStats();
+    }, 45000);
+    return () => clearInterval(id);
   }, []);
 
   async function handleSaveTrip(form) {

@@ -19,11 +19,20 @@ export const getDashboardStats = async (req, res) => {
       pool.request().query("SELECT COUNT(*) AS total FROM vehicles WHERE LOWER(status)='active'"),
       pool.request().query("SELECT COUNT(*) AS total FROM vehicles WHERE status != 'deleted'"),
       pool.request().query("SELECT AVG(CAST(rating AS FLOAT)) AS avg_rating FROM ratings"),
+      // Today's revenue, Lebanon local day (UTC+2/+3 with DST), net of refunds.
+      // Counts fare debits and subtracts same-day refund credits; wallet top-ups
+      // and other non-refund credits are ignored.
       pool.request().query(`
-        SELECT ISNULL(SUM(amount), 0) AS total
+        SELECT ISNULL(SUM(
+          CASE
+            WHEN type = 'debit'                                  THEN amount
+            WHEN type = 'credit' AND description LIKE 'Refund%'  THEN -amount
+            ELSE 0
+          END
+        ), 0) AS total
         FROM wallet_transactions
-        WHERE type = 'debit'
-          AND CAST(created_at AS DATE) = CAST(GETUTCDATE() AS DATE)
+        WHERE CAST(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Middle East Standard Time' AS DATE)
+            = CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'Middle East Standard Time' AS DATE)
       `),
       pool.request().query(`
         SELECT COUNT(*) AS total FROM complaints
@@ -126,35 +135,44 @@ export const getDashboardOverview = async (req, res) => {
           ORDER BY avg_rating DESC, trips DESC
         `),
 
-        // 5. 7-day trip counts + debit revenue
+        // 5. 7-day trip counts + revenue (Lebanon local day, net of refunds)
         pool.request().query(`
           WITH days AS (
-            SELECT DATEADD(day, n.n, CAST(DATEADD(day,-6,CAST(GETUTCDATE() AS DATE)) AS DATE)) AS dt
+            SELECT DATEADD(day, n.n,
+              DATEADD(day, -6, CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'Middle East Standard Time' AS DATE))) AS dt
             FROM (VALUES(0),(1),(2),(3),(4),(5),(6)) n(n)
           )
           SELECT
             LEFT(DATENAME(WEEKDAY, d.dt), 3)    AS day,
             (SELECT COUNT(*) FROM trips t
-             WHERE CAST(t.start_time AS DATE) = d.dt) AS trips,
-            ISNULL((SELECT SUM(wt.amount)
+             WHERE CAST(t.start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Middle East Standard Time' AS DATE) = d.dt) AS trips,
+            ISNULL((SELECT SUM(CASE
+                      WHEN wt.type='debit'                                 THEN wt.amount
+                      WHEN wt.type='credit' AND wt.description LIKE 'Refund%' THEN -wt.amount
+                      ELSE 0 END)
              FROM wallet_transactions wt
-             WHERE wt.type='debit'
-               AND CAST(wt.created_at AS DATE) = d.dt), 0) AS rev
+             WHERE CAST(wt.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Middle East Standard Time' AS DATE) = d.dt), 0) AS rev
           FROM days d
           ORDER BY d.dt
         `),
 
-        // 6. This-week vs last-week revenue totals
+        // 6. This-week vs last-week revenue totals (Lebanon local day, net of refunds)
         pool.request().query(`
           SELECT
-            ISNULL(SUM(CASE
-              WHEN CAST(created_at AS DATE) >= CAST(DATEADD(day,-6,GETUTCDATE()) AS DATE)
-              THEN amount END), 0)  AS this_week,
-            ISNULL(SUM(CASE
-              WHEN CAST(created_at AS DATE) >= CAST(DATEADD(day,-13,GETUTCDATE()) AS DATE)
-               AND CAST(created_at AS DATE) <  CAST(DATEADD(day,-6, GETUTCDATE()) AS DATE)
-              THEN amount END), 0)  AS last_week
-          FROM wallet_transactions WHERE type = 'debit'
+            ISNULL(SUM(CASE WHEN local_dt >= DATEADD(day,-6,  today) THEN net END), 0) AS this_week,
+            ISNULL(SUM(CASE WHEN local_dt >= DATEADD(day,-13, today)
+                             AND local_dt <  DATEADD(day,-6,  today) THEN net END), 0) AS last_week
+          FROM (
+            SELECT
+              CAST(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Middle East Standard Time' AS DATE) AS local_dt,
+              CAST(SYSDATETIMEOFFSET() AT TIME ZONE 'Middle East Standard Time' AS DATE)            AS today,
+              CASE
+                WHEN type='debit'                                 THEN amount
+                WHEN type='credit' AND description LIKE 'Refund%'  THEN -amount
+                ELSE 0
+              END AS net
+            FROM wallet_transactions
+          ) x
         `),
 
         // 7. Passenger load by hour today
