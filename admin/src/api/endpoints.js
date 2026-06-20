@@ -5,7 +5,10 @@ export const getDashboardStats = () => apiClient.get('/dashboard/stats');
 export const getDashboardOverview = () => apiClient.get('/dashboard/overview');
 
 // Trips
-export const getTrips              = ()         => apiClient.get('/trips');
+export const getTrips              = (params)   => {
+  const qs = params ? new URLSearchParams(params).toString() : '';
+  return apiClient.get(`/trips${qs ? `?${qs}` : ''}`);
+};
 export const getTripById           = (id)       => apiClient.get(`/trips/${id}`);
 export const createTrip            = (data)     => apiClient.post('/trips', data);
 export const updateTripStatus      = (id, status) => apiClient.put(`/trips/${id}/status`, { status });

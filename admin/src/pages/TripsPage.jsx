@@ -1139,7 +1139,7 @@ export default function TripsPage() {
   const loadTrips = useCallback(() => {
     setTripsLoading(true);
     setTripsError(null);
-    getTrips()
+    getTrips({ limit: 200 })
       .then(d => {
         const rows = d?.data ?? d;
         setTrips((rows || []).map(normalizeTrip));
@@ -1190,11 +1190,20 @@ export default function TripsPage() {
     ? serverConflicts
     : (serverConflicts !== null ? serverConflicts : clientConflicts);
 
+  // "Available" mirrors what passengers see: a trip is bookable only if it has a
+  // vehicle + route attached and isn't completed/cancelled (matches view_trip_vehicle).
+  const isAvailableTrip = (t) =>
+    t.vehicle_id != null &&
+    t.route_id != null &&
+    !["completed", "cancelled"].includes((t.status || "").toLowerCase());
+
   const stats = {
-    all:       trips.length,
-    ongoing:   trips.filter(t => t.status?.toLowerCase() === "ongoing").length,
-    delayed:   trips.filter(t => t.status?.toLowerCase() === "delayed").length,
-    completed: trips.filter(t => t.status?.toLowerCase() === "completed").length,
+    all:         trips.length,
+    ongoing:     trips.filter(t => t.status?.toLowerCase() === "ongoing").length,
+    delayed:     trips.filter(t => t.status?.toLowerCase() === "delayed").length,
+    completed:   trips.filter(t => t.status?.toLowerCase() === "completed").length,
+    available:   trips.filter(isAvailableTrip).length,
+    unavailable: trips.filter(t => !isAvailableTrip(t)).length,
   };
 
   async function handleSaveTrip(form) {
@@ -1272,7 +1281,7 @@ export default function TripsPage() {
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", margin: 0, letterSpacing: "-.3px" }}>Trips</h1>
           <p style={{ fontSize: 12, color: "#64748B", margin: "2px 0 0" }}>
-            {trips.length} trips · {stats.delayed} with delayed status · {delays.length} delay report{delays.length !== 1 ? "s" : ""} · {conflicts.length} conflict{conflicts.length !== 1 ? "s" : ""}
+            {trips.length} trips · {stats.available} available · {stats.unavailable} completed/cancelled · {stats.delayed} with delayed status · {delays.length} delay report{delays.length !== 1 ? "s" : ""} · {conflicts.length} conflict{conflicts.length !== 1 ? "s" : ""}
           </p>
         </div>
         <div style={{ flex: 1 }} />
