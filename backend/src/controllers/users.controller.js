@@ -2,7 +2,6 @@ import bcrypt from "bcrypt";
 import { poolPromise, sql } from "../db/db.js";
 import { ensureAuthTables } from "../db/featureSetup.js";
 import { writeAuditLog } from "./auditLog.controller.js";
-import { profileContainer } from "../middleware/upload.middleware.js";
 
 // ── POST /api/users — admin creates a user with any role ─────────────────────
 const VALID_ROLES = ["passenger", "driver", "admin", "staff"];
@@ -589,7 +588,7 @@ export const getMe = async (req, res) => {
     const result = await pool.request()
       .input("id", sql.Int, req.user.user_id)
       .query(`
-        SELECT user_id, full_name, email, phone, role, category, status, birth_date, gender, created_at, profile_photo_url
+        SELECT user_id, full_name, email, phone, role, category, status, birth_date, gender, created_at
         FROM   users
         WHERE  user_id = @id
       `);
@@ -671,46 +670,3 @@ export const deleteMyAccount = async (req, res) => {
     res.status(500).json({ error: "Failed to process account deletion." });
   }
 };
-
-// ── DELETE /api/users/me/avatar — remove profile photo ───────────────────────
-export const removeAvatar = async (req, res) => {
-  try {
-    const pool = await poolPromise;
-    await pool.request()
-      .input("id", sql.Int, req.user.user_id)
-      .query("UPDATE users SET profile_photo_url = NULL WHERE user_id = @id");
-    res.json({ message: "Avatar removed" });
-  } catch (err) {
-    console.error("[removeAvatar]", err);
-    res.status(500).json({ error: "Failed to remove avatar" });
-  }
-};
-
-// ── POST /api/users/me/avatar — upload/replace profile photo ─────────────────
-export const uploadAvatar = async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: "No image file received" });
-
-    const userId  = req.user.user_id;
-    const ext     = (req.file.originalname.match(/\.[^.]+$/) || [".jpg"])[0].toLowerCase();
-    const blobName = `avatar-${userId}-${Date.now()}${ext}`;
-
-    const blockBlob = profileContainer.getBlockBlobClient(blobName);
-    await blockBlob.uploadData(req.file.buffer, {
-      blobHTTPHeaders: { blobContentType: req.file.mimetype },
-    });
-
-    const url  = blockBlob.url;
-    const pool = await poolPromise;
-    await pool.request()
-      .input("id",  sql.Int,          userId)
-      .input("url", sql.NVarChar(500), url)
-      .query("UPDATE users SET profile_photo_url = @url WHERE user_id = @id");
-
-    res.json({ url, message: "Avatar updated" });
-  } catch (err) {
-    console.error("[uploadAvatar]", err);
-    res.status(500).json({ error: "Avatar upload failed" });
-  }
-};
-

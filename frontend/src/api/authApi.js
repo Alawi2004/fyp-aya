@@ -9,12 +9,3 @@ export const getMyRatingsApi = () => apiClient.get('/ratings/me').then(r => r.da
 export const sendOtpApi = (email, purpose) => apiClient.post('/auth/send-otp', { email, purpose });
 export const verifyOtpApi = (email, code) => apiClient.post('/auth/verify-otp', { email, code });
 export const resetPasswordOtpApi = (data) => apiClient.post('/auth/reset-password-otp', data);
-export const uploadAvatarApi = (uri) => {
-  if (!uri) return apiClient.delete('/users/me/avatar').then(r => r.data);
-  const filename = uri.split('/').pop() || 'avatar.jpg';
-  const ext = (/\.(\w+)$/.exec(filename)?.[1] || 'jpg').toLowerCase();
-  const type = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-  const form = new FormData();
-  form.append('photo', { uri, name: filename, type });
-  return apiClient.post('/users/me/avatar', form, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
-};

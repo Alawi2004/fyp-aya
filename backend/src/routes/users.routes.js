@@ -17,12 +17,9 @@ import {
   deleteMyAccount,
   getMe,
   updateMe,
-  uploadAvatar,
-  removeAvatar,
 } from "../controllers/users.controller.js";
 import { requirePermission } from "../middleware/permissions.middleware.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
-import { uploadPhoto } from "../middleware/upload.middleware.js";
 
 const router = express.Router();
 
@@ -50,8 +47,6 @@ const router = express.Router();
 
 router.get("/me",                       requireAuth, getMe);
 router.put("/me",                       requireAuth, updateMe);
-router.post("/me/avatar",               requireAuth, uploadPhoto, uploadAvatar);
-router.delete("/me/avatar",             requireAuth, removeAvatar);
 router.get("/me/favorites",             requireAuth, getFavorites);
 router.post("/me/favorites",            requireAuth, addFavorite);
 router.delete("/me/favorites/:routeId", requireAuth, removeFavorite);

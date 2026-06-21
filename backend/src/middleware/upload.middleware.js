@@ -3,14 +3,12 @@ import { BlobServiceClient, StorageSharedKeyCredential } from "@azure/storage-bl
 import dotenv from "dotenv";
 dotenv.config();
 
-const account             = process.env.AZURE_STORAGE_ACCOUNT_NAME;
-const accountKey          = process.env.AZURE_STORAGE_ACCOUNT_KEY;
-const containerName       = process.env.AZURE_STORAGE_VEHICLE_CONTAINER || "vehicle-photos";
-const profileContainerName = process.env.AZURE_STORAGE_PROFILE_CONTAINER || "profile-photos";
+const account        = process.env.AZURE_STORAGE_ACCOUNT_NAME;
+const accountKey     = process.env.AZURE_STORAGE_ACCOUNT_KEY;
+const containerName  = process.env.AZURE_STORAGE_VEHICLE_CONTAINER || "vehicle-photos";
 
-let blobServiceClientInstance  = null;
-let vehicleContainerInstance   = null;
-let profileContainerInstance   = null;
+let blobServiceClientInstance = null;
+let vehicleContainerInstance  = null;
 
 function getBlobClient() {
   if (!blobServiceClientInstance) {
@@ -19,15 +17,12 @@ function getBlobClient() {
     blobServiceClientInstance = new BlobServiceClient(`https://${account}.blob.core.windows.net`, cred);
     vehicleContainerInstance  = blobServiceClientInstance.getContainerClient(containerName);
     vehicleContainerInstance.createIfNotExists({ access: "blob" }).catch(() => {});
-    profileContainerInstance  = blobServiceClientInstance.getContainerClient(profileContainerName);
-    profileContainerInstance.createIfNotExists({ access: "blob" }).catch(() => {});
   }
-  return { blobServiceClient: blobServiceClientInstance, vehicleContainer: vehicleContainerInstance, profileContainer: profileContainerInstance };
+  return { blobServiceClient: blobServiceClientInstance, vehicleContainer: vehicleContainerInstance };
 }
 
 export const blobServiceClient = new Proxy({}, { get: (_, p) => getBlobClient().blobServiceClient[p] });
 export const vehicleContainer  = new Proxy({}, { get: (_, p) => getBlobClient().vehicleContainer[p] });
-export const profileContainer  = new Proxy({}, { get: (_, p) => getBlobClient().profileContainer[p] });
 
 // Use memory storage — we stream the buffer to Azure ourselves
 export const uploadPhoto = multer({
