@@ -310,7 +310,7 @@ export const AppProvider = ({ children }) => {
           type: 'info',
           title: 'Reservation Cancelled',
           body: refundAmount > 0
-            ? `Your taxi reservation has been cancelled. ${currency} ${refundAmount.toFixed(2)} refunded to wallet.`
+            ? `Your taxi reservation has been cancelled. ${fmtMoney(refundAmount)} refunded to wallet.`
             : 'Your taxi reservation has been cancelled.',
           time: 'Just now',
           read: false,
@@ -331,7 +331,7 @@ export const AppProvider = ({ children }) => {
         _id: Date.now().toString(),
         type: 'info',
         title: 'Booking Cancelled',
-        body: `Your booking for ${booking.bus?.name} has been cancelled. ${currency} ${refundAmount.toFixed(2)} refunded to wallet.`,
+        body: `Your booking for ${booking.bus?.name} has been cancelled. ${fmtMoney(refundAmount)} refunded to wallet.`,
         time: 'Just now',
         read: false,
       });

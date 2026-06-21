@@ -1406,8 +1406,8 @@ const TaxiReservationScreen = ({ navigation, route }) => {
                   </Bump>
                   {distanceKm != null && (
                     <Text style={styles.fareDistance}>
-                      {distanceKm.toFixed(1)} km · {currency} {selVehicle.base.toFixed(2)}{" "}
-                      base + {currency} {(selVehicle.perKm * distanceKm).toFixed(2)}
+                      {distanceKm.toFixed(1)} km · {fmtMoney(selVehicle.base)}{" "}
+                      base + {fmtMoney(selVehicle.perKm * distanceKm)}
                     </Text>
                   )}
                   <View style={styles.fareBalanceRow}>
@@ -1422,7 +1422,7 @@ const TaxiReservationScreen = ({ navigation, route }) => {
                         insufficient && styles.fareBalanceInsufficient,
                       ]}
                     >
-                      Wallet: {currency} {walletBalance.toFixed(2)}
+                      Wallet: {fmtMoney(walletBalance)}
                       {insufficient ? "  ⚠ Insufficient" : ""}
                     </Text>
                   </View>
