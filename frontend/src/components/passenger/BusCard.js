@@ -44,7 +44,7 @@ const TYPE_LABEL = {
 };
 
 const BusCard = ({ bus, onPress, fmtMoney, isFavorite = false, onToggleFavorite }) => {
-  const { t } = useApp();
+  const { t, language } = useApp();
   const recurrenceLabel = formatRecurrence(bus.schedule_recurrence, bus.schedule_custom_days);
   const [photoUrl, setPhotoUrl] = useState(null);
 
@@ -120,26 +120,37 @@ const BusCard = ({ bus, onPress, fmtMoney, isFavorite = false, onToggleFavorite 
         )}
       </View>
 
-      {/* Route row */}
-      <View style={styles.routeRow}>
-        <View style={styles.routeStop}>
-          <Text style={styles.stopLabel}>{t('FROM')}</Text>
-          <Text style={styles.stopName}>{bus.origin}</Text>
-          <Text style={styles.stopTime}>{bus.departureTime}</Text>
-        </View>
-        <View style={styles.routeMid}>
-          <View style={styles.routeLineDash} />
-          <View style={styles.routeArrow}>
-            <Ionicons name="bus-outline" size={13} color={PURPLE.primary} />
+      {/* Route row — FROM/TO swap in Arabic so reading order is right-to-left */}
+      {(() => {
+        const isArabic = language === 'ar';
+        const left  = isArabic
+          ? { label: t('TO'),   name: bus.destination, time: bus.arrivalTime,   align: 'flex-start' }
+          : { label: t('FROM'), name: bus.origin,      time: bus.departureTime, align: 'flex-start' };
+        const right = isArabic
+          ? { label: t('FROM'), name: bus.origin,      time: bus.departureTime, align: 'flex-end' }
+          : { label: t('TO'),   name: bus.destination, time: bus.arrivalTime,   align: 'flex-end' };
+        return (
+          <View style={styles.routeRow}>
+            <View style={[styles.routeStop, { alignItems: left.align }]}>
+              <Text style={styles.stopLabel}>{left.label}</Text>
+              <Text style={styles.stopName}>{left.name}</Text>
+              <Text style={styles.stopTime}>{left.time}</Text>
+            </View>
+            <View style={styles.routeMid}>
+              <View style={styles.routeLineDash} />
+              <View style={[styles.routeArrow, isArabic && { transform: [{ scaleX: -1 }] }]}>
+                <Ionicons name="bus-outline" size={13} color={PURPLE.primary} />
+              </View>
+              <View style={styles.routeLineDash} />
+            </View>
+            <View style={[styles.routeStop, { alignItems: right.align }]}>
+              <Text style={styles.stopLabel}>{right.label}</Text>
+              <Text style={styles.stopName}>{right.name}</Text>
+              <Text style={styles.stopTime}>{right.time}</Text>
+            </View>
           </View>
-          <View style={styles.routeLineDash} />
-        </View>
-        <View style={[styles.routeStop, { alignItems: 'flex-end' }]}>
-          <Text style={styles.stopLabel}>{t('TO')}</Text>
-          <Text style={styles.stopName}>{bus.destination}</Text>
-          <Text style={styles.stopTime}>{bus.arrivalTime}</Text>
-        </View>
-      </View>
+        );
+      })()}
 
       {/* Divider */}
       <View style={styles.divider} />

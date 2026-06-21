@@ -29,7 +29,8 @@
 // export const useApp = () => useContext(AppContext);
 
 import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from 'react';
-import { I18nManager, AppState } from 'react-native';
+import { AppState } from 'react-native';
+import { setRTLLanguage } from '../utils/rtlState';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import apiClient, { registerPushToken, registerFcmToken } from '../api/apiClient';
@@ -193,12 +194,8 @@ export const AppProvider = ({ children }) => {
 
   const applyLanguage = useCallback((lang) => {
     setLanguage(lang);
+    setRTLLanguage(lang);
     apiClient.defaults.headers.common['Accept-Language'] = lang;
-    const isRTL = lang === 'ar';
-    if (I18nManager.isRTL !== isRTL) {
-      I18nManager.allowRTL(isRTL);
-      I18nManager.forceRTL(isRTL);
-    }
     AsyncStorage.setItem('app.language', lang).catch(() => {});
   }, []);
 
