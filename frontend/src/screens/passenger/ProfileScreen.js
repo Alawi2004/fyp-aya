@@ -93,7 +93,7 @@ const ProfileScreen = ({ navigation }) => {
   const [langModal, setLangModal] = useState(false);
   const [currencyModal, setCurrencyModal] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [localPhoto, setLocalPhoto] = useState(null);
+  const [pendingPhoto, setPendingPhoto] = useState(null);
 
   // ── Pull everything fresh from the backend ──────────────────────────────────
   const loadAll = useCallback(async (showSpinner = false) => {
@@ -171,7 +171,7 @@ const ProfileScreen = ({ navigation }) => {
       { text: 'Take Photo',          onPress: () => pickImage(true)  },
       { text: 'Choose from Library', onPress: () => pickImage(false) },
     ];
-    if (localPhoto || user?.profile_photo_url) {
+    if (user?.profile_photo_url) {
       options.push({ text: 'Remove Photo', style: 'destructive', onPress: removePhoto });
     }
     options.push({ text: 'Cancel', style: 'cancel' });
@@ -181,34 +181,27 @@ const ProfileScreen = ({ navigation }) => {
   const pickImage = async (fromCamera) => {
     if (fromCamera) {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Camera access is required.');
-        return;
-      }
-      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.85 });
-      if (!result.canceled) uploadPhoto(result.assets[0].uri);
+      if (status !== 'granted') { Alert.alert('Permission needed', 'Camera access is required.'); return; }
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 0.85 });
+      if (!result.canceled) setPendingPhoto(result.assets[0].uri);
     } else {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission needed', 'Photo library access is required.');
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.85 });
-      if (!result.canceled) uploadPhoto(result.assets[0].uri);
+      if (status !== 'granted') { Alert.alert('Permission needed', 'Photo library access is required.'); return; }
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 0.85 });
+      if (!result.canceled) setPendingPhoto(result.assets[0].uri);
     }
   };
 
-  const uploadPhoto = async (uri) => {
-    setLocalPhoto(uri);   // show instantly like Instagram
+  const savePhoto = async () => {
+    if (!pendingPhoto) return;
     setUploading(true);
     try {
-      const { url } = await uploadAvatarApi(uri);
+      const { url } = await uploadAvatarApi(pendingPhoto);
       const updated = { ...user, profile_photo_url: url };
       setUser(updated);
       await AsyncStorage.setItem('userData', JSON.stringify(updated));
-      setLocalPhoto(null); // hand off to the persisted URL
+      setPendingPhoto(null);
     } catch (err) {
-      setLocalPhoto(null);
       Alert.alert('Upload failed', err?.response?.data?.error || 'Could not upload photo. Please try again.');
     } finally {
       setUploading(false);
@@ -219,16 +212,10 @@ const ProfileScreen = ({ navigation }) => {
     const prev = user?.profile_photo_url;
     const updated = { ...user, profile_photo_url: null };
     setUser(updated);
-    setLocalPhoto(null);
     await AsyncStorage.setItem('userData', JSON.stringify(updated));
-    try {
-      await uploadAvatarApi(null); // backend clears the URL
-    } catch {
-      // revert silently
-      const reverted = { ...user, profile_photo_url: prev };
-      setUser(reverted);
-      await AsyncStorage.setItem('userData', JSON.stringify(reverted));
-    }
+    uploadAvatarApi(null).catch(() => {
+      setUser({ ...user, profile_photo_url: prev });
+    });
   };
 
   const handleLogout = () => {
@@ -270,21 +257,15 @@ const ProfileScreen = ({ navigation }) => {
             <Ionicons name="create-outline" size={18} color={COLORS.white} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.avatarWrap} onPress={handleAvatarPress} activeOpacity={0.8} disabled={uploading}>
-            {(localPhoto || user?.profile_photo_url) ? (
-              <Image source={{ uri: localPhoto || user.profile_photo_url }} style={styles.avatarImage} />
+          <TouchableOpacity style={styles.avatarWrap} onPress={handleAvatarPress} activeOpacity={0.8}>
+            {user?.profile_photo_url ? (
+              <Image source={{ uri: user.profile_photo_url }} style={styles.avatarImage} />
             ) : (
               <Text style={styles.avatarText}>{initials}</Text>
             )}
-            {uploading ? (
-              <View style={styles.avatarOverlay}>
-                <ActivityIndicator color={COLORS.white} />
-              </View>
-            ) : (
-              <View style={styles.avatarCameraBtn}>
-                <Ionicons name="camera" size={12} color={COLORS.white} />
-              </View>
-            )}
+            <View style={styles.avatarCameraBtn}>
+              <Ionicons name="camera" size={12} color={COLORS.white} />
+            </View>
             {isVerified && (
               <View style={styles.avatarBadge}>
                 <Ionicons name="checkmark" size={11} color={COLORS.white} />
@@ -409,6 +390,33 @@ const ProfileScreen = ({ navigation }) => {
         </View>
       </ScrollView>
 
+      {/* Photo preview + Save modal */}
+      <Modal visible={!!pendingPhoto} transparent animationType="slide" onRequestClose={() => !uploading && setPendingPhoto(null)}>
+        <View style={styles.previewOverlay}>
+          <View style={styles.previewCard}>
+            <Text style={styles.previewTitle}>Profile Photo</Text>
+            {pendingPhoto && <Image source={{ uri: pendingPhoto }} style={styles.previewImage} />}
+            <TouchableOpacity
+              style={[styles.saveBtn, uploading && styles.saveBtnBusy]}
+              onPress={savePhoto}
+              disabled={uploading}
+              activeOpacity={0.85}
+            >
+              {uploading
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.saveBtnText}>Save</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => setPendingPhoto(null)}
+              disabled={uploading}
+            >
+              <Text style={styles.cancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Language picker modal */}
       <Modal visible={langModal} transparent animationType="fade" onRequestClose={() => setLangModal(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setLangModal(false)}>
@@ -500,12 +508,6 @@ const styles = StyleSheet.create({
   },
   avatarImage: { width: '100%', height: '100%', borderRadius: 27 },
   avatarText: { fontSize: 32, fontWeight: '900', color: COLORS.white },
-  avatarOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center', justifyContent: 'center',
-    borderRadius: 27,
-  },
   avatarCameraBtn: {
     position: 'absolute', bottom: 4, right: 4,
     width: 22, height: 22, borderRadius: 11,
@@ -605,6 +607,32 @@ const styles = StyleSheet.create({
   pickerRowText: { fontSize: 16, fontWeight: '700', color: COLORS.textPrimary, flex: 1 },
   pickerRowTextActive: { color: PURPLE.primary },
   pickerRowSub: { fontSize: 12, color: COLORS.textMuted, marginTop: 1, fontWeight: '500' },
+
+  /* Photo preview modal */
+  previewOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  previewCard: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40,
+    alignItems: 'center',
+  },
+  previewTitle: {
+    fontSize: 16, fontWeight: '800', color: COLORS.textPrimary, marginBottom: 20,
+  },
+  previewImage: {
+    width: 180, height: 180, borderRadius: 90, marginBottom: 28,
+  },
+  saveBtn: {
+    width: '100%', paddingVertical: 15, borderRadius: 14,
+    backgroundColor: PURPLE.primary, alignItems: 'center', marginBottom: 12,
+  },
+  saveBtnBusy: { opacity: 0.7 },
+  saveBtnText: { fontSize: 16, fontWeight: '800', color: '#fff' },
+  cancelBtn: { paddingVertical: 10 },
+  cancelBtnText: { fontSize: 15, fontWeight: '600', color: COLORS.textMuted },
 });
 
 export default ProfileScreen;
