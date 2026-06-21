@@ -82,7 +82,7 @@ const STATUS_CFG = {
 };
 
 // ─── Trip Action Modal ─────────────────────────────────────────────────────────
-const TripActionModal = ({ trip, loading, insets, onClose, onStart, onEnd, onCancel }) => {
+const TripActionModal = ({ trip, loading, insets, onClose, onStart, onEnd, onCancel, t }) => {
   if (!trip) return null;
   const busy   = loading === trip.trip_id;
   const active = isActive(trip.status);
@@ -727,6 +727,7 @@ const DriverMapScreen = ({ navigation, route }) => {
         onStart={handleStart}
         onEnd={handleEnd}
         onCancel={handleCancel}
+        t={t}
       />
     </View>
   );

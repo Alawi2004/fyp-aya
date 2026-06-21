@@ -63,7 +63,7 @@ const isDoneStatus      = (s) => ['completed', 'cancelled', 'closed'].includes(s
 // anything else (confirmed, boarded, upcoming, pending, scheduled) → can be started
 
 // ── Trip Detail Modal ────────────────────────────────────────────────────────
-const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd, onOpenMap, onCancel, onManifest }) => {
+const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd, onOpenMap, onCancel, onManifest, fmtMoney }) => {
   // Hooks must come before any early return
   const sheetY    = useRef(new Animated.Value(600)).current;
   const dragBase  = useRef(0);
@@ -752,6 +752,7 @@ const DriverDashboardScreen = ({ navigation }) => {
         trip={selectedTrip}
         actionLoading={actionLoading}
         insets={insets}
+        fmtMoney={fmtMoney}
         onClose={() => setSelectedTrip(null)}
         onStart={handleStartTrip}
         onEnd={handleEndTrip}
