@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Modal,
-  TouchableOpacity, Alert, StatusBar, RefreshControl, ActivityIndicator, Linking,
+  TouchableOpacity, Alert, StatusBar, RefreshControl, ActivityIndicator, Linking, Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import useHeaderInsets from '../../hooks/useHeaderInsets';
@@ -10,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Defs, LinearGradient as SvgGradient, Stop, Rect } from 'react-native-svg';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
-import { getProfileApi, getMyRatingsApi } from '../../api/authApi';
+import { getProfileApi, getMyRatingsApi, uploadAvatarApi } from '../../api/authApi';
 import { getWalletApi } from '../../api/walletApi';
 import { COLORS, PURPLE } from '../../constants/colors';
 
@@ -91,6 +92,7 @@ const ProfileScreen = ({ navigation }) => {
   const [ratingStats, setRatingStats] = useState({ count: 0, avg: null });
   const [langModal, setLangModal] = useState(false);
   const [currencyModal, setCurrencyModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   // ── Pull everything fresh from the backend ──────────────────────────────────
   const loadAll = useCallback(async (showSpinner = false) => {
@@ -163,6 +165,60 @@ const ProfileScreen = ({ navigation }) => {
   const isVerified = (user?.status || 'active') === 'active';
   const ratingDisplay = ratingStats.avg != null ? ratingStats.avg.toFixed(1) : '—';
 
+  const handleAvatarPress = () => {
+    Alert.alert('Profile Photo', 'Choose an option', [
+      {
+        text: 'Take Photo',
+        onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission needed', 'Camera access is required to take a photo.');
+            return;
+          }
+          const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ['images'],
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+          });
+          if (!result.canceled) await doUpload(result.assets[0].uri);
+        },
+      },
+      {
+        text: 'Choose from Library',
+        onPress: async () => {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission needed', 'Photo library access is required.');
+            return;
+          }
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+          });
+          if (!result.canceled) await doUpload(result.assets[0].uri);
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const doUpload = async (uri) => {
+    setUploading(true);
+    try {
+      const { url } = await uploadAvatarApi(uri);
+      const updated = { ...user, profile_photo_url: url };
+      setUser(updated);
+      await AsyncStorage.setItem('userData', JSON.stringify(updated));
+    } catch {
+      Alert.alert('Upload failed', 'Could not upload photo. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleLogout = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
@@ -202,14 +258,26 @@ const ProfileScreen = ({ navigation }) => {
             <Ionicons name="create-outline" size={18} color={COLORS.white} />
           </TouchableOpacity>
 
-          <View style={styles.avatarWrap}>
-            <Text style={styles.avatarText}>{initials}</Text>
+          <TouchableOpacity style={styles.avatarWrap} onPress={handleAvatarPress} activeOpacity={0.8}>
+            {user?.profile_photo_url ? (
+              <Image source={{ uri: user.profile_photo_url }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarText}>{initials}</Text>
+            )}
+            {uploading && (
+              <View style={styles.avatarOverlay}>
+                <ActivityIndicator color={COLORS.white} />
+              </View>
+            )}
+            <View style={styles.avatarCameraBtn}>
+              <Ionicons name="camera" size={12} color={COLORS.white} />
+            </View>
             {isVerified && (
               <View style={styles.avatarBadge}>
                 <Ionicons name="checkmark" size={11} color={COLORS.white} />
               </View>
             )}
-          </View>
+          </TouchableOpacity>
           <Text style={styles.userName}>{user?.name || 'Passenger'}</Text>
           <Text style={styles.userEmail}>{user?.email || ''}</Text>
           {memberSince && (
@@ -414,8 +482,22 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.35)',
     marginBottom: 12,
+    overflow: 'hidden',
   },
+  avatarImage: { width: '100%', height: '100%', borderRadius: 27 },
   avatarText: { fontSize: 32, fontWeight: '900', color: COLORS.white },
+  avatarOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center', justifyContent: 'center',
+    borderRadius: 27,
+  },
+  avatarCameraBtn: {
+    position: 'absolute', bottom: 4, right: 4,
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center', justifyContent: 'center',
+  },
   avatarBadge: {
     position: 'absolute', bottom: -3, right: -3,
     width: 24, height: 24, borderRadius: 12,

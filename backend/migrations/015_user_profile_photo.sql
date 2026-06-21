@@ -1,0 +1,5 @@
+IF NOT EXISTS (
+  SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_NAME = 'users' AND COLUMN_NAME = 'profile_photo_url'
+)
+  ALTER TABLE users ADD profile_photo_url NVARCHAR(500) NULL;
