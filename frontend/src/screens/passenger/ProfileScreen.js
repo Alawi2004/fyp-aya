@@ -93,6 +93,7 @@ const ProfileScreen = ({ navigation }) => {
   const [langModal, setLangModal] = useState(false);
   const [currencyModal, setCurrencyModal] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [pendingPhoto, setPendingPhoto] = useState(null);
 
   // ── Pull everything fresh from the backend ──────────────────────────────────
   const loadAll = useCallback(async (showSpinner = false) => {
@@ -165,42 +166,40 @@ const ProfileScreen = ({ navigation }) => {
   const isVerified = (user?.status || 'active') === 'active';
   const ratingDisplay = ratingStats.avg != null ? ratingStats.avg.toFixed(1) : '—';
 
+  const pickImage = async (fromCamera) => {
+    if (fromCamera) {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Camera access is required to take a photo.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+      if (!result.canceled) setPendingPhoto(result.assets[0].uri);
+    } else {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Photo library access is required.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+      if (!result.canceled) setPendingPhoto(result.assets[0].uri);
+    }
+  };
+
   const handleAvatarPress = () => {
     Alert.alert('Profile Photo', 'Choose an option', [
-      {
-        text: 'Take Photo',
-        onPress: async () => {
-          const { status } = await ImagePicker.requestCameraPermissionsAsync();
-          if (status !== 'granted') {
-            Alert.alert('Permission needed', 'Camera access is required to take a photo.');
-            return;
-          }
-          const result = await ImagePicker.launchCameraAsync({
-            mediaTypes: ['images'],
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.8,
-          });
-          if (!result.canceled) await doUpload(result.assets[0].uri);
-        },
-      },
-      {
-        text: 'Choose from Library',
-        onPress: async () => {
-          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          if (status !== 'granted') {
-            Alert.alert('Permission needed', 'Photo library access is required.');
-            return;
-          }
-          const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.8,
-          });
-          if (!result.canceled) await doUpload(result.assets[0].uri);
-        },
-      },
+      { text: 'Take Photo',          onPress: () => pickImage(true)  },
+      { text: 'Choose from Library', onPress: () => pickImage(false) },
       { text: 'Cancel', style: 'cancel' },
     ]);
   };
@@ -212,8 +211,9 @@ const ProfileScreen = ({ navigation }) => {
       const updated = { ...user, profile_photo_url: url };
       setUser(updated);
       await AsyncStorage.setItem('userData', JSON.stringify(updated));
-    } catch {
-      Alert.alert('Upload failed', 'Could not upload photo. Please try again.');
+      setPendingPhoto(null);
+    } catch (err) {
+      Alert.alert('Upload failed', err?.response?.data?.error || 'Could not upload photo. Please try again.');
     } finally {
       setUploading(false);
     }
@@ -444,6 +444,40 @@ const ProfileScreen = ({ navigation }) => {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Photo preview modal */}
+      <Modal visible={!!pendingPhoto} transparent animationType="fade" onRequestClose={() => setPendingPhoto(null)}>
+        <View style={styles.photoModalOverlay}>
+          <View style={styles.photoModalCard}>
+            <Text style={styles.photoModalTitle}>Use this photo?</Text>
+            {pendingPhoto && (
+              <Image source={{ uri: pendingPhoto }} style={styles.photoPreview} />
+            )}
+            <View style={styles.photoModalButtons}>
+              <TouchableOpacity
+                style={styles.photoRetakeBtn}
+                onPress={() => { setPendingPhoto(null); handleAvatarPress(); }}
+                disabled={uploading}
+              >
+                <Text style={styles.photoRetakeTxt}>Retake</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.photoSaveBtn, uploading && { opacity: 0.6 }]}
+                onPress={() => doUpload(pendingPhoto)}
+                disabled={uploading}
+              >
+                {uploading
+                  ? <ActivityIndicator color={COLORS.white} size="small" />
+                  : <Text style={styles.photoSaveTxt}>Save Photo</Text>
+                }
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity onPress={() => setPendingPhoto(null)} disabled={uploading} style={styles.photoCancelLink}>
+              <Text style={styles.photoCancelTxt}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -573,6 +607,41 @@ const styles = StyleSheet.create({
     flex: 1, backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
   },
+
+  /* Photo preview modal */
+  photoModalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center', alignItems: 'center', padding: 24,
+  },
+  photoModalCard: {
+    backgroundColor: COLORS.white, borderRadius: 24,
+    padding: 24, width: '100%', alignItems: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25, shadowRadius: 20, elevation: 10,
+  },
+  photoModalTitle: {
+    fontSize: 17, fontWeight: '800', color: COLORS.textPrimary, marginBottom: 16,
+  },
+  photoPreview: {
+    width: 200, height: 200, borderRadius: 100,
+    marginBottom: 24, borderWidth: 3, borderColor: PURPLE.light,
+  },
+  photoModalButtons: {
+    flexDirection: 'row', gap: 12, width: '100%', marginBottom: 12,
+  },
+  photoRetakeBtn: {
+    flex: 1, paddingVertical: 13, borderRadius: 14,
+    borderWidth: 1.5, borderColor: COLORS.borderLight,
+    alignItems: 'center',
+  },
+  photoRetakeTxt: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary },
+  photoSaveBtn: {
+    flex: 2, paddingVertical: 13, borderRadius: 14,
+    backgroundColor: PURPLE.primary, alignItems: 'center',
+  },
+  photoSaveTxt: { fontSize: 15, fontWeight: '800', color: COLORS.white },
+  photoCancelLink: { paddingVertical: 6 },
+  photoCancelTxt: { fontSize: 13, color: COLORS.textMuted, fontWeight: '600' },
   pickerSheet: {
     backgroundColor: COLORS.white, borderTopLeftRadius: 24, borderTopRightRadius: 24,
     paddingHorizontal: 20, paddingTop: 20, paddingBottom: 36,
