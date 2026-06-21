@@ -1,6 +1,7 @@
 import { poolPromise, sql } from "../db/db.js";
 import { ensureOperationalTables } from "../db/featureSetup.js";
 import { verifyPassengerQrToken } from "../utils/passengerQr.js";
+import { getWalletBalance } from "../services/wallet.service.js";
 
 // POST /api/bookings — book one or more seats on a trip.
 // Body: { trip_id, seats, carpool? }
@@ -147,15 +148,13 @@ export const createBooking = async (req, res) => {
 
     await tx.commit();
 
-    const balanceResult = await pool.request()
-      .input("uid", sql.Int, userId)
-      .query("SELECT balance FROM wallets WHERE user_id = @uid");
+    const newBalance = await getWalletBalance(pool, userId);
 
     res.status(201).json({
       message:    "Booking confirmed",
       tickets,
       total:      totalFare,
-      newBalance: parseFloat(balanceResult.recordset[0]?.balance ?? 0),
+      newBalance: parseFloat(newBalance),
     });
   } catch (err) {
     await tx.rollback().catch(() => {});
@@ -362,14 +361,12 @@ export const cancelBooking = async (req, res) => {
 
     await tx.commit();
 
-    const balanceResult = await pool.request()
-      .input("uid", sql.Int, userId)
-      .query("SELECT balance FROM wallets WHERE user_id = @uid");
+    const newBalance = await getWalletBalance(pool, userId);
 
     res.json({
       message:    "Booking cancelled",
       refund,
-      newBalance: parseFloat(balanceResult.recordset[0]?.balance ?? 0),
+      newBalance: parseFloat(newBalance),
     });
   } catch (err) {
     await tx.rollback().catch(() => {});

@@ -6,7 +6,6 @@ import {
   getUserProfile,
   updateUserProfile,
   getUserTickets,
-  getUserNotifications,
   getPassengers,
   suspendUser,
   restoreUser,
@@ -131,26 +130,6 @@ router.delete("/:id", requirePermission("users", "delete"), deleteUser);
  *         description: List of tickets
  */
 router.get("/:id/tickets", requirePermission("users", "view"), getUserTickets);
-
-/**
- * @swagger
- * /api/users/{id}/notifications:
- *   get:
- *     tags: [Users]
- *     summary: Get notifications for a user
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: List of notifications
- */
-router.get("/:id/notifications",   requirePermission("users", "view"), getUserNotifications);
 
 // ── Passenger-specific ────────────────────────────────────────────────────────
 

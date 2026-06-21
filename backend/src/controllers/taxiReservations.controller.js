@@ -1,5 +1,6 @@
 import { poolPromise, sql } from "../db/db.js";
 import { ensureOperationalTables } from "../db/featureSetup.js";
+import { getWalletBalance } from "../services/wallet.service.js";
 
 const toFloat = (v) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
 const toInt   = (v) => { const n = parseInt(v, 10); return Number.isInteger(n) && n > 0 ? n : null; };
@@ -143,10 +144,7 @@ export const createTaxiReservation = async (req, res) => {
 
     await tx.commit();
 
-    const balanceResult = await pool.request()
-      .input("uid", sql.Int, userId)
-      .query("SELECT balance FROM wallets WHERE user_id = @uid");
-    const newBalance = parseFloat(balanceResult.recordset[0]?.balance ?? 0);
+    const newBalance = parseFloat(await getWalletBalance(pool, userId));
 
     res.status(201).json({
       message:     "Reservation created",
@@ -316,10 +314,7 @@ export const cancelTaxiReservation = async (req, res) => {
 
     await tx.commit();
 
-    const balanceResult = await pool.request()
-      .input("uid", sql.Int, userId)
-      .query("SELECT balance FROM wallets WHERE user_id = @uid");
-    const newBalance = parseFloat(balanceResult.recordset[0]?.balance ?? 0);
+    const newBalance = parseFloat(await getWalletBalance(pool, userId));
 
     res.json({ message: "Reservation cancelled", refund, newBalance });
   } catch (err) {

@@ -314,14 +314,6 @@ export const getUserTickets = async (req, res) => {
   }
 };
 
-export const getUserNotifications = async (req, res) => {
-  const pool = await poolPromise;
-  const result = await pool.request()
-    .input("id", sql.Int, req.params.id)
-    .query("SELECT * FROM notifications WHERE user_id=@id");
-  res.json(result.recordset);
-};
-
 // ── GET /api/users/passengers ─────────────────────────────────────────────────
 
 export const getPassengers = async (req, res) => {

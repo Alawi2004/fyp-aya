@@ -7,6 +7,7 @@ import { poolPromise, sql } from "../db/db.js";
 import { ensureAuthTables } from "../db/featureSetup.js";
 import { sendPasswordResetEmail, sendOTPEmail } from "../services/email.service.js";
 import { isForce2FA, getSecuritySettings } from "../db/settingsCache.js";
+import { getDriverIdByUserId } from "../services/driver.service.js";
 
 const TEMP_2FA_TTL         = "5m";
 const RESET_TOKEN_TTL_MS   = 60 * 60 * 1000;
@@ -372,10 +373,7 @@ export const login = async (req, res) => {
     // For driver users, include driver_id so mobile app can use it
     if (safeUser.role === "driver") {
       try {
-        const dr = await pool.request()
-          .input("uid", sql.Int, safeUser.user_id)
-          .query("SELECT driver_id FROM drivers WHERE user_id = @uid");
-        safeUser.driver_id = dr.recordset[0]?.driver_id ?? null;
+        safeUser.driver_id = await getDriverIdByUserId(pool, safeUser.user_id);
       } catch (_) { safeUser.driver_id = null; }
     }
 

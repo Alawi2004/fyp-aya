@@ -102,7 +102,6 @@ export const createUser      = (data)     => apiClient.post('/users', data);
 export const updateUser      = (id, data) => apiClient.put(`/users/${id}`, data);
 export const deleteUserApi   = (id)       => apiClient.delete(`/users/${id}`);
 export const getUserTickets        = (id) => apiClient.get(`/users/${id}/tickets`);
-export const getUserNotifications  = (id) => apiClient.get(`/users/${id}/notifications`);
 
 // Passengers
 export const getPassengers       = ()           => apiClient.get('/users/passengers/list');
@@ -138,7 +137,7 @@ export const getAdjustmentHistory = (limit = 100) => apiClient.get(`/wallet/adju
 
 // Notifications
 export const getNotifications           = ()       => apiClient.get('/notifications');
-export const getUserNotifications_v2    = (id)     => apiClient.get(`/notifications/user/${id}`);
+export const getUserNotifications       = (id)     => apiClient.get(`/notifications/user/${id}`);
 export const markNotificationAsRead     = (id)       => apiClient.put(`/notifications/${id}/read`, {});
 export const createNotification         = (data)     => apiClient.post('/notifications', data);
 export const updateNotificationApi      = (id, data) => apiClient.put(`/notifications/${id}`, data);

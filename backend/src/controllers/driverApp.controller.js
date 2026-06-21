@@ -63,15 +63,7 @@ async function _pushDelayToPassengers(pool, tripId, delayMin, reason) {
 export const getDriverTrips = async (req, res) => {
   try {
     const pool = await poolPromise;
-    let driverId = req.query.driver_id || req.user?.driver_id;
-
-    // Auto-resolve driver_id from JWT user_id if not supplied
-    if (!driverId && req.user?.user_id) {
-      const dr = await pool.request()
-        .input("uid", sql.Int, req.user.user_id)
-        .query("SELECT driver_id FROM drivers WHERE user_id = @uid");
-      driverId = dr.recordset[0]?.driver_id;
-    }
+    let driverId = req.query.driver_id || await resolveDriverId(pool, req.user);
     if (!driverId) return res.status(400).json({ error: "driver_id required" });
 
     const result = await pool
@@ -232,13 +224,7 @@ export const getDriverEarnings = async (req, res) => {
 export const getDriverVehicle = async (req, res) => {
   try {
     const pool = await poolPromise;
-    let driverId = req.query.driver_id;
-    if (!driverId && req.user?.user_id) {
-      const dr = await pool.request()
-        .input("uid", sql.Int, req.user.user_id)
-        .query("SELECT driver_id FROM drivers WHERE user_id = @uid");
-      driverId = dr.recordset[0]?.driver_id;
-    }
+    let driverId = req.query.driver_id || await resolveDriverId(pool, req.user);
     if (!driverId) return res.status(400).json({ error: "driver_id required" });
 
     // Most recent vehicle this driver was assigned to (via trips)
@@ -296,13 +282,7 @@ export const createServiceRequest = async (req, res) => {
     const pool = await poolPromise;
 
     // Resolve driver + their current vehicle
-    let driverId = req.query.driver_id;
-    if (!driverId && req.user?.user_id) {
-      const dr = await pool.request()
-        .input("uid", sql.Int, req.user.user_id)
-        .query("SELECT driver_id FROM drivers WHERE user_id = @uid");
-      driverId = dr.recordset[0]?.driver_id;
-    }
+    let driverId = req.query.driver_id || await resolveDriverId(pool, req.user);
     if (!driverId) return res.status(400).json({ error: "driver_id required" });
 
     const vRes = await pool.request()
