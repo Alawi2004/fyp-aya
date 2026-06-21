@@ -10,6 +10,7 @@ export const sendOtpApi = (email, purpose) => apiClient.post('/auth/send-otp', {
 export const verifyOtpApi = (email, code) => apiClient.post('/auth/verify-otp', { email, code });
 export const resetPasswordOtpApi = (data) => apiClient.post('/auth/reset-password-otp', data);
 export const uploadAvatarApi = (uri) => {
+  if (!uri) return apiClient.delete('/users/me/avatar').then(r => r.data);
   const filename = uri.split('/').pop() || 'avatar.jpg';
   const ext = (/\.(\w+)$/.exec(filename)?.[1] || 'jpg').toLowerCase();
   const type = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';

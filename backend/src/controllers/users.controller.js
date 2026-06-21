@@ -672,6 +672,20 @@ export const deleteMyAccount = async (req, res) => {
   }
 };
 
+// ── DELETE /api/users/me/avatar — remove profile photo ───────────────────────
+export const removeAvatar = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    await pool.request()
+      .input("id", sql.Int, req.user.user_id)
+      .query("UPDATE users SET profile_photo_url = NULL WHERE user_id = @id");
+    res.json({ message: "Avatar removed" });
+  } catch (err) {
+    console.error("[removeAvatar]", err);
+    res.status(500).json({ error: "Failed to remove avatar" });
+  }
+};
+
 // ── POST /api/users/me/avatar — upload/replace profile photo ─────────────────
 export const uploadAvatar = async (req, res) => {
   try {
