@@ -1,6 +1,5 @@
 import express from "express";
 import {
-  sendGpsLocation,
   getLatestGps,
   getTripGpsHistory,
   getLiveGps,
@@ -9,7 +8,7 @@ import {
   getGeofenceAlerts,
 } from "../controllers/gps.controller.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
-import { requireRole, requirePermission } from "../middleware/permissions.middleware.js";
+import { requirePermission } from "../middleware/permissions.middleware.js";
 
 const router = express.Router();
 
@@ -20,37 +19,7 @@ const router = express.Router();
  *   description: Real-time vehicle location tracking
  */
 
-/**
- * @swagger
- * /api/gps:
- *   post:
- *     tags: [GPS]
- *     summary: Send a GPS location update from a driver
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [trip_id, latitude, longitude]
- *             properties:
- *               trip_id:
- *                 type: integer
- *               latitude:
- *                 type: number
- *                 format: double
- *                 example: 23.5880
- *               longitude:
- *                 type: number
- *                 format: double
- *                 example: 58.3829
- *     responses:
- *       200:
- *         description: Location recorded
- */
-router.post("/", requireRole("driver"), sendGpsLocation);
+// Driver GPS ingest is POST /api/driver/location (single write path into gps_logs).
 
 // Named routes must precede /:trip_id/latest to avoid param capture
 router.get("/live",                requirePermission("live", "view"), getLiveGps);

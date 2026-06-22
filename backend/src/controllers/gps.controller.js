@@ -1,54 +1,9 @@
 import { poolPromise, sql } from "../db/db.js";
-import { broadcastGpsUpdate } from "../services/gps.stream.service.js";
 import { sqlLocalDate } from "../utils/lebanonTime.js";
 
-// POST /api/gps — save location and broadcast to WebSocket subscribers
-export const sendGpsLocation = async (req, res) => {
-  try {
-    const { trip_id, latitude, longitude, speed, heading } = req.body;
-    const pool = await poolPromise;
-
-    // Resolve plate number for the WebSocket broadcast
-    const tripRow = await pool.request()
-      .input("tid", sql.Int, trip_id)
-      .query(`
-        SELECT
-          CONCAT('TRP-', RIGHT('000' + CAST(t.trip_id AS VARCHAR), 3)) AS trip_ref,
-          v.plate_number AS vehicle_id,
-          r.route_name   AS route
-        FROM trips t
-        LEFT JOIN vehicles v ON v.vehicle_id = t.vehicle_id
-        LEFT JOIN routes   r ON r.route_id   = t.route_id
-        WHERE t.trip_id = @tid
-      `);
-
-    await pool
-      .request()
-      .input("trip_id",   sql.Int,          trip_id)
-      .input("latitude",  sql.Decimal(9, 6), latitude)
-      .input("longitude", sql.Decimal(9, 6), longitude)
-      .query(`INSERT INTO gps_logs(trip_id, latitude, longitude, recorded_at) VALUES(@trip_id, @latitude, @longitude, GETDATE())`);
-
-    res.status(201).json({ message: "GPS location saved" });
-
-    // Fire-and-forget WebSocket broadcast after response is sent
-    const meta = tripRow.recordset[0] ?? {};
-    broadcastGpsUpdate({
-      trip_id:    trip_id,
-      trip_ref:   meta.trip_ref   ?? null,
-      vehicle_id: meta.vehicle_id ?? null,
-      route:      meta.route      ?? null,
-      lat:        parseFloat(latitude),
-      lng:        parseFloat(longitude),
-      speed:      speed   ?? null,
-      heading:    heading ?? null,
-      recorded_at: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to save GPS data" });
-  }
-};
+// NOTE: Driver GPS ingest is consolidated to POST /api/driver/location
+// (driverApp.controller.updateLocation). The old POST /api/gps endpoint was
+// removed so there is a single write path into gps_logs.
 
 // GET /api/gps/trip/:id?date=YYYY-MM-DD
 // Returns the full ordered GPS track for a trip, optionally filtered to a single date.
