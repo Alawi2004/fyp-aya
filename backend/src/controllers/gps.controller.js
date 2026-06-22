@@ -143,51 +143,9 @@ export const getLatestGps = async (req, res) => {
   }
 };
 
-// GET /api/gps/sse/bus/:vehicleId — SSE stream for browser clients
-// Pushes a GPS position event every 3 seconds until the client disconnects.
-export const sseGpsBus = async (req, res) => {
-  const { vehicleId } = req.params;
-
-  res.writeHead(200, {
-    "Content-Type":  "text/event-stream",
-    "Cache-Control": "no-cache",
-    "Connection":    "keep-alive",
-    "X-Accel-Buffering": "no",   // disable nginx buffering
-  });
-
-  // Send a connected event immediately so the client doesn't wait 3 s
-  res.write(`data: ${JSON.stringify({ type: "connected", vehicle_id: vehicleId })}\n\n`);
-
-  const push = async () => {
-    try {
-      const pool   = await poolPromise;
-      const result = await pool.request()
-        .input("vid", sql.NVarChar(50), vehicleId)
-        .query(`
-          SELECT TOP 1
-            CAST(g.latitude  AS FLOAT) AS latitude,
-            CAST(g.longitude AS FLOAT) AS longitude,
-            g.recorded_at              AS updatedAt
-          FROM gps_logs g
-          JOIN  trips    t ON t.trip_id    = g.trip_id
-          JOIN  vehicles v ON v.vehicle_id = t.vehicle_id
-          WHERE (LOWER(v.plate_number) = LOWER(@vid) OR LOWER(REPLACE(v.plate_number,'-','')) = LOWER(REPLACE(@vid,'-','')))
-            AND LOWER(ISNULL(t.status,'')) IN ('ongoing','active')
-            AND g.recorded_at >= DATEADD(minute, -${LIVE_GPS_WINDOW_MIN}, GETUTCDATE())
-          ORDER BY g.recorded_at DESC
-        `);
-
-      if (result.recordset[0]) {
-        res.write(`data: ${JSON.stringify({ type: "gps_update", ...result.recordset[0] })}\n\n`);
-      }
-    } catch { /* keep stream alive on transient DB errors */ }
-  };
-
-  await push();
-  const interval = setInterval(push, 3_000);
-
-  req.on("close", () => clearInterval(interval));
-};
+// NOTE: the old SSE stream (GET /api/gps/sse/bus/:vehicleId) was removed — it
+// had no clients and spawned an unbounded per-connection 3s DB poll. Live
+// browser/app tracking uses the WebSocket stream at /gps-stream instead.
 
 // GET /api/gps/geofence-alerts — recent geofence breach events
 export const getGeofenceAlerts = async (req, res) => {

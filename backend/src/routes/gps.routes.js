@@ -4,7 +4,6 @@ import {
   getTripGpsHistory,
   getLiveGps,
   getBusGps,
-  sseGpsBus,
   getGeofenceAlerts,
 } from "../controllers/gps.controller.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
@@ -25,7 +24,6 @@ const router = express.Router();
 router.get("/live",                requirePermission("live", "view"), getLiveGps);
 router.get("/geofence-alerts",     requireAuth, getGeofenceAlerts);
 router.get("/bus/:vehicleId",      requireAuth, getBusGps);
-router.get("/sse/bus/:vehicleId",  requireAuth, sseGpsBus);
 router.get("/trip/:id",            requireAuth, getTripGpsHistory);
 
 /**
