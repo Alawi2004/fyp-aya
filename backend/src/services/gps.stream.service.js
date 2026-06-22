@@ -33,16 +33,21 @@ const _byVehicle = new Map();  // vehicle_id (string) → Set<WebSocket>
 const _adminSubs = new Set();  // WebSockets subscribed to all events
 
 let _wss = null;
+let _heartbeat = null;
 
 // ── Attachment ────────────────────────────────────────────────────────────────
 
 /**
  * Attach the WebSocket server to an existing Node.js http.Server.
- * Call this once from server.js after creating the HTTP server.
+ * Call this once from server.js after creating the HTTP server. Calling it
+ * again is a no-op (returns the existing server) so we never end up with
+ * duplicate servers or heartbeat intervals.
  *
  * @param {import('http').Server} httpServer
  */
 export function attachWebSocket(httpServer) {
+  if (_wss) return _wss;   // already attached — avoid duplicate server + heartbeat
+
   _wss = new WebSocketServer({
     server: httpServer,
     path:   "/gps-stream",
@@ -53,16 +58,25 @@ export function attachWebSocket(httpServer) {
 
   _wss.on("connection", _onConnection);
 
-  // Heartbeat: ping every 30 s, terminate non-responding sockets
-  setInterval(() => {
+  // Heartbeat: ping every 30 s, terminate non-responding sockets.
+  _heartbeat = setInterval(() => {
     for (const ws of _wss.clients) {
       if (!ws.isAlive) { ws.terminate(); continue; }
       ws.isAlive = false;
       ws.ping();
     }
   }, 30_000);
+  _heartbeat.unref?.();   // don't keep the process alive just for the heartbeat
+
+  // Clean up the heartbeat if the server is ever closed.
+  _wss.on("close", () => {
+    clearInterval(_heartbeat);
+    _heartbeat = null;
+    _wss = null;
+  });
 
   console.log("[ws] GPS stream server attached at /gps-stream");
+  return _wss;
 }
 
 // ── Connection handler ────────────────────────────────────────────────────────
