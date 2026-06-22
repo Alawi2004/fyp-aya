@@ -677,22 +677,58 @@ export const reportDelay = async (req, res) => {
 // POST /api/driver/location
 export const updateLocation = async (req, res) => {
   try {
+    const userId = req.user?.user_id;
+    if (!userId) return res.status(401).json({ error: "Authentication required" });
+
     const { trip_id, latitude, longitude } = req.body;
+
+    // ── #6 Validate payload ──────────────────────────────────────────────────
+    const tripId = Number(trip_id);
+    const lat    = Number(latitude);
+    const lng    = Number(longitude);
+    if (!Number.isInteger(tripId) || tripId <= 0) {
+      return res.status(400).json({ error: "Valid trip_id is required" });
+    }
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90 ||
+        !Number.isFinite(lng) || lng < -180 || lng > 180) {
+      return res.status(400).json({ error: "latitude/longitude out of range" });
+    }
+    if (lat === 0 && lng === 0) {
+      return res.status(400).json({ error: "Invalid GPS fix (0, 0)" });
+    }
+
     const pool = await poolPromise;
-    await pool
-      .request()
-      .input("trip_id", sql.Int, trip_id)
-      .input("lat", sql.Decimal(9, 6), latitude)
-      .input("lng", sql.Decimal(9, 6), longitude)
+
+    // ── #7 Ownership: only log GPS for THIS driver's own active trip. The
+    // EXISTS guard does validation + insert in a single round-trip; 0 rows
+    // affected means the trip isn't this driver's or is finished/cancelled. ──
+    const result = await pool.request()
+      .input("trip_id", sql.Int,          tripId)
+      .input("uid",     sql.Int,          userId)
+      .input("lat",     sql.Decimal(9, 6), lat)
+      .input("lng",     sql.Decimal(9, 6), lng)
       .query(`
         INSERT INTO gps_logs (trip_id, latitude, longitude, recorded_at)
-        VALUES (@trip_id, @lat, @lng, GETDATE())
+        SELECT @trip_id, @lat, @lng, GETUTCDATE()
+        WHERE EXISTS (
+          SELECT 1 FROM trips t
+          JOIN drivers d ON d.driver_id = t.driver_id
+          WHERE t.trip_id = @trip_id
+            AND d.user_id  = @uid
+            AND ISNULL(d.is_deleted, 0) = 0
+            AND LOWER(ISNULL(t.status, '')) NOT IN ('completed', 'cancelled')
+        )
       `);
+
+    if ((result.rowsAffected[0] ?? 0) === 0) {
+      return res.status(403).json({ error: "Trip is not your active trip" });
+    }
+
     res.json({ message: "Location updated" });
 
     // Fire-and-forget: broadcast to WebSocket subscribers keyed by both plate and trip_id
     pool.request()
-      .input("tid", sql.Int, trip_id)
+      .input("tid", sql.Int, tripId)
       .query(`
         SELECT v.plate_number AS vehicle_id, r.route_name AS route
         FROM trips t
@@ -703,11 +739,11 @@ export const updateLocation = async (req, res) => {
       .then(tripRow => {
         const meta = tripRow.recordset[0] ?? {};
         broadcastGpsUpdate({
-          trip_id,
+          trip_id:     tripId,
           vehicle_id:  meta.vehicle_id ?? null,
           route:       meta.route      ?? null,
-          lat:         parseFloat(latitude),
-          lng:         parseFloat(longitude),
+          lat,
+          lng,
           recorded_at: new Date().toISOString(),
         });
       })
