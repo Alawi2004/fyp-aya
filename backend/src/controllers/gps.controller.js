@@ -32,6 +32,8 @@ export const getTripGpsHistory = async (req, res) => {
         gps_id,
         CAST(latitude  AS FLOAT) AS lat,
         CAST(longitude AS FLOAT) AS lng,
+        CAST(speed     AS FLOAT) AS speed,
+        CAST(heading   AS FLOAT) AS heading,
         recorded_at              AS timestamp
       FROM gps_logs
       ${where}
@@ -43,7 +45,8 @@ export const getTripGpsHistory = async (req, res) => {
       lng:       r.lng,
       timestamp: r.timestamp,
       timeLabel: new Date(r.timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-      speed:     0,
+      speed:     r.speed ?? 0,
+      heading:   r.heading ?? null,
     }));
 
     res.json({ points, hasData: points.length > 0 });

@@ -55,6 +55,8 @@ export function DriverLocationProvider({ children }) {
   const tripRef         = useRef(null);
   const broadcastingRef = useRef(true);
   const speedBuf        = useRef([]);
+  const speedRef        = useRef(null);   // latest smoothed speed (km/h)
+  const headingRef      = useRef(null);   // latest GPS heading (degrees)
   const subRef          = useRef(null);
 
   useEffect(() => { broadcastingRef.current = broadcasting; }, [broadcasting]);
@@ -89,12 +91,20 @@ export function DriverLocationProvider({ children }) {
           const rawMs = l.coords.speed;
           if (rawMs != null && rawMs >= 0) {
             const kmh = rawMs * 3.6;
-            if (kmh >= 2 && kmh <= 120) {
+            if (kmh < 2) {
+              speedRef.current = 0;          // stationary
+            } else if (kmh <= 120) {
               const buf = [...speedBuf.current, kmh].slice(-SPEED_BUFFER_SIZE);
               speedBuf.current = buf;
-              setLiveSpeed(Math.round(median(buf)));
+              const smoothed = Math.round(median(buf));
+              setLiveSpeed(smoothed);
+              speedRef.current = smoothed;
             }
           }
+
+          // GPS heading in degrees (some platforms report -1 when unknown).
+          const hdg = l.coords.heading;
+          headingRef.current = (hdg != null && hdg >= 0) ? Math.round(hdg) : null;
         },
       );
     })();
@@ -131,8 +141,13 @@ export function DriverLocationProvider({ children }) {
       const trip = tripRef.current;
       const pos  = locationRef.current;
       if (!broadcastingRef.current || !trip?.trip_id || !pos) return;
-      updateLocationApi({ trip_id: trip.trip_id, latitude: pos.latitude, longitude: pos.longitude })
-        .catch(() => {});
+      updateLocationApi({
+        trip_id:   trip.trip_id,
+        latitude:  pos.latitude,
+        longitude: pos.longitude,
+        speed:     speedRef.current,
+        heading:   headingRef.current,
+      }).catch(() => {});
     };
     const id = setInterval(tick, broadcastMs);
     return () => clearInterval(id);

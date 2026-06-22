@@ -680,7 +680,7 @@ export const updateLocation = async (req, res) => {
     const userId = req.user?.user_id;
     if (!userId) return res.status(401).json({ error: "Authentication required" });
 
-    const { trip_id, latitude, longitude } = req.body;
+    const { trip_id, latitude, longitude, speed, heading } = req.body;
 
     // ── #6 Validate payload ──────────────────────────────────────────────────
     const tripId = Number(trip_id);
@@ -697,19 +697,27 @@ export const updateLocation = async (req, res) => {
       return res.status(400).json({ error: "Invalid GPS fix (0, 0)" });
     }
 
+    // #8 Optional speed (km/h) / heading (degrees) — stored when sane, else NULL.
+    const speedN   = Number(speed);
+    const headingN = Number(heading);
+    const speedVal   = Number.isFinite(speedN)   && speedN   >= 0 ? Math.min(speedN, 999.99) : null;
+    const headingVal = Number.isFinite(headingN) && headingN >= 0 && headingN <= 360 ? headingN : null;
+
     const pool = await poolPromise;
 
     // ── #7 Ownership: only log GPS for THIS driver's own active trip. The
     // EXISTS guard does validation + insert in a single round-trip; 0 rows
     // affected means the trip isn't this driver's or is finished/cancelled. ──
     const result = await pool.request()
-      .input("trip_id", sql.Int,          tripId)
-      .input("uid",     sql.Int,          userId)
+      .input("trip_id", sql.Int,           tripId)
+      .input("uid",     sql.Int,           userId)
       .input("lat",     sql.Decimal(9, 6), lat)
       .input("lng",     sql.Decimal(9, 6), lng)
+      .input("speed",   sql.Decimal(5, 2), speedVal)
+      .input("heading", sql.Decimal(5, 2), headingVal)
       .query(`
-        INSERT INTO gps_logs (trip_id, latitude, longitude, recorded_at)
-        SELECT @trip_id, @lat, @lng, GETUTCDATE()
+        INSERT INTO gps_logs (trip_id, latitude, longitude, speed, heading, recorded_at)
+        SELECT @trip_id, @lat, @lng, @speed, @heading, GETUTCDATE()
         WHERE EXISTS (
           SELECT 1 FROM trips t
           JOIN drivers d ON d.driver_id = t.driver_id
@@ -744,6 +752,8 @@ export const updateLocation = async (req, res) => {
           route:       meta.route      ?? null,
           lat,
           lng,
+          speed:       speedVal,
+          heading:     headingVal,
           recorded_at: new Date().toISOString(),
         });
       })

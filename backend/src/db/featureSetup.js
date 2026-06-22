@@ -411,6 +411,17 @@ IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'gps_logs'
 BEGIN
   CREATE INDEX IX_gps_logs_trip_recorded ON gps_logs (trip_id, recorded_at DESC);
 END;
+
+-- Persist GPS speed (km/h) and heading (degrees) sent by the driver app so
+-- trip history/analytics aren't stuck reporting 0.
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='gps_logs' AND COLUMN_NAME='speed')
+BEGIN
+  ALTER TABLE gps_logs ADD speed DECIMAL(5,2) NULL;
+END;
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='gps_logs' AND COLUMN_NAME='heading')
+BEGIN
+  ALTER TABLE gps_logs ADD heading DECIMAL(5,2) NULL;
+END;
 `;
 
 export const ensureOperationalTables = async (pool) => {
