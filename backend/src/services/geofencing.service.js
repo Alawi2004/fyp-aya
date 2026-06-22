@@ -4,8 +4,8 @@
  * Runs a background loop every 30 seconds checking every active trip's
  * latest GPS position against its planned route corridor.
  *
- * When a vehicle strays more than GEOFENCE_RADIUS_M (500 m) from all
- * waypoints on its assigned route:
+ * When a vehicle strays more than GEOFENCE_RADIUS_M (default 150 m, from
+ * system_settings) from its assigned route polyline:
  *   1. A row is inserted into geofence_events (status = 'active').
  *   2. Admin users with push tokens receive an FCM/Expo alert.
  *   3. The WebSocket GPS stream broadcasts a 'geofence_breach' event.
@@ -37,19 +37,49 @@ function haversineM(lat1, lon1, lat2, lon2) {
 }
 
 /**
- * Minimum great-circle distance from point (lat, lon) to any segment
- * endpoint in the waypoints array.
+ * Perpendicular distance (metres) from point P to the segment A→B.
  *
- * Using endpoint distance only (no perpendicular projection) is safe
- * because route_waypoints are stored at ~100-500 m resolution.
+ * Uses a local equirectangular projection (metres) centred on P. Accurate
+ * for the short segments (~100-500 m) between route waypoints, and far more
+ * correct than vertex-only distance: a bus travelling along a straight road
+ * between two sparse waypoints reads ~0 m off-route instead of up to half
+ * the segment length.
+ */
+function pointToSegmentM(lat, lon, aLat, aLon, bLat, bLon) {
+  const R     = 6_371_000;
+  const toRad = d => (d * Math.PI) / 180;
+  const mPerDegLat = (Math.PI / 180) * R;
+  const mPerDegLon = (Math.PI / 180) * R * Math.cos(toRad(lat));
+
+  // Project A and B into local metres with P at the origin.
+  const ax = (aLon - lon) * mPerDegLon, ay = (aLat - lat) * mPerDegLat;
+  const bx = (bLon - lon) * mPerDegLon, by = (bLat - lat) * mPerDegLat;
+
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  // Projection factor of P onto AB, clamped to the segment [0, 1].
+  let tcl = len2 === 0 ? 0 : ((-ax) * dx + (-ay) * dy) / len2;
+  tcl = Math.max(0, Math.min(1, tcl));
+
+  const cx = ax + tcl * dx, cy = ay + tcl * dy; // closest point on segment
+  return Math.hypot(cx, cy);
+}
+
+/**
+ * Minimum perpendicular distance (metres) from point (lat, lon) to the route
+ * polyline formed by the ordered waypoints.
  */
 function distToPath(lat, lon, waypoints) {
   if (!waypoints.length) return 0;
-  return Math.min(
-    ...waypoints.map(w =>
-      haversineM(lat, lon, parseFloat(w.latitude), parseFloat(w.longitude))
-    )
-  );
+  const pts = waypoints.map(w => ({ lat: parseFloat(w.latitude), lon: parseFloat(w.longitude) }));
+  if (pts.length === 1) return haversineM(lat, lon, pts[0].lat, pts[0].lon);
+
+  let min = Infinity;
+  for (let i = 1; i < pts.length; i++) {
+    const d = pointToSegmentM(lat, lon, pts[i - 1].lat, pts[i - 1].lon, pts[i].lat, pts[i].lon);
+    if (d < min) min = d;
+  }
+  return min;
 }
 
 // ── Single check cycle ────────────────────────────────────────────────────────
@@ -201,4 +231,4 @@ export function startGeofencingEngine() {
   console.log(`[geofence] engine started — checking every ${CHECK_INTERVAL_MS / 1000}s`);
 }
 
-export { haversineM, distToPath };
+export { haversineM, distToPath, pointToSegmentM };
