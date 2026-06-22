@@ -2,10 +2,13 @@
  * useGpsWebSocket — React Native GPS stream hook
  *
  * Connects to the backend WebSocket server (/gps-stream) and subscribes
- * to real-time GPS updates for a specific vehicle.  Falls back to HTTP
- * polling when:
+ * to real-time GPS updates for a specific vehicle.  HTTP polling is used
+ * ONLY as a fallback:
  *   • EXPO_PUBLIC_FRONTEND_ONLY === 'true'  (dev mock mode)
- *   • WebSocket connection fails or disconnects
+ *   • before the WebSocket has opened (so the first fix appears fast)
+ *   • while the WebSocket is disconnected / reconnecting
+ *
+ * Once the WebSocket is open, polling stops — the two never run together.
  *
  * Usage:
  *   const { location, isLive, isConnected, lastUpdated } = useGpsWebSocket(busId);
@@ -39,42 +42,56 @@ export function useGpsWebSocket(vehicleId, initialLocation = null) {
   const wsRef      = useRef(null);
   const mountedRef = useRef(true);
   const retryTimer = useRef(null);
+  const pollRef    = useRef(null);
 
-  // ── Polling fallback (used in FRONTEND_ONLY mode or after WS failure) ──────
+  // Apply a position update from either source. setState setters and refs are
+  // stable, so this never needs to be re-created.
+  const applyLocation = useCallback((lat, lng, ts) => {
+    if (!mountedRef.current || isNaN(lat) || isNaN(lng)) return;
+    setLocation({ latitude: lat, longitude: lng });
+    setLastUpdated(ts || new Date().toISOString());
+    setIsLive(true);
+  }, []);
+
+  // ── HTTP polling fallback ──────────────────────────────────────────────────
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  }, []);
+
   const startPolling = useCallback(() => {
-    const interval = setInterval(async () => {
+    if (pollRef.current) return;   // already polling — never stack intervals
+    const tick = async () => {
       if (!mountedRef.current) return;
       try {
         const loc = await fetchBusGps(vehicleId);
-        const lat = parseFloat(loc?.latitude ?? loc?.lat);
-        const lng = parseFloat(loc?.longitude ?? loc?.lng);
-        if (!isNaN(lat) && !isNaN(lng) && mountedRef.current) {
-          setLocation({ latitude: lat, longitude: lng });
-          setLastUpdated(loc.updatedAt || loc.recorded_at || new Date().toISOString());
-          setIsLive(true);
-        }
+        applyLocation(
+          parseFloat(loc?.latitude ?? loc?.lat),
+          parseFloat(loc?.longitude ?? loc?.lng),
+          loc?.updatedAt || loc?.recorded_at,
+        );
       } catch { /* keep showing last known position */ }
-    }, POLL_INTERVAL);
-    return interval;
-  }, [vehicleId]);
+    };
+    tick();                                   // immediate first read
+    pollRef.current = setInterval(tick, POLL_INTERVAL);
+  }, [vehicleId, applyLocation]);
 
   // ── WebSocket connection ───────────────────────────────────────────────────
   const connect = useCallback(() => {
     if (!mountedRef.current || FRONTEND_ONLY) return;
 
-    const url = _wsUrl();
     let ws;
     try {
-      ws = new WebSocket(url);
+      ws = new WebSocket(_wsUrl());
     } catch {
-      return; // WebSocket not available — polling fallback handles it
+      startPolling();   // WebSocket unavailable — fall back to polling
+      return;
     }
-
     wsRef.current = ws;
 
     ws.onopen = () => {
       if (!mountedRef.current) { ws.close(); return; }
       setIsConnected(true);
+      stopPolling();    // live stream is authoritative — stop the fallback poll
       ws.send(JSON.stringify({ type: "subscribe", vehicle_id: vehicleId }));
     };
 
@@ -83,9 +100,7 @@ export function useGpsWebSocket(vehicleId, initialLocation = null) {
       try {
         const msg = JSON.parse(event.data);
         if (msg.type === "gps_update" && msg.lat != null) {
-          setLocation({ latitude: msg.lat, longitude: msg.lng });
-          setLastUpdated(msg.recorded_at || new Date().toISOString());
-          setIsLive(true);
+          applyLocation(Number(msg.lat), Number(msg.lng), msg.recorded_at);
         }
       } catch { /* ignore malformed frames */ }
     };
@@ -95,29 +110,23 @@ export function useGpsWebSocket(vehicleId, initialLocation = null) {
     ws.onclose = () => {
       if (!mountedRef.current) return;
       setIsConnected(false);
-      // Attempt reconnect after a short delay
+      startPolling();   // resume polling while disconnected
       retryTimer.current = setTimeout(connect, RECONNECT_DELAY);
     };
-  }, [vehicleId]);
+  }, [vehicleId, startPolling, stopPolling, applyLocation]);
 
   // ── Effect: start stream on mount, tear down on unmount ──────────────────
   useEffect(() => {
     mountedRef.current = true;
-    let pollInterval   = null;
 
-    if (FRONTEND_ONLY) {
-      // Dev mode — use polling with mock data
-      pollInterval = startPolling();
-    } else {
-      connect();
-      // Start polling as a background fallback; it will update location
-      // if the WebSocket hasn't received anything for 6+ seconds.
-      pollInterval = startPolling();
-    }
+    // Poll immediately for a fast first fix; in live mode the WebSocket's
+    // onopen handler stops it once the stream is established.
+    startPolling();
+    if (!FRONTEND_ONLY) connect();
 
     return () => {
       mountedRef.current = false;
-      clearInterval(pollInterval);
+      stopPolling();
       clearTimeout(retryTimer.current);
       if (wsRef.current) {
         wsRef.current.onclose = null;  // prevent reconnect attempt on unmount
@@ -125,7 +134,7 @@ export function useGpsWebSocket(vehicleId, initialLocation = null) {
         wsRef.current = null;
       }
     };
-  }, [vehicleId, connect, startPolling]);
+  }, [vehicleId, connect, startPolling, stopPolling]);
 
   return { location, isLive, isConnected, lastUpdated };
 }
