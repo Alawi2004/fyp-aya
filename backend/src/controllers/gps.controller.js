@@ -5,6 +5,11 @@ import { sqlLocalDate } from "../utils/lebanonTime.js";
 // (driverApp.controller.updateLocation). The old POST /api/gps endpoint was
 // removed so there is a single write path into gps_logs.
 
+// A trip with no GPS ping within this window is treated as no longer "live",
+// so the live/latest/bus/SSE endpoints never return a frozen position as if it
+// were current. Applied consistently across every live-position query.
+const LIVE_GPS_WINDOW_MIN = 30;
+
 // GET /api/gps/trip/:id?date=YYYY-MM-DD
 // Returns the full ordered GPS track for a trip, optionally filtered to a single date.
 // When no records exist, returns { points: [], hasData: false } so the frontend
@@ -66,7 +71,7 @@ export const getLiveGps = async (req, res) => {
         SELECT trip_id, latitude, longitude, recorded_at,
                ROW_NUMBER() OVER (PARTITION BY trip_id ORDER BY recorded_at DESC) AS rn
         FROM gps_logs
-        WHERE recorded_at >= DATEADD(minute, -30, GETUTCDATE())
+        WHERE recorded_at >= DATEADD(minute, -${LIVE_GPS_WINDOW_MIN}, GETUTCDATE())
       ) g
       JOIN  trips    t ON t.trip_id    = g.trip_id
       LEFT JOIN routes   r ON r.route_id   = t.route_id
@@ -102,6 +107,7 @@ export const getBusGps = async (req, res) => {
           OR  LOWER(REPLACE(v.plate_number, '-', '')) = LOWER(REPLACE(@vid, '-', ''))
         )
           AND LOWER(ISNULL(t.status, '')) IN ('ongoing', 'active')
+          AND g.recorded_at >= DATEADD(minute, -${LIVE_GPS_WINDOW_MIN}, GETUTCDATE())
         ORDER BY g.recorded_at DESC
       `);
     if (!result.recordset[0]) return res.status(404).json(null);
@@ -119,10 +125,13 @@ export const getLatestGps = async (req, res) => {
     const result = await pool
       .request()
       .input("trip_id", sql.Int, req.params.trip_id).query(`
-        SELECT TOP 1 *
-        FROM gps_logs
-        WHERE trip_id = @trip_id
-        ORDER BY recorded_at DESC
+        SELECT TOP 1 g.*
+        FROM gps_logs g
+        JOIN trips t ON t.trip_id = g.trip_id
+        WHERE g.trip_id = @trip_id
+          AND LOWER(ISNULL(t.status, '')) IN ('ongoing', 'active')
+          AND g.recorded_at >= DATEADD(minute, -${LIVE_GPS_WINDOW_MIN}, GETUTCDATE())
+        ORDER BY g.recorded_at DESC
       `);
 
     res.json(result.recordset[0] || null);
@@ -161,6 +170,7 @@ export const sseGpsBus = async (req, res) => {
           JOIN  vehicles v ON v.vehicle_id = t.vehicle_id
           WHERE (LOWER(v.plate_number) = LOWER(@vid) OR LOWER(REPLACE(v.plate_number,'-','')) = LOWER(REPLACE(@vid,'-','')))
             AND LOWER(ISNULL(t.status,'')) IN ('ongoing','active')
+            AND g.recorded_at >= DATEADD(minute, -${LIVE_GPS_WINDOW_MIN}, GETUTCDATE())
           ORDER BY g.recorded_at DESC
         `);
 
