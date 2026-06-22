@@ -399,6 +399,18 @@ BEGIN
   );
   CREATE INDEX IX_stop_requests_user ON stop_requests(user_id, created_at DESC);
 END;
+
+-- Composite index for GPS lookups. gps_logs is the highest-volume table (a row
+-- every ~2s per active trip); every live/history/geofence query partitions or
+-- orders by recorded_at within a trip. Without this they scan the whole table.
+IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'gps_logs')
+   AND NOT EXISTS (
+     SELECT 1 FROM sys.indexes
+     WHERE name = 'IX_gps_logs_trip_recorded' AND object_id = OBJECT_ID('dbo.gps_logs')
+   )
+BEGIN
+  CREATE INDEX IX_gps_logs_trip_recorded ON gps_logs (trip_id, recorded_at DESC);
+END;
 `;
 
 export const ensureOperationalTables = async (pool) => {
