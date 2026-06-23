@@ -924,12 +924,14 @@ const HomeScreen = ({ navigation }) => {
         />
       )}
 
-      {/* ── Scroll-to-top ── */}
+      {/* ── Scroll-to-top ──
+          Sits right above the global chat FAB from PassengerNavigator.js,
+          which occupies bottom 65 + max(insets.bottom, 12) + 14 .. (+54). */}
       <Animated.View
         pointerEvents={showTop ? "auto" : "none"}
         style={[
           styles.fab,
-          { bottom: insets.bottom + 22 },
+          { bottom: 117 + Math.max(insets.bottom, 12) },
           {
             opacity: fabAnim,
             transform: [

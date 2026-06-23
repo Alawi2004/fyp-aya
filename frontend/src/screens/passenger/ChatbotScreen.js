@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, Modal, TextInput, FlatList,
-  Platform, Pressable, ScrollView, Animated,
+  Platform, Pressable, ScrollView, Animated, KeyboardAvoidingView,
   Dimensions, Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -208,8 +208,12 @@ async function startLocationWatch() {
 startLocationWatch();
 
 // ── Main chatbot modal ────────────────────────────────────────────────────────
-let _msgId = 1;
-const mkId = () => String(_msgId++);
+// Timestamp + per-call counter — stays unique even across a Fast Refresh
+// reload, which would otherwise reset a plain incrementing counter back to 1
+// while restored chat history (with old high ids) is still sitting in state,
+// causing duplicate-key collisions in the FlatList.
+let _msgSeq = 0;
+const mkId = () => `${Date.now()}-${_msgSeq++}`;
 
 const WELCOME = (userName) => ({
   id: mkId(),
@@ -221,8 +225,8 @@ const WELCOME = (userName) => ({
 });
 
 const ChatbotScreen = ({ visible, onClose, onAction }) => {
-  const insets    = useSafeAreaInsets();
-  const { user }  = useAuth();
+  const insets       = useSafeAreaInsets();
+  const { user }     = useAuth();
 
   const [messages,  setMessages]  = useState([]);
   const [input,     setInput]     = useState('');
@@ -232,7 +236,6 @@ const ChatbotScreen = ({ visible, onClose, onAction }) => {
 
   const listRef    = useRef(null);
   const inputRef   = useRef(null);
-  const slideAnim  = useRef(new Animated.Value(0)).current;
   const historyRef = useRef([]);
 
   // ── Keyboard height tracking ──────────────────────────────────────────────
@@ -256,12 +259,7 @@ const ChatbotScreen = ({ visible, onClose, onAction }) => {
       setMessages([WELCOME(user?.full_name ?? user?.name)]);
       setShowChips(true);
       setKbHeight(0);
-      Animated.spring(slideAnim, {
-        toValue: 1, useNativeDriver: true,
-        tension: 60, friction: 11,
-      }).start();
     } else {
-      slideAnim.setValue(0);
       setInput('');
       setTyping(false);
     }
@@ -329,107 +327,113 @@ const ChatbotScreen = ({ visible, onClose, onAction }) => {
     sendMessage(CHIP_PROMPTS[id] ?? id);
   }, [sendMessage]);
 
-  // When keyboard is up: push the sheet above it (paddingBottom on overlay)
-  // and cap the sheet height so it fits in the available space.
-  const sheetH    = Math.min(SHEET_MAX_H, SCREEN_H - kbHeight - 20);
-  const slideStyle = {
-    transform: [{
-      translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [SHEET_MAX_H, 0] }),
-    }],
-  };
-
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="slide"
       onRequestClose={onClose}
-      statusBarTranslucent
     >
-      <View style={[styles.overlay, kbHeight > 0 && { paddingBottom: kbHeight }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={() => { Keyboard.dismiss(); onClose(); }} />
+      {/* KeyboardAvoidingView (not manual keyboard-height math) shrinks the
+          available space itself, so the sheet — sized off that space via
+          flexGrow + maxHeight below — shrinks correctly on both platforms
+          instead of getting shoved off-screen by the keyboard. */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.kav}
+      >
+        <View style={styles.overlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => { Keyboard.dismiss(); onClose(); }} />
 
-        <Animated.View style={[styles.sheet, { height: sheetH }, slideStyle]}>
-          {/* ── Header ─────────────────────────────────────────────── */}
-          <View style={styles.header}>
-            <GradientFill id="chat-hdr" colors={PURPLE.gradient} />
-            <View style={styles.headerContent}>
-              <View style={styles.headerLeft}>
-                <View style={styles.headerAvatar}>
-                  <Ionicons name="sparkles" size={18} color={COLORS.white} />
-                </View>
-                <View>
-                  <Text style={styles.headerTitle}>Yalla Transit AI</Text>
-                  <View style={styles.headerStatusRow}>
-                    <View style={styles.onlineDot} />
-                    <Text style={styles.headerSub}>Online · Ready to help</Text>
+          <View style={styles.sheet}>
+            {/* ── Header ─────────────────────────────────────────────── */}
+            <View style={styles.header}>
+              <GradientFill id="chat-hdr" colors={PURPLE.gradient} />
+              <View style={styles.headerContent}>
+                <View style={styles.headerLeft}>
+                  <View style={styles.headerAvatar}>
+                    <Ionicons name="sparkles" size={18} color={COLORS.white} />
+                  </View>
+                  <View>
+                    <Text style={styles.headerTitle}>Yalla Transit AI</Text>
+                    <View style={styles.headerStatusRow}>
+                      <View style={styles.onlineDot} />
+                      <Text style={styles.headerSub}>Online · Ready to help</Text>
+                    </View>
                   </View>
                 </View>
+                <PressableScale onPress={onClose} scaleTo={0.88} style={styles.closeBtn}>
+                  <Ionicons name="close" size={20} color={COLORS.white} />
+                </PressableScale>
               </View>
-              <PressableScale onPress={onClose} scaleTo={0.88} style={styles.closeBtn}>
-                <Ionicons name="close" size={20} color={COLORS.white} />
+            </View>
+
+            {/* ── Message list ────────────────────────────────────────── */}
+            <FlatList
+              ref={listRef}
+              data={messages}
+              keyExtractor={m => m.id}
+              renderItem={({ item }) => <MessageBubble item={item} />}
+              style={styles.list}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+              onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+              ListFooterComponent={typing ? <TypingIndicator /> : null}
+              keyboardShouldPersistTaps="handled"
+            />
+
+            {/* ── Quick reply chips ─────────────────────────────────── */}
+            {showChips && !typing && <QuickReplies onSelect={handleChip} />}
+
+            {/* ── Input bar ────────────────────────────────────────── */}
+            <View style={[styles.inputBar, { paddingBottom: kbHeight > 0 ? 10 : Math.max(insets.bottom, 10) }]}>
+              <TextInput
+                ref={inputRef}
+                style={styles.input}
+                placeholder="Ask me anything…"
+                placeholderTextColor={COLORS.textMuted}
+                value={input}
+                onChangeText={setInput}
+                multiline
+                maxLength={400}
+                returnKeyType="send"
+                blurOnSubmit
+                onSubmitEditing={() => sendMessage()}
+              />
+              <PressableScale
+                onPress={() => sendMessage()}
+                scaleTo={0.88}
+                style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]}
+                disabled={!input.trim()}
+              >
+                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                  {input.trim() && <GradientFill id="send-btn" colors={PURPLE.gradient} />}
+                </View>
+                <Ionicons name="send" size={17} color={input.trim() ? COLORS.white : COLORS.textMuted} />
               </PressableScale>
             </View>
           </View>
-
-          {/* ── Message list ────────────────────────────────────────── */}
-          <FlatList
-            ref={listRef}
-            data={messages}
-            keyExtractor={m => m.id}
-            renderItem={({ item }) => <MessageBubble item={item} />}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
-            ListFooterComponent={typing ? <TypingIndicator /> : null}
-            keyboardShouldPersistTaps="handled"
-          />
-
-          {/* ── Quick reply chips ─────────────────────────────────── */}
-          {showChips && !typing && <QuickReplies onSelect={handleChip} />}
-
-          {/* ── Input bar ────────────────────────────────────────── */}
-          <View style={[styles.inputBar, { paddingBottom: kbHeight > 0 ? 10 : Math.max(insets.bottom, 10) }]}>
-            <TextInput
-              ref={inputRef}
-              style={styles.input}
-              placeholder="Ask me anything…"
-              placeholderTextColor={COLORS.textMuted}
-              value={input}
-              onChangeText={setInput}
-              multiline
-              maxLength={400}
-              returnKeyType="send"
-              blurOnSubmit
-              onSubmitEditing={() => sendMessage()}
-            />
-            <PressableScale
-              onPress={() => sendMessage()}
-              scaleTo={0.88}
-              style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]}
-              disabled={!input.trim()}
-            >
-              <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                {input.trim() && <GradientFill id="send-btn" colors={PURPLE.gradient} />}
-              </View>
-              <Ionicons name="send" size={17} color={input.trim() ? COLORS.white : COLORS.textMuted} />
-            </PressableScale>
-          </View>
-        </Animated.View>
-      </View>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
+  kav: { flex: 1 },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(15,15,35,0.55)',
     justifyContent: 'flex-end',
   },
   sheet: {
-    // height set dynamically: SHEET_MAX_H - kbHeight
+    // flexGrow fills whatever room KeyboardAvoidingView leaves above the
+    // keyboard; maxHeight caps it at 88% of the screen when the keyboard
+    // is closed (or absent) so the sheet doesn't fill the whole screen.
+    flexGrow: 1,
+    flexShrink: 1,
+    maxHeight: SHEET_MAX_H,
     backgroundColor: COLORS.background,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
@@ -463,6 +467,11 @@ const styles = StyleSheet.create({
   },
 
   // ── Message list ──────────────────────────────────────────────────────────
+  // flex: 1 + minHeight: 0 lets the list actually shrink to the space left
+  // between the header and the input bar when the keyboard opens — without
+  // it the list keeps its full content height and pushes the chips/input
+  // bar (and bottom messages) past the sheet's clipped bounds.
+  list: { flex: 1, minHeight: 0 },
   listContent: {
     paddingHorizontal: 14,
     paddingTop: 14,
@@ -563,12 +572,14 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surfaceAlt,
     borderRadius: 21,
     paddingHorizontal: 16,
-    paddingVertical: Platform.OS === 'ios' ? 11 : 8,
+    paddingTop: Platform.OS === 'ios' ? 11 : 11,
+    paddingBottom: Platform.OS === 'ios' ? 11 : 9,
     fontSize: 14,
+    lineHeight: 18,
     color: COLORS.textPrimary,
     borderWidth: 1,
     borderColor: COLORS.border,
-    textAlignVertical: 'center',
+    textAlignVertical: 'top',
   },
   sendBtn: {
     width: 42, height: 42, borderRadius: 21,

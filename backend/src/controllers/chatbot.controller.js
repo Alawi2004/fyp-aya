@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { poolPromise, sql } from "../db/db.js";
 import { ensureOperationalTables } from "../db/featureSetup.js";
 import { sqlLocalHour } from "../utils/lebanonTime.js";
+import { nominatimGeocode } from "../utils/geocode.js";
 
 // ── Azure AI Foundry client ───────────────────────────────────────────────────
 // Lazily created so a missing AZURE_OPENAI_KEY doesn't crash the whole server
@@ -290,6 +291,28 @@ const TOOLS = [
         },
         required: ["from_query", "to_query"],
       },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "add_new_stop",
+      description: "Verifies a place name is a real, existing location (via geocoding) and, if so, creates it as a new bus stop so trip planning can use it. Call this only when search_stops/search_routes/plan_multi_stop_trip found 0 matches for a place the user wants to use, AND the user has confirmed they want it added. If the place can't be geocoded, returns real_location:false — tell the user you couldn't verify it exists and ask for a nearby landmark instead. Never invent coordinates yourself.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "The place/stop name exactly as the user said it, e.g. 'Zalka seaside'" },
+        },
+        required: ["name"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_service_areas",
+      description: "Lists every area/neighbourhood currently covered by the bus network (all stop names plus route start/end locations). Use this whenever the user asks what areas, cities, or neighbourhoods are available/covered/served — e.g. 'what areas do you have', 'where do you operate', 'which areas can I travel to' — instead of calling search_stops with a vague query like 'area'.",
+      parameters: { type: "object", properties: {}, required: [] },
     },
   },
   {
@@ -851,6 +874,71 @@ async function executeTool(name, args, ctx) {
       };
     }
 
+    // ── Add a new stop, only if it geocodes to a real location ─────────────
+    case "add_new_stop": {
+      const name = String(args.name ?? "").trim().slice(0, 100);
+      if (!name) return { success: false, error: "Missing stop name" };
+
+      // Don't duplicate a stop that already exists under this exact name
+      const existing = await pool.request()
+        .input("name", sql.VarChar(100), name)
+        .query("SELECT TOP 1 stop_id, stop_name, latitude, longitude FROM stops WHERE stop_name = @name AND is_deleted = 0");
+      if (existing.recordset.length) {
+        return { success: true, already_existed: true, stop: existing.recordset[0] };
+      }
+
+      // Real-location check — never insert a stop we haven't actually verified exists
+      const geo = await nominatimGeocode(`${name}, Lebanon`);
+      if (!geo) {
+        return { success: false, real_location: false, message: `Could not verify "${name}" as a real location.` };
+      }
+
+      const ins = await pool.request()
+        .input("name", sql.VarChar(100), name)
+        .input("lat",  sql.Decimal(9, 6), geo.lat)
+        .input("lng",  sql.Decimal(9, 6), geo.lng)
+        .query(`
+          INSERT INTO stops (stop_name, latitude, longitude, is_deleted)
+          OUTPUT INSERTED.stop_id
+          VALUES (@name, @lat, @lng, 0)
+        `);
+
+      return {
+        success: true,
+        real_location: true,
+        stop: {
+          stop_id:      ins.recordset[0]?.stop_id,
+          stop_name:    name,
+          latitude:     geo.lat,
+          longitude:    geo.lng,
+          display_name: geo.display_name,
+        },
+      };
+    }
+
+    // ── List all service areas (stops + route endpoints) ────────────────────
+    case "list_service_areas": {
+      const [stopsRes, routesRes] = await Promise.all([
+        pool.request()
+          .query("SELECT DISTINCT stop_name FROM stops WHERE is_deleted = 0 ORDER BY stop_name"),
+        pool.request()
+          .query(`
+            SELECT DISTINCT start_location, end_location
+            FROM routes
+            WHERE is_deleted = 0
+          `),
+      ]);
+
+      const areas = new Set();
+      for (const row of stopsRes.recordset) areas.add(row.stop_name);
+      for (const row of routesRes.recordset) {
+        if (row.start_location) areas.add(row.start_location);
+        if (row.end_location)   areas.add(row.end_location);
+      }
+
+      return { areas: [...areas].sort(), count: areas.size };
+    }
+
     // ── Initiate taxi booking (frontend action) ─────────────────────────────
     case "initiate_taxi_booking": {
       actionRef.current = {
@@ -957,7 +1045,10 @@ You have live access to the user's wallet, tickets, routes, and trip data via to
 ## RULE 0 — Disambiguate every place name before acting
 When the user mentions any destination, stop, or area (e.g. "airport", "AUB", "Cola", "downtown Beirut"):
 1. Call **search_stops(name) and search_routes(name)** first.
-2. **0 results** → "I couldn't find a stop called [X]. Could you describe the area or a nearby landmark?"
+2. **0 results, NOT trip planning** → "I couldn't find a stop called [X]. Could you describe the area or a nearby landmark?"
+2b. **0 results, trip planning** (user wants to plan/book a trip to/from this place) → ask: "I don't have a stop called **[X]** yet — want me to add it if it's a real place?" Only after the user says yes, call **add_new_stop(name)**.
+   - real_location=true → "Added **[stop_name]** as a new stop. Let's plan your trip." then continue (e.g. retry plan_multi_stop_trip).
+   - real_location=false → "I couldn't verify that's a real place. Could you give me a nearby landmark or the exact name?" — never call add_new_stop again for the same unverified name without new info from the user.
 3. **1 result** → "I found **[stop name]** — is that the right place?"
 4. **2+ results** → Present a numbered list, ask "Which one?" — the user just replies with a number.
 5. **Only after confirmation** → proceed with the actual action.
@@ -966,12 +1057,16 @@ Example — "I want to go to the airport":
 ✗ Wrong: call initiate_taxi_booking("airport")
 ✓ Right: search_stops("airport") → "I found:\n**1.** Beirut–Rafic Hariri International Airport (Khaldeh)\n**2.** Airport Road Stop\nWhich one?"
 
+Example — trip planning to an unlisted place "I want to go to Zalka seaside":
+✗ Wrong: "There is no stop for that." (dead end)
+✓ Right: search_stops/plan_multi_stop_trip → 0 results → "I don't have a stop called **Zalka seaside** yet — want me to add it if it's a real place?" → user confirms → add_new_stop("Zalka seaside") → if real_location, confirm the new stop and continue planning.
+
 ## Conversation rules
 1. **One question per turn.** Never ask two things at once. Pick the most important one.
 2. **Short answers** — 2–4 sentences for facts. Use bullet lists for 3+ items.
 3. **Number choices** — always use 1, 2, 3 when asking the user to pick.
 4. **No filler** — never start with "Sure!", "Of course!", "Great question!" etc.
-5. **Confirm before side-effects** — cancellations, complaints, ratings: show what you'll do, wait for "yes".
+5. **Confirm before side-effects** — cancellations, complaints, ratings, adding a new stop: show what you'll do, wait for "yes".
 6. **Bold key values** — amounts, route names, times, tracking codes.
 7. **No results** — say "I didn't find any [X]" and suggest rephrasing. Never guess.
 8. **Confused user** — if the user's message is unclear, ask one simple clarifying question: "Do you mean [X] or [Y]?"
@@ -990,7 +1085,9 @@ Example — "I want to go to the airport":
 | Fare estimate | search_routes → get_fare_info |
 | Best time to travel | search_routes → get_passenger_demand |
 | A → B trip plan | disambiguate A and B → plan_multi_stop_trip |
+| Unlisted stop in trip plan | confirm with user → add_new_stop → retry plan_multi_stop_trip |
 | Nearest stops | get_nearby_stops |
+| What areas/cities do you cover? | list_service_areas |
 | Cancel booking | get_upcoming_bookings → list → confirm → cancel_booking |
 | Rate last trip | get_completed_trips → ask stars+comment → submit_rating |
 | Explain charge | get_wallet_transactions |

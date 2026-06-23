@@ -1,6 +1,7 @@
 import { poolPromise, sql } from "../db/db.js";
 import { ensureOperationalTables } from "../db/featureSetup.js";
 import { getWalletBalance } from "../services/wallet.service.js";
+import { nominatimGeocode } from "../utils/geocode.js";
 
 const toFloat = (v) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
 const toInt   = (v) => { const n = parseInt(v, 10); return Number.isInteger(n) && n > 0 ? n : null; };
@@ -181,21 +182,6 @@ const parseMapCoords = (text) => {
   return null;
 };
 
-const nominatimGeocode = async (query) => {
-  try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=0`;
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'FYP-AYA Transit App (student project)', 'Accept-Language': 'en' },
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data.length) return null;
-    return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-  } catch {
-    return null;
-  }
-};
-
 // GET /api/taxi-reservations/expand-map?url=...
 // Server-side URL expansion — bypasses Google bot-detection and consent pages.
 export const expandMapUrl = async (req, res) => {
@@ -239,7 +225,7 @@ export const expandMapUrl = async (req, res) => {
     if (titleMatch) {
       const placeName = titleMatch[1].trim();
       if (placeName) {
-        const geocoded = await nominatimGeocode(placeName);
+        const geocoded = await nominatimGeocode(placeName, { countryCodes: null });
         if (geocoded) return res.json(geocoded);
       }
     }

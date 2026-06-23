@@ -37,6 +37,7 @@ import {
   getPickerResult,
   clearPickerResult,
 } from "../../utils/locationPickerResult";
+import { formatTime } from "../../utils/formatters";
 
 if (
   Platform.OS === "android" &&
@@ -938,6 +939,19 @@ const TaxiReservationScreen = ({ navigation, route }) => {
       drivers?.find((d) => d.driver_id === selectedDriverId) ?? null;
     const fare = estimatedFare ?? selVehicle.base;
 
+    // Departure is always known (now, or the picked schedule); arrival/duration
+    // are only known once we have a route distance to estimate drive time from.
+    const departureDate = bookNow ? new Date() : new Date(getScheduledDatetime());
+    const AVG_SPEED_KMH = 30; // rough city-traffic estimate for Lebanon roads
+    const durationMin =
+      distanceKm != null
+        ? Math.max(5, Math.round((distanceKm / AVG_SPEED_KMH) * 60))
+        : null;
+    const arrivalDate =
+      durationMin != null
+        ? new Date(departureDate.getTime() + durationMin * 60_000)
+        : null;
+
     setConfirming(true);
     try {
       const data = await createTaxiReservation({
@@ -979,6 +993,9 @@ const TaxiReservationScreen = ({ navigation, route }) => {
           name: `${selVehicle.label} Taxi`,
           origin: pickup,
           destination: dest,
+          departureTime: formatTime(departureDate),
+          arrivalTime: arrivalDate ? `~${formatTime(arrivalDate)}` : null,
+          duration: durationMin != null ? `${durationMin} min` : null,
         },
         seatId: null,
         seats: [],
