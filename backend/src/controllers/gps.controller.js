@@ -1,54 +1,14 @@
 import { poolPromise, sql } from "../db/db.js";
-import { broadcastGpsUpdate } from "../services/gps.stream.service.js";
 import { sqlLocalDate } from "../utils/lebanonTime.js";
 
-// POST /api/gps — save location and broadcast to WebSocket subscribers
-export const sendGpsLocation = async (req, res) => {
-  try {
-    const { trip_id, latitude, longitude, speed, heading } = req.body;
-    const pool = await poolPromise;
+// NOTE: Driver GPS ingest is consolidated to POST /api/driver/location
+// (driverApp.controller.updateLocation). The old POST /api/gps endpoint was
+// removed so there is a single write path into gps_logs.
 
-    // Resolve plate number for the WebSocket broadcast
-    const tripRow = await pool.request()
-      .input("tid", sql.Int, trip_id)
-      .query(`
-        SELECT
-          CONCAT('TRP-', RIGHT('000' + CAST(t.trip_id AS VARCHAR), 3)) AS trip_ref,
-          v.plate_number AS vehicle_id,
-          r.route_name   AS route
-        FROM trips t
-        LEFT JOIN vehicles v ON v.vehicle_id = t.vehicle_id
-        LEFT JOIN routes   r ON r.route_id   = t.route_id
-        WHERE t.trip_id = @tid
-      `);
-
-    await pool
-      .request()
-      .input("trip_id",   sql.Int,          trip_id)
-      .input("latitude",  sql.Decimal(9, 6), latitude)
-      .input("longitude", sql.Decimal(9, 6), longitude)
-      .query(`INSERT INTO gps_logs(trip_id, latitude, longitude, recorded_at) VALUES(@trip_id, @latitude, @longitude, GETDATE())`);
-
-    res.status(201).json({ message: "GPS location saved" });
-
-    // Fire-and-forget WebSocket broadcast after response is sent
-    const meta = tripRow.recordset[0] ?? {};
-    broadcastGpsUpdate({
-      trip_id:    trip_id,
-      trip_ref:   meta.trip_ref   ?? null,
-      vehicle_id: meta.vehicle_id ?? null,
-      route:      meta.route      ?? null,
-      lat:        parseFloat(latitude),
-      lng:        parseFloat(longitude),
-      speed:      speed   ?? null,
-      heading:    heading ?? null,
-      recorded_at: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to save GPS data" });
-  }
-};
+// A trip with no GPS ping within this window is treated as no longer "live",
+// so the live/latest/bus/SSE endpoints never return a frozen position as if it
+// were current. Applied consistently across every live-position query.
+const LIVE_GPS_WINDOW_MIN = 30;
 
 // GET /api/gps/trip/:id?date=YYYY-MM-DD
 // Returns the full ordered GPS track for a trip, optionally filtered to a single date.
@@ -72,6 +32,8 @@ export const getTripGpsHistory = async (req, res) => {
         gps_id,
         CAST(latitude  AS FLOAT) AS lat,
         CAST(longitude AS FLOAT) AS lng,
+        CAST(speed     AS FLOAT) AS speed,
+        CAST(heading   AS FLOAT) AS heading,
         recorded_at              AS timestamp
       FROM gps_logs
       ${where}
@@ -83,7 +45,8 @@ export const getTripGpsHistory = async (req, res) => {
       lng:       r.lng,
       timestamp: r.timestamp,
       timeLabel: new Date(r.timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-      speed:     0,
+      speed:     r.speed ?? 0,
+      heading:   r.heading ?? null,
     }));
 
     res.json({ points, hasData: points.length > 0 });
@@ -111,7 +74,7 @@ export const getLiveGps = async (req, res) => {
         SELECT trip_id, latitude, longitude, recorded_at,
                ROW_NUMBER() OVER (PARTITION BY trip_id ORDER BY recorded_at DESC) AS rn
         FROM gps_logs
-        WHERE recorded_at >= DATEADD(minute, -30, GETUTCDATE())
+        WHERE recorded_at >= DATEADD(minute, -${LIVE_GPS_WINDOW_MIN}, GETUTCDATE())
       ) g
       JOIN  trips    t ON t.trip_id    = g.trip_id
       LEFT JOIN routes   r ON r.route_id   = t.route_id
@@ -147,6 +110,7 @@ export const getBusGps = async (req, res) => {
           OR  LOWER(REPLACE(v.plate_number, '-', '')) = LOWER(REPLACE(@vid, '-', ''))
         )
           AND LOWER(ISNULL(t.status, '')) IN ('ongoing', 'active')
+          AND g.recorded_at >= DATEADD(minute, -${LIVE_GPS_WINDOW_MIN}, GETUTCDATE())
         ORDER BY g.recorded_at DESC
       `);
     if (!result.recordset[0]) return res.status(404).json(null);
@@ -164,10 +128,13 @@ export const getLatestGps = async (req, res) => {
     const result = await pool
       .request()
       .input("trip_id", sql.Int, req.params.trip_id).query(`
-        SELECT TOP 1 *
-        FROM gps_logs
-        WHERE trip_id = @trip_id
-        ORDER BY recorded_at DESC
+        SELECT TOP 1 g.*
+        FROM gps_logs g
+        JOIN trips t ON t.trip_id = g.trip_id
+        WHERE g.trip_id = @trip_id
+          AND LOWER(ISNULL(t.status, '')) IN ('ongoing', 'active')
+          AND g.recorded_at >= DATEADD(minute, -${LIVE_GPS_WINDOW_MIN}, GETUTCDATE())
+        ORDER BY g.recorded_at DESC
       `);
 
     res.json(result.recordset[0] || null);
@@ -176,50 +143,9 @@ export const getLatestGps = async (req, res) => {
   }
 };
 
-// GET /api/gps/sse/bus/:vehicleId — SSE stream for browser clients
-// Pushes a GPS position event every 3 seconds until the client disconnects.
-export const sseGpsBus = async (req, res) => {
-  const { vehicleId } = req.params;
-
-  res.writeHead(200, {
-    "Content-Type":  "text/event-stream",
-    "Cache-Control": "no-cache",
-    "Connection":    "keep-alive",
-    "X-Accel-Buffering": "no",   // disable nginx buffering
-  });
-
-  // Send a connected event immediately so the client doesn't wait 3 s
-  res.write(`data: ${JSON.stringify({ type: "connected", vehicle_id: vehicleId })}\n\n`);
-
-  const push = async () => {
-    try {
-      const pool   = await poolPromise;
-      const result = await pool.request()
-        .input("vid", sql.NVarChar(50), vehicleId)
-        .query(`
-          SELECT TOP 1
-            CAST(g.latitude  AS FLOAT) AS latitude,
-            CAST(g.longitude AS FLOAT) AS longitude,
-            g.recorded_at              AS updatedAt
-          FROM gps_logs g
-          JOIN  trips    t ON t.trip_id    = g.trip_id
-          JOIN  vehicles v ON v.vehicle_id = t.vehicle_id
-          WHERE (LOWER(v.plate_number) = LOWER(@vid) OR LOWER(REPLACE(v.plate_number,'-','')) = LOWER(REPLACE(@vid,'-','')))
-            AND LOWER(ISNULL(t.status,'')) IN ('ongoing','active')
-          ORDER BY g.recorded_at DESC
-        `);
-
-      if (result.recordset[0]) {
-        res.write(`data: ${JSON.stringify({ type: "gps_update", ...result.recordset[0] })}\n\n`);
-      }
-    } catch { /* keep stream alive on transient DB errors */ }
-  };
-
-  await push();
-  const interval = setInterval(push, 3_000);
-
-  req.on("close", () => clearInterval(interval));
-};
+// NOTE: the old SSE stream (GET /api/gps/sse/bus/:vehicleId) was removed — it
+// had no clients and spawned an unbounded per-connection 3s DB poll. Live
+// browser/app tracking uses the WebSocket stream at /gps-stream instead.
 
 // GET /api/gps/geofence-alerts — recent geofence breach events
 export const getGeofenceAlerts = async (req, res) => {

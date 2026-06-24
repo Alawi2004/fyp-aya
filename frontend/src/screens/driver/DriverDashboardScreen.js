@@ -10,7 +10,6 @@ import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { COLORS, PURPLE } from '../../constants/colors';
 import { getDriverTripsApi, startTripApi, completeTripApi, cancelTripApi } from '../../api/driverApi';
-import { useGpsTracking } from '../../hooks/useGpsTracking';
 
 const TRIP_STATUS = [
   { key: 'idle',       label: 'Not Started', icon: 'ellipse-outline',    color: COLORS.textMuted   },
@@ -501,7 +500,8 @@ const DriverDashboardScreen = ({ navigation }) => {
   }, [loadTrips]);
 
   const activeTrip    = trips.find(t => isActiveStatus(t.status));
-  useGpsTracking(activeTrip?.trip_id ?? null);
+  // GPS broadcasting is handled centrally by DriverLocationProvider (one watcher
+  // for the whole app) — no per-screen GPS watch here.
   const upcomingCount = trips.filter(t => !isActiveStatus(t.status) && !isDoneStatus(t.status)).length;
   const doneToday     = trips.filter(t => isDoneStatus(t.status)).length;
   const earnedToday   = trips.filter(t => isDoneStatus(t.status)).reduce((s, t) => s + t.earnings, 0);

@@ -3,6 +3,7 @@ import sql   from "mssql";
 import app   from "./app.js";
 import { attachWebSocket }       from "./services/gps.stream.service.js";
 import { startGeofencingEngine } from "./services/geofencing.service.js";
+import { startGpsRetentionJob }  from "./services/gpsRetention.service.js";
 import { poolPromise }           from "./db/db.js";
 
 const PORT = process.env.PORT || 4000;
@@ -28,10 +29,13 @@ server.listen(PORT, () => {
   console.log(`🔌 WebSocket GPS stream at ws://localhost:${PORT}/gps-stream`);
 });
 
-// Start server-side geofencing engine after the DB pool is ready
+// Start background jobs after the DB pool is ready
 poolPromise
-  .then(() => startGeofencingEngine())
-  .catch(err => console.error("[startup] geofencing engine failed to start:", err.message));
+  .then(() => {
+    startGeofencingEngine();
+    startGpsRetentionJob();
+  })
+  .catch(err => console.error("[startup] background jobs failed to start:", err.message));
 
 // ── Legacy test + DB-table-list endpoints ─────────────────────────────────────
 // (kept for dev convenience / health-check scripts)

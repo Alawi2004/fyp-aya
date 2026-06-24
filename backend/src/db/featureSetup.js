@@ -399,6 +399,45 @@ BEGIN
   );
   CREATE INDEX IX_stop_requests_user ON stop_requests(user_id, created_at DESC);
 END;
+
+-- Composite index for GPS lookups. gps_logs is the highest-volume table (a row
+-- every ~2s per active trip); every live/history/geofence query partitions or
+-- orders by recorded_at within a trip. Without this they scan the whole table.
+IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'gps_logs')
+   AND NOT EXISTS (
+     SELECT 1 FROM sys.indexes
+     WHERE name = 'IX_gps_logs_trip_recorded' AND object_id = OBJECT_ID('dbo.gps_logs')
+   )
+BEGIN
+  CREATE INDEX IX_gps_logs_trip_recorded ON gps_logs (trip_id, recorded_at DESC);
+END;
+
+-- Persist GPS speed (km/h) and heading (degrees) sent by the driver app so
+-- trip history/analytics aren't stuck reporting 0.
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='gps_logs' AND COLUMN_NAME='speed')
+BEGIN
+  ALTER TABLE gps_logs ADD speed DECIMAL(5,2) NULL;
+END;
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='gps_logs' AND COLUMN_NAME='heading')
+BEGIN
+  ALTER TABLE gps_logs ADD heading DECIMAL(5,2) NULL;
+END;
+
+-- Normalize gps_logs.recorded_at default from getdate() (local) to UTC, so it
+-- matches the explicit GETUTCDATE() inserts and the UTC-based read queries.
+IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='gps_logs')
+   AND NOT EXISTS (SELECT 1 FROM sys.default_constraints WHERE name='DF_gps_logs_recorded_at')
+BEGIN
+  DECLARE @df_gps_recorded sysname = (
+    SELECT dc.name
+    FROM sys.default_constraints dc
+    JOIN sys.columns c ON c.object_id = dc.parent_object_id AND c.column_id = dc.parent_column_id
+    WHERE dc.parent_object_id = OBJECT_ID('dbo.gps_logs') AND c.name = 'recorded_at'
+  );
+  IF @df_gps_recorded IS NOT NULL
+    EXEC('ALTER TABLE gps_logs DROP CONSTRAINT ' + @df_gps_recorded);
+  ALTER TABLE gps_logs ADD CONSTRAINT DF_gps_logs_recorded_at DEFAULT (GETUTCDATE()) FOR recorded_at;
+END;
 `;
 
 export const ensureOperationalTables = async (pool) => {

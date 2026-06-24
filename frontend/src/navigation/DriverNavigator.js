@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, PURPLE } from '../constants/colors';
 import PressableScale from '../components/common/PressableScale';
 import { useApp } from '../context/AppContext';
+import { DriverLocationProvider } from '../context/DriverLocationContext';
 
 import DriverDashboardScreen   from '../screens/driver/DriverDashboardScreen';
 import DriverMapScreen         from '../screens/driver/DriverMapScreen';
@@ -138,16 +139,19 @@ const CustomTabBar = ({ state, navigation }) => {
 };
 
 const DriverNavigator = () => (
-  <Tab.Navigator
-    tabBar={props => <CustomTabBar {...props} />}
-    screenOptions={{ headerShown: false }}
-  >
-    <Tab.Screen name="DashboardStack"     component={DashboardStack}     options={{ tabBarLabel: 'Dashboard' }} />
-    <Tab.Screen name="MapStack"           component={MapStack}           options={{ tabBarLabel: 'Navigate'  }} />
-    <Tab.Screen name="VehicleStack"       component={VehicleStack}       options={{ tabBarLabel: 'Vehicle'   }} />
-    <Tab.Screen name="EarningsStack"      component={EarningsStack}      options={{ tabBarLabel: 'Earnings'  }} />
-    <Tab.Screen name="HistoryStack"       component={HistoryStack}       options={{ tabBarLabel: 'History'   }} />
-  </Tab.Navigator>
+  // Single GPS owner for the whole driver app — one watcher, one broadcaster.
+  <DriverLocationProvider>
+    <Tab.Navigator
+      tabBar={props => <CustomTabBar {...props} />}
+      screenOptions={{ headerShown: false }}
+    >
+      <Tab.Screen name="DashboardStack"     component={DashboardStack}     options={{ tabBarLabel: 'Dashboard' }} />
+      <Tab.Screen name="MapStack"           component={MapStack}           options={{ tabBarLabel: 'Navigate'  }} />
+      <Tab.Screen name="VehicleStack"       component={VehicleStack}       options={{ tabBarLabel: 'Vehicle'   }} />
+      <Tab.Screen name="EarningsStack"      component={EarningsStack}      options={{ tabBarLabel: 'Earnings'  }} />
+      <Tab.Screen name="HistoryStack"       component={HistoryStack}       options={{ tabBarLabel: 'History'   }} />
+    </Tab.Navigator>
+  </DriverLocationProvider>
 );
 
 const styles = StyleSheet.create({

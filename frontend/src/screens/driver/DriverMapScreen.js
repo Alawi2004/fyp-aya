@@ -5,17 +5,16 @@ import {
   ActivityIndicator, Alert, PanResponder, Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ExpoLocation from 'expo-location';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, PURPLE } from '../../constants/colors';
 import {
   markStopArrivalApi, getRouteWaypointsApi, getRouteStopsApi,
   getDriverTripsApi, startTripApi, completeTripApi, cancelTripApi,
-  updateLocationApi,
 } from '../../api/driverApi';
 import { getTripEtaPredictions } from '../../api/etaApi';
 import { useApp } from '../../context/AppContext';
+import { useDriverLocation } from '../../context/DriverLocationContext';
 
 // ─── constants ────────────────────────────────────────────────────────────────
 const SCREEN_H            = Dimensions.get('window').height;
@@ -23,8 +22,6 @@ const ARRIVAL_RADIUS_M    = 50;
 const APPROACH_RADIUS_M   = 200;
 const SPEED_KMH_DEFAULT   = 25;   // fallback when GPS speed unavailable
 const ROAD_FACTOR         = 1.35; // haversine → actual road distance ratio
-const GPS_WATCH_MS        = 2000; // local position update (2 s — smooth ETA)
-const SPEED_BUFFER_SIZE   = 5;    // rolling window for speed smoothing
 const HERE_ETA_POLL_MS    = 30_000; // how often to refresh HERE ETAs from backend
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -36,12 +33,6 @@ const haversine = (lat1, lon1, lat2, lon2) => {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-// Median of an array — rejects speed outliers better than mean.
-const median = arr => {
-  const s = [...arr].sort((a, b) => a - b);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
 
 const calcEta = (fLat, fLon, toLat, toLon, dwellStops = 0, speedKmh = SPEED_KMH_DEFAULT) => {
   const roadDist  = haversine(fLat, fLon, toLat, toLon) * ROAD_FACTOR;
@@ -201,14 +192,14 @@ const DriverMapScreen = ({ navigation, route }) => {
   const paramBusNumber = route?.params?.busNumber ?? '';
   const insets         = useSafeAreaInsets();
   const { gpsSettings, t } = useApp();
-  const broadcastMs      = (gpsSettings?.updateIntervalSec ?? 10) * 1000;
   const deviationRadiusM = gpsSettings?.geofenceRadiusM ?? 150;
+  // Single app-wide GPS source (one watcher + one broadcaster).
+  const { location, liveSpeed, gpsError, broadcasting, setBroadcasting } = useDriverLocation();
 
   const mapRef       = useRef(null);
   const pulseAnim    = useRef(new Animated.Value(1)).current;
   const panelAnim    = useRef(new Animated.Value(100)).current;
   const triggeredRef = useRef(new Set());
-  const broadcastRef = useRef(null);
 
   // ── Swipe-to-collapse panel (finger-following, spring snap) ──
   const panelDragY    = useRef(new Animated.Value(0)).current;
@@ -239,19 +230,12 @@ const DriverMapScreen = ({ navigation, route }) => {
     })
   ).current;
 
-  // GPS
-  const [location,  setLocation]  = useState(null);
-  const [gpsError,  setGpsError]  = useState(false);
-
   // Route + stops (for active trip)
   const [routeWaypoints, setRouteWaypoints] = useState([]);
   const [stops,          setStops]          = useState([]);
   const [approaching,    setApproaching]    = useState(false);
   const [deviating,      setDeviating]      = useState(false);
   const [deviationDismissed, setDeviationDismissed] = useState(false);
-
-  // Broadcast toggle
-  const [broadcasting, setBroadcasting] = useState(true);
 
   // Trips list
   const [trips,         setTrips]         = useState([]);
@@ -267,62 +251,21 @@ const DriverMapScreen = ({ navigation, route }) => {
   const displayBusNumber = paramBusNumber || activeTrip?.busNumber || '';
 
   const centeredRef   = useRef(false);
-  const speedBuf      = useRef([]);          // rolling GPS speed readings (km/h)
-  const [liveSpeed, setLiveSpeed] = useState(null); // smoothed speed in km/h
 
   // HERE-powered ETAs from the backend (stop_id → eta_min in minutes)
   const [hereStopEtas, setHereStopEtas] = useState({});
 
-  // ── GPS: get location immediately, independent of tripId ──
+  // ── Centre the map on the first GPS fix from the shared provider ──
+  // The GPS watch + server broadcast both live in DriverLocationProvider so
+  // there's a single watcher/broadcaster for the whole driver app.
   useEffect(() => {
-    let sub;
-    (async () => {
-      const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
-      if (status !== 'granted') { setGpsError(true); return; }
-      // Quick first fix at High accuracy.
-      const loc = await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.High });
-      const pos = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
-      setLocation(pos);
-      if (!centeredRef.current) {
-        centeredRef.current = true;
-        mapRef.current?.animateToRegion(
-          { ...pos, latitudeDelta: 0.022, longitudeDelta: 0.022 },
-          400,
-        );
-      }
-      // Watch at GPS_WATCH_MS (2 s) for smooth local ETA + arrival detection.
-      // Server broadcast runs on its own interval (broadcastMs, default 5 s).
-      // distanceInterval:0 ensures updates fire on time even when stationary.
-      sub = await ExpoLocation.watchPositionAsync(
-        { accuracy: ExpoLocation.Accuracy.BestForNavigation, timeInterval: GPS_WATCH_MS, distanceInterval: 0 },
-        l => {
-          setLocation({ latitude: l.coords.latitude, longitude: l.coords.longitude });
-
-          // Track GPS speed (m/s → km/h). Filter noise: must be 2–120 km/h.
-          const rawMs = l.coords.speed;
-          if (rawMs != null && rawMs >= 0) {
-            const kmh = rawMs * 3.6;
-            if (kmh >= 2 && kmh <= 120) {
-              const buf = [...speedBuf.current, kmh].slice(-SPEED_BUFFER_SIZE);
-              speedBuf.current = buf;
-              setLiveSpeed(Math.round(median(buf)));
-            }
-          }
-        }
-      );
-    })();
-    return () => sub?.remove();
-  }, []);
-
-  // ── Broadcasting: post to server every 10s when on an active trip ──
-  useEffect(() => {
-    if (broadcastRef.current) clearInterval(broadcastRef.current);
-    if (!broadcasting || !effectiveTripId || !location) return;
-    const post = () => updateLocationApi({ trip_id: effectiveTripId, latitude: location.latitude, longitude: location.longitude }).catch(() => {});
-    post();
-    broadcastRef.current = setInterval(post, broadcastMs);
-    return () => clearInterval(broadcastRef.current);
-  }, [broadcasting, effectiveTripId, location?.latitude, location?.longitude]);
+    if (!location || centeredRef.current) return;
+    centeredRef.current = true;
+    mapRef.current?.animateToRegion(
+      { ...location, latitudeDelta: 0.022, longitudeDelta: 0.022 },
+      400,
+    );
+  }, [location]);
 
   // ── Load all trips ──
   const loadTrips = useCallback(async () => {
