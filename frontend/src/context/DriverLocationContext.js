@@ -76,14 +76,18 @@ export function DriverLocationProvider({ children }) {
       try {
         const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
         const pos = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+        console.log('[GPS] first fix', pos.latitude, pos.longitude,
+          '±', Math.round(loc.coords.accuracy ?? 0), 'm', 'mocked=', loc.mocked ?? false);
         if (mounted) { locationRef.current = pos; setLocation(pos); }
-      } catch { /* watch below will supply a fix */ }
+      } catch (e) { console.log('[GPS] first fix failed', e?.message); }
 
       if (!mounted) return;
       subRef.current = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.BestForNavigation, timeInterval: WATCH_MS, distanceInterval: 0 },
         (l) => {
           const pos = { latitude: l.coords.latitude, longitude: l.coords.longitude };
+          console.log('[GPS] watch', pos.latitude, pos.longitude,
+            '±', Math.round(l.coords.accuracy ?? 0), 'm', 'mocked=', l.mocked ?? false);
           locationRef.current = pos;
           setLocation(pos);
 
