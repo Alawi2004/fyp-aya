@@ -16,6 +16,7 @@ import {
   getTripDelays,
   getTripChecklists,
   getTripStopArrivals,
+  deleteTrip,
 } from "../controllers/trips.controller.js";
 import { getTripEtaPredictions } from "../controllers/eta.controller.js";
 import { requirePermission } from "../middleware/permissions.middleware.js";
@@ -186,5 +187,6 @@ router.get("/:id/arrivals", getTripStopArrivals);
 router.get("/:id", getTripById);
 router.put("/:id/status", requirePermission("trips", "edit"), updateTripStatus);
 router.put("/:id",        requirePermission("trips", "edit"), updateTrip);
+router.delete("/:id",     requirePermission("trips", "delete"), deleteTrip);
 
 export default router;

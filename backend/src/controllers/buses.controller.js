@@ -1,4 +1,13 @@
 import { poolPromise, sql } from "../db/db.js";
+import { getRouteDurationMin } from "../modules/eta/routeDuration.js";
+
+const formatHHMM12 = (date) => {
+  let h = date.getHours();
+  const m = String(date.getMinutes()).padStart(2, "0");
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return `${String(h).padStart(2, "0")}:${m} ${ampm}`;
+};
 
 // GET /api/buses — returns trips joined with vehicle & route info (what the passenger app needs)
 export const getBuses = async (req, res) => {
@@ -13,11 +22,7 @@ export const getBuses = async (req, res) => {
         r.route_name                                            AS route,
         r.start_location                                        AS origin,
         r.end_location                                          AS destination,
-        FORMAT(t.start_time, 'hh:mm tt')                        AS departureTime,
-        FORMAT(ISNULL(t.end_time, DATEADD(MINUTE,60,t.start_time)), 'hh:mm tt') AS arrivalTime,
-        CAST(DATEDIFF(MINUTE, t.start_time,
-          ISNULL(t.end_time, DATEADD(MINUTE,60,t.start_time)))
-        AS VARCHAR) + ' min'                                    AS duration,
+        t.start_time                                            AS start_time,
         t.status,
         r.route_id,
         (SELECT TOP 1 rts.recurrence
@@ -42,7 +47,21 @@ export const getBuses = async (req, res) => {
       JOIN routes  r ON t.route_id   = r.route_id
       WHERE t.status IN ('ongoing','active','scheduled','boarding','delayed')
     `);
-    res.json({ buses: result.recordset });
+
+    const durationCache = new Map();
+    const buses = await Promise.all(result.recordset.map(async (row) => {
+      const durationMin = await getRouteDurationMin(pool, row.route_id, durationCache) ?? 60;
+      const arrival = new Date(row.start_time.getTime() + durationMin * 60000);
+      const { start_time, ...rest } = row;
+      return {
+        ...rest,
+        departureTime: formatHHMM12(row.start_time),
+        arrivalTime:   formatHHMM12(arrival),
+        duration:      `${durationMin} min`,
+      };
+    }));
+
+    res.json({ buses });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch buses" });
   }

@@ -931,7 +931,7 @@ const HomeScreen = ({ navigation }) => {
         pointerEvents={showTop ? "auto" : "none"}
         style={[
           styles.fab,
-          { bottom: 117 + Math.max(insets.bottom, 12) },
+          { bottom: 65 + Math.max(insets.bottom, 12) },
           {
             opacity: fabAnim,
             transform: [
@@ -1288,7 +1288,7 @@ const styles = StyleSheet.create({
   statusChipTextOn: { color: COLORS.white },
 
   /* Scroll-to-top FAB */
-  fab: { position: "absolute", right: 18 },
+  fab: { position: "absolute", right: 20 },
   fabBtn: {
     width: 48,
     height: 48,

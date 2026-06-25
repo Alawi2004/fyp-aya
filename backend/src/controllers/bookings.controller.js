@@ -2,6 +2,7 @@ import { poolPromise, sql } from "../db/db.js";
 import { ensureOperationalTables } from "../db/featureSetup.js";
 import { verifyPassengerQrToken } from "../utils/passengerQr.js";
 import { getWalletBalance } from "../services/wallet.service.js";
+import { getRouteDurationMin } from "../modules/eta/routeDuration.js";
 
 // POST /api/bookings — book one or more seats on a trip.
 // Body: { trip_id, seats, carpool? }
@@ -189,9 +190,7 @@ export const getBookings = async (req, res) => {
           LOWER(ISNULL(v.vehicle_type, 'bus'))                                 AS bus_type,
           r.start_location                                                     AS origin,
           r.end_location                                                       AS destination,
-          CAST(DATEDIFF(MINUTE, t.start_time,
-            ISNULL(t.end_time, DATEADD(MINUTE, 60, t.start_time)))
-          AS VARCHAR) + ' min'                                                 AS duration,
+          NULL AS duration,   -- real duration computed from route geometry below
           CASE
             WHEN tk.status = 'cancelled' THEN 'cancelled'
             WHEN t.status  = 'completed' THEN 'completed'
@@ -245,7 +244,8 @@ export const getBookings = async (req, res) => {
         ORDER BY created_at DESC
       `);
 
-    const bookings = result.recordset.map((row) => {
+    const durationCache = new Map();
+    const bookings = await Promise.all(result.recordset.map(async (row) => {
       if (row.booking_source === 'taxi') {
         return {
           _id:         `taxi_${row.booking_id}`,
@@ -268,6 +268,9 @@ export const getBookings = async (req, res) => {
           date:   row.created_at,
         };
       }
+      // Real road-based route duration — see routeDuration.js for why this
+      // replaces the old end_time-based guess (always "60 min" otherwise).
+      const durationMin = await getRouteDurationMin(pool, row.route_id, durationCache) ?? 60;
       return {
         _id:    String(row.booking_id),
         type:   "bus",
@@ -278,7 +281,7 @@ export const getBookings = async (req, res) => {
           type:                row.bus_type,
           origin:              row.origin,
           destination:         row.destination,
-          duration:            row.duration,
+          duration:            `${durationMin} min`,
           route_id:            row.route_id,
           schedule_recurrence: row.schedule_recurrence ?? null,
         },
@@ -287,7 +290,7 @@ export const getBookings = async (req, res) => {
         price:  parseFloat(row.amount ?? 0),
         date:   row.created_at,
       };
-    });
+    }));
 
     res.json(bookings);
   } catch (err) {

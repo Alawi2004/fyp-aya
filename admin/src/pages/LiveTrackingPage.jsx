@@ -643,16 +643,17 @@ export default function LiveTrackingPage() {
   useAdminGpsStream((msg) => {
     if (msg.type === 'connected')    { setWsConnected(true); return; }
 
-    if (msg.type === 'gps_update' && msg.trip_ref) {
-      lastSeenRef.current[msg.trip_ref] = Date.now();
+    if (msg.type === 'gps_update' && msg.trip_id != null) {
+      const tripRef = 'TRP-' + String(msg.trip_id).padStart(3, '0');
+      lastSeenRef.current[tripRef] = Date.now();
       setBuses((prev) => {
-        const exists = prev.some(b => b.id === msg.trip_ref);
+        const exists = prev.some(b => b.id === tripRef);
         if (exists) {
-          return prev.map(b => b.id !== msg.trip_ref ? b : enrichBus({ ...b, lat: msg.lat, lng: msg.lng }));
+          return prev.map(b => b.id !== tripRef ? b : enrichBus({ ...b, lat: msg.lat, lng: msg.lng }));
         }
         // New bus arriving via WebSocket — add it
         return [...prev, enrichBus({
-          id: msg.trip_ref, route: msg.route || 'Unknown Route', routeLabel: msg.route || '',
+          id: tripRef, route: msg.route || 'Unknown Route', routeLabel: msg.route || '',
           driver: msg.driver || 'Unknown', vehicle: msg.vehicle_id || '',
           status: 'Ongoing', seats: '?/?', passengerCount: 0, capacity: 40, speed: 0,
           lat: msg.lat, lng: msg.lng, eta: '—', _dlat: 0, _dlng: 0,
