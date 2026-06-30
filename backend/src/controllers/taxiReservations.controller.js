@@ -310,6 +310,227 @@ export const cancelTaxiReservation = async (req, res) => {
   }
 };
 
+// Resolve the driver_id for the authenticated user (null if not a driver)
+async function resolveDriverId(pool, user) {
+  if (user?.driver_id) return user.driver_id;
+  if (!user?.user_id) return null;
+  const dr = await pool.request()
+    .input("uid", sql.Int, user.user_id)
+    .query("SELECT driver_id FROM drivers WHERE user_id = @uid AND ISNULL(is_deleted, 0) = 0");
+  return dr.recordset[0]?.driver_id ?? null;
+}
+
+const RESERVATION_SELECT = `
+  tr.reservation_id, tr.user_id, tr.vehicle_type,
+  tr.pickup_address, tr.pickup_lat, tr.pickup_lng,
+  tr.dest_address,   tr.dest_lat,   tr.dest_lng,
+  tr.distance_km, CAST(tr.estimated_fare AS FLOAT) AS estimated_fare,
+  tr.driver_id, tr.driver_name, tr.scheduled_for, tr.recurrence,
+  tr.notes, tr.stops_json, tr.preferred_driver_gender,
+  tr.status, tr.created_at,
+  u.full_name AS passenger_name, u.phone AS passenger_phone
+`;
+
+// GET /api/taxi-reservations/all — admin/staff: every reservation
+export const getAllTaxiReservations = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    await ensureOperationalTables(pool);
+
+    const request = pool.request();
+    let where = "";
+    if (req.query.status) {
+      request.input("status", sql.NVarChar(20), String(req.query.status));
+      where = "WHERE tr.status = @status";
+    }
+
+    const result = await request.query(`
+      SELECT ${RESERVATION_SELECT}
+      FROM   taxi_reservations tr
+      JOIN   users u ON u.user_id = tr.user_id
+      ${where}
+      ORDER  BY tr.reservation_id DESC
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("[getAllTaxiReservations]", err);
+    res.status(500).json({ error: "Failed to fetch reservations" });
+  }
+};
+
+// GET /api/taxi-reservations/driver — reservations assigned to this driver,
+// plus unassigned pending requests they can accept
+export const getDriverTaxiReservations = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    await ensureOperationalTables(pool);
+
+    const driverId = await resolveDriverId(pool, req.user);
+    if (!driverId) return res.status(403).json({ error: "Not a driver account" });
+
+    const result = await pool.request()
+      .input("did", sql.Int, driverId)
+      .query(`
+        SELECT ${RESERVATION_SELECT}
+        FROM   taxi_reservations tr
+        JOIN   users u ON u.user_id = tr.user_id
+        WHERE  tr.status <> 'cancelled'
+          AND (tr.driver_id = @did
+               OR (tr.driver_id IS NULL AND tr.status = 'pending'))
+        ORDER  BY
+          CASE WHEN tr.driver_id = @did THEN 0 ELSE 1 END,
+          tr.reservation_id DESC
+      `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("[getDriverTaxiReservations]", err);
+    res.status(500).json({ error: "Failed to fetch reservations" });
+  }
+};
+
+// PUT /api/taxi-reservations/:id/status — driver accepts/advances a reservation
+// (admin/staff may update any). Accepting an unassigned request claims it.
+const DRIVER_STATUSES = ["accepted", "on_the_way", "arrived", "completed"];
+
+export const updateTaxiReservationStatus = async (req, res) => {
+  const reservationId = parseInt(req.params.id, 10);
+  if (!reservationId) return res.status(400).json({ error: "Invalid reservation id" });
+
+  const status = String(req.body?.status || "").toLowerCase();
+  if (!DRIVER_STATUSES.includes(status)) {
+    return res.status(400).json({ error: `status must be one of ${DRIVER_STATUSES.join(", ")}` });
+  }
+
+  try {
+    const pool = await poolPromise;
+    const isAdmin = ["admin", "staff"].includes(req.user?.role);
+    const driverId = isAdmin ? null : await resolveDriverId(pool, req.user);
+    if (!isAdmin && !driverId) return res.status(403).json({ error: "Not a driver account" });
+
+    const resv = (await pool.request()
+      .input("id", sql.Int, reservationId)
+      .query("SELECT reservation_id, driver_id, status FROM taxi_reservations WHERE reservation_id = @id")
+    ).recordset[0];
+    if (!resv) return res.status(404).json({ error: "Reservation not found" });
+
+    // A driver may only act on their own reservation, or claim an unassigned one
+    if (!isAdmin) {
+      if (resv.driver_id && resv.driver_id !== driverId) {
+        return res.status(403).json({ error: "This reservation is assigned to another driver" });
+      }
+    }
+
+    const claim = !resv.driver_id && !isAdmin && status === "accepted";
+
+    const request = pool.request()
+      .input("id",     sql.Int,          reservationId)
+      .input("status", sql.NVarChar(20), status);
+
+    let setDriver = "";
+    if (claim) {
+      const drv = (await pool.request()
+        .input("did", sql.Int, driverId)
+        .query(`
+          SELECT u.full_name FROM drivers d
+          JOIN users u ON u.user_id = d.user_id
+          WHERE d.driver_id = @did
+        `)).recordset[0];
+      request.input("did", sql.Int, driverId);
+      request.input("dname", sql.NVarChar(100), drv?.full_name ?? null);
+      setDriver = ", driver_id = @did, driver_name = @dname";
+    }
+
+    await request.query(`
+      UPDATE taxi_reservations
+      SET status = @status${setDriver}
+      WHERE reservation_id = @id
+    `);
+
+    res.json({ ok: true, reservation_id: reservationId, status });
+  } catch (err) {
+    console.error("[updateTaxiReservationStatus]", err);
+    res.status(500).json({ error: "Failed to update reservation" });
+  }
+};
+
+// PUT /api/taxi-reservations/:id/location — assigned driver streams live GPS
+export const updateTaxiReservationLocation = async (req, res) => {
+  const reservationId = parseInt(req.params.id, 10);
+  if (!reservationId) return res.status(400).json({ error: "Invalid reservation id" });
+
+  const lat = Number(req.body?.latitude);
+  const lng = Number(req.body?.longitude);
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90 ||
+      !Number.isFinite(lng) || lng < -180 || lng > 180 ||
+      (lat === 0 && lng === 0)) {
+    return res.status(400).json({ error: "Valid latitude/longitude required" });
+  }
+
+  try {
+    const pool = await poolPromise;
+    const driverId = await resolveDriverId(pool, req.user);
+    if (!driverId) return res.status(403).json({ error: "Not a driver account" });
+
+    const result = await pool.request()
+      .input("id",  sql.Int,   reservationId)
+      .input("did", sql.Int,   driverId)
+      .input("lat", sql.Float, lat)
+      .input("lng", sql.Float, lng)
+      .query(`
+        UPDATE taxi_reservations
+        SET driver_lat = @lat, driver_lng = @lng, driver_loc_at = GETUTCDATE()
+        WHERE reservation_id = @id AND driver_id = @did
+      `);
+
+    if (result.rowsAffected[0] === 0) {
+      return res.status(403).json({ error: "This reservation is not assigned to you" });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[updateTaxiReservationLocation]", err);
+    res.status(500).json({ error: "Failed to update location" });
+  }
+};
+
+// GET /api/taxi-reservations/:id/location — passenger polls the driver's live GPS
+export const getTaxiReservationLocation = async (req, res) => {
+  const userId = req.user?.user_id;
+  const reservationId = parseInt(req.params.id, 10);
+  if (!reservationId) return res.status(400).json({ error: "Invalid reservation id" });
+
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input("id", sql.Int, reservationId)
+      .query(`
+        SELECT user_id, driver_id, driver_name, status,
+               driver_lat, driver_lng, driver_loc_at
+        FROM taxi_reservations WHERE reservation_id = @id
+      `);
+    const r = result.recordset[0];
+    if (!r) return res.status(404).json({ error: "Reservation not found" });
+    if (r.user_id !== userId) return res.status(403).json({ error: "Not your reservation" });
+
+    const hasLoc = r.driver_lat != null && r.driver_lng != null;
+    const ageSec = r.driver_loc_at ? Math.round((Date.now() - new Date(r.driver_loc_at).getTime()) / 1000) : null;
+    res.json({
+      reservation_id: reservationId,
+      status:         r.status,
+      driver_name:    r.driver_name,
+      has_driver:     r.driver_id != null,
+      latitude:       hasLoc ? r.driver_lat : null,
+      longitude:      hasLoc ? r.driver_lng : null,
+      updated_at:     r.driver_loc_at,
+      age_seconds:    ageSec,
+      // Live only if we have a fix from the last 30 s
+      live:           hasLoc && ageSec != null && ageSec <= 30,
+    });
+  } catch (err) {
+    console.error("[getTaxiReservationLocation]", err);
+    res.status(500).json({ error: "Failed to fetch location" });
+  }
+};
+
 // GET /api/taxi-reservations — passenger's own reservations
 export const getMyTaxiReservations = async (req, res) => {
   const userId = req.user?.user_id;

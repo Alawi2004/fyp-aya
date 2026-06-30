@@ -3,24 +3,23 @@ import { CAMERA_REST_URL } from '../config/camera';
 
 const CAMERA_SERVER_REST = CAMERA_REST_URL;
 
-const makeDemoEvent = (onBus) => ({
-  event:     Math.random() > 0.35 ? 'ENTRY' : 'EXIT',
-  tid:       Math.floor(Math.random() * 900) + 100,
-  frame:     Math.floor(Math.random() * 10000),
-  on_bus:    onBus,
-  timestamp: new Date().toISOString(),
-});
+const EMPTY_COUNTER = { entered: 0, exited: 0, on_bus: 0, fps: 0, last_event: null };
 
+/**
+ * Live passenger-counter data for one bus, read straight from the camera server.
+ *
+ * No mock/demo data: when the camera server is offline, or the selected bus has
+ * no passenger-counter session, the counter reads zero and `online` is false.
+ * The UI should show an "offline" state rather than fabricated numbers.
+ */
 export function useCounterData(busId = null, pollInterval = 1500) {
-  const [counter, setCounter] = useState({ entered: 0, exited: 0, on_bus: 0, fps: 0, last_event: null });
+  const [counter, setCounter] = useState(EMPTY_COUNTER);
   const [events,  setEvents]  = useState([]);
-  const [health,  setHealth]  = useState({ status: 'demo' });
+  const [health,  setHealth]  = useState({ status: 'offline' });
   const [online,  setOnline]  = useState(false);
 
-  const onlineRef    = useRef(false);
-  const demoStateRef = useRef(null);
-  const demoIdRef    = useRef(null);
-  const busIdRef     = useRef(busId);
+  const onlineRef = useRef(false);
+  const busIdRef  = useRef(busId);
 
   useEffect(() => { busIdRef.current = busId; }, [busId]);
 
@@ -33,72 +32,49 @@ export function useCounterData(busId = null, pollInterval = 1500) {
         });
       } catch {}
     }
-    if (demoStateRef.current) {
-      demoStateRef.current = { entered: 0, exited: 0, on_bus: 0 };
-    }
-    setCounter({ entered: 0, exited: 0, on_bus: 0, fps: 0, last_event: null });
+    setCounter(EMPTY_COUNTER);
     setEvents([]);
   }, []);
 
   useEffect(() => {
     if (!busId) return;
-
     let active = true;
-    const baseCount = Math.floor(Math.random() * 18) + 6;
-    demoStateRef.current = { on_bus: baseCount, entered: baseCount + 8, exited: 8 };
 
-    function stopDemo() {
-      if (demoIdRef.current) {
-        clearInterval(demoIdRef.current);
-        demoIdRef.current = null;
-      }
-    }
-
-    function startDemo() {
+    function goOffline() {
       if (!active) return;
       onlineRef.current = false;
       setOnline(false);
-      setHealth({ status: 'demo' });
-      if (demoIdRef.current) return;
-      demoIdRef.current = setInterval(() => {
-        if (!active) return;
-        const ds = demoStateRef.current;
-        const entering = Math.random() > 0.4;
-        demoStateRef.current = {
-          on_bus:  Math.max(0, ds.on_bus + (entering ? 1 : -1)),
-          entered: ds.entered + (entering ? 1 : 0),
-          exited:  ds.exited  + (entering ? 0 : 1),
-        };
-        const event = makeDemoEvent(demoStateRef.current.on_bus);
-        setEvents(old => [event, ...old].slice(0, 50));
-        setCounter({ ...demoStateRef.current, fps: 23 + Math.round(Math.random() * 3), last_event: event });
-      }, pollInterval);
+      setHealth({ status: 'offline' });
+      setCounter(EMPTY_COUNTER);
+      setEvents([]);
     }
 
     async function poll() {
       if (!active) return;
       try {
-        const [hRes, cRes] = await Promise.all([
-          fetch(`${CAMERA_SERVER_REST}/api/health`,               { signal: AbortSignal.timeout(1500) }),
-          fetch(`${CAMERA_SERVER_REST}/api/bus/${busId}/counter`, { signal: AbortSignal.timeout(1500) }),
-        ]);
+        // 1. Is the camera server reachable at all?
+        const hRes = await fetch(`${CAMERA_SERVER_REST}/api/health`, { signal: AbortSignal.timeout(1500) });
         if (!active) return;
-        if (!hRes.ok || !cRes.ok) { startDemo(); return; }
+        if (!hRes.ok) { goOffline(); return; }
 
-        const [hData, cData] = await Promise.all([hRes.json(), cRes.json()]);
+        const hData = await hRes.json();
         if (!active) return;
-
-        let eData = [];
-        try {
-          const eRes = await fetch(`${CAMERA_SERVER_REST}/api/bus/${busId}/events?limit=50`, { signal: AbortSignal.timeout(1500) });
-          if (eRes.ok) eData = await eRes.json();
-        } catch {}
-
-        if (!active) return;
-        stopDemo();
         onlineRef.current = true;
         setOnline(true);
         setHealth({ status: hData.status || 'ok', buses: hData.buses });
+
+        // 2. Does THIS bus have a live passenger-counter session?
+        const cRes = await fetch(`${CAMERA_SERVER_REST}/api/bus/${busId}/counter`, { signal: AbortSignal.timeout(1500) });
+        if (!active) return;
+        if (!cRes.ok) {
+          // Server is up but this bus has no passenger camera — show zeros, not mock.
+          setCounter(EMPTY_COUNTER);
+          setEvents([]);
+          return;
+        }
+
+        const cData = await cRes.json();
+        if (!active) return;
         setCounter({
           on_bus:          cData.on_bus      ?? cData.current_passengers ?? 0,
           entered:         cData.entered     ?? cData.entries             ?? 0,
@@ -108,13 +84,20 @@ export function useCounterData(busId = null, pollInterval = 1500) {
           available_seats: cData.available_seats ?? null,
           capacity:        cData.capacity    ?? null,
         });
-        if (Array.isArray(eData) && eData.length > 0) setEvents(eData);
+
+        try {
+          const eRes = await fetch(`${CAMERA_SERVER_REST}/api/bus/${busId}/events?limit=50`, { signal: AbortSignal.timeout(1500) });
+          if (eRes.ok && active) {
+            const eData = await eRes.json();
+            if (Array.isArray(eData)) setEvents(eData);
+          }
+        } catch { /* events optional */ }
       } catch {
-        if (active) startDemo();
+        goOffline();
       }
     }
 
-    setCounter({ entered: 0, exited: 0, on_bus: 0, fps: 0, last_event: null });
+    setCounter(EMPTY_COUNTER);
     setEvents([]);
     setOnline(false);
     onlineRef.current = false;
@@ -125,7 +108,6 @@ export function useCounterData(busId = null, pollInterval = 1500) {
     return () => {
       active = false;
       clearInterval(pollId);
-      stopDemo();
     };
   }, [busId, pollInterval]);
 

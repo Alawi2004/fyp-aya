@@ -1386,6 +1386,27 @@ export default function DriversPage() {
 
   useEffect(() => { loadDrivers(); }, [loadDrivers]);
 
+  // Auto-select whichever bus is actually streaming a driver camera, so the
+  // Drivers tab shows the live feed without the admin having to pick a bus.
+  // Only overrides the current selection when it isn't itself a live bus, so a
+  // manual choice of another live bus is respected.
+  useEffect(() => {
+    let alive = true;
+    async function pickLiveBus() {
+      try {
+        const res = await fetch(`${CAMERA_SERVER_REST}/api/buses`, { signal: AbortSignal.timeout(1500) });
+        if (!res.ok || !alive) return;
+        const data = await res.json();
+        const ids = Array.isArray(data?.buses) ? data.buses.map(b => b.bus_id) : [];
+        if (ids.length === 0) return;
+        setSelectedBusId(prev => (ids.includes(prev) ? prev : ids[0]));
+      } catch { /* camera server offline */ }
+    }
+    pickLiveBus();
+    const t = setInterval(pickLiveBus, 3000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+
   function openProfile(d) { setProfile(d); }
 
   function openAdd() {

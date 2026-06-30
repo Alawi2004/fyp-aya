@@ -556,19 +556,28 @@ export default function LiveTrackingPage() {
       .catch(() => {});
   }, []);
 
-  // Fetch HERE ETA for the selected trip and keep it fresh every 30 s
-  const _selectedTripId = buses.find(b => b.id === selected)?.trip_id ?? null;
+  // Fetch real HERE road ETA for ALL active trips (not just the selected one)
+  // and keep them fresh every 30 s, so every bus shows an accurate traffic-aware
+  // ETA instead of the local heuristic fallback. The server caches per-segment,
+  // so repeat calls are cheap.
+  const _tripIdsKey = [...new Set(buses.map(b => b.trip_id).filter(Boolean))]
+    .sort((a, b) => a - b)
+    .join(',');
   useEffect(() => {
-    if (!_selectedTripId) return;
+    const ids = _tripIdsKey ? _tripIdsKey.split(',').map(Number) : [];
+    if (!ids.length) return;
     let dead = false;
-    const fetch30 = () =>
-      getTripEtaPredictions(_selectedTripId)
-        .then(res => { if (!dead) setTripEtaMap(prev => ({ ...prev, [_selectedTripId]: res.data })); })
-        .catch(() => {});
-    fetch30();
-    const t = setInterval(fetch30, 30_000);
+    const fetchAll = () => {
+      ids.forEach(id =>
+        getTripEtaPredictions(id)
+          .then(res => { if (!dead) setTripEtaMap(prev => ({ ...prev, [id]: res.data })); })
+          .catch(() => {})
+      );
+    };
+    fetchAll();
+    const t = setInterval(fetchAll, 30_000);
     return () => { dead = true; clearInterval(t); };
-  }, [_selectedTripId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [_tripIdsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load real active trips from the backend on mount
   useEffect(() => {
@@ -1122,7 +1131,8 @@ export default function LiveTrackingPage() {
                 {/* Row 4: ETA + seat pill */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
                   {(() => {
-                    const h = tripEtaMap[bus.trip_id]?.stops?.[0];
+                    // ETA to the final destination (last remaining stop)
+                    const h = tripEtaMap[bus.trip_id]?.stops?.at(-1);
                     const label = h?.eta_min != null
                       ? (h.eta_min < 1 ? 'Arriving' : `${Math.round(h.eta_min)} min`)
                       : bus.trafficInfo.adjustedEta;
@@ -1189,7 +1199,8 @@ export default function LiveTrackingPage() {
             { label: 'Vehicle',  value: selectedBus.vehicle },
             { label: 'Speed',    value: `${selectedBus.speed} km/h` },
             { label: 'ETA', value: (() => {
-                const h = tripEtaMap[selectedBus.trip_id]?.stops?.[0];
+                // ETA to the final destination (last remaining stop)
+                const h = tripEtaMap[selectedBus.trip_id]?.stops?.at(-1);
                 return h?.eta_min != null
                   ? (h.eta_min < 1 ? 'Arriving' : `${Math.round(h.eta_min)} min`)
                   : selectedBus.trafficInfo.adjustedEta;

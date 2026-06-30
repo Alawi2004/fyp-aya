@@ -204,7 +204,10 @@ export const getBookings = async (req, res) => {
           (SELECT TOP 1 rts.recurrence
            FROM recurring_trip_schedules rts
            WHERE rts.route_name = r.route_name AND rts.status = 'Active'
-           ORDER BY rts.active_from DESC)                                       AS schedule_recurrence
+           ORDER BY rts.active_from DESC)                                       AS schedule_recurrence,
+          NULL AS pickup_lat, NULL AS pickup_lng,
+          NULL AS dest_lat,   NULL AS dest_lng,
+          NULL AS stops_json, NULL AS distance_km
         FROM tickets  tk
         JOIN trips    t ON t.trip_id    = tk.trip_id
         JOIN vehicles v ON v.vehicle_id = t.vehicle_id
@@ -238,7 +241,10 @@ export const getBookings = async (req, res) => {
           tr.driver_name                                                       AS driver_name,
           tr.scheduled_for                                                     AS scheduled_for,
           NULL                                                                 AS route_id,
-          NULL                                                                 AS schedule_recurrence
+          NULL                                                                 AS schedule_recurrence,
+          tr.pickup_lat, tr.pickup_lng,
+          tr.dest_lat,   tr.dest_lng,
+          tr.stops_json, tr.distance_km
         FROM taxi_reservations tr
         WHERE tr.user_id = @id
 
@@ -261,6 +267,22 @@ export const getBookings = async (req, res) => {
             origin:      row.origin,
             destination: row.destination,
             duration:    row.duration,
+            // Real taxi coordinates + stops so the tracking map shows the
+            // actual pickup → stops → destination (not a bus route).
+            pickup:      (row.pickup_lat != null && row.pickup_lng != null)
+                           ? { latitude: row.pickup_lat, longitude: row.pickup_lng } : null,
+            dest:        (row.dest_lat != null && row.dest_lng != null)
+                           ? { latitude: row.dest_lat, longitude: row.dest_lng } : null,
+            distance_km: row.distance_km ?? null,
+            stops:       (() => {
+              try {
+                const arr = row.stops_json ? JSON.parse(row.stops_json) : [];
+                return Array.isArray(arr)
+                  ? arr.filter((s) => s && s.lat != null && s.lng != null)
+                       .map((s) => ({ address: s.address ?? '', latitude: s.lat, longitude: s.lng }))
+                  : [];
+              } catch { return []; }
+            })(),
           },
           seatId: null,
           seats:  [],

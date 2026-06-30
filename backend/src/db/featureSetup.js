@@ -384,6 +384,18 @@ BEGIN
   ALTER TABLE taxi_reservations ADD preferred_driver_gender NVARCHAR(10) NULL;
 END;
 
+-- Live driver location for an in-progress taxi (streamed by the driver app)
+IF NOT EXISTS (
+  SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_NAME = 'taxi_reservations' AND COLUMN_NAME = 'driver_lat'
+)
+BEGIN
+  ALTER TABLE taxi_reservations ADD
+    driver_lat    FLOAT      NULL,
+    driver_lng    FLOAT      NULL,
+    driver_loc_at DATETIME2  NULL;
+END;
+
 -- Passenger-submitted requests to add a new bus stop at a location
 IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'stop_requests')
 BEGIN

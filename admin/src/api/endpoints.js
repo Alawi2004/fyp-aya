@@ -42,6 +42,10 @@ export const uploadVehiclePhoto      = (id, formData) => apiClient.post(`/vehicl
 export const deleteVehicle           = (id)            => apiClient.delete(`/vehicles/${id}`);
 export const deleteVehiclePhotoApi   = (id, filename) => apiClient.delete(`/vehicles/${id}/photos/${filename}`);
 
+// Taxi reservations
+export const getAllTaxiReservations    = (status) => apiClient.get('/taxi-reservations/all', { params: status ? { status } : {} });
+export const updateTaxiReservationStatus = (id, status) => apiClient.put(`/taxi-reservations/${id}/status`, { status });
+
 // Drivers
 export const getDrivers = () => apiClient.get('/drivers');
 export const getDriverById = (id) => apiClient.get(`/drivers/${id}`);

@@ -11,6 +11,8 @@ import { DriverLocationProvider } from '../context/DriverLocationContext';
 
 import DriverDashboardScreen   from '../screens/driver/DriverDashboardScreen';
 import DriverMapScreen         from '../screens/driver/DriverMapScreen';
+import DriverCameraScreen      from '../screens/driver/DriverCameraScreen';
+import TaxiRequestsScreen      from '../screens/driver/TaxiRequestsScreen';
 import PassengerVerifyScreen   from '../screens/driver/PassengerVerifyScreen';
 import PassengerListScreen     from '../screens/driver/PassengerListScreen';
 import EarningsScreen          from '../screens/driver/EarningsScreen';
@@ -46,6 +48,8 @@ const DashboardStack = () => (
     <Stack.Screen name="Earnings"          component={EarningsScreen}         />
     <Stack.Screen name="TripChecklist"     component={TripChecklistScreen}    />
     <Stack.Screen name="DriverMap"         component={DriverMapScreen}        />
+    <Stack.Screen name="DriverCamera"      component={DriverCameraScreen}     />
+    <Stack.Screen name="TaxiRequests"      component={TaxiRequestsScreen}     />
     <Stack.Screen name="DelayReport"       component={DelayReportScreen}      />
     <Stack.Screen name="WeeklySchedule"   component={WeeklyScheduleScreen}   />
     <Stack.Screen name="DriverHelpSupport"  component={DriverHelpSupportScreen} />

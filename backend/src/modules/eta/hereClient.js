@@ -57,7 +57,7 @@ async function callHere(origin, viaPoints, destination) {
     origin:        `${origin.latitude},${origin.longitude}`,
     destination:   `${destination.latitude},${destination.longitude}`,
     return:        'summary',
-    departureTime: 'now', // enables real-time traffic
+    departureTime: new Date().toISOString(), // current time → enables real-time traffic (HERE v8 rejects literal 'now')
     apiKey,
   });
   for (const p of viaPoints) {

@@ -12,6 +12,7 @@ import CameraPage       from "./pages/CameraPage";
 import UsersPage        from "./pages/UsersPage";
 import DriversPage      from "./pages/DriversPage";
 import VehiclesPage     from "./pages/VehiclesPage";
+import TaxiReservationsPage from "./pages/TaxiReservationsPage";
 import RoutesPage       from "./pages/RoutesPage";
 import TripsPage        from "./pages/TripsPage";
 import AnalyticsPage    from "./pages/AnalyticsPage";
@@ -63,6 +64,7 @@ function AppShell() {
     passengers:    <PassengersPage />,
     drivers:       <DriversPage />,
     vehicles:      <VehiclesPage />,
+    taxi:          <TaxiReservationsPage />,
     routes:        <RoutesPage />,
     trips:         <TripsPage />,
     analytics:     <AnalyticsPage />,

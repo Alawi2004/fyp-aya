@@ -69,7 +69,28 @@ if not os.path.isfile(_YOLO_PATH):
 #  Node.js backend forwarding (fire-and-forget)
 # =============================================================================
 
-NODE_BACKEND = os.environ.get("NODE_BACKEND_URL", "http://localhost:5000")
+NODE_BACKEND = os.environ.get("NODE_BACKEND_URL", "http://localhost:4000")
+
+# When a driver's phone connects to the ingest WebSocket, also open this local
+# camera as the bus's PASSENGER counter (so the laptop webcam appears in admin
+# alongside the phone driver feed). Set to "none"/"off"/"-1" to disable, or to a
+# different webcam index / video-file path.
+def _parse_ingest_passenger_source():
+    v = os.environ.get("INGEST_PASSENGER_SOURCE", "0").strip()
+    if v.lower() in ("", "none", "off", "-1", "false"):
+        return None
+    try:
+        return int(v)
+    except ValueError:
+        return v   # treat as a file path / device string
+
+INGEST_PASSENGER_SOURCE = _parse_ingest_passenger_source()
+
+# Phones send near-full-resolution frames (e.g. 1004x1920). Running MediaPipe +
+# YOLO on frames that large is slow and makes the admin video lag. Downscale so
+# the longest side is at most this many pixels before the AI runs — still plenty
+# of detail for face/eye/phone detection, far less CPU + bandwidth.
+INGEST_MAX_DIM = int(os.environ.get("INGEST_MAX_DIM", "720") or "720")
 
 
 def _forward(path: str, payload: dict):
@@ -470,10 +491,20 @@ _ALERT_STATE_MAP = {
 class DriverCameraSession:
 
     def __init__(self, bus_id: str, source,
-                 shared_cam: Optional[SharedCamera] = None):
+                 shared_cam: Optional[SharedCamera] = None,
+                 external: bool = False):
         self.bus_id  = bus_id
         self.source  = source
         self._shared = shared_cam
+        # External (ingest) mode: frames are pushed in via submit_frame()
+        # instead of being read from a local VideoCapture / SharedCamera.
+        self._external      = external
+        self._input_frame: Optional[np.ndarray] = None
+        # Auto-orientation for phone frames: find the rotation that yields a
+        # face, then lock it (handles iOS/Android orientation differences).
+        self._rotation     = 0
+        self._rot_locked   = False
+        self._rot_attempts = 0
 
         self._face_det     = FaceDetector()
         self._eye_det      = EyeDetector()
@@ -538,11 +569,49 @@ class DriverCameraSession:
         with self._lock:
             return self._latest_jpeg, dict(self._status)
 
+    def submit_frame(self, frame: np.ndarray):
+        """Push a frame from an external source (e.g. the driver's phone)."""
+        with self._lock:
+            self._input_frame = frame
+
+    _ROT_CODES = {90: cv2.ROTATE_90_CLOCKWISE,
+                  180: cv2.ROTATE_180,
+                  270: cv2.ROTATE_90_COUNTERCLOCKWISE}
+
+    def _rotate(self, frame, deg):
+        if deg == 0:
+            return frame
+        return cv2.rotate(frame, self._ROT_CODES[deg])
+
+    def _orient(self, frame):
+        """Return an upright frame. Until a face is found, periodically try each
+        rotation and lock onto the one that works. Never gives up permanently —
+        if the driver isn't visible at startup it keeps searching (throttled)
+        until a face appears, so it can't lock onto the wrong orientation."""
+        if self._rot_locked:
+            return self._rotate(frame, self._rotation)
+        self._rot_attempts += 1
+        # Throttle the 4× search so we don't burn CPU while no face is visible.
+        if self._rot_attempts % 3 == 0:
+            for deg in (0, 90, 270, 180):
+                cand = self._rotate(frame, deg)
+                try:
+                    fr = self._face_det.detect(cand)
+                    if fr and fr.multi_face_landmarks:
+                        self._rotation   = deg
+                        self._rot_locked = True
+                        print(f"[DriverCam][{self.bus_id}] orientation locked at {deg}°")
+                        return cand
+                except Exception:
+                    pass
+        return self._rotate(frame, self._rotation)
+
     # ── main loop ─────────────────────────────────────────────────────────────
 
     def _loop(self):
-        use_shared = self._shared is not None
-        if not use_shared:
+        use_shared   = self._shared is not None
+        use_external = self._external
+        if not use_shared and not use_external:
             self._cap = cv2.VideoCapture(self.source)
             self._cap.set(cv2.CAP_PROP_FRAME_WIDTH,  _Config.FRAME_WIDTH)
             self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, _Config.FRAME_HEIGHT)
@@ -557,13 +626,23 @@ class DriverCameraSession:
 
         while self._running:
             try:
-                ret, frame = (self._shared.read() if use_shared
-                              else self._cap.read())
+                if use_external:
+                    with self._lock:
+                        frame = None if self._input_frame is None else self._input_frame.copy()
+                    ret = frame is not None
+                else:
+                    ret, frame = (self._shared.read() if use_shared
+                                  else self._cap.read())
                 if not ret or frame is None:
                     time.sleep(0.02)
                     continue
 
-                frame = cv2.flip(frame, 1)
+                # Phone frames: auto-correct orientation (iOS/Android differ).
+                # Local webcams: mirror for a natural "selfie" view.
+                if use_external:
+                    frame = self._orient(frame)
+                else:
+                    frame = cv2.flip(frame, 1)
                 h, w  = frame.shape[:2]
                 now   = time.perf_counter()
 
@@ -638,20 +717,23 @@ class DriverCameraSession:
                 confidence = int(vote_counts[top_state] / len(self._vote_buf) * 100)
 
                 with self._lock:
+                    # Cast every value to a native Python type — the detectors
+                    # return numpy bools/floats which FastAPI's JSON encoder
+                    # cannot serialize (raises ValueError on /driver/status).
                     self._status = {
-                        "state":          top_state,
-                        "alert_label":    top_state,
-                        "confidence":     confidence,
-                        "alert":          top_state != "focused",
-                        "face_detected":  face_found,
-                        "eyes_closed":    eyes_closed,
-                        "gaze":           gaze,
-                        "phone_detected": phone_near,
-                        "ear":            round(ear, 3),
-                        "perclos":        perclos,
-                        "perclos_drowsy": perclos_drowsy,
-                        "seatbelt_on":    seatbelt_on,
-                        "fps":            round(fps, 1),
+                        "state":          str(top_state),
+                        "alert_label":    str(top_state),
+                        "confidence":     int(confidence),
+                        "alert":          bool(top_state != "focused"),
+                        "face_detected":  bool(face_found),
+                        "eyes_closed":    bool(eyes_closed),
+                        "gaze":           str(gaze),
+                        "phone_detected": bool(phone_near),
+                        "ear":            float(round(ear, 3)),
+                        "perclos":        float(perclos),
+                        "perclos_drowsy": bool(perclos_drowsy),
+                        "seatbelt_on":    bool(seatbelt_on),
+                        "fps":            float(round(fps, 1)),
                         "bus_id":         self.bus_id,
                         "timestamp":      datetime.now().isoformat(),
                     }
@@ -710,7 +792,12 @@ class BusCameraSession:
     registered_at: str = field(default_factory=lambda: datetime.now().isoformat())
 
     def start(self):
-        if self.passenger_source == self.driver_source:
+        driver_external = self.driver_source == "ingest"
+
+        # Share one capture only when both cams read the SAME real device.
+        if (self.passenger_source is not None
+                and not driver_external
+                and self.passenger_source == self.driver_source):
             try:
                 self.shared_cam = SharedCamera(
                     self.passenger_source,
@@ -720,27 +807,70 @@ class BusCameraSession:
                 print(f"[BusCameraSession] {e}")
                 self.shared_cam = None
 
-        self.passenger_cam = PassengerCameraSession(
-            self.bus_id, self.passenger_source,
-            shared_cam=self.shared_cam, capacity=self.capacity,
-        )
-        self.passenger_cam.start()
+        # Passenger cam — skipped when passenger_source is None (e.g. a
+        # phone-only driver-monitor session).
+        if self.passenger_source is not None:
+            self.passenger_cam = PassengerCameraSession(
+                self.bus_id, self.passenger_source,
+                shared_cam=self.shared_cam, capacity=self.capacity,
+            )
+            self.passenger_cam.start()
+
         driver_note = ""
-        try:
+        if driver_external:
+            # Frames are pushed in via /ws/bus/{id}/driver/ingest.
             self.driver_cam = DriverCameraSession(
-                self.bus_id, self.driver_source,
-                shared_cam=self.shared_cam,
+                self.bus_id, "ingest", external=True,
             )
             self.driver_cam.start()
-        except Exception as e:
-            self.driver_cam = None
-            driver_note = f" [driver disabled: {e}]"
-            print(f"[BusCameraSession] Driver pipeline unavailable for "
-                  f"bus {self.bus_id}: {e}")
+        elif self.driver_source is not None:
+            try:
+                self.driver_cam = DriverCameraSession(
+                    self.bus_id, self.driver_source,
+                    shared_cam=self.shared_cam,
+                )
+                self.driver_cam.start()
+            except Exception as e:
+                self.driver_cam = None
+                driver_note = f" [driver disabled: {e}]"
+                print(f"[BusCameraSession] Driver pipeline unavailable for "
+                      f"bus {self.bus_id}: {e}")
+
         shared_note = " [shared camera]" if self.shared_cam else ""
         print(f"[BusCameraSession] Bus {self.bus_id} started "
               f"(passenger={self.passenger_source}, "
               f"driver={self.driver_source}){shared_note}{driver_note}")
+
+    def ensure_passenger(self, source, capacity: int = 50):
+        """Attach a passenger-counter cam (e.g. the laptop webcam) without
+        disturbing an already-running driver cam."""
+        if self.passenger_cam is not None or source is None:
+            return
+        self.passenger_source = source
+        self.capacity         = capacity
+        self.passenger_cam = PassengerCameraSession(
+            self.bus_id, source, capacity=capacity,
+        )
+        self.passenger_cam.start()
+        print(f"[BusCameraSession] Bus {self.bus_id} passenger cam started "
+              f"(source={source})")
+
+    def ensure_driver_ingest(self):
+        """Switch the driver cam to phone-ingest mode, keeping any passenger
+        cam running."""
+        if self.driver_cam is not None and getattr(self.driver_cam, "_external", False):
+            return  # already an ingest cam
+        if self.driver_cam is not None:
+            self.driver_cam.stop()
+        self.driver_source = "ingest"
+        self.driver_cam = DriverCameraSession(self.bus_id, "ingest", external=True)
+        self.driver_cam.start()
+        print(f"[BusCameraSession] Bus {self.bus_id} driver cam switched to phone ingest")
+
+    def stop_driver(self):
+        if self.driver_cam:
+            self.driver_cam.stop()
+            self.driver_cam = None
 
     def stop(self):
         if self.passenger_cam:
@@ -807,6 +937,13 @@ def register_bus(body: dict):
     capacity = int(body.get("capacity", 50) or 50)
 
     with _sessions_lock:
+        existing = _sessions.get(bus_id)
+        # A driver's phone may be actively streaming this bus via the ingest
+        # WebSocket. Admin selecting the bus must NOT tear that live feed down —
+        # instead just attach the passenger (laptop) cam alongside it.
+        if existing and existing.driver_cam and getattr(existing.driver_cam, "_external", False):
+            existing.ensure_passenger(p_src, capacity)
+            return {"ok": True, "bus_id": bus_id, "note": "passenger cam added to ingest session"}
         if bus_id in _sessions:
             _sessions[bus_id].stop()
         sess = BusCameraSession(bus_id=bus_id, passenger_source=p_src,
@@ -959,6 +1096,100 @@ async def ws_driver(websocket: WebSocket, bus_id: str):
         return jpeg
 
     await _stream(websocket, _get_frame)
+
+
+# ── Driver frame ingest (phone camera → AI pipeline) ──────────────────────────
+
+import base64 as _base64
+
+
+@app.websocket("/ws/bus/{bus_id}/driver/ingest")
+async def ws_driver_ingest(websocket: WebSocket, bus_id: str):
+    """
+    Receives live JPEG frames from the driver's phone and feeds them into the
+    driver-monitor AI pipeline. Each message is a JPEG, sent either as binary
+    bytes or as a (optionally data-URI prefixed) base64 string.
+
+    A driver-only ingest session is auto-created on first connect, so the phone
+    does not need to call /api/bus/register first. The annotated result is then
+    available to admin viewers at /ws/bus/{bus_id}/driver.
+    """
+    await websocket.accept()
+
+    with _sessions_lock:
+        sess = _sessions.get(bus_id)
+        if sess is None:
+            # No session yet — create a driver-only ingest session.
+            sess = BusCameraSession(bus_id=bus_id, passenger_source=None,
+                                    driver_source="ingest")
+            sess.start()
+            _sessions[bus_id] = sess
+        else:
+            # Session exists (e.g. admin already started a passenger cam) —
+            # switch its driver cam to phone ingest, keeping the passenger cam.
+            sess.ensure_driver_ingest()
+        # Open the laptop webcam as this bus's passenger counter so it shows up
+        # in admin alongside the phone driver feed.
+        if INGEST_PASSENGER_SOURCE is not None:
+            sess.ensure_passenger(INGEST_PASSENGER_SOURCE, 50)
+        driver_cam = sess.driver_cam
+
+    print(f"[Ingest][{bus_id}] phone camera connected "
+          f"(passenger_source={INGEST_PASSENGER_SOURCE})")
+    n_frames = 0
+    n_decoded = 0
+    try:
+        while True:
+            msg = await websocket.receive()
+            if msg.get("type") == "websocket.disconnect":
+                break
+
+            raw = msg.get("bytes")
+            if raw is None and msg.get("text") is not None:
+                txt = msg["text"]
+                if txt.startswith("data:"):
+                    txt = txt.split(",", 1)[-1]
+                try:
+                    raw = _base64.b64decode(txt)
+                except Exception:
+                    raw = None
+            if not raw:
+                continue
+            n_frames += 1
+
+            arr   = np.frombuffer(raw, np.uint8)
+            frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+            if frame is not None:
+                # Downscale large phone frames so the AI keeps up (less lag).
+                h0, w0 = frame.shape[:2]
+                m = max(h0, w0)
+                if m > INGEST_MAX_DIM:
+                    s = INGEST_MAX_DIM / m
+                    frame = cv2.resize(frame, (int(w0 * s), int(h0 * s)),
+                                       interpolation=cv2.INTER_AREA)
+                n_decoded += 1
+                driver_cam.submit_frame(frame)
+                # Periodic diagnostic so we can see frames are flowing + whether
+                # the AI is finding a face.
+                if n_decoded % 30 == 0:
+                    st = driver_cam.get_status()
+                    print(f"[Ingest][{bus_id}] {n_decoded} frames "
+                          f"({frame.shape[1]}x{frame.shape[0]}) · "
+                          f"face={st.get('face_detected')} state={st.get('state')} "
+                          f"seatbelt_on={st.get('seatbelt_on')}")
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        print(f"[Ingest][{bus_id}] error: {e}")
+    finally:
+        # End of trip / phone disconnected — tear the whole session down so the
+        # laptop webcam is released and admin shows the bus as offline.
+        with _sessions_lock:
+            s = _sessions.pop(bus_id, None)
+        if s:
+            s.stop()
+        print(f"[Ingest][{bus_id}] phone camera disconnected "
+              f"({n_decoded}/{n_frames} frames decoded)")
 
 
 # ── Legacy compat ─────────────────────────────────────────────────────────────

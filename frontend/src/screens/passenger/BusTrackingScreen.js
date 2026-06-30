@@ -35,7 +35,7 @@ import { COLORS, PURPLE } from "../../constants/colors";
 import GradientFill from "../../components/common/GradientFill";
 import FadeInView from "../../components/common/FadeInView";
 import PressableScale from "../../components/common/PressableScale";
-import apiClient from "../../api/apiClient";
+import apiClient, { getTaxiLocationApi } from "../../api/apiClient";
 
 const CAMERA_SERVER = "http://localhost:9000";
 const SEAT_POLL_MS = 5_000;
@@ -290,6 +290,18 @@ const BusTrackingScreen = ({ route, navigation }) => {
   const { tripId, busName = "Bus", booking } = route.params || {};
   const isTaxi = booking?.type === "taxi";
   const vehicleId = String(tripId ?? "");
+
+  // ── Taxi-specific data (from the reservation, NOT a bus trip) ──────────────
+  // For a taxi there is no bus route / live trip GPS, so the map and ETA are
+  // built from the reservation's own pickup / stops / destination coordinates.
+  const taxiPickup = isTaxi ? (booking?.bus?.pickup ?? null) : null;
+  const taxiDest   = isTaxi ? (booking?.bus?.dest ?? null) : null;
+  const taxiStops  = isTaxi && Array.isArray(booking?.bus?.stops) ? booking.bus.stops : [];
+  const taxiDistanceKm = isTaxi ? (booking?.bus?.distance_km ?? null) : null;
+  // Simple city-speed estimate (~30 km/h) when no live routing is available.
+  const taxiEtaMin = taxiDistanceKm != null
+    ? Math.max(1, Math.round((taxiDistanceKm / 30) * 60))
+    : null;
   const mapRef = useRef(null);
   const panelSlide   = useRef(new Animated.Value(0)).current;
   const topSlide     = useRef(new Animated.Value(0)).current;
@@ -330,10 +342,11 @@ const BusTrackingScreen = ({ route, navigation }) => {
     lastUpdated: wsLastUpdated,
   } = useGpsWebSocket(vehicleId, { latitude: 33.8938, longitude: 35.5018 });
 
-  const [busLocation, setBusLocation] = useState({
-    latitude: 33.8938,
-    longitude: 35.5018,
-  });
+  const [busLocation, setBusLocation] = useState(() =>
+    isTaxi && booking?.bus?.pickup
+      ? { latitude: booking.bus.pickup.latitude, longitude: booking.bus.pickup.longitude }
+      : { latitude: 33.8938, longitude: 35.5018 }
+  );
   const [isLive, setIsLive] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [etaData, setEtaData] = useState(null);
@@ -438,9 +451,18 @@ const BusTrackingScreen = ({ route, navigation }) => {
 
   // ── Derived stop list (real or empty) ────────────────────────────────────
   const stopsList = useMemo(() => {
+    if (isTaxi) {
+      // The taxi's own intermediate stops + destination — the actual route the
+      // passenger booked (not a bus route).
+      const list = taxiStops
+        .filter((s) => s?.latitude != null && s?.longitude != null)
+        .map((s, i) => ({ latitude: s.latitude, longitude: s.longitude, stop_name: s.address || `Stop ${i + 1}` }));
+      if (taxiDest) list.push({ latitude: taxiDest.latitude, longitude: taxiDest.longitude, stop_name: "Destination" });
+      return list;
+    }
     if (etaData?.stops?.length > 0) return etaData.stops;
     return EMPTY_STOPS;
-  }, [etaData]);
+  }, [isTaxi, etaData, taxiStops, taxiDest]);
 
   // Pick the first stop with a meaningful ETA (> 1 min ahead).
   // When the bus is at the first stop (eta_min ≈ 0 → "Arriving"), skip to the
@@ -450,7 +472,11 @@ const BusTrackingScreen = ({ route, navigation }) => {
     stopsList[0] ??
     null;
 
-  const etaDisplay = nextStop
+  const etaDisplay = isTaxi
+    ? (taxiEtaMin != null
+        ? (taxiEtaMin < 60 ? `${taxiEtaMin} min` : `${Math.floor(taxiEtaMin / 60)}h ${taxiEtaMin % 60}m`)
+        : "— min")
+    : nextStop
     ? nextStop.eta_min < 1
       ? "Arriving"
       : nextStop.eta_min < 60
@@ -473,6 +499,7 @@ const BusTrackingScreen = ({ route, navigation }) => {
 
   // ── Approaching alert logic ────────────────────────────────────────────────
   useEffect(() => {
+    if (isTaxi) return;   // no live taxi tracking → no proximity alerts
     if (alertSent.current || !nextStop) return;
     const stopsAway = stopsList.length;
     const shouldAlert = nextStop.eta_min <= 5 || stopsAway <= 2;
@@ -513,6 +540,9 @@ const BusTrackingScreen = ({ route, navigation }) => {
   }, [vehicleId]);
 
   const fetchEta = useCallback(async () => {
+    // Taxis are not bus trips — never query the bus ETA endpoint with the
+    // reservation id (that returned an unrelated trip's stops/ETA).
+    if (isTaxi) return;
     if (!tripId) {
       console.log('[ETA] no tripId — skipping');
       return;
@@ -532,8 +562,33 @@ const BusTrackingScreen = ({ route, navigation }) => {
     }
   }, [tripId]);
 
+  // ── Taxi: poll the assigned driver's live GPS (reservation id == tripId) ────
+  useEffect(() => {
+    if (!isTaxi || !tripId) return;
+    let alive = true;
+    const poll = async () => {
+      try {
+        const d = await getTaxiLocationApi(tripId);
+        if (!alive) return;
+        if (d?.latitude != null && d?.longitude != null) {
+          setBusLocation({ latitude: d.latitude, longitude: d.longitude });
+          setIsLive(!!d.live);
+          if (d.updated_at) setLastUpdated(d.updated_at);
+          mapRef.current?.animateToRegion(
+            { latitude: d.latitude, longitude: d.longitude, latitudeDelta: 0.02, longitudeDelta: 0.02 },
+            600
+          );
+        }
+      } catch { /* driver not streaming yet */ }
+    };
+    poll();
+    const id = setInterval(poll, 4000);
+    return () => { alive = false; clearInterval(id); };
+  }, [isTaxi, tripId]);
+
   // Sync WebSocket / polling location into component state and map
   useEffect(() => {
+    if (isTaxi) return;                 // taxis have no live trip GPS
     if (wsLocation?.latitude == null) return;
     setBusLocation({
       latitude: wsLocation.latitude,
@@ -596,6 +651,20 @@ const BusTrackingScreen = ({ route, navigation }) => {
     );
   };
 
+  // For a taxi, frame the whole pickup → stops → destination route once ready.
+  const handleMapReady = () => {
+    if (!isTaxi || !mapRef.current) return;
+    const pts = [busLocation, ...stopsList]
+      .map((p) => ({ latitude: p.latitude, longitude: p.longitude }))
+      .filter((p) => p.latitude != null && p.longitude != null);
+    if (pts.length >= 2) {
+      mapRef.current.fitToCoordinates(pts, {
+        edgePadding: { top: 90, right: 60, bottom: 340, left: 60 },
+        animated: false,
+      });
+    }
+  };
+
   const panelTranslate = panelSlide.interpolate({
     inputRange: [0, 1],
     outputRange: [300, 0],
@@ -619,6 +688,7 @@ const BusTrackingScreen = ({ route, navigation }) => {
         ref={mapRef}
         style={StyleSheet.absoluteFillObject}
         provider={PROVIDER_GOOGLE}
+        onMapReady={handleMapReady}
         initialRegion={{
           ...busLocation,
           latitudeDelta: 0.05,

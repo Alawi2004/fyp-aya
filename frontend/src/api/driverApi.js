@@ -1,11 +1,18 @@
 import apiClient from './apiClient';
 export const getDriverTripsApi = () => apiClient.get('/driver/trips');
+export const getAvailableTripsApi = () => apiClient.get('/driver/trips/available');
+export const acceptTripApi = (id) => apiClient.put(`/driver/trips/${id}/accept`);
 export const startTripApi = (id) => apiClient.put(`/driver/trips/${id}/start`);
 export const completeTripApi = (id) => apiClient.put(`/driver/trips/${id}/complete`);
 export const cancelTripApi  = (id) => apiClient.put(`/driver/trips/${id}/cancel`);
 export const getPassengerListApi = (tripId) => apiClient.get(`/driver/trips/${tripId}/passengers`);
 export const getEarningsApi = () => apiClient.get('/driver/earnings');
 export const getDriverVehicleApi = () => apiClient.get('/driver/vehicle');
+
+// Taxi reservations assigned to this driver + claimable requests
+export const getDriverTaxiReservationsApi   = ()           => apiClient.get('/taxi-reservations/driver');
+export const updateTaxiReservationStatusApi = (id, status) => apiClient.put(`/taxi-reservations/${id}/status`, { status });
+export const updateTaxiLocationApi          = (id, coords) => apiClient.put(`/taxi-reservations/${id}/location`, coords);
 export const scheduleServiceApi = (data) => apiClient.post('/driver/service-request', data);
 export const reportIssueApi = (data) => apiClient.post('/driver/issues', data);
 export const sendEmergencyApi = (data) => apiClient.post('/driver/emergency', data);

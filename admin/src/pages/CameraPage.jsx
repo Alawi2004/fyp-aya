@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, useCallback } from 'react';
 import { useWebSocketCamera } from '../hooks/useWebSocketCamera';
 import { useCounterData }     from '../hooks/useCounterData';
+import { useDriverStatus }    from '../hooks/useDriverStatus';
 import { CAMERA_REST_URL }    from '../config/camera';
 import { getVehicles }        from '../api/endpoints';
 
@@ -176,6 +177,139 @@ function PassengerCameraPanel({ busId, counter }) {
               <div style={{ fontSize: 24, fontWeight: 900, color, marginTop: 2, lineHeight: 1 }}>{value}</div>
             </div>
           ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Driver AI monitor panel ─────────────────────────────────────────────────
+
+const DRIVER_STATE = {
+  focused:        { label: 'Focused',      color: '#166534', bg: '#dcfce7', border: '#86efac' },
+  drowsy:         { label: 'Drowsiness',   color: '#991b1b', bg: '#fee2e2', border: '#fca5a5' },
+  phone_detected: { label: 'Phone Use',    color: '#991b1b', bg: '#fee2e2', border: '#fca5a5' },
+  distracted:     { label: 'Distracted',   color: '#92400e', bg: '#fffbeb', border: '#fde68a' },
+  seatbelt_off:   { label: 'Seatbelt Off', color: '#92400e', bg: '#fffbeb', border: '#fde68a' },
+  no_face:        { label: 'No Face',      color: '#6b7280', bg: '#f3f4f6', border: '#d1d5db' },
+  unknown:        { label: 'Waiting…',     color: '#6b7280', bg: '#f3f4f6', border: '#d1d5db' },
+};
+
+function DriverMonitorPanel({ busId }) {
+  const { frameUrl, connected } = useWebSocketCamera(busId, 'driver');
+  const { status, alerts, online } = useDriverStatus(busId, 1500);
+  const [collapsed, setCollapsed] = useState(false);
+  const [maximized, setMaximized] = useState(false);
+  const isLive = connected && !!frameUrl;
+
+  const state = DRIVER_STATE[status.state] || DRIVER_STATE.unknown;
+  const badge = isLive
+    ? { text: '● LIVE',       bg: '#dcfce7', color: '#166534', border: '#86efac' }
+    : online
+    ? { text: '◉ NO VIDEO',   bg: '#dbeafe', color: '#4C1D95', border: '#C4B5FD' }
+    : { text: '○ NO DRIVER',  bg: '#f3f4f6', color: '#6b7280', border: '#d1d5db' };
+
+  const Feed = () => isLive ? (
+    <>
+      <img src={frameUrl} alt="driver cam"
+        style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', backgroundColor: '#0a0f14' }} />
+      <div style={{ position: 'absolute', top: 8, left: 8, backgroundColor: 'rgba(0,0,0,.70)',
+                    padding: '3px 9px', borderRadius: 6, fontSize: 11, fontWeight: 700, color: '#e2e8f0' }}>
+        {busId} · DRIVER AI MONITOR
+      </div>
+      <div style={{ position: 'absolute', top: 8, right: 8, padding: '3px 10px', borderRadius: 6,
+                    fontSize: 11, fontWeight: 800, backgroundColor: state.bg, color: state.color,
+                    border: `1px solid ${state.border}` }}>
+        {state.label}{status.confidence ? ` ${status.confidence}%` : ''}
+      </div>
+    </>
+  ) : (
+    <CameraOffline label={online ? 'Connecting to driver video…' : 'Driver Has Not Started a Trip'} />
+  );
+
+  return (
+    <>
+      {maximized && (
+        <CamMaxOverlay title={`Driver AI Monitor — ${busId}`}
+          onClose={() => setMaximized(false)}
+          onMinimize={() => { setMaximized(false); setCollapsed(true); }}>
+          <Feed />
+        </CamMaxOverlay>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontWeight: 700, fontSize: 13, color: '#374151' }}>
+            Driver AI Monitor — {busId}
+          </span>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span style={{ fontSize: 9, color: '#6b7280' }}>DROWSINESS · PHONE · DISTRACTION</span>
+            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6,
+                           backgroundColor: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}>
+              {badge.text}
+            </span>
+            <CamIconBtn onClick={() => setCollapsed(c => !c)} title={collapsed ? 'Expand' : 'Collapse'}>
+              {collapsed ? '▲' : '▼'}
+            </CamIconBtn>
+            <CamIconBtn onClick={() => setMaximized(true)} title="Maximize">⛶</CamIconBtn>
+          </div>
+        </div>
+
+        {!collapsed && (
+          <div style={{ position: 'relative', aspectRatio: '16/9', borderRadius: 10, overflow: 'hidden',
+                        border: `2px solid ${isLive ? (status.alert ? '#dc2626' : '#059669') : '#1e293b'}`,
+                        boxShadow: isLive && status.alert ? '0 0 18px #dc262644' : 'none', backgroundColor: '#0a0f14' }}>
+            <Feed />
+          </div>
+        )}
+
+        {/* Live detector chips */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+          {[
+            { label: 'Face',     value: status.face_detected ? 'Detected' : 'None',  ok: status.face_detected },
+            { label: 'Eyes',     value: status.eyes_closed ? 'Closed' : 'Open',      ok: !status.eyes_closed },
+            { label: 'Phone',    value: status.phone_detected ? 'In Use' : 'Clear',  ok: !status.phone_detected },
+            { label: 'Seatbelt', value: status.seatbelt_on ? 'On' : 'Off',           ok: status.seatbelt_on },
+          ].map(({ label, value, ok }) => (
+            <div key={label} style={{ padding: '7px 6px', borderRadius: 8, textAlign: 'center',
+                                      backgroundColor: ok ? '#f0fdf4' : '#fef2f2',
+                                      border: `1px solid ${ok ? '#86efac' : '#fca5a5'}` }}>
+              <div style={{ fontSize: 9, color: '#6b7280', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.4px' }}>
+                {label}
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: ok ? '#059669' : '#dc2626', marginTop: 2 }}>
+                {value}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* AI alert history */}
+        <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
+          <div style={{ padding: '7px 12px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb',
+                        fontSize: 11, fontWeight: 800, color: '#374151', textTransform: 'uppercase', letterSpacing: '.4px' }}>
+            AI Alerts {alerts.length > 0 ? `(${alerts.length})` : ''}
+          </div>
+          {alerts.length === 0 ? (
+            <div style={{ padding: 10, textAlign: 'center', color: '#9ca3af', fontSize: 12 }}>
+              No alerts — driver behaviour normal
+            </div>
+          ) : (
+            <div style={{ maxHeight: 160, overflowY: 'auto' }}>
+              {alerts.slice(0, 30).map((a, i) => {
+                const meta = DRIVER_STATE[a.type] || DRIVER_STATE.unknown;
+                return (
+                  <div key={i} style={{ padding: '7px 12px', display: 'flex', justifyContent: 'space-between',
+                                        alignItems: 'center', borderBottom: '1px solid #f3f4f6', fontSize: 12 }}>
+                    <span style={{ fontWeight: 700, color: meta.color }}>⚠ {meta.label}</span>
+                    <span style={{ color: '#9ca3af', fontSize: 11 }}>
+                      {a.timestamp ? new Date(a.timestamp).toLocaleTimeString() : ''}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </>
@@ -370,7 +504,7 @@ export default function CameraPage() {
                         backgroundColor: camServerOnline ? '#f0fdf4' : '#f9fafb',
                         color: camServerOnline ? '#166534' : '#6b7280',
                         border: `1px solid ${camServerOnline ? '#86efac' : '#d1d5db'}` }}>
-            {camServerOnline ? '● Camera Server Online' : '○ Demo Mode'}
+            {camServerOnline ? '● Camera Server Online' : '○ Camera Server Offline'}
           </div>
           {selectedBusId && (
             <button onClick={handleReset} style={{
@@ -422,10 +556,16 @@ export default function CameraPage() {
             </div>
           ) : (
             <>
-              {/* Camera feed */}
-              <div style={{ backgroundColor: '#fff', borderRadius: 12, padding: 14,
-                            border: '1px solid #e5e7eb' }}>
-                <PassengerCameraPanel busId={selectedBusId} counter={counter} />
+              {/* Camera feeds — passenger counter + driver AI monitor */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <div style={{ backgroundColor: '#fff', borderRadius: 12, padding: 14,
+                              border: '1px solid #e5e7eb' }}>
+                  <PassengerCameraPanel busId={selectedBusId} counter={counter} />
+                </div>
+                <div style={{ backgroundColor: '#fff', borderRadius: 12, padding: 14,
+                              border: '1px solid #e5e7eb' }}>
+                  <DriverMonitorPanel busId={selectedBusId} />
+                </div>
               </div>
 
               {/* Status bar */}
@@ -439,7 +579,7 @@ export default function CameraPage() {
                   { label: 'Total Entered',value: counter.entered },
                   { label: 'Total Exited', value: counter.exited },
                   { label: 'Active Buses', value: buses.filter(b => b.active).length },
-                  { label: 'Data Source',  value: camServerOnline ? 'Camera Server' : 'Demo', color: camServerOnline ? '#059669' : '#6b7280' },
+                  { label: 'Data Source',  value: camServerOnline ? 'Camera Server' : 'Offline', color: camServerOnline ? '#059669' : '#6b7280' },
                 ].map(({ label, value, color }) => (
                   <div key={label}>
                     <div style={{ fontSize: 9, color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.5px' }}>{label}</div>

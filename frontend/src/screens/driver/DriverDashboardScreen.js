@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { COLORS, PURPLE } from '../../constants/colors';
-import { getDriverTripsApi, startTripApi, completeTripApi, cancelTripApi } from '../../api/driverApi';
+import { getDriverTripsApi, startTripApi, completeTripApi, cancelTripApi, getAvailableTripsApi, acceptTripApi } from '../../api/driverApi';
 
 const TRIP_STATUS = [
   { key: 'idle',       label: 'Not Started', icon: 'ellipse-outline',    color: COLORS.textMuted   },
@@ -62,7 +62,7 @@ const isDoneStatus      = (s) => ['completed', 'cancelled', 'closed'].includes(s
 // anything else (confirmed, boarded, upcoming, pending, scheduled) → can be started
 
 // ── Trip Detail Modal ────────────────────────────────────────────────────────
-const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd, onOpenMap, onCancel, onManifest, fmtMoney }) => {
+const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd, onOpenMap, onOpenCamera, onCancel, onManifest, fmtMoney }) => {
   // Hooks must come before any early return
   const sheetY    = useRef(new Animated.Value(600)).current;
   const dragBase  = useRef(0);
@@ -215,6 +215,17 @@ const TripDetailModal = ({ trip, actionLoading, insets, onClose, onStart, onEnd,
                   Trip {trip.status}. No further actions available.
                 </Text>
               </View>
+            )}
+
+            {active && !done && (
+              <TouchableOpacity
+                style={modalStyles.cameraBtn}
+                onPress={() => onOpenCamera(trip)}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="videocam" size={18} color={COLORS.white} />
+                <Text style={modalStyles.cameraBtnText}>Open Safety Camera</Text>
+              </TouchableOpacity>
             )}
 
             {active && !done && (
@@ -382,6 +393,14 @@ const modalStyles = StyleSheet.create({
     marginTop: 10, backgroundColor: PURPLE.light,
   },
   manifestBtnText: { fontSize: 14, fontWeight: '700', color: PURPLE.primary },
+
+  cameraBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: PURPLE.primary, borderRadius: 14, paddingVertical: 15, marginBottom: 10,
+    shadowColor: PURPLE.primary, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
+  },
+  cameraBtnText: { fontSize: 15, fontWeight: '800', color: COLORS.white },
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -396,6 +415,7 @@ const DriverDashboardScreen = ({ navigation }) => {
   const timerRef   = useRef(null);
   const [tripStatus, setTripStatus] = useState('active');
   const [trips,         setTrips]         = useState([]);
+  const [available,     setAvailable]     = useState([]);
   const [loading,       setLoading]       = useState(true);
   const [refreshing,    setRefreshing]    = useState(false);
   const [actionLoading, setActionLoading] = useState(null);
@@ -404,16 +424,43 @@ const DriverDashboardScreen = ({ navigation }) => {
   const loadTrips = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const res  = await getDriverTripsApi();
-      const data = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.trips) ? res.data.trips : []);
+      const [res, availRes] = await Promise.all([
+        getDriverTripsApi(),
+        getAvailableTripsApi().catch(() => ({ data: [] })),
+      ]);
+      const data  = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.trips) ? res.data.trips : []);
+      const avail = Array.isArray(availRes.data) ? availRes.data : [];
       setTrips(data.map(normaliseTrip));
+      setAvailable(avail.map(normaliseTrip));
     } catch {
       setTrips([]);
+      setAvailable([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
+
+  const handleAcceptTrip = (trip) => {
+    Alert.alert('Accept Trip', `Accept ${trip.routeName}? This trip will be assigned to you.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Accept', onPress: async () => {
+          setActionLoading(trip.trip_id);
+          try {
+            await acceptTripApi(trip.trip_id);
+            loadTrips(true);
+          } catch (err) {
+            // 409 = someone else grabbed it first
+            Alert.alert('Trip Unavailable', err?.response?.data?.error || 'Could not accept this trip.');
+            loadTrips(true);
+          } finally {
+            setActionLoading(null);
+          }
+        },
+      },
+    ]);
+  };
 
   const handleStartTrip = (trip) => {
     Alert.alert('Start Trip', `Start ${trip.routeName}?`, [
@@ -425,6 +472,12 @@ const DriverDashboardScreen = ({ navigation }) => {
             await startTripApi(trip.trip_id);
             setSelectedTrip(null);
             loadTrips(true);
+            // Open the in-cab safety camera and start streaming to the control center
+            navigation.navigate('DriverCamera', {
+              tripId:    trip.trip_id,
+              busId:     trip.busNumber,
+              routeName: trip.routeName,
+            });
           } catch (err) {
             Alert.alert('Error', err?.response?.data?.error || 'Could not start trip.');
           } finally {
@@ -622,8 +675,8 @@ const DriverDashboardScreen = ({ navigation }) => {
           <View style={styles.actionsRow}>
             {[
               { icon: 'navigate',      label: t('Navigate'),   color: PURPLE.primary,    bg: PURPLE.light,   onPress: () => navigation.navigate('TripChecklist')   },
-              { icon: 'qr-code',       label: t('Scan QR'),    color: COLORS.secondary,  bg: COLORS.secondaryLight, onPress: () => navigation.navigate('PassengerVerify', { tripId: activeTrip?.trip_id ?? null })  },
-              { icon: 'calendar',      label: t('Schedule'),   color: PURPLE.primary,    bg: PURPLE.light,   onPress: () => navigation.navigate('WeeklySchedule')   },
+              { icon: 'car',           label: t('Taxi'),       color: COLORS.secondary,  bg: COLORS.secondaryLight, onPress: () => navigation.navigate('TaxiRequests')     },
+              { icon: 'qr-code',       label: t('Scan QR'),    color: PURPLE.primary,    bg: PURPLE.light,   onPress: () => navigation.navigate('PassengerVerify', { tripId: activeTrip?.trip_id ?? null })  },
               { icon: 'warning',       label: t('Emergency'),  color: COLORS.danger,     bg: COLORS.dangerLight,    onPress: () => navigation.navigate('Emergency')        },
             ].map(a => (
               <TouchableOpacity key={a.label} style={styles.actionBtn} activeOpacity={0.8} onPress={a.onPress}>
@@ -659,6 +712,51 @@ const DriverDashboardScreen = ({ navigation }) => {
                 <Text style={styles.bannerBtnText} numberOfLines={1}>{t('Open Map')}</Text>
               </View>
             </TouchableOpacity>
+          )}
+
+          {/* ─── Available Trips (unassigned — first to accept wins) ─── */}
+          {available.length > 0 && (
+            <View style={{ marginBottom: 8 }}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>{t('Available Trips')}</Text>
+                <View style={styles.availCountPill}>
+                  <Text style={styles.availCountText}>{available.length}</Text>
+                </View>
+              </View>
+              {available.map(trip => (
+                <View key={`avail-${trip._id}`} style={styles.availCard}>
+                  <View style={styles.tripCardHeader}>
+                    <View style={[styles.tripIconWrap, { backgroundColor: COLORS.secondaryLight }]}>
+                      <Ionicons name="flash" size={18} color={COLORS.secondary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.tripRouteName}>{trip.routeName}</Text>
+                      <Text style={styles.tripBusNum}>{trip.origin} → {trip.destination}</Text>
+                    </View>
+                    <View style={styles.availBadge}>
+                      <Text style={styles.availBadgeText}>{t('Open')}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.availFooter}>
+                    <View style={styles.availMeta}>
+                      <Ionicons name="time-outline" size={13} color={COLORS.textMuted} />
+                      <Text style={styles.availMetaText}>{trip.departureTime}</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.acceptBtn, actionLoading === trip.trip_id && { opacity: 0.6 }]}
+                      onPress={() => handleAcceptTrip(trip)}
+                      disabled={actionLoading === trip.trip_id}
+                      activeOpacity={0.85}
+                    >
+                      {actionLoading === trip.trip_id
+                        ? <ActivityIndicator size="small" color={COLORS.white} />
+                        : <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />}
+                      <Text style={styles.acceptBtnText}>{t('Accept Trip')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
           )}
 
           {/* ─── Today's Schedule ─── */}
@@ -757,6 +855,14 @@ const DriverDashboardScreen = ({ navigation }) => {
         onStart={handleStartTrip}
         onEnd={handleEndTrip}
         onCancel={handleCancelTrip}
+        onOpenCamera={(trip) => {
+          setSelectedTrip(null);
+          navigation.navigate('DriverCamera', {
+            tripId:    trip.trip_id,
+            busId:     trip.busNumber,
+            routeName: trip.routeName,
+          });
+        }}
         onManifest={(trip) => {
           setSelectedTrip(null);
           navigation.navigate('PassengerList', { tripId: trip._id, routeName: trip.routeName });
@@ -890,6 +996,35 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   sectionTitle: { fontSize: 15, fontWeight: '800', color: COLORS.textPrimary, letterSpacing: -0.2 },
   sectionLink: { fontSize: 12, fontWeight: '700', color: PURPLE.primary },
+
+  /* Available (unassigned) trips */
+  availCountPill: {
+    backgroundColor: COLORS.secondary, borderRadius: 999,
+    paddingHorizontal: 9, paddingVertical: 2, minWidth: 22, alignItems: 'center',
+  },
+  availCountText: { fontSize: 12, fontWeight: '800', color: COLORS.white },
+  availCard: {
+    backgroundColor: COLORS.white, borderRadius: 16, padding: 14, marginBottom: 10,
+    borderWidth: 1.5, borderColor: COLORS.secondary,
+    shadowColor: COLORS.secondary, shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12, shadowRadius: 8, elevation: 2,
+  },
+  availBadge: {
+    backgroundColor: COLORS.secondaryLight, borderRadius: 999,
+    paddingHorizontal: 10, paddingVertical: 4,
+  },
+  availBadgeText: { fontSize: 10, fontWeight: '800', color: COLORS.secondary, textTransform: 'uppercase' },
+  availFooter: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border,
+  },
+  availMeta: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  availMetaText: { fontSize: 12, color: COLORS.textSecondary, fontWeight: '600' },
+  acceptBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+    backgroundColor: COLORS.secondary, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 18,
+  },
+  acceptBtnText: { fontSize: 14, fontWeight: '800', color: COLORS.white },
 
   /* Trip card */
   tripCard: {

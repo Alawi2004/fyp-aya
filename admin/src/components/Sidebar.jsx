@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   LayoutDashboard, MapPin, Camera, Users, UserCheck, UserRound,
   Bus, GitBranch, CalendarDays, BarChart3,
-  Ticket, Bell, Star, ChevronRight, Wallet, BadgeCheck, MessageSquareWarning, ScrollText, Settings, ClipboardList, Radio,
+  Ticket, Bell, Star, ChevronRight, Wallet, BadgeCheck, MessageSquareWarning, ScrollText, Settings, ClipboardList, Radio, Car,
 } from "lucide-react";
 
 const NAV = [
@@ -17,6 +17,7 @@ const NAV = [
   { id: "staff",         label: "Staff Accounts",    icon: BadgeCheck,      badge: null },
   { section: "Fleet" },
   { id: "vehicles",      label: "Vehicles",          icon: Bus,             badge: null },
+  { id: "taxi",          label: "Taxi Reservations", icon: Car,             badge: null },
   { id: "routes",        label: "Routes & Stops",    icon: GitBranch,       badge: null },
   { id: "trips",         label: "Trips",             icon: CalendarDays,    badge: null },
   { id: "geofence",      label: "Geofence Zones",    icon: Radio,           badge: null },

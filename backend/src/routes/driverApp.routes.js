@@ -1,6 +1,8 @@
 import express from "express";
 import {
   getDriverTrips,
+  getAvailableTrips,
+  acceptTrip,
   startTrip,
   completeTrip,
   cancelTrip,
@@ -42,6 +44,10 @@ router.use(requireRole("driver"));
  *         description: List of assigned trips
  */
 router.get("/trips", getDriverTrips);
+
+// Unassigned trips any driver can claim (first-come-first-served)
+router.get("/trips/available", getAvailableTrips);
+router.put("/trips/:id/accept", acceptTrip);
 
 /**
  * @swagger

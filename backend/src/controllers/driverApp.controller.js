@@ -77,14 +77,71 @@ export const getDriverTrips = async (req, res) => {
                (SELECT COUNT(*) FROM tickets tk
                   WHERE tk.trip_id = t.trip_id AND tk.status <> 'cancelled') AS passengers
         FROM trips t
-        JOIN routes r ON t.route_id = r.route_id
-        JOIN vehicles v ON t.vehicle_id = v.vehicle_id
+        LEFT JOIN routes r   ON t.route_id   = r.route_id
+        LEFT JOIN vehicles v ON t.vehicle_id = v.vehicle_id
         WHERE t.driver_id = @id
         ORDER BY t.start_time DESC
       `);
     res.json(result.recordset);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch driver trips" });
+  }
+};
+
+// GET /api/driver/trips/available — unassigned trips any driver can accept
+export const getAvailableTrips = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT t.*, r.route_name, r.start_location, r.end_location,
+             v.model AS vehicle_model, v.plate_number, v.capacity AS totalSeats,
+             (SELECT ISNULL(SUM(tk.amount), 0) FROM tickets tk
+                WHERE tk.trip_id = t.trip_id AND tk.status <> 'cancelled') AS earnings,
+             (SELECT COUNT(*) FROM tickets tk
+                WHERE tk.trip_id = t.trip_id AND tk.status <> 'cancelled') AS passengers
+      FROM trips t
+      LEFT JOIN routes r   ON t.route_id   = r.route_id
+      LEFT JOIN vehicles v ON t.vehicle_id = v.vehicle_id
+      WHERE t.driver_id IS NULL
+        AND ISNULL(t.status, '') NOT IN ('completed', 'cancelled')
+      ORDER BY t.start_time ASC
+    `);
+    res.json(result.recordset);
+  } catch (err) {
+    console.error("[getAvailableTrips]", err);
+    res.status(500).json({ error: "Failed to fetch available trips" });
+  }
+};
+
+// PUT /api/driver/trips/:id/accept — first driver to accept claims the trip.
+// The atomic UPDATE (driver_id IS NULL guard) guarantees only one winner.
+export const acceptTrip = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const driverId = await resolveDriverId(pool, req.user);
+    if (!driverId) return res.status(403).json({ error: "Not a driver account" });
+
+    const tripId = Number(req.params.id);
+    if (!tripId) return res.status(400).json({ error: "Invalid trip id" });
+
+    const result = await pool.request()
+      .input("id",  sql.Int, tripId)
+      .input("did", sql.Int, driverId)
+      .query(`
+        UPDATE trips
+        SET driver_id = @did
+        WHERE trip_id = @id
+          AND driver_id IS NULL
+          AND ISNULL(status, '') NOT IN ('completed', 'cancelled')
+      `);
+
+    if (result.rowsAffected[0] === 0) {
+      return res.status(409).json({ error: "This trip has already been taken or is no longer available." });
+    }
+    res.json({ ok: true, trip_id: tripId });
+  } catch (err) {
+    console.error("[acceptTrip]", err);
+    res.status(500).json({ error: "Failed to accept trip" });
   }
 };
 
