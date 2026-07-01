@@ -43,6 +43,10 @@ const ETA_POLL_MS = 15_000;
 
 const EMPTY_STOPS = [];
 
+// Camera-only framing for the brief window before we know the trip's real
+// position — never used to place the bus marker itself.
+const DEFAULT_REGION = { latitude: 33.8938, longitude: 35.5018 };
+
 const TAXI_AMBER = "#D97706";
 
 const TRAFFIC_COLOR = {
@@ -335,17 +339,19 @@ const BusTrackingScreen = ({ route, navigation }) => {
     })
   ).current;
 
-  // WebSocket GPS stream (with HTTP polling fallback built in)
+  // WebSocket GPS stream (with HTTP polling fallback built in) — no fake
+  // default location; until a real fix arrives we fall back to the trip's
+  // actual starting point via etaData.current_position below.
   const {
     location: wsLocation,
     isLive: wsIsLive,
     lastUpdated: wsLastUpdated,
-  } = useGpsWebSocket(vehicleId, { latitude: 33.8938, longitude: 35.5018 });
+  } = useGpsWebSocket(vehicleId);
 
   const [busLocation, setBusLocation] = useState(() =>
     isTaxi && booking?.bus?.pickup
       ? { latitude: booking.bus.pickup.latitude, longitude: booking.bus.pickup.longitude }
-      : { latitude: 33.8938, longitude: 35.5018 }
+      : null
   );
   const [isLive, setIsLive] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -607,6 +613,20 @@ const BusTrackingScreen = ({ route, navigation }) => {
     );
   }, [wsLocation, wsIsLive, wsLastUpdated]);
 
+  // No live GPS yet — fall back to the trip's real current position (latest
+  // GPS log or, if the trip hasn't started, the route's actual first stop).
+  // This replaces showing a meaningless hardcoded coordinate.
+  useEffect(() => {
+    if (isLive || !etaData?.current_position) return;
+    const { latitude, longitude } = etaData.current_position;
+    if (latitude == null || longitude == null) return;
+    setBusLocation({ latitude, longitude });
+    mapRef.current?.animateToRegion(
+      { latitude, longitude, latitudeDelta: 0.03, longitudeDelta: 0.03 },
+      600
+    );
+  }, [etaData, isLive]);
+
   useEffect(() => {
     // Request notification permission
     requestNotifPermission().then((granted) => {
@@ -645,6 +665,7 @@ const BusTrackingScreen = ({ route, navigation }) => {
   }, [tripId, fetchEta, fetchSeatInfo, topSlide, panelSlide]);
 
   const centerOnBus = () => {
+    if (!busLocation) return;
     mapRef.current?.animateToRegion(
       { ...busLocation, latitudeDelta: 0.02, longitudeDelta: 0.02 },
       800
@@ -655,8 +676,8 @@ const BusTrackingScreen = ({ route, navigation }) => {
   const handleMapReady = () => {
     if (!isTaxi || !mapRef.current) return;
     const pts = [busLocation, ...stopsList]
-      .map((p) => ({ latitude: p.latitude, longitude: p.longitude }))
-      .filter((p) => p.latitude != null && p.longitude != null);
+      .filter((p) => p && p.latitude != null && p.longitude != null)
+      .map((p) => ({ latitude: p.latitude, longitude: p.longitude }));
     if (pts.length >= 2) {
       mapRef.current.fitToCoordinates(pts, {
         edgePadding: { top: 90, right: 60, bottom: 340, left: 60 },
@@ -690,29 +711,31 @@ const BusTrackingScreen = ({ route, navigation }) => {
         provider={PROVIDER_GOOGLE}
         onMapReady={handleMapReady}
         initialRegion={{
-          ...busLocation,
+          ...(busLocation || DEFAULT_REGION),
           latitudeDelta: 0.05,
           longitudeDelta: 0.05,
         }}
       >
-        <Marker
-          coordinate={busLocation}
-          title={busName}
-          anchor={{ x: 0.5, y: 0.5 }}
-        >
-          <View style={styles.busMarkerWrap}>
-            <MarkerPulse
-              color={isTaxi ? "rgba(217,119,6,0.45)" : "rgba(139,92,246,0.45)"}
-            />
-            <View style={[styles.busMarker, isTaxi && styles.taxiMarker]}>
-              <Ionicons
-                name={isTaxi ? "car-sport" : "bus"}
-                size={18}
-                color={COLORS.white}
+        {busLocation && (
+          <Marker
+            coordinate={busLocation}
+            title={busName}
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <View style={styles.busMarkerWrap}>
+              <MarkerPulse
+                color={isTaxi ? "rgba(217,119,6,0.45)" : "rgba(139,92,246,0.45)"}
               />
+              <View style={[styles.busMarker, isTaxi && styles.taxiMarker]}>
+                <Ionicons
+                  name={isTaxi ? "car-sport" : "bus"}
+                  size={18}
+                  color={COLORS.white}
+                />
+              </View>
             </View>
-          </View>
-        </Marker>
+          </Marker>
+        )}
         {stopsList.map((stop, i) =>
           stop.latitude && stop.longitude ? (
             <Marker

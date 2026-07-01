@@ -13,6 +13,7 @@ export const getTripById           = (id)       => apiClient.get(`/trips/${id}`)
 export const createTrip            = (data)     => apiClient.post('/trips', data);
 export const updateTripStatus      = (id, status) => apiClient.put(`/trips/${id}/status`, { status });
 export const updateTrip            = (id, data)   => apiClient.put(`/trips/${id}`, data);
+export const deleteTrip            = (id)       => apiClient.delete(`/trips/${id}`);
 export const getTripsByVehicleType = (type)     => apiClient.get(`/trips/vehicle/${type}`);
 export const getPassengerLoad      = (id)       => apiClient.get(`/trips/${id}/load`);
 export const getTripGpsLogs        = (id, date) => apiClient.get(`/gps/trip/${id}${date ? `?date=${date}` : ''}`);

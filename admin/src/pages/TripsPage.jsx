@@ -9,7 +9,7 @@ import { StatusPill } from "../components/StatusPill";
 import { StatCard } from "../components/StatCard";
 import { TripModal } from "../components/TripModal";
 import {
-  getTrips, createTrip, updateTripStatus, updateTrip,
+  getTrips, createTrip, updateTripStatus, updateTrip, deleteTrip,
   getTimetableTrips, getRecurringSchedules,
   createRecurringSchedule, updateRecurringSchedule, deleteRecurringSchedule,
   getTripConflicts, getTripDelays, getTripStopArrivals,
@@ -144,7 +144,7 @@ function TabNav({ tabs, active, onChange }) {
 }
 
 // ── Tab 1: Trips list ─────────────────────────────────────────────────────────
-function TripsListTab({ trips, allTrips, onAdd, onEdit, onDetail }) {
+function TripsListTab({ trips, allTrips, onAdd, onEdit, onDetail, onDelete }) {
   const [filter, setFilter] = useState("All");
   const [search, setSearch] = useState("");
 
@@ -186,6 +186,10 @@ function TripsListTab({ trips, allTrips, onAdd, onEdit, onDetail }) {
             fontSize: 11, color: "#6D28D9", background: "#F5F3FF",
             border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer",
           }}>Edit</button>
+          <button onClick={e => { e.stopPropagation(); onDelete(row); }} style={{
+            fontSize: 11, color: "#DC2626", background: "#FEF2F2",
+            border: "none", borderRadius: 6, padding: "4px 10px", cursor: "pointer",
+          }}>Delete</button>
         </div>
       ),
     },
@@ -1258,6 +1262,17 @@ export default function TripsPage() {
     }
   }
 
+  async function handleDeleteTrip(trip) {
+    if (!window.confirm(`Delete trip ${trip.id} (${trip.route})? This can't be undone.`)) return;
+    try {
+      await deleteTrip(trip.id);
+      loadTrips();
+      loadConflicts();
+    } catch (err) {
+      window.alert(err?.message ?? "Failed to delete trip.");
+    }
+  }
+
   function handleResolve(conflictTrip) {
     // Server conflicts now include route_id/driver_id/vehicle_id directly.
     // For client-side conflicts (timetableTrips), look up the normalized trip first.
@@ -1323,7 +1338,7 @@ export default function TripsPage() {
           ? <PageLoading message="Loading trips…" />
           : tripsError
           ? <PageError message={tripsError} onRetry={loadTrips} />
-          : <TripsListTab trips={trips} allTrips={allTrips} onAdd={() => setTripModal(false)} onEdit={t => setTripModal(t)} onDetail={t => setDetailTrip(t)} />
+          : <TripsListTab trips={trips} allTrips={allTrips} onAdd={() => setTripModal(false)} onEdit={t => setTripModal(t)} onDetail={t => setDetailTrip(t)} onDelete={handleDeleteTrip} />
       )}
       {tab === "timetable" && <TimetableTab routeOpts={routeOpts} />}
       {tab === "recurring" && (

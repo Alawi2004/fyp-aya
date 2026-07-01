@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
+import { useSetFabOffset } from "../../context/FabOffsetContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import SeatPicker from "../../components/passenger/SeatPicker";
@@ -219,6 +220,17 @@ const BookingScreen = ({ route, navigation }) => {
 
   const heroAnim = useRef(new Animated.Value(0)).current;
   const barAnim = useRef(new Animated.Value(0)).current;
+
+  // Push the global chat FAB up by the height of our sticky bottom bar so it
+  // never sits on top of the "Book Now" button — only while this screen is focused.
+  const setFabOffset = useSetFabOffset();
+  const [bottomBarHeight, setBottomBarHeight] = useState(0);
+  useFocusEffect(
+    useCallback(() => {
+      setFabOffset(bottomBarHeight);
+      return () => setFabOffset(0);
+    }, [setFabOffset, bottomBarHeight])
+  );
 
   useEffect(() => {
     Animated.spring(heroAnim, {
@@ -771,6 +783,7 @@ const BookingScreen = ({ route, navigation }) => {
 
       {/* Bottom Bar */}
       <Animated.View
+        onLayout={(e) => setBottomBarHeight(e.nativeEvent.layout.height)}
         style={[
           styles.bottomBar,
           {

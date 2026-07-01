@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, PURPLE } from '../constants/colors';
 import PressableScale from '../components/common/PressableScale';
 import { useApp } from '../context/AppContext';
+import { FabOffsetContext } from '../context/FabOffsetContext';
 import GradientFill from '../components/common/GradientFill';
 import ChatbotScreen from '../screens/passenger/ChatbotScreen';
 import { navigationRef } from './navigationRef';
@@ -118,8 +119,11 @@ const PassengerNavigator = () => {
   const insets = useSafeAreaInsets();
   const [chatOpen, setChatOpen] = useState(false);
 
-  // Position the FAB above the tab bar: tab bar is ~65 px tall + bottom inset
-  const fabBottom = 65 + Math.max(insets.bottom, 12) + 14;
+  // Position the FAB above the tab bar: tab bar is ~65 px tall + bottom inset.
+  // Screens with their own bottom action bar (e.g. seat booking's "Book Now")
+  // push the FAB up further via FabOffsetContext so it never overlaps them.
+  const [extraFabOffset, setExtraFabOffset] = useState(0);
+  const fabBottom = 65 + Math.max(insets.bottom, 12) + 14 + extraFabOffset;
 
   // Handle actions returned by the chatbot backend
   const handleChatAction = useCallback((action) => {
@@ -144,36 +148,38 @@ const PassengerNavigator = () => {
   }, []);
 
   return (
-    <View style={{ flex: 1 }}>
-      <Tab.Navigator
-        tabBar={props => <CustomTabBar {...props} />}
-        screenOptions={{ headerShown: false }}
-      >
-        <Tab.Screen name="HomeStack"    component={HomeStack}         options={{ tabBarLabel: 'Home' }} />
-        <Tab.Screen name="TripHistory"  component={TripHistoryScreen} options={{ tabBarLabel: 'Trips' }} />
-        <Tab.Screen name="Wallet"       component={WalletScreen}      options={{ tabBarLabel: 'Wallet' }} />
-        <Tab.Screen name="ProfileStack" component={ProfileStack}      options={{ tabBarLabel: 'Profile' }} />
-      </Tab.Navigator>
+    <FabOffsetContext.Provider value={setExtraFabOffset}>
+      <View style={{ flex: 1 }}>
+        <Tab.Navigator
+          tabBar={props => <CustomTabBar {...props} />}
+          screenOptions={{ headerShown: false }}
+        >
+          <Tab.Screen name="HomeStack"    component={HomeStack}         options={{ tabBarLabel: 'Home' }} />
+          <Tab.Screen name="TripHistory"  component={TripHistoryScreen} options={{ tabBarLabel: 'Trips' }} />
+          <Tab.Screen name="Wallet"       component={WalletScreen}      options={{ tabBarLabel: 'Wallet' }} />
+          <Tab.Screen name="ProfileStack" component={ProfileStack}      options={{ tabBarLabel: 'Profile' }} />
+        </Tab.Navigator>
 
-      {/* ── Floating AI chat button ───────────────────────────────────── */}
-      <PressableScale
-        onPress={() => setChatOpen(true)}
-        scaleTo={0.9}
-        style={[styles.fab, { bottom: fabBottom }]}
-      >
-        <View style={StyleSheet.absoluteFill}>
-          <GradientFill id="fab-grad" colors={PURPLE.gradient} />
-        </View>
-        <Ionicons name="chatbubble-ellipses" size={22} color={COLORS.white} />
-      </PressableScale>
+        {/* ── Floating AI chat button ───────────────────────────────────── */}
+        <PressableScale
+          onPress={() => setChatOpen(true)}
+          scaleTo={0.9}
+          style={[styles.fab, { bottom: fabBottom }]}
+        >
+          <View style={StyleSheet.absoluteFill}>
+            <GradientFill id="fab-grad" colors={PURPLE.gradient} />
+          </View>
+          <Ionicons name="chatbubble-ellipses" size={22} color={COLORS.white} />
+        </PressableScale>
 
-      {/* ── Chat modal ───────────────────────────────────────────────── */}
-      <ChatbotScreen
-        visible={chatOpen}
-        onClose={() => setChatOpen(false)}
-        onAction={handleChatAction}
-      />
-    </View>
+        {/* ── Chat modal ───────────────────────────────────────────────── */}
+        <ChatbotScreen
+          visible={chatOpen}
+          onClose={() => setChatOpen(false)}
+          onAction={handleChatAction}
+        />
+      </View>
+    </FabOffsetContext.Provider>
   );
 };
 

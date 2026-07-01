@@ -234,6 +234,64 @@ export const updateTrip = async (req, res) => {
   }
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE /api/trips/:id
+// Blocks deletion if the trip has tickets or ratings tied to it (real revenue/
+// passenger history — cancel the trip instead). Otherwise clears the trip's
+// operational logs (gps, geofence, eta, checklists, delays, stop arrivals) and
+// nulls out trip_id on complaints/issues before removing the trip row, since
+// those tables have FK references back to trips.
+// ─────────────────────────────────────────────────────────────────────────────
+export const deleteTrip = async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ error: "Invalid trip id" });
+
+  try {
+    const pool = await poolPromise;
+
+    const ticketCheck = await pool.request().input("id", sql.Int, id)
+      .query("SELECT COUNT(*) AS cnt FROM tickets WHERE trip_id = @id");
+    const ticketCount = ticketCheck.recordset[0]?.cnt ?? 0;
+    if (ticketCount > 0) {
+      return res.status(409).json({
+        error: `This trip has ${ticketCount} ticket${ticketCount !== 1 ? "s" : ""} booked. Cancel the trip instead of deleting it.`,
+        ticket_count: ticketCount,
+      });
+    }
+
+    const ratingCheck = await pool.request().input("id", sql.Int, id)
+      .query("SELECT COUNT(*) AS cnt FROM ratings WHERE trip_id = @id");
+    const ratingCount = ratingCheck.recordset[0]?.cnt ?? 0;
+    if (ratingCount > 0) {
+      return res.status(409).json({
+        error: `This trip has ${ratingCount} rating${ratingCount !== 1 ? "s" : ""} on it and can't be deleted.`,
+        rating_count: ratingCount,
+      });
+    }
+
+    await pool.request().input("id", sql.Int, id).query(`
+      UPDATE complaints SET trip_id = NULL WHERE trip_id = @id;
+      IF OBJECT_ID('issues','U') IS NOT NULL
+        UPDATE issues SET trip_id = NULL WHERE trip_id = @id;
+      DELETE FROM trip_stop_arrivals WHERE trip_id = @id;
+      DELETE FROM trip_delays        WHERE trip_id = @id;
+      DELETE FROM trip_checklists    WHERE trip_id = @id;
+      DELETE FROM geofence_events    WHERE trip_id = @id;
+      DELETE FROM eta_predictions    WHERE trip_id = @id;
+      DELETE FROM gps_logs           WHERE trip_id = @id;
+      DELETE FROM passenger_counts   WHERE trip_id = @id;
+    `);
+
+    const del = await pool.request().input("id", sql.Int, id)
+      .query("DELETE FROM trips WHERE trip_id = @id");
+    if (del.rowsAffected[0] === 0) return res.status(404).json({ error: "Trip not found" });
+    res.json({ message: "Trip deleted" });
+  } catch (err) {
+    console.error("[deleteTrip]", err.message);
+    res.status(500).json({ error: "Delete failed: " + err.message });
+  }
+};
+
 export const getTripsByVehicleType = async (req, res) => {
   const pool = await poolPromise;
   const result = await pool
