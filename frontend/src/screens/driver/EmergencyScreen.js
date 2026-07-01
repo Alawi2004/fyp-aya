@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, PURPLE } from '../../constants/colors';
 import { sendEmergencyApi } from '../../api/driverApi';
 import { useAuth } from '../../context/AuthContext';
+import { useDriverLocation } from '../../context/DriverLocationContext';
 
 const EMERGENCY_TYPES = [
   { id: 'accident',  label: 'Road Accident',    icon: 'warning-outline',      color: COLORS.danger,  bg: COLORS.dangerLight   },
@@ -21,6 +22,7 @@ const EMERGENCY_TYPES = [
 const EmergencyScreen = ({ navigation, route }) => {
   const headerInsets = useHeaderInsets();
   const { user } = useAuth();
+  const { location } = useDriverLocation();
   const pulseAnim    = useRef(new Animated.Value(1)).current;
   const ringAnim     = useRef(new Animated.Value(1)).current;
   const [selected, setSelected]   = useState(null);
@@ -64,6 +66,8 @@ const EmergencyScreen = ({ navigation, route }) => {
               await sendEmergencyApi({
                 trip_id: route?.params?.trip_id ?? null,
                 message: selected.label,
+                latitude:  location?.latitude ?? null,
+                longitude: location?.longitude ?? null,
               });
               setTriggered(true);
               Alert.alert(

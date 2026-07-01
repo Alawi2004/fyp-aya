@@ -69,6 +69,7 @@ export const deleteUser = async (req, res) => {
   const uid  = Number(req.params.id);
   if (!uid) return res.status(400).json({ error: "Invalid user id" });
 
+  let tx = null;   // declared here so the catch block can roll back safely
   try {
     // Step 1 — break the transitive FK chain: drivers → trips
     // trips.driver_id references drivers, not users directly.
@@ -97,7 +98,7 @@ export const deleteUser = async (req, res) => {
     `);
 
     // Step 3 — run cleanup + final delete inside one transaction
-    const tx = pool.transaction();
+    tx = pool.transaction();
     await tx.begin();
 
     for (const { tbl, col, is_nullable } of fkRows.recordset) {
@@ -123,7 +124,7 @@ export const deleteUser = async (req, res) => {
     writeAuditLog(pool, { actorUserId: req.user?.user_id, actorRole: req.user?.role, actionName: "user.deleted", entityType: "user", entityId: uid, req });
     res.json({ message: "User deleted" });
   } catch (err) {
-    try { await tx.rollback(); } catch {}
+    if (tx) { try { await tx.rollback(); } catch { /* already rolled back */ } }
     console.error("[deleteUser]", err.message);
     res.status(500).json({ error: "Delete failed: " + err.message });
   }

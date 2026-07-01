@@ -108,6 +108,8 @@ export const getBusGps = async (req, res) => {
         WHERE (
               LOWER(v.plate_number) = LOWER(@vid)
           OR  LOWER(REPLACE(v.plate_number, '-', '')) = LOWER(REPLACE(@vid, '-', ''))
+          -- The passenger app subscribes/polls by trip_id, so also match that.
+          OR  (TRY_CAST(@vid AS INT) IS NOT NULL AND t.trip_id = TRY_CAST(@vid AS INT))
         )
           AND LOWER(ISNULL(t.status, '')) IN ('ongoing', 'active')
           AND g.recorded_at >= DATEADD(minute, -${LIVE_GPS_WINDOW_MIN}, GETUTCDATE())

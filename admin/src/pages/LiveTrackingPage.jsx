@@ -660,9 +660,9 @@ export default function LiveTrackingPage() {
         if (exists) {
           return prev.map(b => b.id !== tripRef ? b : enrichBus({ ...b, lat: msg.lat, lng: msg.lng }));
         }
-        // New bus arriving via WebSocket — add it
+        // New bus arriving via WebSocket — add it (keep trip_id so its real ETA loads)
         return [...prev, enrichBus({
-          id: tripRef, route: msg.route || 'Unknown Route', routeLabel: msg.route || '',
+          id: tripRef, trip_id: msg.trip_id, route: msg.route || 'Unknown Route', routeLabel: msg.route || '',
           driver: msg.driver || 'Unknown', vehicle: msg.vehicle_id || '',
           status: 'Ongoing', seats: '?/?', passengerCount: 0, capacity: 40, speed: 0,
           lat: msg.lat, lng: msg.lng, eta: '—', _dlat: 0, _dlng: 0,
@@ -756,7 +756,7 @@ export default function LiveTrackingPage() {
               if (!updatedIds.has(live.trip_ref)) {
                 lastSeenRef.current[live.trip_ref] = Date.now();
                 updated.push(enrichBus({
-                  id: live.trip_ref, route: live.route || 'Unknown Route', routeLabel: live.route || '',
+                  id: live.trip_ref, trip_id: live.trip_id, route: live.route || 'Unknown Route', routeLabel: live.route || '',
                   driver: live.driver || 'Unknown', vehicle: live.vehicle || '',
                   status: 'Ongoing', seats: '?/?', passengerCount: 0, capacity: 40, speed: 0,
                   lat: live.lat, lng: live.lng, eta: '—', _dlat: 0, _dlng: 0,
@@ -1069,7 +1069,14 @@ export default function LiveTrackingPage() {
           {/* Leaflet map */}
           <div style={{ flex: 1, position: 'relative' }}>
             <LiveMap
-              buses={filteredBuses.filter(b => b.lat != null && b.lng != null)}
+              buses={filteredBuses.filter(b => b.lat != null && b.lng != null).map(b => {
+                // Attach the real HERE ETA (to destination) so the map popup
+                // matches the list/detail instead of the local heuristic.
+                const h = tripEtaMap[b.trip_id]?.stops?.at(-1);
+                return h?.eta_min != null
+                  ? { ...b, realEta: h.eta_min < 1 ? 'Arriving' : `${Math.round(h.eta_min)} min` }
+                  : b;
+              })}
               routes={[]}
               selectedId={selected}
               onSelect={setSelected}

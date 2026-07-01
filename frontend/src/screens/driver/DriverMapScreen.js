@@ -353,7 +353,7 @@ const DriverMapScreen = ({ navigation, route }) => {
   const effectiveSpeed = liveSpeed ?? SPEED_KMH_DEFAULT;
   const stopsWithEta = stops.map((stop, idx) => {
     if (stop.done || !location) return { ...stop, eta: null };
-    const hereMin = hereStopEtas[stop.stop_id];
+    const hereMin = hereStopEtas[stop.id];   // stops are keyed by .id (= stop_id)
     if (hereMin != null) return { ...stop, eta: Math.max(1, Math.round(hereMin)) };
     const ahead = stops.slice(0, idx).filter(s => !s.done).length;
     return { ...stop, eta: calcEta(location.latitude, location.longitude, stop.lat, stop.lng, ahead, effectiveSpeed) };

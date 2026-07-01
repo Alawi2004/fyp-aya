@@ -990,12 +990,21 @@ const TaxiReservationScreen = ({ navigation, route }) => {
         _id: `taxi_${resData.reservation_id}`,
         type: "taxi",
         bus: {
+          // reservation_id + coords so "Track My Taxi" works immediately after
+          // booking (before the DB-backed booking list reloads).
+          _id: resData.reservation_id ?? null,
           name: `${selVehicle.label} Taxi`,
           origin: pickup,
           destination: dest,
           departureTime: formatTime(departureDate),
           arrivalTime: arrivalDate ? `~${formatTime(arrivalDate)}` : null,
           duration: durationMin != null ? `${durationMin} min` : null,
+          pickup: pickupLatLng ?? null,
+          dest: destLatLng ?? null,
+          distance_km: distanceKm ?? null,
+          stops: stops
+            .filter((s) => s.latLng?.latitude != null && s.latLng?.longitude != null)
+            .map((s) => ({ address: s.address, latitude: s.latLng.latitude, longitude: s.latLng.longitude })),
         },
         seatId: null,
         seats: [],

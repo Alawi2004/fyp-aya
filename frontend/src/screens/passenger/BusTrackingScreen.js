@@ -478,9 +478,25 @@ const BusTrackingScreen = ({ route, navigation }) => {
     stopsList[0] ??
     null;
 
+  // Taxi ETA counts down using the driver's live position when available,
+  // otherwise falls back to the full-trip distance estimate.
+  const taxiLiveEtaMin = (() => {
+    if (!isTaxi) return null;
+    if (isLive && busLocation && taxiDest) {
+      const R = 6371, toRad = (d) => (d * Math.PI) / 180;
+      const dLat = toRad(taxiDest.latitude - busLocation.latitude);
+      const dLng = toRad(taxiDest.longitude - busLocation.longitude);
+      const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(toRad(busLocation.latitude)) * Math.cos(toRad(taxiDest.latitude)) * Math.sin(dLng / 2) ** 2;
+      const km = 2 * R * Math.asin(Math.sqrt(a)) * 1.3; // straight-line × road factor
+      return Math.max(1, Math.round((km / 30) * 60));
+    }
+    return taxiEtaMin;
+  })();
+
   const etaDisplay = isTaxi
-    ? (taxiEtaMin != null
-        ? (taxiEtaMin < 60 ? `${taxiEtaMin} min` : `${Math.floor(taxiEtaMin / 60)}h ${taxiEtaMin % 60}m`)
+    ? (taxiLiveEtaMin != null
+        ? (taxiLiveEtaMin < 60 ? `${taxiLiveEtaMin} min` : `${Math.floor(taxiLiveEtaMin / 60)}h ${taxiLiveEtaMin % 60}m`)
         : "— min")
     : nextStop
     ? nextStop.eta_min < 1

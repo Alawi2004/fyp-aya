@@ -400,16 +400,25 @@ export const reportIssue = async (req, res) => {
 // POST /api/driver/emergency
 export const sendEmergency = async (req, res) => {
   try {
-    const { trip_id, message } = req.body;
+    const { trip_id, message, latitude, longitude } = req.body;
     const pool = await poolPromise;
     const driverId = await resolveDriverId(pool, req.user);
     if (!driverId) return res.status(403).json({ error: "Driver profile not found" });
+
+    // Attach the driver's live GPS to the alert (embedded in the description so
+    // no schema change is needed) — this is what makes SOS actionable.
+    const lat = Number(latitude), lng = Number(longitude);
+    const hasLoc = Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+    const locSuffix = hasLoc
+      ? ` @ ${lat.toFixed(5)},${lng.toFixed(5)} https://maps.google.com/?q=${lat},${lng}`
+      : " (no GPS fix)";
+    const fullMsg = (String(message || "Emergency alert").slice(0, 800) + locSuffix);
 
     await pool
       .request()
       .input("driver_id", sql.Int,  driverId)
       .input("trip_id",   sql.Int,  trip_id || null)
-      .input("message",   sql.NVarChar(1000), String(message || "Emergency alert").slice(0, 900))
+      .input("message",   sql.NVarChar(1000), fullMsg)
       .query(`
         INSERT INTO issues (driver_id, trip_id, description, created_at)
         VALUES (@driver_id, @trip_id, CONCAT('EMERGENCY: ', @message), GETDATE())

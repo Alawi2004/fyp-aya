@@ -303,7 +303,7 @@ export default function LiveMap({
                   ['Status',  bus.status],
                   ['Seats',   bus.seats],
                   ['Speed',   `${bus.speed} km/h`],
-                  ['ETA',     bus.trafficInfo?.adjustedEta ?? bus.eta],
+                  ['ETA',     bus.realEta ?? bus.trafficInfo?.adjustedEta ?? bus.eta],
                 ].map(([k, v]) => (
                   <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '2px 0', borderBottom: '1px solid #f0f0f0' }}>
                     <span style={{ color: '#888' }}>{k}</span>
