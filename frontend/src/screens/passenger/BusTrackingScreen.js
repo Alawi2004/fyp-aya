@@ -458,13 +458,12 @@ const BusTrackingScreen = ({ route, navigation }) => {
   // ── Derived stop list (real or empty) ────────────────────────────────────
   const stopsList = useMemo(() => {
     if (isTaxi) {
-      // The taxi's own intermediate stops + destination — the actual route the
-      // passenger booked (not a bus route).
-      const list = taxiStops
+      // Only the intermediate stops the passenger actually added — no phantom
+      // "Destination" stop. If none were added, show none. (The destination has
+      // its own marker on the map.)
+      return taxiStops
         .filter((s) => s?.latitude != null && s?.longitude != null)
         .map((s, i) => ({ latitude: s.latitude, longitude: s.longitude, stop_name: s.address || `Stop ${i + 1}` }));
-      if (taxiDest) list.push({ latitude: taxiDest.latitude, longitude: taxiDest.longitude, stop_name: "Destination" });
-      return list;
     }
     if (etaData?.stops?.length > 0) return etaData.stops;
     return EMPTY_STOPS;
@@ -691,7 +690,7 @@ const BusTrackingScreen = ({ route, navigation }) => {
   // For a taxi, frame the whole pickup → stops → destination route once ready.
   const handleMapReady = () => {
     if (!isTaxi || !mapRef.current) return;
-    const pts = [busLocation, ...stopsList]
+    const pts = [busLocation, ...stopsList, taxiDest]
       .filter((p) => p && p.latitude != null && p.longitude != null)
       .map((p) => ({ latitude: p.latitude, longitude: p.longitude }));
     if (pts.length >= 2) {
@@ -768,6 +767,16 @@ const BusTrackingScreen = ({ route, navigation }) => {
               </View>
             </Marker>
           ) : null
+        )}
+        {/* Taxi destination marker (its own pin, not counted as a "stop") */}
+        {isTaxi && taxiDest?.latitude != null && taxiDest?.longitude != null && (
+          <Marker
+            coordinate={{ latitude: taxiDest.latitude, longitude: taxiDest.longitude }}
+            title="Destination"
+            anchor={{ x: 0.5, y: 1 }}
+          >
+            <Ionicons name="location" size={30} color={COLORS.danger} />
+          </Marker>
         )}
       </MapView>
 
@@ -916,8 +925,9 @@ const BusTrackingScreen = ({ route, navigation }) => {
           ) : null}
         </FadeInView>
 
-        {/* Approaching alert banner (shown when close) */}
-        {!alertSent.current &&
+        {/* Approaching alert banner (shown when close) — bus only */}
+        {!isTaxi &&
+          !alertSent.current &&
           nextStop &&
           (nextStop.eta_min <= 5 || stopsList.length <= 2) && (
             <FadeInView index={2}>
