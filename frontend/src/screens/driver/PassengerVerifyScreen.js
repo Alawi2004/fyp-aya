@@ -14,6 +14,10 @@ const PassengerVerifyScreen = ({ navigation, route }) => {
   const headerInsets = useHeaderInsets();
   const { fmtMoney } = useApp();
   const tripId = route?.params?.tripId ?? null;
+  // When the driver opens the scanner from a taxi ride card, verify against
+  // that specific reservation rather than a bus trip.
+  const reservationId = route?.params?.reservationId ?? null;
+  const passengerLabel = route?.params?.passengerName ?? null;
 
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned]   = useState(false);
@@ -47,7 +51,7 @@ const PassengerVerifyScreen = ({ navigation, route }) => {
     if (scanned || loading) return;
     setLoading(true);
     try {
-      const response = await scanQrApi(data, tripId);
+      const response = await scanQrApi(data, tripId, reservationId);
       const body = response.data;
 
       if (body.valid) {
@@ -149,7 +153,11 @@ const PassengerVerifyScreen = ({ navigation, route }) => {
         <View style={styles.topTitleWrap}>
           <Text style={styles.topTitle}>Passenger Verification</Text>
           <Text style={styles.topSub}>
-            {tripId ? `Trip #${tripId} · ${scanCount} boarded` : `${scanCount} scanned`}
+            {reservationId
+              ? `Taxi ride #${reservationId}${passengerLabel ? ` · ${passengerLabel}` : ''}`
+              : tripId
+                ? `Trip #${tripId} · ${scanCount} boarded`
+                : `${scanCount} scanned`}
           </Text>
         </View>
         <View style={{ width: 40 }} />

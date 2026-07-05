@@ -28,7 +28,7 @@ const MENU_SECTIONS = [
   {
     title: 'Account',
     items: [
-      { icon: 'notifications-outline', label: 'Notifications', screen: 'NotificationsStack',  color: PURPLE.primary   },
+      { icon: 'notifications-outline', label: 'Notifications', screen: 'DriverNotifications',  color: PURPLE.primary   },
       { icon: 'help-circle-outline', label: 'Help & Support',  screen: 'DriverHelpSupport',  color: COLORS.secondary },
       { icon: 'log-out-outline',    label: 'Sign Out',         screen: '__logout__',        color: COLORS.danger    },
     ],

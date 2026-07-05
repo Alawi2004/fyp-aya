@@ -158,6 +158,21 @@ const TaxiRequestsScreen = ({ navigation }) => {
           </View>
         )}
 
+        {/* Verify the passenger's boarding QR against this exact ride */}
+        {ACTIVE_STATUSES.includes(item.status) && (
+          <TouchableOpacity
+            style={styles.scanBtn}
+            onPress={() => navigation.navigate('PassengerVerify', {
+              reservationId: item.reservation_id,
+              passengerName: item.passenger_name || 'Passenger',
+            })}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="qr-code-outline" size={18} color={PURPLE.primary} />
+            <Text style={styles.scanBtnText}>{t('Scan Passenger QR')}</Text>
+          </TouchableOpacity>
+        )}
+
         {action && (
           <TouchableOpacity
             style={[styles.actionBtn, isBusy && { opacity: 0.6 }]}
@@ -247,6 +262,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.secondary, borderRadius: 14, paddingVertical: 14, marginTop: 8,
   },
   actionText: { fontSize: 15, fontWeight: '800', color: COLORS.white },
+
+  scanBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: PURPLE.light, borderRadius: 14, paddingVertical: 13, marginTop: 8,
+    borderWidth: 1.5, borderColor: PURPLE.primary,
+  },
+  scanBtnText: { fontSize: 15, fontWeight: '800', color: PURPLE.primary },
 
   empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, gap: 10 },
   emptyTitle: { fontSize: 16, fontWeight: '800', color: COLORS.textPrimary, marginTop: 8 },

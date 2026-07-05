@@ -32,11 +32,13 @@ import GradientFill from "../../components/common/GradientFill";
 import { getStopsApi } from "../../api/stopsApi";
 import { getMultiTripRouteApi } from "../../api/multiTripApi";
 import { getBusDetailsApi } from "../../api/busApi";
+import apiClient, { expandMapUrl as apiExpandMapUrl } from "../../api/apiClient";
 import { useApp } from "../../context/AppContext";
 import { stopsWithDistance, formatDist } from "../../utils/mockStops";
 import MultiTripBottomSheet from "../../components/passenger/MultiTripBottomSheet";
 import FadeInView from "../../components/common/FadeInView";
 import PressableScale from "../../components/common/PressableScale";
+import { getPickerResult, clearPickerResult } from "../../utils/locationPickerResult";
 
 if (
   Platform.OS === "android" &&
@@ -52,6 +54,32 @@ const nomHeaders = () => ({
   "User-Agent": "FYP-AYA Transit App (student project)",
   "Accept-Language": apiClient.defaults.headers.common?.['Accept-Language'] || 'en',
 });
+
+// ── Extract lat/lng from a Google Maps URL (or any text carrying coords) ──────
+const parseCoords = (text) => {
+  // @lat,lng — standard share/place URL (most common)
+  let m = text.match(/@(-?(?:1[0-7]\d|\d{1,2})\.\d+),(-?(?:1[0-7]\d|\d{1,2})\.\d+)/);
+  if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
+  // !3dlat!4dlng — directions / embed / data= field
+  m = text.match(/!3d(-?(?:1[0-7]\d|\d{1,2})\.\d+)!4d(-?(?:1[0-7]\d|\d{1,2})\.\d+)/);
+  if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
+  // ?q=, ?center=, ?ll=, ?query= carrying numeric coords
+  m = text.match(/[?&](?:q|center|ll|query)=(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
+  if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
+  return null;
+};
+
+// Resolve a Google Maps link to coordinates. Short links are expanded by the
+// backend (server-side fetch bypasses Google's bot-detection).
+const extractCoordsFromUrl = async (url) => {
+  const direct = parseCoords(url);
+  if (direct) return direct;
+  try {
+    const data = await apiExpandMapUrl(url);
+    if (data?.lat != null && data?.lng != null) return { lat: data.lat, lng: data.lng };
+  } catch {}
+  return null;
+};
 
 const MODES = [
   { key: "fastest", label: "Fastest", icon: "flash-outline" },
@@ -387,6 +415,8 @@ const StopPickerModal = ({
   visible,
   onClose,
   onSelect,
+  onPickOnMap,
+  field,
   title,
   stops,
   loadingStops,
@@ -398,6 +428,10 @@ const StopPickerModal = ({
   const [addrLoading, setAddrLoading] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
   const addrTimerRef = useRef(null);
+  // Google Maps link paste box (address mode)
+  const [pastingLink, setPastingLink] = useState(false);
+  const [mapsLink, setMapsLink] = useState("");
+  const [linkLoading, setLinkLoading] = useState(false);
 
   // ── stops mode helpers ────────────────────────────────────────────────────
   const filtered = useMemo(
@@ -424,6 +458,52 @@ const StopPickerModal = ({
     setAddrLoading(false);
     clearTimeout(addrTimerRef.current);
     setSearchMode("stops");
+    setPastingLink(false);
+    setMapsLink("");
+    setLinkLoading(false);
+  };
+
+  // Snap any lat/lng to the nearest bus stop and select it. Returns false if
+  // stops aren't ready or none are close enough.
+  const resolveToStop = (lat, lng) => {
+    if (loadingStops || !stops.length) {
+      Alert.alert("Loading", "Bus stop data is still loading. Please wait a moment.");
+      return false;
+    }
+    const found = findNearestStop(stops, lat, lng);
+    if (!found) {
+      Alert.alert("No nearby stop", "Could not find a bus stop near this location.");
+      return false;
+    }
+    handleSelect(found.stop, { distKm: found.distKm, walkMins: found.walkMins });
+    return true;
+  };
+
+  // Google Maps link → coordinates → nearest stop
+  const handlePasteLink = async () => {
+    const raw = mapsLink.trim();
+    if (!raw) return;
+    setLinkLoading(true);
+    try {
+      const coords = await extractCoordsFromUrl(raw);
+      if (!coords) {
+        Alert.alert(
+          "Could not read link",
+          'Could not extract coordinates from this link.\n\nMake sure you copied the "Share" link from Google Maps, or use "Pick on Map".'
+        );
+        return;
+      }
+      resolveToStop(coords.lat, coords.lng);
+    } finally {
+      setLinkLoading(false);
+    }
+  };
+
+  // Hand off to the full-screen map picker (parent closes this modal + navigates)
+  const handlePickOnMap = () => {
+    const f = field;
+    reset();
+    onPickOnMap?.(f);
   };
 
   const handleClose = () => {
@@ -654,11 +734,81 @@ const StopPickerModal = ({
                 color={PURPLE.primary}
               />
               <Text style={pickerStyles.addrHintText}>
-                Type any address in Lebanon — we'll find the nearest bus stop
-                automatically.
+                Search an address, drop a pin on the map, or paste a Google Maps
+                link — we'll find the nearest bus stop automatically.
               </Text>
             </View>
           </FadeInView>
+        )}
+
+        {/* ── Address mode: Pick on Map / Google Maps link ── */}
+        {searchMode === "address" && (
+          <View style={pickerStyles.altWrap}>
+            {!pastingLink ? (
+              <View style={pickerStyles.altRow}>
+                <PressableScale
+                  style={pickerStyles.altBtn}
+                  onPress={handlePickOnMap}
+                  scaleTo={0.95}
+                >
+                  <Ionicons name="map-outline" size={17} color={PURPLE.primary} />
+                  <Text style={pickerStyles.altBtnText}>Pick on Map</Text>
+                </PressableScale>
+                <PressableScale
+                  style={pickerStyles.altBtn}
+                  onPress={() => {
+                    animateLayout();
+                    setMapsLink("");
+                    setPastingLink(true);
+                  }}
+                  scaleTo={0.95}
+                >
+                  <Ionicons name="link-outline" size={17} color="#EA4335" />
+                  <Text style={pickerStyles.altBtnText}>Google Maps Link</Text>
+                </PressableScale>
+              </View>
+            ) : (
+              <View style={pickerStyles.linkBox}>
+                <TextInput
+                  style={pickerStyles.linkInput}
+                  value={mapsLink}
+                  onChangeText={setMapsLink}
+                  placeholder="Paste Google Maps link…"
+                  placeholderTextColor={COLORS.textMuted}
+                  autoFocus
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <View style={pickerStyles.linkBtnRow}>
+                  <PressableScale
+                    style={pickerStyles.linkCancel}
+                    onPress={() => {
+                      animateLayout();
+                      setPastingLink(false);
+                      setMapsLink("");
+                    }}
+                  >
+                    <Text style={pickerStyles.linkCancelText}>Cancel</Text>
+                  </PressableScale>
+                  <PressableScale
+                    style={[
+                      pickerStyles.linkGo,
+                      (!mapsLink.trim() || linkLoading) && { opacity: 0.5 },
+                    ]}
+                    onPress={() => {
+                      if (mapsLink.trim() && !linkLoading) handlePasteLink();
+                    }}
+                  >
+                    {linkLoading ? (
+                      <ActivityIndicator size="small" color={COLORS.white} />
+                    ) : (
+                      <Text style={pickerStyles.linkGoText}>Find Stop</Text>
+                    )}
+                  </PressableScale>
+                </View>
+              </View>
+            )}
+          </View>
         )}
 
         {/* ── Results ── */}
@@ -971,6 +1121,47 @@ const TripPlannerScreen = ({ navigation, route }) => {
     }
     setPickerFor(null);
   };
+
+  // "Pick on Map" — close the picker modal, then open the full-screen map picker.
+  // `field` ('from'|'to') is echoed back so the focus listener below knows which
+  // endpoint to fill.
+  const handlePickOnMap = (field) => {
+    setPickerFor(null);
+    const title = field === "from" ? "Set Origin Location" : "Set Destination";
+    setTimeout(() => {
+      navigation.navigate("MapLocationPicker", { field, title });
+    }, 300);
+  };
+
+  // Receive the map-picker result and snap it to the nearest bus stop.
+  useEffect(() => {
+    const unsub = navigation.addListener("focus", () => {
+      const r = getPickerResult();
+      if (!r || (r.field !== "from" && r.field !== "to")) return;
+      clearPickerResult();
+      const latLng = r.latLng;
+      if (!latLng) return;
+      if (!stops.length) {
+        Alert.alert("Loading", "Stop data not ready yet. Please try again.");
+        return;
+      }
+      const found = findNearestStop(stops, latLng.latitude, latLng.longitude);
+      if (!found) {
+        Alert.alert("No nearby stop", "Could not find a bus stop near this location.");
+        return;
+      }
+      animateLayout();
+      const walkInfo = { distKm: found.distKm, walkMins: found.walkMins };
+      if (r.field === "from") {
+        setFromStop(found.stop);
+        setFromWalkInfo(walkInfo);
+      } else {
+        setToStop(found.stop);
+        setToWalkInfo(walkInfo);
+      }
+    });
+    return unsub;
+  }, [navigation, stops]);
 
   const swap = () => {
     swapCount.current += 1;
@@ -1946,10 +2137,12 @@ const TripPlannerScreen = ({ navigation, route }) => {
       {/* ── Stop Picker Modal ── */}
       <StopPickerModal
         visible={pickerFor !== null}
+        field={pickerFor}
         title={pickerFor === "from" ? t('Select Origin') : t('Select Destination')}
         stops={stops}
         loadingStops={loadingStops}
         onSelect={handleSelectStop}
+        onPickOnMap={handlePickOnMap}
         onClose={() => setPickerFor(null)}
         userLocation={userLocation}
       />
@@ -2702,6 +2895,52 @@ const pickerStyles = StyleSheet.create({
     fontWeight: "600",
     marginTop: 2,
   },
+
+  // Address mode — Pick on Map / Google Maps link
+  altWrap: { paddingHorizontal: 16, marginTop: 2, marginBottom: 6 },
+  altRow: { flexDirection: "row", gap: 10 },
+  altBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingVertical: 11,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.white,
+  },
+  altBtnText: { fontSize: 13, fontWeight: "700", color: COLORS.textPrimary },
+  linkBox: {
+    backgroundColor: COLORS.background,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 10,
+    gap: 8,
+  },
+  linkInput: {
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    fontWeight: "500",
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+  },
+  linkBtnRow: { flexDirection: "row", gap: 8, justifyContent: "flex-end" },
+  linkCancel: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10 },
+  linkCancelText: { fontSize: 13, fontWeight: "700", color: COLORS.textMuted },
+  linkGo: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: PURPLE.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: 10,
+    minWidth: 96,
+  },
+  linkGoText: { fontSize: 13, fontWeight: "800", color: COLORS.white },
 
   // Centre wrap for loading / empty
   centerWrap: { alignItems: "center", paddingTop: 60, gap: 10 },

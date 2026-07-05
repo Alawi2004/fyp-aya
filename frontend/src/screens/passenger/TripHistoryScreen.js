@@ -304,24 +304,28 @@ const TripHistoryScreen = ({ navigation }) => {
           {/* Actions */}
           {item.status === 'upcoming' && (
             <View style={styles.actions}>
-              {!isTaxi && (
-                <PressableScale
-                  style={styles.actionBtnBlue}
-                  onPress={() => navigation.navigate('HomeStack', { screen: 'Ticket', params: { booking: item } })}
-                >
-                  <Ionicons name="ticket-outline" size={14} color={PURPLE.primary} />
-                  <Text style={styles.actionTextBlue}>{t('View Ticket')}</Text>
-                </PressableScale>
-              )}
-              {!isTaxi && (
-                <PressableScale
-                  style={styles.actionBtnBlue}
-                  onPress={() => navigation.navigate('HomeStack', { screen: 'BusTracking', params: { tripId: item.bus?._id, busName: item.bus?.name } })}
-                >
-                  <Ionicons name="navigate-outline" size={14} color={PURPLE.primary} />
-                  <Text style={styles.actionTextBlue}>{t('Track Bus')}</Text>
-                </PressableScale>
-              )}
+              {/* Both taxis and bus tickets have a viewable QR ticket */}
+              <PressableScale
+                style={styles.actionBtnBlue}
+                onPress={() => navigation.navigate('HomeStack', { screen: 'Ticket', params: { booking: item } })}
+              >
+                <Ionicons name="ticket-outline" size={14} color={PURPLE.primary} />
+                <Text style={styles.actionTextBlue}>{t('View Ticket')}</Text>
+              </PressableScale>
+              <PressableScale
+                style={styles.actionBtnBlue}
+                onPress={() => navigation.navigate('HomeStack', {
+                  screen: 'BusTracking',
+                  // Taxi tracking is driven by the reservation object (pickup /
+                  // stops / dest coords), so pass the booking along.
+                  params: isTaxi
+                    ? { tripId: item.bus?._id, busName: item.bus?.name, booking: item }
+                    : { tripId: item.bus?._id, busName: item.bus?.name },
+                })}
+              >
+                <Ionicons name="navigate-outline" size={14} color={PURPLE.primary} />
+                <Text style={styles.actionTextBlue}>{isTaxi ? t('Track Taxi') : t('Track Bus')}</Text>
+              </PressableScale>
               <PressableScale style={styles.actionBtnRed} onPress={() => handleCancel(item)}>
                 <Ionicons name="close-circle-outline" size={14} color={COLORS.danger} />
                 <Text style={styles.actionTextRed}>{t('Cancel')}</Text>

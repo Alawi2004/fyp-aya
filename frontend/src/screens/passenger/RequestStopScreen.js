@@ -24,7 +24,7 @@ import * as Location from "expo-location";
 import GradientFill from "../../components/common/GradientFill";
 import FadeInView from "../../components/common/FadeInView";
 import PressableScale from "../../components/common/PressableScale";
-import {
+import apiClient, {
   createStopRequest,
   expandMapUrl as apiExpandMapUrl,
 } from "../../api/apiClient";

@@ -108,6 +108,8 @@ const STRINGS = {
   // ── Trip history actions ──────────────────────────────────────────────────────
   'View Ticket':  { ar: 'عرض التذكرة',  fr: 'Voir le billet',  de: 'Ticket anzeigen', es: 'Ver boleto',    tr: 'Bileti Gör' },
   'Track Bus':    { ar: 'تتبع الباص',   fr: 'Suivre le bus',   de: 'Bus verfolgen',   es: 'Rastrear bus',  tr: 'Otobüsü Takip Et' },
+  'Track Taxi':   { ar: 'تتبع التاكسي', fr: 'Suivre le taxi',  de: 'Taxi verfolgen',  es: 'Rastrear taxi', tr: 'Taksiyi Takip Et' },
+  'Scan Passenger QR': { ar: 'مسح رمز الراكب', fr: 'Scanner le QR du passager', de: 'Fahrgast-QR scannen', es: 'Escanear QR del pasajero', tr: 'Yolcu QR Tara' },
   'Track':        { ar: 'تتبع',         fr: 'Suivre',          de: 'Verfolgen',       es: 'Rastrear',      tr: 'Takip Et' },
   'Rate':         { ar: 'قيّم',          fr: 'Évaluer',         de: 'Bewerten',        es: 'Calificar',     tr: 'Değerlendir' },
   'Complaint':    { ar: 'شكوى',         fr: 'Réclamation',     de: 'Beschwerde',      es: 'Queja',         tr: 'Şikayet' },

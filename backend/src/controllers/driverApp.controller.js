@@ -435,7 +435,7 @@ export const sendEmergency = async (req, res) => {
 // Also accepts the legacy JWT token format for backwards compatibility.
 // Body: { token: string, trip_id?: number }
 export const scanPassengerQr = async (req, res) => {
-  const { token, trip_id: driverTripId } = req.body;
+  const { token, trip_id: driverTripId, reservation_id: driverReservationId } = req.body;
   if (!token) return res.status(400).json({ valid: false, message: "QR token required" });
 
   const pool = await poolPromise;
@@ -444,12 +444,19 @@ export const scanPassengerQr = async (req, res) => {
   // ── Parse QR ─────────────────────────────────────────────────────────────
   let qrPayload = null;
   let isLegacyJwt = false;
+  let isSigned = false;
 
   try {
     const parsed = JSON.parse(token);
-    // Ticket QR: must have tid (ticket_id) and sig (HMAC)
-    if (parsed && parsed.tid && parsed.sig) {
+    const isTaxiTid = String(parsed?.tid ?? "").startsWith("taxi_");
+    // Ticket QR: signed (has sig), OR the offline static variant for a TAXI.
+    // A taxi offline QR carries no signature (generated without network), but a
+    // scan only verifies it against the reservation + assigned driver and never
+    // moves money, so it's safe to accept unsigned. Bus tickets must stay signed
+    // because scanning them boards the passenger and debits their wallet.
+    if (parsed && parsed.tid && (parsed.sig || (parsed.mode === "offline-static" && isTaxiTid))) {
       qrPayload = parsed;
+      isSigned = !!parsed.sig;
     }
   } catch (_) {}
 
@@ -457,16 +464,127 @@ export const scanPassengerQr = async (req, res) => {
     // Fall back to legacy JWT token path
     const passengerQr = verifyPassengerQrToken(token);
     if (!passengerQr.valid) {
+      console.warn("[scan-qr] rejected: unparseable / not a ticket QR");
       return res.status(401).json({ valid: false, message: "Invalid or malformed QR code" });
     }
     isLegacyJwt = true;
     qrPayload = { _legacy: true, userId: parseInt(passengerQr.payload.sub, 10), jti: passengerQr.payload.jti, tokenHash: passengerQr.tokenHash };
   }
 
-  // ── HMAC verification (ticket QR only) ───────────────────────────────────
-  if (!isLegacyJwt) {
+  // ── HMAC verification (signed ticket QR only) ────────────────────────────
+  if (!isLegacyJwt && isSigned) {
     if (!verifyTicketQrHmac(qrPayload)) {
+      console.warn("[scan-qr] rejected: HMAC signature mismatch for tid", qrPayload.tid);
       return res.status(401).json({ valid: false, message: "QR signature invalid — ticket may have been tampered with" });
+    }
+  }
+
+  // ── Taxi reservation QR branch ────────────────────────────────────────────
+  // Taxi tickets encode their id as "taxi_<reservation_id>" inside the signed
+  // payload. They live in taxi_reservations (not the tickets table) and the
+  // fare is already charged at booking time, so a scan only verifies that the
+  // passenger belongs to the driver's current ride.
+  if (!isLegacyJwt && String(qrPayload.tid ?? "").startsWith("taxi_")) {
+    try {
+      const reservationId = parseInt(String(qrPayload.tid).replace("taxi_", ""), 10);
+      const passengerId   = parseInt(qrPayload.uid, 10);
+      if (!reservationId || !passengerId) {
+        console.warn("[scan-qr taxi] rejected: bad ids from payload", { tid: qrPayload.tid, uid: qrPayload.uid });
+        return res.status(400).json({ valid: false, message: "Malformed taxi QR code" });
+      }
+
+      // Resolve the scanning driver so we can confirm the ride is theirs
+      const drvRes = await pool.request()
+        .input("uid", sql.Int, req.user?.user_id ?? 0)
+        .query("SELECT driver_id FROM drivers WHERE user_id = @uid AND ISNULL(is_deleted, 0) = 0");
+      const scanningDriverId = req.user?.driver_id ?? drvRes.recordset[0]?.driver_id ?? null;
+
+      const rvRes = await pool.request()
+        .input("rid", sql.Int, reservationId)
+        .input("uid", sql.Int, passengerId)
+        .query(`
+          SELECT tr.reservation_id, tr.user_id, tr.driver_id, tr.driver_name,
+                 tr.status, tr.vehicle_type, tr.pickup_address, tr.dest_address,
+                 tr.scheduled_for, CAST(tr.estimated_fare AS FLOAT) AS estimated_fare,
+                 u.full_name, u.email
+          FROM taxi_reservations tr
+          JOIN users u ON u.user_id = tr.user_id
+          WHERE tr.reservation_id = @rid AND tr.user_id = @uid
+        `);
+      const rv = rvRes.recordset[0];
+
+      if (!rv) {
+        console.warn("[scan-qr taxi] rejected: no reservation", { reservationId, passengerId });
+        return res.status(404).json({ valid: false, message: "Taxi reservation not found" });
+      }
+      console.log("[scan-qr taxi] matched reservation", {
+        reservationId, passengerId, status: rv.status,
+        reservationDriverId: rv.driver_id, scanningDriverId, driverReservationId,
+      });
+      if (rv.status === "cancelled") {
+        return res.status(409).json({
+          valid: false,
+          message: "This taxi reservation was cancelled",
+          passenger: { name: rv.full_name, seat_number: null },
+        });
+      }
+      if (rv.status === "completed") {
+        return res.status(409).json({
+          valid: false,
+          message: "This taxi ride is already completed",
+          passenger: { name: rv.full_name, seat_number: null },
+        });
+      }
+
+      // "For this trip" check — the reservation must be assigned to the scanning
+      // driver, and (when they opened the scanner from a specific ride card) it
+      // must be that exact reservation.
+      const routeLabel        = `${rv.pickup_address} → ${rv.dest_address}`;
+      const assignedToScanner = scanningDriverId != null && rv.driver_id === scanningDriverId;
+      const matchesCurrentRide = !driverReservationId ||
+        parseInt(driverReservationId, 10) === rv.reservation_id;
+
+      if (!assignedToScanner || !matchesCurrentRide) {
+        return res.status(200).json({
+          valid: false,
+          wrong_trip: true,
+          message: assignedToScanner
+            ? `This ticket is for a different taxi ride (#${rv.reservation_id})`
+            : "This taxi ride is assigned to another driver",
+          ticket: {
+            ticket_id:      rv.reservation_id,
+            trip_id:        rv.reservation_id,
+            route_name:     routeLabel,
+            start_location: rv.pickup_address,
+            end_location:   rv.dest_address,
+            seat_number:    null,
+          },
+          passenger: { name: rv.full_name, email: rv.email, seat_number: null },
+        });
+      }
+
+      return res.json({
+        valid: true,
+        passenger: {
+          name:        rv.full_name,
+          email:       rv.email,
+          seat_number: null,
+          ticket_id:   rv.reservation_id,
+        },
+        trip: {
+          trip_id:        rv.reservation_id,
+          route_name:     routeLabel,
+          start_location: rv.pickup_address,
+          end_location:   rv.dest_address,
+          start_time:     rv.scheduled_for,
+        },
+        // Taxi fare is charged at booking time — nothing to deduct on scan.
+        fare_deducted:     false,
+        amount_deducted:   0,
+        fare_insufficient: false,
+      });
+    } catch (err) {
+      return res.status(500).json({ valid: false, error: "Failed to process taxi QR scan" });
     }
   }
 

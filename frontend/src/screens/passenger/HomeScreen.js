@@ -580,6 +580,9 @@ const HomeScreen = ({ navigation }) => {
               navigation.navigate("BusTracking", {
                 tripId: activeBooking.bus?._id,
                 busName: activeBooking.bus?.name,
+                // Taxi tracking is built from the reservation's own coordinates,
+                // so pass the booking through when the active ride is a taxi.
+                ...(activeBooking.type === "taxi" ? { booking: activeBooking } : {}),
               })
             }
             scaleTo={0.98}
